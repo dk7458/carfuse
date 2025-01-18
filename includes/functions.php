@@ -4,7 +4,7 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 function sendEmail($to, $subject, $message, $template = null, $data = []) {
-    require __DIR__ . '../vendor/autoload.php';
+    require '../vendor/autoload.php';
 
     $mail = new PHPMailer(true);
 
