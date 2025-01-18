@@ -1,9 +1,9 @@
 <?php
 // Database configuration
 $host = 'localhost';
-$username = 'root';
-$password = 'your_password';
-$database = 'car_rental';
+$username = 'u122931475_user';
+$password = 'Japierdole!876';
+$database = 'u122931475_carfuse';
 
 try {
     $conn = new mysqli($host, $username, $password, $database);
