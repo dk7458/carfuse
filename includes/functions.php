@@ -1,5 +1,55 @@
 <?php
 
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+function sendEmail($to, $subject, $message, $template = null, $data = []) {
+    require '../vendor/autoload.php';
+
+    $mail = new PHPMailer(true);
+
+    try {
+        // SMTP server configuration
+        $mail->isSMTP();
+        $mail->Host = 'smtp.zoho.eu';
+        $mail->SMTPAuth = true;
+        $mail->Username = 'noreply@carfuse.pl';
+        $mail->Password = 'Spierdalaj!23';
+        $mail->SMTPSecure = 'tls';
+        $mail->Port = 587;
+
+        // Sender and recipient
+        $mail->setFrom('no-reply@yourdomain.com', 'Car Rental System');
+        $mail->addAddress($to);
+
+        // Content
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+
+        if ($template) {
+            $message = applyTemplate($template, $data);
+        }
+
+        $mail->Body = $message;
+
+        $mail->send();
+        return true;
+    } catch (Exception $e) {
+        error_log("Email Error: {$mail->ErrorInfo}");
+        return false;
+    }
+}
+
+function applyTemplate($templateFile, $data) {
+    ob_start();
+    extract($data);
+    include "../templates/emails/$templateFile";
+    return ob_get_clean();
+}
+?>
+
+<?php
+
 /**
  * Generate a CSRF token for forms.
  * 
