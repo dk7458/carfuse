@@ -19,7 +19,7 @@ function sendEmail($to, $subject, $message, $template = null, $data = []) {
         $mail->Port = 587;
 
         // Sender and recipient
-        $mail->setFrom('no-reply@yourdomain.com', 'Car Rental System');
+        $mail->setFrom('noreply@carfuse.pl', 'Carfuse');
         $mail->addAddress($to);
 
         // Content
