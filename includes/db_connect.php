@@ -1,19 +1,22 @@
 <?php
-// Load environment variables
-require '../vendor/autoload.php';
-$dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../');
-$dotenv->load();
+// Database configuration
+$host = 'localhost';
+$username = 'root';
+$password = 'your_password';
+$database = 'car_rental';
 
-// Database connection
-$conn = new mysqli(
-    $_ENV['DB_HOST'],
-    $_ENV['DB_USER'],
-    $_ENV['DB_PASS'],
-    $_ENV['DB_NAME']
-);
+try {
+    $conn = new mysqli($host, $username, $password, $database);
 
-// Check connection
-if ($conn->connect_error) {
-    die("Database connection failed: " . $conn->connect_error);
+    // Check for connection errors
+    if ($conn->connect_error) {
+        throw new Exception("Database connection failed: " . $conn->connect_error);
+    }
+
+    // Set character encoding
+    $conn->set_charset('utf8mb4');
+} catch (Exception $e) {
+    error_log($e->getMessage()); // Log the error
+    die("Błąd połączenia z bazą danych. Spróbuj ponownie później.");
 }
 ?>

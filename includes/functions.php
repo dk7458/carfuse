@@ -1,0 +1,86 @@
+<?php
+
+/**
+ * Generate a CSRF token for forms.
+ * 
+ * @return string
+ */
+function generateCsrfToken() {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+/**
+ * Validate a CSRF token.
+ * 
+ * @param string $token
+ * @return bool
+ */
+function validateCsrfToken($token) {
+    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+}
+
+/**
+ * Log actions to the database.
+ * 
+ * @param int $userId
+ * @param string $action
+ * @param string|null $details
+ */
+function logAction($userId, $action, $details = null) {
+    global $conn;
+    $sql = "INSERT INTO logs (user_id, action, details, timestamp) VALUES (?, ?, ?, NOW())";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("iss", $userId, $action, $details);
+    $stmt->execute();
+}
+
+/**
+ * Send a notification via email or SMS (future extension).
+ * 
+ * @param string $type 'email' or 'sms'
+ * @param string $recipient
+ * @param string $subject
+ * @param string $message
+ */
+function sendNotification($type, $recipient, $subject, $message) {
+    if ($type === 'email') {
+        sendEmail($recipient, $subject, $message);
+    }
+    // Extend for SMS support
+}
+
+/**
+ * Sanitize and validate email input.
+ * 
+ * @param string $email
+ * @return string|bool
+ */
+function sanitizeEmail($email) {
+    $email = filter_var($email, FILTER_SANITIZE_EMAIL);
+    return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : false;
+}
+
+/**
+ * Redirect to a given URL.
+ * 
+ * @param string $url
+ */
+function redirect($url) {
+    header("Location: $url");
+    exit();
+}
+
+function sendMQTTNotification($topic, $message) {
+    // Ensure the topic and message are properly escaped for shell execution
+    $escapedTopic = escapeshellarg($topic);
+    $escapedMessage = escapeshellarg($message);
+    $mqttCommand = "mosquitto_pub -t $escapedTopic -m $escapedMessage";
+    shell_exec($mqttCommand);
+}
+
+
+
+?>
