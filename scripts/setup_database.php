@@ -1,5 +1,6 @@
 <?php
-require '../includes/db_connect.php';
+require __DIR__ . '/../includes/db_connect.php';
+
 
 // Enable error reporting for debugging
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
