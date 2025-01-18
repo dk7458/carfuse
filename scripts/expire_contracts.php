@@ -1,5 +1,5 @@
 <?php
-require '../includes/db_connect.php';
+require __DIR__ . '../includes/db_connect.php';
 
 try {
     // Define current date

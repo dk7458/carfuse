@@ -1,5 +1,5 @@
 <?php
-require '../includes/functions.php';
+require __DIR__ . '../includes/functions.php';
 
 use PhpMqtt\Client\MqttClient;
 use PhpMqtt\Client\ConnectionSettings;

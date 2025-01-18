@@ -1,5 +1,5 @@
 <?php
-require '../includes/db_connect.php';
+require __DIR__ . '../includes/db_connect.php';
 
 // Define the reporting range (last 30 days)
 $startDate = date('Y-m-d', strtotime('-30 days'));

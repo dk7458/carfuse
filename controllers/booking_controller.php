@@ -1,8 +1,8 @@
 <?php
 
-require '../includes/db_connect.php';
-require '../includes/functions.php';
-require '../includes/pdf_generator.php';
+require __DIR__ . '../includes/db_connect.php';
+require __DIR__ . '../includes/functions.php';
+require __DIR__ . '../includes/pdf_generator.php';
 
 session_start();
 

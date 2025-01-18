@@ -1,6 +1,6 @@
 <?php
-require '../../includes/db_connect.php';
-require '../../includes/functions.php';
+require __DIR__ . '../../includes/db_connect.php';
+require __DIR__ . '../../includes/functions.php';
 
 session_start();
 
@@ -102,8 +102,8 @@ $availableFleet = $conn->query("SELECT COUNT(*) AS count FROM fleet WHERE availa
     <div id="mqtt-alerts"></div>
 </div>
 <?php
-require '../../includes/db_connect.php';
-require '../../includes/functions.php';
+require __DIR__ . '../../includes/db_connect.php';
+require __DIR__ . '../../includes/functions.php';
 
 session_start();
 
