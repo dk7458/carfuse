@@ -9,6 +9,15 @@ if (!isset($_SESSION['user_id'])) {
     redirect('/public/login.php');
 }
 
+// Set session timeout
+$timeout = 1800; // 30 minutes
+if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeout) {
+    session_unset();
+    session_destroy();
+    redirect('/public/login.php');
+}
+$_SESSION['last_activity'] = time();
+
 $userId = $_SESSION['user_id'];
 
 // Fetch user bookings
@@ -45,6 +54,7 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
             <div class="col-md-3">
                 <div class="list-group">
                     <a href="#bookings" class="list-group-item list-group-item-action active" data-bs-toggle="collapse" aria-expanded="true">Rezerwacje</a>
+                    <a href="/public/user/profile.php" class="list-group-item list-group-item-action">Profil</a>
                     <a href="#personal-data" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zmień Dane Osobowe</a>
                     <a href="#reset-password" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zresetuj Hasło</a>
                     <a href="#documents" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Twoje Dokumenty</a>
