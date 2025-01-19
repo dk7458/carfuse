@@ -9,5 +9,5 @@
 </head>
 <body>
     <header class="d-flex justify-content-center py-3">
-        <img src="/logo.png" alt="Carfuse Logo" style="height: 60px;">
+        <img src="/public/logo.png" alt="Carfuse Logo" style="height: 60px;">
     </header>
