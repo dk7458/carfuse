@@ -72,6 +72,7 @@ $userDocuments = glob("$userDocumentDir/*.{pdf}", GLOB_BRACE);
                     <a href="#personal-data" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zmień Dane Osobowe</a>
                     <a href="#reset-password" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zresetuj Hasło</a>
                     <a href="#documents" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Twoje Dokumenty</a>
+                    <a href="#notification-settings" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Ustawienia Powiadomień</a>
                 </div>
             </div>
             <div class="col-md-9">
@@ -212,6 +213,22 @@ $userDocuments = glob("$userDocumentDir/*.{pdf}", GLOB_BRACE);
                     <?php else: ?>
                         <div class="alert alert-info">Brak dokumentów do wyświetlenia.</div>
                     <?php endif; ?>
+                </div>
+                <div id="notification-settings" class="collapse">
+                    <h2 class="mt-5">Ustawienia Powiadomień</h2>
+                    <form method="POST" action="/views/user/notification_settings.php" class="standard-form">
+                        <div class="form-check mb-3">
+                            <input type="checkbox" id="email_notifications" name="email_notifications" class="form-check-input" 
+                                <?php echo $preferences['email_notifications'] ? 'checked' : ''; ?>>
+                            <label for="email_notifications" class="form-check-label">Otrzymuj powiadomienia e-mail</label>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input type="checkbox" id="sms_notifications" name="sms_notifications" class="form-check-input" 
+                                <?php echo $preferences['sms_notifications'] ? 'checked' : ''; ?>>
+                            <label for="sms_notifications" class="form-check-label">Otrzymuj powiadomienia SMS</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Zapisz</button>
+                    </form>
                 </div>
             </div>
         </div>

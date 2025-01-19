@@ -41,7 +41,7 @@ $notifications = $conn->query($sql);
 
 </head>
 <body>
-    <?php include '../../views/shared/navbar.php'; ?>
+    <?php include '../../views/shared/navbar_admin.php'; ?>
 
     <div class="container mt-5">
         <h1 class="text-center">Zarządzanie Powiadomieniami</h1>
