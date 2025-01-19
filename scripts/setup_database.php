@@ -39,6 +39,8 @@ createTable($conn, 'users', "
         pesel_or_id VARCHAR(20),
         password_hash VARCHAR(255) NOT NULL,
         role ENUM('user', 'admin') DEFAULT 'user',
+        email_notifications BOOLEAN DEFAULT 0,
+        sms_notifications BOOLEAN DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
 ");
@@ -49,6 +51,8 @@ checkAndAddColumn($conn, 'users', 'email', 'VARCHAR(255) UNIQUE NOT NULL');
 checkAndAddColumn($conn, 'users', 'phone', 'VARCHAR(15)');
 checkAndAddColumn($conn, 'users', 'address', 'TEXT');
 checkAndAddColumn($conn, 'users', 'pesel_or_id', 'VARCHAR(20)');
+checkAndAddColumn($conn, 'users', 'email_notifications', 'BOOLEAN DEFAULT 0');
+checkAndAddColumn($conn, 'users', 'sms_notifications', 'BOOLEAN DEFAULT 0');
 
 // Fleet Table
 createTable($conn, 'fleet', "
