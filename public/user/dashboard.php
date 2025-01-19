@@ -43,6 +43,22 @@ $preferences = $conn->query("SELECT email_notifications, sms_notifications FROM 
 
 // Fetch user documents
 $userDocuments = glob("$userDocumentDir/*.{pdf}", GLOB_BRACE);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $emailNotifications = isset($_POST['email_notifications']) ? 1 : 0;
+    $smsNotifications = isset($_POST['sms_notifications']) ? 1 : 0;
+
+    $stmt = $conn->prepare("UPDATE users SET email_notifications = ?, sms_notifications = ? WHERE id = ?");
+    $stmt->bind_param("iii", $emailNotifications, $smsNotifications, $userId);
+
+    if ($stmt->execute()) {
+        $_SESSION['success_message'] = "Preferencje powiadomień zostały zaktualizowane.";
+    } else {
+        $_SESSION['error_message'] = "Wystąpił błąd podczas zapisywania preferencji.";
+    }
+    header("Location: /public/user/dashboard.php#notification-settings");
+    exit();
+}
 ?>
 
 <!DOCTYPE html>
