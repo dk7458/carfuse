@@ -38,6 +38,9 @@ $bookings = $conn->query("
 // Fetch user details
 $userDetails = $conn->query("SELECT * FROM users WHERE id = $userId")->fetch_assoc();
 
+// Fetch notification preferences
+$preferences = $conn->query("SELECT email_notifications, sms_notifications FROM users WHERE id = $userId")->fetch_assoc();
+
 // Fetch user documents
 $userDocuments = glob("$userDocumentDir/*.{pdf}", GLOB_BRACE);
 ?>
