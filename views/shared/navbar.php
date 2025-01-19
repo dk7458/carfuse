@@ -1,5 +1,7 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 $userRole = $_SESSION['user_role'] ?? null;
 ?>
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
