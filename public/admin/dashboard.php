@@ -117,7 +117,19 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
 
                 <div id="notification-settings" class="collapse">
                     <h2 class="mt-5">Ustawienia Powiadomień</h2>
-                    <?php include '../../views/admin/notification_settings.php'; ?>
+                    <form method="POST" action="/public/admin/notification_settings_proxy.php" class="standard-form">
+                        <div class="form-check mb-3">
+                            <input type="checkbox" id="email_notifications" name="email_notifications" class="form-check-input" 
+                                <?php echo $preferences['email_notifications'] ? 'checked' : ''; ?>>
+                            <label for="email_notifications" class="form-check-label">Otrzymuj powiadomienia e-mail</label>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input type="checkbox" id="sms_notifications" name="sms_notifications" class="form-check-input" 
+                                <?php echo $preferences['sms_notifications'] ? 'checked' : ''; ?>>
+                            <label for="sms_notifications" class="form-check-label">Otrzymuj powiadomienia SMS</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Zapisz</button>
+                    </form>
                 </div>
 
                 <div id="manage-admins" class="collapse">
