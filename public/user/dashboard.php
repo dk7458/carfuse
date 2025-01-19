@@ -235,7 +235,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <div id="notification-settings" class="collapse">
                     <h2 class="mt-5">Ustawienia Powiadomień</h2>
-                    <form method="POST" action="/public/user/notification_settings_proxy.php" class="standard-form">
+                    <form method="POST" action="/views/user/notification_settings.php" class="standard-form">
                         <div class="form-check mb-3">
                             <input type="checkbox" id="email_notifications" name="email_notifications" class="form-check-input" 
                                 <?php echo $preferences['email_notifications'] ? 'checked' : ''; ?>>
