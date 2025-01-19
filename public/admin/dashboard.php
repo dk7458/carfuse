@@ -43,7 +43,10 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
                     <a href="#maintenance" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Konserwacja</a>
                     <a href="#reports" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Raporty</a>
                     <a href="#contracts" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Umowy</a>
+                    <a href="#notifications" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Powiadomienia</a>
+                    <a href="#notification-settings" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Ustawienia Powiadomień</a>
                     <a href="#manage-admins" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zarządzaj Administratorami</a>
+                    <a href="#signature-management" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zarządzaj Podpisami</a>
                 </div>
             </div>
             <div class="col-md-9">
@@ -84,32 +87,47 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
 
                 <div id="bookings" class="collapse">
                     <h2 class="mt-5">Rezerwacje</h2>
-                    <!-- Add booking management functionality here -->
+                    <?php include '../../views/admin/bookings.php'; ?>
                 </div>
 
                 <div id="vehicles" class="collapse">
                     <h2 class="mt-5">Pojazdy</h2>
-                    <!-- Add vehicle management functionality here -->
+                    <?php include '../../views/admin/fleet.php'; ?>
                 </div>
 
                 <div id="maintenance" class="collapse">
                     <h2 class="mt-5">Konserwacja</h2>
-                    <!-- Add maintenance management functionality here -->
+                    <?php include '../../views/admin/maintenance_logs.php'; ?>
                 </div>
 
                 <div id="reports" class="collapse">
                     <h2 class="mt-5">Raporty</h2>
-                    <!-- Add reports management functionality here -->
+                    <?php include '../../views/admin/reports.php'; ?>
                 </div>
 
                 <div id="contracts" class="collapse">
                     <h2 class="mt-5">Umowy</h2>
-                    <!-- Add contracts management functionality here -->
+                    <?php include '../../views/admin/contracts.php'; ?>
+                </div>
+
+                <div id="notifications" class="collapse">
+                    <h2 class="mt-5">Powiadomienia</h2>
+                    <?php include '../../views/admin/notifications.php'; ?>
+                </div>
+
+                <div id="notification-settings" class="collapse">
+                    <h2 class="mt-5">Ustawienia Powiadomień</h2>
+                    <?php include '../../views/admin/notification_settings.php'; ?>
                 </div>
 
                 <div id="manage-admins" class="collapse">
                     <h2 class="mt-5">Zarządzaj Administratorami</h2>
                     <!-- Add manage admins functionality here -->
+                </div>
+
+                <div id="signature-management" class="collapse">
+                    <h2 class="mt-5">Zarządzaj Podpisami</h2>
+                    <?php include '../../views/admin/signature_management.php'; ?>
                 </div>
             </div>
         </div>

@@ -31,82 +31,67 @@ $fleetUsageData = $conn->query("
 ")->fetch_all(MYSQLI_ASSOC);
 ?>
 
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raporty</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/theme.css">
-
-</head>
-<body>
-    <?php include '../../views/shared/navbar_admin.php'; ?>
-
-    <div class="container mt-5">
-        <h1 class="text-center">Raporty</h1>
-        <form method="GET" class="standard-form row g-3 mt-4">
-            <div class="col-md-5">
-                <label for="start_date" class="form-label">Data Początkowa</label>
-                <input type="date" id="start_date" name="start_date" class="form-control" value="<?php echo $startDate; ?>">
-            </div>
-            <div class="col-md-5">
-                <label for="end_date" class="form-label">Data Końcowa</label>
-                <input type="date" id="end_date" name="end_date" class="form-control" value="<?php echo $endDate; ?>">
-            </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">Generuj</button>
-            </div>
-        </form>
-
-        <div class="mt-5">
-            <h3>Dochód</h3>
-            <?php if (!empty($revenueData)): ?>
-                <table class="table table-bordered">
-                    <thead>
-                        <tr>
-                            <th>Data</th>
-                            <th>Dochód (PLN)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($revenueData as $row): ?>
-                            <tr>
-                                <td><?php echo $row['date']; ?></td>
-                                <td><?php echo number_format($row['revenue'], 2, ',', ' '); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            <?php else: ?>
-                <p>Brak danych do wyświetlenia.</p>
-            <?php endif; ?>
+<div class="container mt-5">
+    <h1 class="text-center">Raporty</h1>
+    <form method="GET" class="standard-form row g-3 mt-4">
+        <div class="col-md-5">
+            <label for="start_date" class="form-label">Data Początkowa</label>
+            <input type="date" id="start_date" name="start_date" class="form-control" value="<?php echo $startDate; ?>">
         </div>
-
-        <div class="mt-5">
-            <h3>Użycie Floty</h3>
-            <?php if (!empty($fleetUsageData)): ?>
-                <table class="table table-bordered">
-                    <thead>
-                        <tr>
-                            <th>Pojazd</th>
-                            <th>Ilość Wynajmów</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($fleetUsageData as $row): ?>
-                            <tr>
-                                <td><?php echo "{$row['make']} {$row['model']}"; ?></td>
-                                <td><?php echo $row['usage_count']; ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            <?php else: ?>
-                <p>Brak danych do wyświetlenia.</p>
-            <?php endif; ?>
+        <div class="col-md-5">
+            <label for="end_date" class="form-label">Data Końcowa</label>
+            <input type="date" id="end_date" name="end_date" class="form-control" value="<?php echo $endDate; ?>">
         </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">Generuj</button>
+        </div>
+    </form>
+
+    <div class="mt-5">
+        <h3>Dochód</h3>
+        <?php if (!empty($revenueData)): ?>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Dochód (PLN)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($revenueData as $row): ?>
+                        <tr>
+                            <td><?php echo $row['date']; ?></td>
+                            <td><?php echo number_format($row['revenue'], 2, ',', ' '); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php else: ?>
+            <p>Brak danych do wyświetlenia.</p>
+        <?php endif; ?>
     </div>
-</body>
-</html>
+
+    <div class="mt-5">
+        <h3>Użycie Floty</h3>
+        <?php if (!empty($fleetUsageData)): ?>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Pojazd</th>
+                        <th>Ilość Wynajmów</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($fleetUsageData as $row): ?>
+                        <tr>
+                            <td><?php echo "{$row['make']} {$row['model']}"; ?></td>
+                            <td><?php echo $row['usage_count']; ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php else: ?>
+            <p>Brak danych do wyświetlenia.</p>
+        <?php endif; ?>
+    </div>
+</div>
