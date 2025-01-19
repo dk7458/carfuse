@@ -1,132 +1,147 @@
 <?php
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+// dashboard.php (przykładowy główny plik panelu administratora w Bootstrap 5.3)
 
-session_start();
+// 1. Pobranie parametru "?page=" z adresu, np. dashboard.php?page=konserwacja
+$page = $_GET['page'] ?? 'podsumowanie';
 
-// Ensure the user is an admin
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
-    redirect('/public/login.php');
+// 2. Mapa "klucz => plik", czyli nazwy sekcji na linki w menu -> pliki, które mają być wczytane.
+$validPages = [
+    'podsumowanie' => 'pages/podsumowanie.php',             // np. plik powitalny (stwórz sam)
+    'uzytkownicy'   => 'views/admin/user_management.php',    // (../../views/admin/user_management.php) dostosuj ścieżkę
+    'rezerwacje'    => 'booking_management.php',             // (pages/booking_management.php) dostosuj ścieżkę
+    'konserwacja'   => 'maintenance_management.php',
+    'raporty'       => 'reports_management.php',
+    'umowy'         => 'contract_management.php',
+    'flota'         => 'fleet_management.php',
+    'powiadomienia' => 'notifications_management.php',
+];
+
+// 3. Sprawdź, czy klucz istnieje w tablicy $validPages, w przeciwnym razie ładuj "podsumowanie".
+if (!array_key_exists($page, $validPages)) {
+    $page = 'podsumowanie';
 }
-
-// Fetch summary data
-$totalUsers = $conn->query("SELECT COUNT(*) AS count FROM users")->fetch_assoc()['count'];
-$totalBookings = $conn->query("SELECT COUNT(*) AS count FROM bookings")->fetch_assoc()['count'];
-$totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_assoc()['count'];
+$contentFile = $validPages[$page];
 ?>
-
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel Administratora</title>
-    <link 
+  <meta charset="UTF-8">
+  <title>Panel Administratora</title>
+  <!-- Bootstrap 5.3.0 CSS -->
+  <link
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    >   
-    <script 
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-    ></script>
-
-    <link rel="stylesheet" href="/theme.css">
+  >
+  <style>
+    /* Proste style dla layoutu z kolumnami */
+    body {
+      overflow-x: hidden;
+    }
+    .sidebar {
+      min-height: 100vh; /* Pełna wysokość dla sidebaru */
+    }
+    @media (min-width: 992px) {
+      .sidebar {
+        position: sticky;
+        top: 0;
+      }
+    }
+  </style>
 </head>
 <body>
-    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/shared/navbar_admin.php'; ?>
 
-    <div class="container mt-5">
-        <div class="row">
-            <div class="col-md-3">
-                <div class="list-group">
-                    <a href="#summary" class="list-group-item list-group-item-action active" data-bs-toggle="collapse" aria-expanded="true">Podsumowanie</a>
-                    <a href="#users" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Użytkownicy</a>
-                    <a href="#bookings" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Rezerwacje</a>
-                    <a href="#vehicles" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Pojazdy</a>
-                    <a href="#maintenance" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Konserwacja</a>
-                    <a href="#reports" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Raporty</a>
-                    <a href="#contracts" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Umowy</a>
-                    <a href="#notifications" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Powiadomienia</a>
-                    <a href="#notification-settings" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Ustawienia Powiadomień</a>
-                    <a href="#manage-admins" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zarządzaj Administratorami</a>
-                    <a href="#signature-management" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zarządzaj Podpisami</a>
-                </div>
-            </div>
-            <div class="col-md-9">
-                <div id="summary" class="collapse show">
-                    <h1 class="text-center">Panel Administratora</h1>
-                    <div class="row mt-5">
-                        <div class="col-md-4">
-                            <div class="card text-center">
-                                <div class="card-body">
-                                    <h5 class="card-title">Użytkownicy</h5>
-                                    <p class="card-text"><?php echo $totalUsers; ?></p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="card text-center">
-                                <div class="card-body">
-                                    <h5 class="card-title">Rezerwacje</h5>
-                                    <p class="card-text"><?php echo $totalBookings; ?></p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="card text-center">
-                                <div class="card-body">
-                                    <h5 class="card-title">Pojazdy</h5>
-                                    <p class="card-text"><?php echo $totalVehicles; ?></p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+  <!-- Górny pasek nawigacji (osobny plik) -->
+  <?php include __DIR__ . '/navbar.php'; ?>
 
-                <div id="users" class="collapse">
-                    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/admin/manage_users.php'; ?>
-                </div>
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Sidebar: Menu z lewej -->
+      <nav class="col-12 col-md-3 col-xl-2 bg-dark sidebar p-0">
+        <ul class="nav flex-column text-white">
+          <li class="nav-item">
+            <a
+              class="nav-link text-white <?php echo ($page==='podsumowanie')?'bg-secondary':''; ?>"
+              href="?page=podsumowanie"
+            >
+              Podsumowanie
+            </a>
+          </li>
+          <li class="nav-item">
+            <a
+              class="nav-link text-white <?php echo ($page==='uzytkownicy')?'bg-secondary':''; ?>"
+              href="?page=uzytkownicy"
+            >
+              Użytkownicy
+            </a>
+          </li>
+          <li class="nav-item">
+            <a
+              class="nav-link text-white <?php echo ($page==='rezerwacje')?'bg-secondary':''; ?>"
+              href="?page=rezerwacje"
+            >
+              Rezerwacje
+            </a>
+          </li>
+          <li class="nav-item">
+            <a
+              class="nav-link text-white <?php echo ($page==='konserwacja')?'bg-secondary':''; ?>"
+              href="?page=konserwacja"
+            >
+              Konserwacja
+            </a>
+          </li>
+          <li class="nav-item">
+            <a
+              class="nav-link text-white <?php echo ($page==='raporty')?'bg-secondary':''; ?>"
+              href="?page=raporty"
+            >
+              Raporty
+            </a>
+          </li>
+          <li class="nav-item">
+            <a
+              class="nav-link text-white <?php echo ($page==='umowy')?'bg-secondary':''; ?>"
+              href="?page=umowy"
+            >
+              Umowy
+            </a>
+          </li>
+          <li class="nav-item">
+            <a
+              class="nav-link text-white <?php echo ($page==='flota')?'bg-secondary':''; ?>"
+              href="?page=flota"
+            >
+              Flota
+            </a>
+          </li>
+          <li class="nav-item">
+            <a
+              class="nav-link text-white <?php echo ($page==='powiadomienia')?'bg-secondary':''; ?>"
+              href="?page=powiadomienia"
+            >
+              Powiadomienia
+            </a>
+          </li>
+        </ul>
+      </nav>
 
-                <div id="bookings" class="collapse">
-                    <?php include 'booking_management.php'; ?>
-                </div>
-
-                <div id="vehicles" class="collapse">
-                    <?php include 'fleet_management.php'; ?>
-                </div>
-
-                <div id="maintenance" class="collapse">
-                    <?php include 'maintenance_management.php'; ?>
-                </div>
-
-                <div id="reports" class="collapse">
-                    <?php include 'reports_management.php'; ?>
-                </div>
-
-                <div id="contracts" class="collapse">
-                    <?php include 'contract_management.php'; ?>
-                </div>
-
-                <div id="notifications" class="collapse">
-                    <?php include 'notifications_management.php'; ?>
-                </div>
-
-                <div id="notification-settings" class="collapse">
-                    <?php include 'notification_settings_management.php'; ?>
-                </div>
-
-                <div id="manage-admins" class="collapse">
-                    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/admin/manage_admins.php'; ?>
-                </div>
-
-                <div id="signature-management" class="collapse">
-                    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/admin/signature_management.php'; ?>
-                </div>
-            </div>
-        </div>
+      <!-- Główna treść: ładowanie plików sekcji -->
+      <main class="col-12 col-md-9 col-xl-10 py-3">
+        <?php
+        // Wczytaj plik odpowiadający aktualnie wybranej stronie
+        if (file_exists(__DIR__ . '/' . $contentFile)) {
+            include __DIR__ . '/' . $contentFile;
+        } else {
+            echo "<div class='alert alert-danger'>Nie znaleziono pliku: <code>$contentFile</code></div>";
+        }
+        ?>
+      </main>
     </div>
+  </div>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
+  <!-- Bootstrap 5.3.0 bundle -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+  ></script>
 </body>
 </html>

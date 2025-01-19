@@ -7,12 +7,13 @@ session_start();
 // Check if the form is submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = htmlspecialchars(trim($_POST['name']));
+    $surname = htmlspecialchars(trim($_POST['surname']));
     $email = filter_var(trim($_POST['email']), FILTER_SANITIZE_EMAIL);
     $password = trim($_POST['password']);
     $phone = htmlspecialchars(trim($_POST['phone']));
 
     // Validate form data
-    if (empty($name) || empty($email) || empty($password)) {
+    if (empty($name) || empty($surname) || empty($email) || empty($password)) {
         $_SESSION['error_message'] = "Wszystkie pola są wymagane.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $_SESSION['error_message'] = "Podano nieprawidłowy adres e-mail.";
@@ -32,8 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['error_message'] = "Ten adres e-mail jest już zarejestrowany.";
         } else {
             // Insert user into the database
-            $stmt = $conn->prepare("INSERT INTO users (name, email, password_hash, phone) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("ssss", $name, $email, $passwordHash, $phone);
+            $stmt = $conn->prepare("INSERT INTO users (name, surname, email, password_hash, phone) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("sssss", $name, $surname, $email, $passwordHash, $phone);
 
             if ($stmt->execute()) {
                 // Success message and redirection
@@ -61,11 +62,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="/theme.css">
     <style>
         .container {
-            max-width: 400px;
+            max-width: 500px;
         }
 
         .form-control {
-            max-width: 350px;
+            max-width: 450px;
         }
     </style>
 </head>
@@ -97,8 +98,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <form method="POST" action="register.php" class="standard-form">
                 <div class="mb-3">
-                    <label for="name" class="form-label">Imię i nazwisko</label>
-                    <input type="text" id="name" name="name" class="form-control mx-auto" placeholder="Wprowadź swoje imię i nazwisko" required>
+                    <label for="name" class="form-label">Imię</label>
+                    <input type="text" id="name" name="name" class="form-control mx-auto" placeholder="Wprowadź swoje imię" required>
+                </div>
+                <div class="mb-3">
+                    <label for="surname" class="form-label">Nazwisko</label>
+                    <input type="text" id="surname" name="surname" class="form-control mx-auto" placeholder="Wprowadź swoje nazwisko" required>
                 </div>
                 <div class="mb-3">
                     <label for="email" class="form-label">E-mail</label>
