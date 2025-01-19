@@ -20,3 +20,4 @@ try {
     die("Błąd połączenia z bazą danych. Spróbuj ponownie później.");
 }
 ?>
+

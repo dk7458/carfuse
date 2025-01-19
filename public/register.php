@@ -1,53 +1,107 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-?>
-<?php
-// Enable error reporting
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 require '../includes/db_connect.php';
 require '../includes/functions.php';
 
 session_start();
 
+// Check if the form is submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = htmlspecialchars(trim($_POST['name']));
-    $email = sanitizeEmail($_POST['email']);
-    $password = $_POST['password'];
-    $confirmPassword = $_POST['confirm_password'];
+    $email = filter_var(trim($_POST['email']), FILTER_SANITIZE_EMAIL);
+    $password = trim($_POST['password']);
+    $phone = htmlspecialchars(trim($_POST['phone']));
 
-    if (empty($name) || empty($email) || empty($password) || empty($confirmPassword)) {
+    // Validate form data
+    if (empty($name) || empty($email) || empty($password)) {
         $_SESSION['error_message'] = "Wszystkie pola są wymagane.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $_SESSION['error_message'] = "Nieprawidłowy format e-mail.";
-    } elseif ($password !== $confirmPassword) {
-        $_SESSION['error_message'] = "Hasła nie pasują do siebie.";
-    } elseif (!preg_match('/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/', $password)) {
-        $_SESSION['error_message'] = "Hasło musi mieć co najmniej 8 znaków, zawierać litery i cyfry.";
+        $_SESSION['error_message'] = "Podano nieprawidłowy adres e-mail.";
     } else {
+        // Hash the password
         $passwordHash = password_hash($password, PASSWORD_DEFAULT);
-        $checkUser = $conn->prepare("SELECT id FROM users WHERE email = ?");
-        $checkUser->bind_param("s", $email);
-        $checkUser->execute();
-        $checkUser->store_result();
 
-        if ($checkUser->num_rows > 0) {
-            $_SESSION['error_message'] = "E-mail jest już zarejestrowany.";
+        // Check if the email already exists
+        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $stmt->store_result();
+
+        if ($stmt->num_rows > 0) {
+            $_SESSION['error_message'] = "Ten adres e-mail jest już zarejestrowany.";
         } else {
-            $stmt = $conn->prepare("INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)");
-            $stmt->bind_param("sss", $name, $email, $passwordHash);
+            // Insert user into the database
+            $stmt = $conn->prepare("INSERT INTO users (name, email, password_hash, phone) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("ssss", $name, $email, $passwordHash, $phone);
 
             if ($stmt->execute()) {
-                $_SESSION['success_message'] = "Rejestracja zakończona sukcesem. Możesz się zalogować.";
-                redirect('/public/login.php');
+                $_SESSION['success_message'] = "Rejestracja zakończona sukcesem. Możesz się teraz zalogować.";
+                header("Location: login.php");
+                exit;
             } else {
-                $_SESSION['error_message'] = "Wystąpił błąd podczas rejestracji.";
+                $_SESSION['error_message'] = "Wystąpił błąd podczas rejestracji. Spróbuj ponownie.";
             }
         }
+
+        $stmt->close();
     }
 }
 ?>
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rejestracja</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <?php include '../views/shared/navbar.php'; ?>
+
+    <div class="container mt-5">
+        <h1 class="text-center">Rejestracja</h1>
+
+        <?php if (isset($_SESSION['error_message'])): ?>
+            <div class="alert alert-danger">
+                <?php 
+                echo $_SESSION['error_message']; 
+                unset($_SESSION['error_message']);
+                ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if (isset($_SESSION['success_message'])): ?>
+            <div class="alert alert-success">
+                <?php 
+                echo $_SESSION['success_message']; 
+                unset($_SESSION['success_message']);
+                ?>
+            </div>
+        <?php endif; ?>
+
+        <form method="POST" action="register.php" class="mt-4">
+            <div class="mb-3">
+                <label for="name" class="form-label">Imię i nazwisko</label>
+                <input type="text" id="name" name="name" class="form-control" placeholder="Wprowadź swoje imię i nazwisko" required>
+            </div>
+            <div class="mb-3">
+                <label for="email" class="form-label">E-mail</label>
+                <input type="email" id="email" name="email" class="form-control" placeholder="Wprowadź swój e-mail" required>
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label">Hasło</label>
+                <input type="password" id="password" name="password" class="form-control" placeholder="Wprowadź swoje hasło" required>
+            </div>
+            <div class="mb-3">
+                <label for="phone" class="form-label">Numer telefonu (opcjonalnie)</label>
+                <input type="text" id="phone" name="phone" class="form-control" placeholder="Wprowadź swój numer telefonu">
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Zarejestruj się</button>
+        </form>
+
+        <p class="text-center mt-3">
+            Masz już konto? <a href="login.php">Zaloguj się</a>
+        </p>
+    </div>
+</body>
+</html>
