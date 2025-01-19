@@ -36,17 +36,17 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
         <div class="row">
             <div class="col-md-3">
                 <div class="list-group">
-                    <a href="#summary" class="list-group-item list-group-item-action active" data-bs-toggle="collapse" aria-expanded="true">Podsumowanie</a>
-                    <a href="#users" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Użytkownicy</a>
-                    <a href="#bookings" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Rezerwacje</a>
-                    <a href="#vehicles" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Pojazdy</a>
-                    <a href="#maintenance" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Konserwacja</a>
-                    <a href="#reports" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Raporty</a>
-                    <a href="#contracts" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Umowy</a>
-                    <a href="#notifications" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Powiadomienia</a>
-                    <a href="#notification-settings" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Ustawienia Powiadomień</a>
-                    <a href="#manage-admins" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zarządzaj Administratorami</a>
-                    <a href="#signature-management" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zarządzaj Podpisami</a>
+                    <a data-bs-target="#summary" class="list-group-item list-group-item-action active" data-bs-toggle="collapse" aria-expanded="true">Podsumowanie</a>
+                    <a data-bs-target="#users" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Użytkownicy</a>
+                    <a data-bs-target="#bookings" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Rezerwacje</a>
+                    <a data-bs-target="#vehicles" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Pojazdy</a>
+                    <a data-bs-target="#maintenance" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Konserwacja</a>
+                    <a data-bs-target="#reports" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Raporty</a>
+                    <a data-bs-target="#contracts" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Umowy</a>
+                    <a data-bs-target="#notifications" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Powiadomienia</a>
+                    <a data-bs-target="#notification-settings" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Ustawienia Powiadomień</a>
+                    <a data-bs-target="#manage-admins" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zarządzaj Administratorami</a>
+                    <a data-bs-target="#signature-management" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zarządzaj Podpisami</a>
                 </div>
             </div>
             <div class="col-md-9">
@@ -136,14 +136,5 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
-    <script>
-        $(document).ready(function() {
-            $('.list-group-item-action').on('click', function() {
-                var target = $(this).attr('href');
-                $('.collapse').not(target).collapse('hide');
-                $(target).collapse('show');
-            });
-        });
-    </script>
 </body>
 </html>
