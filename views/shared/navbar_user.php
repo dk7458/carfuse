@@ -15,11 +15,11 @@ $userRole = $_SESSION['user_role'] ?? null;
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ms-auto">
                 <?php if (isset($_SESSION['user_id'])): ?>
-                    <li class="nav-item"><a class="nav-link" href="public/user/dashboard.php#profile">Profil</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/public/logout.php">Wyloguj</a></li>
+                    <li class="nav-item"><a class="nav-link" href="public/user/dashboard.php#profile" style="height: 70px;">Profil</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/public/logout.php" style="height: 70px;">Wyloguj</a></li>
                 <?php else: ?>
-                    <li class="nav-item"><a class="nav-link" href="/public/login.php">Zaloguj</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/public/register.php">Zarejestruj</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/public/login.php" style="height: 70px;">Zaloguj</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/public/register.php" style="height: 70px;">Zarejestruj</a></li>
                 <?php endif; ?>
             </ul>
         </div>
