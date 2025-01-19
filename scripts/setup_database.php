@@ -43,6 +43,9 @@ createTable($conn, 'users', "
     )
 ");
 
+checkAndAddColumn($conn, 'users', 'name', 'VARCHAR(255) NOT NULL');
+checkAndAddColumn($conn, 'users', 'surname', 'VARCHAR(255) NOT NULL');
+checkAndAddColumn($conn, 'users', 'email', 'VARCHAR(255) UNIQUE NOT NULL');
 checkAndAddColumn($conn, 'users', 'phone', 'VARCHAR(15)');
 checkAndAddColumn($conn, 'users', 'address', 'TEXT');
 checkAndAddColumn($conn, 'users', 'pesel_or_id', 'VARCHAR(20)');

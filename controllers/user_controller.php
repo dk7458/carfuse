@@ -14,6 +14,7 @@ if (!isset($_SESSION['user_id'])) {
 // Handle profile update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_profile') {
     $name = htmlspecialchars($_POST['name']);
+    $surname = htmlspecialchars($_POST['surname']);
     $email = sanitizeEmail($_POST['email']);
     $phone = htmlspecialchars($_POST['phone']);
     $address = htmlspecialchars($_POST['address_part1'] . ' ' . $_POST['address_part2']);
@@ -21,19 +22,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     $stmt = $conn->prepare("
         UPDATE users 
-        SET name = ?, email = ?, phone = ?, address = ?, pesel_or_id = ? 
+        SET name = ?, surname = ?, email = ?, phone = ?, address = ?, pesel_or_id = ? 
         WHERE id = ?
     ");
-    $stmt->bind_param("sssssi", $name, $email, $phone, $address, $pesel_or_id, $_SESSION['user_id']);
+    $stmt->bind_param("ssssssi", $name, $surname, $email, $phone, $address, $pesel_or_id, $_SESSION['user_id']);
 
     if ($stmt->execute()) {
         // Verify the update
-        $stmt = $conn->prepare("SELECT name, email, phone, address, pesel_or_id FROM users WHERE id = ?");
+        $stmt = $conn->prepare("SELECT name, surname, email, phone, address, pesel_or_id FROM users WHERE id = ?");
         $stmt->bind_param("i", $_SESSION['user_id']);
         $stmt->execute();
         $updatedUser = $stmt->get_result()->fetch_assoc();
 
-        if ($updatedUser['name'] === $name && $updatedUser['email'] === $email && $updatedUser['phone'] === $phone && $updatedUser['address'] === $address && $updatedUser['pesel_or_id'] === $pesel_or_id) {
+        if ($updatedUser['name'] === $name && $updatedUser['surname'] === $surname && $updatedUser['email'] === $email && $updatedUser['phone'] === $phone && $updatedUser['address'] === $address && $updatedUser['pesel_or_id'] === $pesel_or_id) {
             echo json_encode(['success' => 'Profile updated successfully.']);
         } else {
             echo json_encode(['error' => 'Failed to verify profile update.']);

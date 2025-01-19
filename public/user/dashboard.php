@@ -20,6 +20,12 @@ $_SESSION['last_activity'] = time();
 
 $userId = $_SESSION['user_id'];
 
+// Ensure user document directory exists
+$userDocumentDir = "../../uploads/users/$userId";
+if (!is_dir($userDocumentDir)) {
+    mkdir($userDocumentDir, 0777, true);
+}
+
 // Fetch user bookings
 $bookings = $conn->query("
     SELECT b.id, f.make, f.model, f.registration_number, b.pickup_date, b.dropoff_date, b.total_price, b.status, b.rental_contract_pdf 
@@ -33,7 +39,7 @@ $bookings = $conn->query("
 $userDetails = $conn->query("SELECT * FROM users WHERE id = $userId")->fetch_assoc();
 
 // Fetch user documents
-$userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
+$userDocuments = glob("$userDocumentDir/*.{pdf}", GLOB_BRACE);
 ?>
 
 <!DOCTYPE html>
@@ -43,7 +49,7 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Użytkownika</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="/home/u122931475/domains/carfuse.pl/public_html/assets/css/theme.css" rel="stylesheet">
+    <link href="/assets/css/theme.css" rel="stylesheet">
 
     <style>
         body {
