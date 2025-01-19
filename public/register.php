@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 
 <body>
-    <?php include '../views/shared/navbar.php'; ?>
+    <?php include '../views/shared/navbar_empty.php'; ?>
 
     <div class="container d-flex justify-content-center align-items-center vh-100">
         <div class="card p-4">

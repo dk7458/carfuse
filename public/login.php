@@ -45,6 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 
 <body>
+    <?php include '../views/shared/navbar_empty.php'; ?>
+
     <div class="container d-flex justify-content-center align-items-center vh-100">
         <div class="card p-4 standard-form">
             <h1 class="text-center mb-4">Logowanie</h1>

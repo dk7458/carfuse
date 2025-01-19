@@ -44,7 +44,7 @@
 }
 
 .btn-danger {
-    background-color: #dc3545;
+    background-color: #ff3e3e;
     border: none;
     padding: 12px 24px;
     font-size: 1rem;
@@ -52,7 +52,7 @@
 }
 
 .btn-danger:hover {
-    background-color: #c82333;
+    background-color: #f70000;
 }
 
 /* General Theme Variables */
@@ -60,6 +60,7 @@
     --primary-color: #007bff;
     --secondary-color: #6c757d;
     --background-color: #f8f9fa;
+    --accent-color: #007bff;
     --font-family: 'Arial', sans-serif;
 }
 
@@ -86,7 +87,7 @@ a:hover {
 }
 
 .navbar .nav-link {
-    color: white !important;
+    color: black !important;
 }
 
 .navbar .nav-link:hover {
@@ -99,7 +100,7 @@ a:hover {
 
 /* Hero Button Styles */
 .hero .btn-primary {
-    background-color: var(--primary-color);
+    background-color: var(--accent-color);
     border: none;
     padding: 12px 24px;
     font-size: 1.2rem;
@@ -108,5 +109,5 @@ a:hover {
 }
 
 .hero .btn-primary:hover {
-    background-color: #0056b3;
+    background-color: #007bff;
 }

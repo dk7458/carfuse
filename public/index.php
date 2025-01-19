@@ -12,10 +12,6 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="/theme.css">
     <style>
-        :root {
-            --accent-color: #ff5722;
-        }
-
         body {
             margin: 0;
             padding: 0;
@@ -98,8 +94,8 @@
 
         /* Footer */
         footer {
-            background: #343a40;
-            color: white;
+            background: #e8e8e8;
+            color: black;
             padding: 40px 0;
             text-align: center;
         }
