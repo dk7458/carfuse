@@ -122,7 +122,7 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
 
                 <div id="manage-admins" class="collapse">
                     <h2 class="mt-5">Zarządzaj Administratorami</h2>
-                    <!-- Add manage admins functionality here -->
+                    <?php include '../../views/admin/manage_admins.php'; ?>
                 </div>
 
                 <div id="signature-management" class="collapse">
