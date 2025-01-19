@@ -1,47 +1,181 @@
-<?php
-require '../includes/db_connect.php';
-?>
-
 <!DOCTYPE html>
 <html lang="pl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carfuse - Wynajem Samochodów</title>
+    <title>Wynajem Samochodów</title>
+    <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --accent-color: #ff5722;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+        }
+
+        /* Header */
+        .navbar {
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        .navbar .nav-link {
+            color: white !important;
+        }
+
+        .navbar .nav-link:hover {
+            color: var(--accent-color) !important;
+        }
+
+        .navbar-brand img {
+            max-height: 50px;
+        }
+
+        /* Hero Section */
+        .hero {
+            background: url('https://source.unsplash.com/1600x900/?car,road') no-repeat center center;
+            background-size: cover;
+            height: 100vh;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .hero .btn-primary {
+            background-color: var(--accent-color);
+            border: none;
+            padding: 12px 24px;
+            font-size: 1.2rem;
+            border-radius: 50px;
+            margin-top: 20px;
+        }
+
+        .hero .btn-primary:hover {
+            background-color: #e64a19;
+        }
+
+        /* Features Section */
+        .features {
+            padding: 50px 0;
+        }
+
+        .features .feature-box {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .features .feature-box i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            color: var(--accent-color);
+        }
+
+        /* Booking Section */
+        #book-now {
+            margin: 50px auto;
+            max-width: 800px;
+        }
+
+        /* Footer */
+        footer {
+            background: #343a40;
+            color: white;
+            padding: 40px 0;
+            text-align: center;
+        }
+    </style>
 </head>
+
 <body>
-    <?php include '../views/shared/navbar.php'; ?>
-
-    <div class="hero" style="background: url('https://source.unsplash.com/1600x900/?car,travel') no-repeat center center; background-size: cover; height: 100vh;">
-        <div class="d-flex align-items-center justify-content-center flex-column text-center text-white" style="height: 100%;">
-            <h1 class="display-3">Odkryj Nowe Horyzonty</h1>
-            <p class="lead">Najlepsze samochody na każdą podróż</p>
-            <a href="/public/register.php" class="btn btn-primary btn-lg">Zarejestruj się teraz</a>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="#"><img src="logo.png" alt="Logo"></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="#features">Usługi</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#book-now">Rezerwacja</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#about">O nas</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#contact">Kontakt</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/public/login.php">Zaloguj się</a></li>
+                </ul>
+            </div>
         </div>
-    </div>
+    </nav>
 
-    <div class="container text-center py-5">
-        <h2>Dlaczego warto nas wybrać?</h2>
-        <div class="row mt-4">
-            <div class="col-md-4">
-                <i class="bi bi-car-front-fill" style="font-size: 3rem; color: #007bff;"></i>
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1 class="display-3 fw-bold">Odkryj Nowe Horyzonty</h1>
+        <p class="lead">Najlepsze samochody na każdą podróż</p>
+        <a href="#book-now" class="btn btn-primary">Zarezerwuj teraz</a>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features container text-center">
+        <h2 class="fw-bold mb-5">Dlaczego My?</h2>
+        <div class="row">
+            <div class="col-md-4 feature-box">
+                <i class="bi bi-car-front-fill"></i>
                 <h4 class="mt-3">Szeroki Wybór</h4>
                 <p>Wybierz z różnorodnych pojazdów dostosowanych do Twoich potrzeb.</p>
             </div>
-            <div class="col-md-4">
-                <i class="bi bi-currency-dollar" style="font-size: 3rem; color: #007bff;"></i>
+            <div class="col-md-4 feature-box">
+                <i class="bi bi-currency-dollar"></i>
                 <h4 class="mt-3">Przystępne Ceny</h4>
                 <p>Najwyższa jakość w rozsądnej cenie.</p>
             </div>
-            <div class="col-md-4">
-                <i class="bi bi-shield-check" style="font-size: 3rem; color: #007bff;"></i>
+            <div class="col-md-4 feature-box">
+                <i class="bi bi-shield-check"></i>
                 <h4 class="mt-3">Zaufana Obsługa</h4>
                 <p>Bezpieczny wynajem z najlepszą obsługą klienta.</p>
             </div>
         </div>
-    </div>
+    </section>
 
-    <?php include '../views/shared/footer.php'; ?>
+    <!-- Booking Section -->
+    <section id="book-now" class="container py-5">
+        <h2 class="fw-bold text-center mb-5">Zarezerwuj Swój Pojazd</h2>
+        <form method="POST" action="/public/booking_process.php" class="row g-3">
+            <div class="col-md-6">
+                <label for="pickup-location" class="form-label">Miejsce odbioru</label>
+                <input type="text" class="form-control" id="pickup-location" name="pickupLocation" placeholder="Wprowadź lokalizację" required>
+            </div>
+            <div class="col-md-6">
+                <label for="dropoff-location" class="form-label">Miejsce zwrotu</label>
+                <input type="text" class="form-control" id="dropoff-location" name="dropoffLocation" placeholder="Wprowadź lokalizację" required>
+            </div>
+            <div class="col-md-6">
+                <label for="pickup-date" class="form-label">Data odbioru</label>
+                <input type="date" class="form-control" id="pickup-date" name="pickupDate" required>
+            </div>
+            <div class="col-md-6">
+                <label for="dropoff-date" class="form-label">Data zwrotu</label>
+                <input type="date" class="form-control" id="dropoff-date" name="dropoffDate" required>
+            </div>
+            <div class="col-12 text-center">
+                <button type="submit" class="btn btn-primary btn-lg">Wyszukaj</button>
+            </div>
+        </form>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2025 Wynajem Samochodów. Wszystkie prawa zastrzeżone.</p>
+    </footer>
 </body>
+
 </html>
