@@ -54,7 +54,7 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
             <div class="col-md-3">
                 <div class="list-group">
                     <a href="#bookings" class="list-group-item list-group-item-action active" data-bs-toggle="collapse" aria-expanded="true">Rezerwacje</a>
-                    <a href="/public/user/profile.php" class="list-group-item list-group-item-action">Profil</a>
+                    <a href="#profile" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Profil</a>
                     <a href="#personal-data" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zmień Dane Osobowe</a>
                     <a href="#reset-password" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zresetuj Hasło</a>
                     <a href="#documents" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Twoje Dokumenty</a>
@@ -113,6 +113,18 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
                             Nie masz żadnych aktywnych rezerwacji.
                         </div>
                     <?php endif; ?>
+                </div>
+
+                <div id="profile" class="collapse">
+                    <h2 class="mt-5">Twój Profil</h2>
+                    <div class="card p-4">
+                        <h2>Dane Osobowe</h2>
+                        <p><strong>Imię:</strong> <?php echo $userDetails['name']; ?></p>
+                        <p><strong>Nazwisko:</strong> <?php echo $userDetails['surname']; ?></p>
+                        <p><strong>E-mail:</strong> <?php echo $userDetails['email']; ?></p>
+                        <p><strong>Adres:</strong> <?php echo $userDetails['address']; ?></p>
+                        <p><strong>PESEL lub Numer Dowodu:</strong> <?php echo $userDetails['pesel_or_id']; ?></p>
+                    </div>
                 </div>
 
                 <div id="personal-data" class="collapse">
@@ -200,6 +212,16 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
                         viewport: viewport
                     };
                     page.render(renderContext);
+                });
+            });
+        });
+
+        document.querySelectorAll('.list-group-item-action').forEach(item => {
+            item.addEventListener('click', function () {
+                document.querySelectorAll('.collapse').forEach(collapse => {
+                    if (collapse.id !== this.getAttribute('href').substring(1)) {
+                        collapse.classList.remove('show');
+                    }
                 });
             });
         });

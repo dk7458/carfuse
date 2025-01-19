@@ -1,3 +1,7 @@
+<?php
+session_start();
+$userRole = $_SESSION['user_role'] ?? null;
+?>
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
     <div class="container">
         <a class="navbar-brand" href="/public/index.php">Carfuse</a>
@@ -8,7 +12,7 @@
             <ul class="navbar-nav ms-auto">
                 <?php if (isset($_SESSION['user_id'])): ?>
                     <li class="nav-item"><a class="nav-link" href="/public/profile.php">Profil</a></li>
-                    <?php if ($_SESSION['user_role'] === 'admin'): ?>
+                    <?php if ($userRole === 'admin'): ?>
                         <li class="nav-item"><a class="nav-link" href="/public/admin/dashboard.php">Panel Administratora</a></li>
                     <?php endif; ?>
                     <li class="nav-item"><a class="nav-link" href="/public/logout.php">Wyloguj</a></li>
