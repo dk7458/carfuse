@@ -24,7 +24,7 @@
 
         /* Header */
         .navbar {
-            background: rgba(0, 0, 0, 0.8);
+            background: #e8e8e8;
         }
 
         .navbar .nav-link {

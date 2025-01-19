@@ -23,6 +23,6 @@ $_SESSION['LAST_ACTIVITY'] = time();
 session_unset();
 session_destroy();
 
-header('Location: /public/login.php');
+header('Location: /public/index.php');
 exit;
 ?>
