@@ -44,10 +44,10 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
         <div class="row">
             <div class="col-md-3">
                 <div class="list-group">
-                    <a href="#bookings" class="list-group-item list-group-item-action active" data-bs-toggle="collapse">Rezerwacje</a>
-                    <a href="#personal-data" class="list-group-item list-group-item-action" data-bs-toggle="collapse">Zmień Dane Osobowe</a>
-                    <a href="#reset-password" class="list-group-item list-group-item-action" data-bs-toggle="collapse">Zresetuj Hasło</a>
-                    <a href="#documents" class="list-group-item list-group-item-action" data-bs-toggle="collapse">Twoje Dokumenty</a>
+                    <a href="#bookings" class="list-group-item list-group-item-action active" data-bs-toggle="collapse" aria-expanded="true">Rezerwacje</a>
+                    <a href="#personal-data" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zmień Dane Osobowe</a>
+                    <a href="#reset-password" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zresetuj Hasło</a>
+                    <a href="#documents" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Twoje Dokumenty</a>
                 </div>
             </div>
             <div class="col-md-9">
@@ -194,5 +194,7 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
             });
         });
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
 </body>
 </html>
