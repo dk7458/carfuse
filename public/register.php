@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .form-control {
-            max-width: 300px;
+            max-width: 350px;
         }
     </style>
 </head>
