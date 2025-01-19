@@ -1,6 +1,6 @@
 <?php
-require '../../includes/db_connect.php';
-require '../../includes/functions.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
 session_start();
 
@@ -32,7 +32,7 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
     <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
-    <?php include '../../views/shared/navbar_admin.php'; ?>
+    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/shared/navbar_admin.php'; ?>
 
     <div class="container mt-5">
         <div class="row">
@@ -84,7 +84,7 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
 
                 <div id="users" class="collapse">
                     <h2 class="mt-5">Użytkownicy</h2>
-                    <?php include '/home/u122931475/domains/carfuse.pl/public_html/public/views/admin/manage_users.php'; ?>
+                    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/admin/manage_users.php'; ?>
                 </div>
 
                 <div id="bookings" class="collapse">
@@ -124,12 +124,12 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
 
                 <div id="manage-admins" class="collapse">
                     <h2 class="mt-5">Zarządzaj Administratorami</h2>
-                    <?php include '../../views/admin/manage_admins.php'; ?>
+                    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/admin/manage_admins.php'; ?>
                 </div>
 
                 <div id="signature-management" class="collapse">
                     <h2 class="mt-5">Zarządzaj Podpisami</h2>
-                    <?php include '../../views/admin/signature_management.php'; ?>
+                    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/admin/signature_management.php'; ?>
                 </div>
             </div>
         </div>
