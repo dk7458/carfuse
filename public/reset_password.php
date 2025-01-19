@@ -53,12 +53,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Resetowanie Hasła</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/assets/css/theme.css" rel="stylesheet">
 </head>
 <body>
     <div class="container mt-5">
         <h1 class="text-center">Resetowanie Hasła</h1>
         <?php include '../views/shared/messages.php'; ?>
-        <form method="POST" action="">
+        <form method="POST" action="" class="standard-form">
             <div class="mb-3">
                 <label for="email" class="form-label">Adres e-mail</label>
                 <input type="email" id="email" name="email" class="form-control" required>

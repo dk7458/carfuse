@@ -45,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zarządzanie Flotą</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/assets/css/theme.css" rel="stylesheet">
 </head>
 <body>
     <?php include '../../views/shared/navbar.php'; ?>
@@ -54,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <?php include '../../views/shared/messages.php'; ?>
 
-        <form method="POST" class="row g-3 mt-4">
+        <form method="POST" class="standard-form row g-3 mt-4">
             <div class="col-md-4">
                 <label for="make" class="form-label">Marka</label>
                 <input type="text" id="make" name="make" class="form-control" required>

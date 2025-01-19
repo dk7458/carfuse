@@ -136,7 +136,7 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
 
                 <div id="personal-data" class="collapse">
                     <h2 class="mt-5">Zmień Dane Osobowe</h2>
-                    <form action="/controllers/user_controller.php" method="POST">
+                    <form action="/controllers/user_controller.php" method="POST" class="standard-form">
                         <input type="hidden" name="action" value="update_profile">
                         <div class="mb-3">
                             <label for="name" class="form-label">Imię</label>
@@ -164,7 +164,7 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
 
                 <div id="reset-password" class="collapse">
                     <h2 class="mt-5">Zresetuj Hasło</h2>
-                    <form action="/controllers/user_controller.php" method="POST">
+                    <form action="/controllers/user_controller.php" method="POST" class="standard-form">
                         <input type="hidden" name="action" value="reset_password">
                         <div class="mb-3">
                             <label for="current_password" class="form-label">Obecne Hasło</label>
