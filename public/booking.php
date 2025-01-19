@@ -23,7 +23,7 @@ $vehicles = $conn->query("SELECT id, make, model, registration_number, price_per
     <title>Rezerwacja Pojazdu</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="../styles/settings.css" rel="stylesheet">
-    <link href="/public/assets/css/theme.css" rel="stylesheet">
+    <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
     <?php include '../views/shared/navbar.php'; ?>
