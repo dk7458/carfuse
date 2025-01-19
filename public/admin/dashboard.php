@@ -83,52 +83,42 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
                 </div>
 
                 <div id="users" class="collapse">
-                    <h2 class="mt-5">Użytkownicy</h2>
                     <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/admin/manage_users.php'; ?>
                 </div>
 
                 <div id="bookings" class="collapse">
-                    <h2 class="mt-5">Rezerwacje</h2>
                     <?php include 'booking_management.php'; ?>
                 </div>
 
                 <div id="vehicles" class="collapse">
-                    <h2 class="mt-5">Pojazdy</h2>
                     <?php include 'fleet_management.php'; ?>
                 </div>
 
                 <div id="maintenance" class="collapse">
-                    <h2 class="mt-5">Konserwacja</h2>
                     <?php include 'maintenance_management.php'; ?>
                 </div>
 
                 <div id="reports" class="collapse">
-                    <h2 class="mt-5">Raporty</h2>
                     <?php include 'reports_management.php'; ?>
                 </div>
 
                 <div id="contracts" class="collapse">
-                    <h2 class="mt-5">Umowy</h2>
                     <?php include 'contract_management.php'; ?>
                 </div>
 
                 <div id="notifications" class="collapse">
-                    <h2 class="mt-5">Powiadomienia</h2>
                     <?php include 'notifications_management.php'; ?>
                 </div>
 
                 <div id="notification-settings" class="collapse">
-                    <h2 class="mt-5">Ustawienia Powiadomień</h2>
                     <?php include 'notification_settings_management.php'; ?>
                 </div>
 
                 <div id="manage-admins" class="collapse">
-                    <h2 class="mt-5">Zarządzaj Administratorami</h2>
                     <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/admin/manage_admins.php'; ?>
                 </div>
 
                 <div id="signature-management" class="collapse">
-                    <h2 class="mt-5">Zarządzaj Podpisami</h2>
                     <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/admin/signature_management.php'; ?>
                 </div>
             </div>
