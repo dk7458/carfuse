@@ -126,11 +126,11 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
                     <h2 class="mt-5">Twój Profil</h2>
                     <div class="card p-4">
                         <h2>Dane Osobowe</h2>
-                        <p><strong>Imię:</strong> <?php echo $userDetails['name']; ?></p>
-                        <p><strong>Nazwisko:</strong> <?php echo $userDetails['surname']; ?></p>
-                        <p><strong>E-mail:</strong> <?php echo $userDetails['email']; ?></p>
-                        <p><strong>Adres:</strong> <?php echo $userDetails['address']; ?></p>
-                        <p><strong>PESEL lub Numer Dowodu:</strong> <?php echo $userDetails['pesel_or_id']; ?></p>
+                        <p><strong>Imię:</strong> <span><?php echo $userDetails['name']; ?></span></p>
+                        <p><strong>Nazwisko:</strong> <span><?php echo $userDetails['surname']; ?></span></p>
+                        <p><strong>E-mail:</strong> <span><?php echo $userDetails['email']; ?></span></p>
+                        <p><strong>Adres:</strong> <span><?php echo $userDetails['address']; ?></span></p>
+                        <p><strong>PESEL lub Numer Dowodu:</strong> <span><?php echo $userDetails['pesel_or_id']; ?></span></p>
                         <a href="#personal-data" class="btn btn-primary mt-3" data-bs-toggle="collapse" aria-expanded="false">Zmień Dane Osobowe</a>
                     </div>
                 </div>
@@ -241,6 +241,21 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
                         var message = jsonResponse.success || jsonResponse.error;
                         $('#responseMessage').text(message);
                         $('#responseModal').modal('show');
+
+                        if (jsonResponse.success) {
+                            // Update profile section with the latest data
+                            $.ajax({
+                                url: '/user/get_user_details.php',
+                                method: 'GET',
+                                success: function(data) {
+                                    var userDetails = JSON.parse(data);
+                                    $('#profile .card p').each(function() {
+                                        var field = $(this).find('strong').text().toLowerCase().replace(':', '');
+                                        $(this).find('span').text(userDetails[field]);
+                                    });
+                                }
+                            });
+                        }
                     },
                     error: function() {
                         $('#responseMessage').text('An error occurred. Please try again.');
