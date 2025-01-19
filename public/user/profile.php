@@ -22,7 +22,8 @@ $userDetails = $conn->query("SELECT * FROM users WHERE id = $userId")->fetch_ass
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profil Użytkownika</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../../styles/settings.css" rel="stylesheet">
+    <link href="/public/assets/css/theme.css" rel="stylesheet">
+
 </head>
 <body>
     <?php include '../../views/shared/navbar.php'; ?>

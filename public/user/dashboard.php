@@ -43,7 +43,8 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Użytkownika</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../../styles/settings.css" rel="stylesheet">
+    <link href="/public/assets/css/theme.css" rel="stylesheet">
+
     <style>
         body {
             overflow-y: scroll;
