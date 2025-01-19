@@ -84,7 +84,7 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
 
                 <div id="users" class="collapse">
                     <h2 class="mt-5">Użytkownicy</h2>
-                    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/admin/manage_users.php'; ?>
+                    <?php include '/home/u122931475/domains/carfuse.pl/public_html/public/views/admin/manage_users.php'; ?>
                 </div>
 
                 <div id="bookings" class="collapse">
