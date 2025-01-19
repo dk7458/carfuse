@@ -162,6 +162,10 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
                             <label for="pesel_or_id" class="form-label">PESEL lub Numer Dowodu</label>
                             <input type="text" id="pesel_or_id" name="pesel_or_id" class="form-control" value="<?php echo $userDetails['pesel_or_id']; ?>" required>
                         </div>
+                        <div class="mb-3">
+                            <label for="phone" class="form-label">Telefon</label>
+                            <input type="text" id="phone" name="phone" class="form-control" value="<?php echo $userDetails['phone']; ?>" required>
+                        </div>
                         <button type="submit" class="btn btn-primary">Zapisz Zmiany</button>
                     </form>
                 </div>
