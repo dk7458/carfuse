@@ -44,6 +44,11 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
     <title>Dashboard Użytkownika</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="../../styles/settings.css" rel="stylesheet">
+    <style>
+        body {
+            overflow-y: scroll;
+        }
+    </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
 </head>
 <body>
@@ -124,6 +129,7 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
                         <p><strong>E-mail:</strong> <?php echo $userDetails['email']; ?></p>
                         <p><strong>Adres:</strong> <?php echo $userDetails['address']; ?></p>
                         <p><strong>PESEL lub Numer Dowodu:</strong> <?php echo $userDetails['pesel_or_id']; ?></p>
+                        <a href="#personal-data" class="btn btn-primary mt-3" data-bs-toggle="collapse" aria-expanded="false">Zmień Dane Osobowe</a>
                     </div>
                 </div>
 
