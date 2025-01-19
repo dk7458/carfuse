@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->fetch();
             if (password_verify($password, $hashedPassword)) {
                 $_SESSION['user_id'] = $userId;
-                header("Location: dashboard.php");
+                header("Location: /public/user/dashboard.php");
                 exit;
             } else {
                 $_SESSION['error_message'] = "Nieprawidłowe hasło.";

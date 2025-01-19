@@ -19,6 +19,12 @@ $bookings = $conn->query("
     WHERE b.user_id = $userId
     ORDER BY b.created_at DESC
 ");
+
+// Fetch user details
+$userDetails = $conn->query("SELECT * FROM users WHERE id = $userId")->fetch_assoc();
+
+// Fetch user documents
+$userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
 ?>
 
 <!DOCTYPE html>
@@ -29,6 +35,7 @@ $bookings = $conn->query("
     <title>Dashboard Użytkownika</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="../../styles/settings.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
 </head>
 <body>
     <?php include '../../views/shared/navbar.php'; ?>
@@ -81,6 +88,75 @@ $bookings = $conn->query("
                 Nie masz żadnych aktywnych rezerwacji.
             </div>
         <?php endif; ?>
+
+        <h2 class="mt-5">Zmień Dane Osobowe</h2>
+        <form action="/controllers/user_controller.php" method="POST">
+            <input type="hidden" name="action" value="update_profile">
+            <div class="mb-3">
+                <label for="name" class="form-label">Imię</label>
+                <input type="text" id="name" name="name" class="form-control" value="<?php echo $userDetails['name']; ?>" required>
+            </div>
+            <div class="mb-3">
+                <label for="email" class="form-label">E-mail</label>
+                <input type="email" id="email" name="email" class="form-control" value="<?php echo $userDetails['email']; ?>" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Zapisz Zmiany</button>
+        </form>
+
+        <h2 class="mt-5">Zresetuj Hasło</h2>
+        <form action="/controllers/user_controller.php" method="POST">
+            <input type="hidden" name="action" value="reset_password">
+            <div class="mb-3">
+                <label for="current_password" class="form-label">Obecne Hasło</label>
+                <input type="password" id="current_password" name="current_password" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label for="new_password" class="form-label">Nowe Hasło</label>
+                <input type="password" id="new_password" name="new_password" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label for="confirm_password" class="form-label">Potwierdź Nowe Hasło</label>
+                <input type="password" id="confirm_password" name="confirm_password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Zresetuj Hasło</button>
+        </form>
+
+        <h2 class="mt-5">Twoje Dokumenty</h2>
+        <?php if (!empty($userDocuments)): ?>
+            <ul class="list-group">
+                <?php foreach ($userDocuments as $document): ?>
+                    <li class="list-group-item">
+                        <a href="<?php echo $document; ?>" target="_blank"><?php echo basename($document); ?></a>
+                        <div id="pdf-viewer-<?php echo basename($document, ".pdf"); ?>" class="pdf-viewer"></div>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php else: ?>
+            <div class="alert alert-info">Brak dokumentów do wyświetlenia.</div>
+        <?php endif; ?>
     </div>
+
+    <script>
+        document.querySelectorAll('.pdf-viewer').forEach(viewer => {
+            const url = viewer.previousElementSibling.href;
+            const loadingTask = pdfjsLib.getDocument(url);
+            loadingTask.promise.then(pdf => {
+                pdf.getPage(1).then(page => {
+                    const scale = 1.5;
+                    const viewport = page.getViewport({ scale: scale });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    viewer.appendChild(canvas);
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+                    page.render(renderContext);
+                });
+            });
+        });
+    </script>
 </body>
 </html>
