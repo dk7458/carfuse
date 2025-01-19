@@ -31,17 +31,17 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
         <div class="row">
             <div class="col-md-3">
                 <div class="list-group">
-                    <a href="#summary" class="list-group-item list-group-item-action active" data-bs-toggle="collapse" aria-expanded="true">Podsumowanie</a>
-                    <a data-bs-target="#users" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Użytkownicy</a>
-                    <a href="#bookings" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Rezerwacje</a>
-                    <a href="#vehicles" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Pojazdy</a>
-                    <a href="#maintenance" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Konserwacja</a>
-                    <a href="#reports" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Raporty</a>
-                    <a href="#contracts" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Umowy</a>
-                    <a href="#notifications" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Powiadomienia</a>
-                    <a href="#notification-settings" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Ustawienia Powiadomień</a>
-                    <a href="#manage-admins" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zarządzaj Administratorami</a>
-                    <a href="#signature-management" class="list-group-item list-group-item-action" data-bs-toggle="collapse" aria-expanded="false">Zarządzaj Podpisami</a>
+                    <a href="#summary" class="list-group-item list-group-item-action active" aria-expanded="true">Podsumowanie</a>
+                    <a href="#users" class="list-group-item list-group-item-action" aria-expanded="false">Użytkownicy</a>
+                    <a href="#bookings" class="list-group-item list-group-item-action" aria-expanded="false">Rezerwacje</a>
+                    <a href="#vehicles" class="list-group-item list-group-item-action" aria-expanded="false">Pojazdy</a>
+                    <a href="#maintenance" class="list-group-item list-group-item-action" aria-expanded="false">Konserwacja</a>
+                    <a href="#reports" class="list-group-item list-group-item-action" aria-expanded="false">Raporty</a>
+                    <a href="#contracts" class="list-group-item list-group-item-action" aria-expanded="false">Umowy</a>
+                    <a href="#notifications" class="list-group-item list-group-item-action" aria-expanded="false">Powiadomienia</a>
+                    <a href="#notification-settings" class="list-group-item list-group-item-action" aria-expanded="false">Ustawienia Powiadomień</a>
+                    <a href="#manage-admins" class="list-group-item list-group-item-action" aria-expanded="false">Zarządzaj Administratorami</a>
+                    <a href="#signature-management" class="list-group-item list-group-item-action" aria-expanded="false">Zarządzaj Podpisami</a>
                 </div>
             </div>
             <div class="col-md-9">
