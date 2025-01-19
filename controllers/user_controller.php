@@ -1,6 +1,6 @@
 <?php
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+require __DIR__ . '../../includes/db_connect.php';
+require __DIR__ . '../../includes/functions.php';
 
 session_start();
 
@@ -16,16 +16,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $name = htmlspecialchars($_POST['name']);
     $email = sanitizeEmail($_POST['email']);
     $phone = htmlspecialchars($_POST['phone']);
+    $address = htmlspecialchars($_POST['address_part1'] . ' ' . $_POST['address_part2']);
+    $pesel_or_id = htmlspecialchars($_POST['pesel_or_id']);
 
     $stmt = $conn->prepare("
         UPDATE users 
-        SET name = ?, email = ?, phone = ? 
+        SET name = ?, email = ?, phone = ?, address = ?, pesel_or_id = ? 
         WHERE id = ?
     ");
-    $stmt->bind_param("sssi", $name, $email, $phone, $_SESSION['user_id']);
+    $stmt->bind_param("sssssi", $name, $email, $phone, $address, $pesel_or_id, $_SESSION['user_id']);
 
     if ($stmt->execute()) {
-        echo json_encode(['success' => 'Profile updated successfully.']);
+        // Verify the update
+        $stmt = $conn->prepare("SELECT name, email, phone, address, pesel_or_id FROM users WHERE id = ?");
+        $stmt->bind_param("i", $_SESSION['user_id']);
+        $stmt->execute();
+        $updatedUser = $stmt->get_result()->fetch_assoc();
+
+        if ($updatedUser['name'] === $name && $updatedUser['email'] === $email && $updatedUser['phone'] === $phone && $updatedUser['address'] === $address && $updatedUser['pesel_or_id'] === $pesel_or_id) {
+            echo json_encode(['success' => 'Profile updated successfully.']);
+        } else {
+            echo json_encode(['error' => 'Failed to verify profile update.']);
+        }
     } else {
         echo json_encode(['error' => 'Failed to update profile.']);
     }

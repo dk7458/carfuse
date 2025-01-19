@@ -1,7 +1,5 @@
-
 <?php
-require '/home/u122931475/domains/carfuse.pl/public_html/controllers/user_controller.php';
-
+require __DIR__ . '../../controllers/user_controller.php';
 
 $action = $_POST['action'] ?? '';
 
