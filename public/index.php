@@ -55,12 +55,12 @@
             border: none;
             padding: 12px 24px;
             font-size: 1.2rem;
-            border-radius: 50px;
+            border-radius: 0; /* Match other buttons */
             margin-top: 20px;
         }
 
         .hero .btn-primary:hover {
-            background-color: #e64a19;
+            background-color: #0056b3;
         }
 
         /* Features Section */
@@ -87,7 +87,7 @@
 
         .form-control {
             width: 100%;
-            max-width: 400px;
+            max-width: 800px; /* Twice as wide */
             margin: 10px auto;
             padding: 10px;
             font-size: 1rem;
