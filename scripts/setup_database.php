@@ -14,6 +14,19 @@ function createTable($conn, $tableName, $createQuery) {
     }
 }
 
+function checkAndAddColumn($conn, $tableName, $columnName, $columnDefinition) {
+    $result = $conn->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
+    if ($result->num_rows === 0) {
+        if ($conn->query("ALTER TABLE `$tableName` ADD `$columnName` $columnDefinition")) {
+            echo "Column '$columnName' added to table '$tableName'.<br>";
+        } else {
+            echo "Error adding column '$columnName' to table '$tableName': " . $conn->error . "<br>";
+        }
+    } else {
+        echo "Column '$columnName' already exists in table '$tableName'.<br>";
+    }
+}
+
 // Users Table
 createTable($conn, 'users', "
     CREATE TABLE users (
@@ -29,6 +42,10 @@ createTable($conn, 'users', "
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
 ");
+
+checkAndAddColumn($conn, 'users', 'phone', 'VARCHAR(15)');
+checkAndAddColumn($conn, 'users', 'address', 'TEXT');
+checkAndAddColumn($conn, 'users', 'pesel_or_id', 'VARCHAR(20)');
 
 // Fleet Table
 createTable($conn, 'fleet', "
@@ -96,17 +113,16 @@ createTable($conn, 'maintenance_logs', "
         FOREIGN KEY (vehicle_id) REFERENCES fleet(id) ON DELETE CASCADE
     )
 ");
-$conn->query("ALTER TABLE users ADD CONSTRAINT UNIQUE (email)");
 
 createTable($conn, 'password_resets', "
-CREATE TABLE password_resets (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    email VARCHAR(255) NOT NULL,
-    token VARCHAR(255) NOT NULL,
-    expires_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (email) REFERENCES users(email) ON DELETE CASCADE
-);
+    CREATE TABLE password_resets (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        token VARCHAR(255) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (email) REFERENCES users(email) ON DELETE CASCADE
+    )
 ");
 
 echo "Database setup completed.<br>";
