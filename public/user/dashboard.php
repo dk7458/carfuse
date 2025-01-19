@@ -237,24 +237,31 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
                     url: form.attr('action'),
                     data: form.serialize(),
                     success: function(response) {
-                        var jsonResponse = JSON.parse(response);
-                        var message = jsonResponse.success || jsonResponse.error;
-                        $('#responseMessage').text(message);
-                        $('#responseModal').modal('show');
+                        console.log(response); // Log the response for debugging
+                        try {
+                            var jsonResponse = JSON.parse(response);
+                            var message = jsonResponse.success || jsonResponse.error;
+                            $('#responseMessage').text(message);
+                            $('#responseModal').modal('show');
 
-                        if (jsonResponse.success) {
-                            // Update profile section with the latest data
-                            $.ajax({
-                                url: '/user/get_user_details.php',
-                                method: 'GET',
-                                success: function(data) {
-                                    var userDetails = JSON.parse(data);
-                                    $('#profile .card p').each(function() {
-                                        var field = $(this).find('strong').text().toLowerCase().replace(':', '');
-                                        $(this).find('span').text(userDetails[field]);
-                                    });
-                                }
-                            });
+                            if (jsonResponse.success) {
+                                // Update profile section with the latest data
+                                $.ajax({
+                                    url: '/user/get_user_details.php',
+                                    method: 'GET',
+                                    success: function(data) {
+                                        var userDetails = JSON.parse(data);
+                                        $('#profile .card p').each(function() {
+                                            var field = $(this).find('strong').text().toLowerCase().replace(':', '');
+                                            $(this).find('span').text(userDetails[field]);
+                                        });
+                                    }
+                                });
+                            }
+                        } catch (e) {
+                            console.error('Invalid JSON response:', response);
+                            $('#responseMessage').text('An error occurred. Please try again.');
+                            $('#responseModal').modal('show');
                         }
                     },
                     error: function() {
@@ -263,35 +270,35 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
                     }
                 });
             });
-        });
 
-        document.querySelectorAll('.pdf-viewer').forEach(viewer => {
-            const url = viewer.previousElementSibling.href;
-            const loadingTask = pdfjsLib.getDocument(url);
-            loadingTask.promise.then(pdf => {
-                pdf.getPage(1).then(page => {
-                    const scale = 1.5;
-                    const viewport = page.getViewport({ scale: scale });
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-                    viewer.appendChild(canvas);
-                    const renderContext = {
-                        canvasContext: context,
-                        viewport: viewport
-                    };
-                    page.render(renderContext);
+            document.querySelectorAll('.pdf-viewer').forEach(viewer => {
+                const url = viewer.previousElementSibling.href;
+                const loadingTask = pdfjsLib.getDocument(url);
+                loadingTask.promise.then(pdf => {
+                    pdf.getPage(1).then(page => {
+                        const scale = 1.5;
+                        const viewport = page.getViewport({ scale: scale });
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        viewer.appendChild(canvas);
+                        const renderContext = {
+                            canvasContext: context,
+                            viewport: viewport
+                        };
+                        page.render(renderContext);
+                    });
                 });
             });
-        });
 
-        document.querySelectorAll('.list-group-item-action').forEach(item => {
-            item.addEventListener('click', function () {
-                document.querySelectorAll('.collapse').forEach(collapse => {
-                    if (collapse.id !== this.getAttribute('href').substring(1)) {
-                        collapse.classList.remove('show');
-                    }
+            document.querySelectorAll('.list-group-item-action').forEach(item => {
+                item.addEventListener('click', function () {
+                    document.querySelectorAll('.collapse').forEach(collapse => {
+                        if (collapse.id !== this.getAttribute('href').substring(1)) {
+                            collapse.classList.remove('show');
+                        }
+                    });
                 });
             });
         });

@@ -1,6 +1,6 @@
 <?php
-require __DIR__ . '../../includes/db_connect.php';
-require __DIR__ . '../../includes/functions.php';
+require '../../includes/db_connect.php';
+require '../../includes/functions.php';
 
 session_start();
 
