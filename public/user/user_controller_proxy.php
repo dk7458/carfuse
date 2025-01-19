@@ -1,6 +1,6 @@
 
 <?php
-require '../../../controllers/user_controller.php';
+require '/controllers/user_controller.php';
 
 $action = $_POST['action'] ?? '';
 
