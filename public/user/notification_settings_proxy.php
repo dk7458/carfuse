@@ -6,7 +6,8 @@ session_start();
 
 // Ensure user is logged in
 if (!isset($_SESSION['user_id'])) {
-    redirect('/login.php');
+    echo json_encode(['error' => 'User not logged in']);
+    exit();
 }
 
 $userId = $_SESSION['user_id'];
@@ -23,11 +24,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->bind_param("iii", $emailNotifications, $smsNotifications, $userId);
 
     if ($stmt->execute()) {
-        $_SESSION['success_message'] = "Preferencje powiadomień zostały zaktualizowane.";
+        echo json_encode(['success' => 'Preferencje powiadomień zostały zaktualizowane.']);
     } else {
-        $_SESSION['error_message'] = "Wystąpił błąd podczas zapisywania preferencji.";
+        echo json_encode(['error' => 'Wystąpił błąd podczas zapisywania preferencji.']);
     }
-    header("Location: /public/user/dashboard.php#notification-settings");
     exit();
 }
 ?>
