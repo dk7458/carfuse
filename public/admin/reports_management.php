@@ -1,6 +1,6 @@
 <?php
-require '../../includes/db_connect.php';
-require '../../includes/functions.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
 session_start();
 
@@ -10,7 +10,7 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
 }
 
 // Fetch available reports
-$reportDir = '../../documents/reports';
+$reportDir = '/home/u122931475/domains/carfuse.pl/public_html/documents/reports';
 $reports = array_diff(scandir($reportDir), ['.', '..']);
 ?>
 
@@ -24,7 +24,7 @@ $reports = array_diff(scandir($reportDir), ['.', '..']);
     <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
-    <?php include '../../views/shared/navbar_admin.php'; ?>
+    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/shared/navbar_admin.php'; ?>
 
     <div class="container mt-5">
         <h1 class="text-center">Raporty</h1>

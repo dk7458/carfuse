@@ -1,6 +1,6 @@
 <?php
-require '../../includes/db_connect.php';
-require '../../includes/functions.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
 session_start();
 
@@ -55,12 +55,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
-    <?php include '../../views/shared/navbar_admin.php'; ?>
+    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/shared/navbar_admin.php'; ?>
 
     <div class="container mt-5">
         <h1 class="text-center">Ustawienia Powiadomień</h1>
 
-        <?php include '../../views/shared/messages.php'; ?>
+        <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/shared/messages.php'; ?>
 
         <form method="POST" action="" class="standard-form">
             <div class="form-check mb-3">
