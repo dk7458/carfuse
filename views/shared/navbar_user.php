@@ -4,10 +4,10 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 $userRole = $_SESSION['user_role'] ?? null;
 ?>
-<nav class="navbar navbar-expand-lg" style="background-color: #e8e8e8;">
+<nav class="navbar navbar-expand-lg" style="background-color: #e8e8e8; height: 70px;">
     <div class="container">
         <a class="navbar-brand" href="/public/index.php">
-        <img src="/public/logo.png" alt="Carfuse Logo" style="height: 80px;">
+            <img src="/public/logo.png" alt="Carfuse Logo" style="height: 70%;">
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>

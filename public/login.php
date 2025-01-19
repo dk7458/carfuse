@@ -10,17 +10,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $_SESSION['error_message'] = "Nieprawidłowy adres e-mail.";
     } else {
-        $stmt = $conn->prepare("SELECT id, password_hash FROM users WHERE email = ?");
+        $stmt = $conn->prepare("SELECT id, password_hash, role FROM users WHERE email = ?");
         $stmt->bind_param("s", $email);
         $stmt->execute();
         $stmt->store_result();
 
         if ($stmt->num_rows > 0) {
-            $stmt->bind_result($userId, $hashedPassword);
+            $stmt->bind_result($userId, $hashedPassword, $role);
             $stmt->fetch();
             if (password_verify($password, $hashedPassword)) {
                 $_SESSION['user_id'] = $userId;
-                header("Location: /public/user/dashboard.php");
+                $_SESSION['user_role'] = $role;
+                if ($role === 'admin') {
+                    header("Location: /public/admin/dashboard.php");
+                } else {
+                    header("Location: /public/user/dashboard.php");
+                }
                 exit;
             } else {
                 $_SESSION['error_message'] = "Nieprawidłowe hasło.";

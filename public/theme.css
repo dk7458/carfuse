@@ -23,7 +23,7 @@
     background-color: var(--primary-color);
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 0;
 }
 
 .standard-form button:hover {
@@ -36,7 +36,7 @@
     border: none;
     padding: 12px 24px;
     font-size: 1rem;
-    border-radius: 4px;
+    border-radius: 0;
 }
 
 .btn-primary:hover {
@@ -48,7 +48,7 @@
     border: none;
     padding: 12px 24px;
     font-size: 1rem;
-    border-radius: 4px;
+    border-radius: 0;
 }
 
 .btn-danger:hover {
@@ -62,40 +62,46 @@
     --background-color: #f8f9fa;
     --accent-color: #007bff;
     --font-family: 'Arial', sans-serif;
+    --font-size: 16px;
 }
 
 body {
     font-family: var(--font-family);
+    font-size: var(--font-size);
     background-color: var(--background-color);
     margin: 0;
     padding: 0;
 }
 
 a {
-    color: var(--primary-color);
+    color: black;
     text-decoration: none;
 }
 
 a:hover {
-    text-decoration: underline;
     color: var(--secondary-color);
 }
 
 /* Navbar Styles */
 .navbar {
     background-color: #e8e8e8;
+    height: 70px;
 }
 
 .navbar .nav-link {
     color: black !important;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .navbar .nav-link:hover {
-    color: var(--secondary-color) !important;
+    background-color: #d0d0d0 !important;
 }
 
 .navbar-brand img {
-    max-height: 50px;
+    max-height: 70%;
 }
 
 /* Hero Button Styles */
@@ -104,10 +110,10 @@ a:hover {
     border: none;
     padding: 12px 24px;
     font-size: 1.2rem;
-    border-radius: 50px;
+    border-radius: 0;
     margin-top: 20px;
 }
 
 .hero .btn-primary:hover {
-    background-color: #007bff;
+    background-color: #0056b3;
 }
