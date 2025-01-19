@@ -51,6 +51,7 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
     <?php include '../../views/shared/navbar.php'; ?>
@@ -209,7 +210,46 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
         </div>
     </div>
 
+    <!-- Modal for displaying responses -->
+    <div class="modal fade" id="responseModal" tabindex="-1" aria-labelledby="responseModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="responseModalLabel">Response</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="responseMessage">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        $(document).ready(function() {
+            $('.standard-form').on('submit', function(event) {
+                event.preventDefault();
+                var form = $(this);
+                $.ajax({
+                    type: form.attr('method'),
+                    url: form.attr('action'),
+                    data: form.serialize(),
+                    success: function(response) {
+                        var jsonResponse = JSON.parse(response);
+                        var message = jsonResponse.success || jsonResponse.error;
+                        $('#responseMessage').text(message);
+                        $('#responseModal').modal('show');
+                    },
+                    error: function() {
+                        $('#responseMessage').text('An error occurred. Please try again.');
+                        $('#responseModal').modal('show');
+                    }
+                });
+            });
+        });
+
         document.querySelectorAll('.pdf-viewer').forEach(viewer => {
             const url = viewer.previousElementSibling.href;
             const loadingTask = pdfjsLib.getDocument(url);
