@@ -118,5 +118,14 @@ $totalVehicles = $conn->query("SELECT COUNT(*) AS count FROM fleet")->fetch_asso
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('.list-group-item-action').on('click', function() {
+                var target = $(this).attr('href');
+                $('.collapse').not(target).collapse('hide');
+                $(target).collapse('show');
+            });
+        });
+    </script>
 </body>
 </html>
