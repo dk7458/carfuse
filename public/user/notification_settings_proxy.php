@@ -1,0 +1,33 @@
+<?php
+require '../../includes/db_connect.php';
+require '../../includes/functions.php';
+
+session_start();
+
+// Ensure user is logged in
+if (!isset($_SESSION['user_id'])) {
+    redirect('/login.php');
+}
+
+$userId = $_SESSION['user_id'];
+
+// Fetch current preferences
+$result = $conn->query("SELECT email_notifications, sms_notifications FROM users WHERE id = $userId");
+$preferences = $result->fetch_assoc();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $emailNotifications = isset($_POST['email_notifications']) ? 1 : 0;
+    $smsNotifications = isset($_POST['sms_notifications']) ? 1 : 0;
+
+    $stmt = $conn->prepare("UPDATE users SET email_notifications = ?, sms_notifications = ? WHERE id = ?");
+    $stmt->bind_param("iii", $emailNotifications, $smsNotifications, $userId);
+
+    if ($stmt->execute()) {
+        $_SESSION['success_message'] = "Preferencje powiadomień zostały zaktualizowane.";
+    } else {
+        $_SESSION['error_message'] = "Wystąpił błąd podczas zapisywania preferencji.";
+    }
+    header("Location: /public/user/dashboard.php#notification-settings");
+    exit();
+}
+?>
