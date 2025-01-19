@@ -80,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
-    <?php include '../../views/shared/navbar.php'; ?>
+    <?php include '../../views/shared/navbar_user.php'; ?>
 
     <div class="container mt-5">
         <div class="row">

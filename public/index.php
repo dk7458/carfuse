@@ -88,6 +88,14 @@
             max-width: 800px;
         }
 
+        .form-control {
+            width: 100%;
+            max-width: 400px;
+            margin: 10px auto;
+            padding: 10px;
+            font-size: 1rem;
+        }
+
         /* Footer */
         footer {
             background: #343a40;
@@ -100,23 +108,7 @@
 
 <body>
     <!-- Navigation Bar -->
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
-        <div class="container">
-            <a class="navbar-brand" href="#"><img src="logo.png" alt="Logo"></a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link" href="#features">Usługi</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#book-now">Rezerwacja</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#about">O nas</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#contact">Kontakt</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/public/login.php">Zaloguj się</a></li>
-                </ul>
-            </div>
-        </div>
-    </nav>
+    <?php include '../views/shared/navbar.php'; ?>
 
     <!-- Hero Section -->
     <section class="hero">
