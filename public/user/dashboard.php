@@ -151,8 +151,12 @@ $userDocuments = glob("../../uploads/users/$userId/*.{pdf}", GLOB_BRACE);
                             <input type="email" id="email" name="email" class="form-control" value="<?php echo $userDetails['email']; ?>" required>
                         </div>
                         <div class="mb-3">
-                            <label for="address" class="form-label">Adres</label>
-                            <textarea id="address" name="address" class="form-control" required><?php echo $userDetails['address']; ?></textarea>
+                            <label for="address_part1" class="form-label">Adres - Część 1</label>
+                            <input type="text" id="address_part1" name="address_part1" class="form-control" value="<?php echo explode(' ', $userDetails['address'])[0]; ?>" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="address_part2" class="form-label">Adres - Część 2</label>
+                            <input type="text" id="address_part2" name="address_part2" class="form-control" value="<?php echo implode(' ', array_slice(explode(' ', $userDetails['address']), 1)); ?>" required>
                         </div>
                         <div class="mb-3">
                             <label for="pesel_or_id" class="form-label">PESEL lub Numer Dowodu</label>

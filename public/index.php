@@ -10,6 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/assets/css/theme.css" rel="stylesheet">
     <style>
         :root {
             --accent-color: #ff5722;
@@ -149,7 +150,7 @@
     <!-- Booking Section -->
     <section id="book-now" class="container py-5">
         <h2 class="fw-bold text-center mb-5">Zarezerwuj Swój Pojazd</h2>
-        <form method="POST" action="/public/booking_process.php" class="row g-3">
+        <form method="POST" action="/public/booking_process.php" class="standard-form row g-3">
             <div class="col-md-6">
                 <label for="pickup-location" class="form-label">Miejsce odbioru</label>
                 <input type="text" class="form-control" id="pickup-location" name="pickupLocation" placeholder="Wprowadź lokalizację" required>
