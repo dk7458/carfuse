@@ -22,13 +22,14 @@ $vehicles = $conn->query("SELECT id, make, model, registration_number, price_per
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rezerwacja Pojazdu</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="../styles/settings.css" rel="stylesheet">
 </head>
 <body>
     <?php include '../views/shared/navbar.php'; ?>
 
     <div class="container mt-5">
         <h1 class="text-center">Rezerwacja Pojazdu</h1>
-        <form action="../controllers/booking_controller.php" method="POST">
+        <form action="../controllers/booking_controller.php" method="POST" class="standard-form">
             <input type="hidden" name="csrf_token" value="<?php echo generateCsrfToken(); ?>">
             <input type="hidden" name="action" value="create_booking">
 

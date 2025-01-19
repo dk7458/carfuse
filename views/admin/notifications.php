@@ -37,6 +37,7 @@ $notifications = $conn->query($sql);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Powiadomienia - Panel Administratora</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="../../styles/settings.css" rel="stylesheet">
 </head>
 <body>
     <?php include '../../views/shared/navbar.php'; ?>
@@ -44,7 +45,7 @@ $notifications = $conn->query($sql);
     <div class="container mt-5">
         <h1 class="text-center">Zarządzanie Powiadomieniami</h1>
 
-        <form method="GET" class="row g-3 mt-4">
+        <form method="GET" class="standard-form row g-3 mt-4">
             <div class="col-md-4">
                 <label for="type" class="form-label">Typ Powiadomienia</label>
                 <select id="type" name="type" class="form-select">

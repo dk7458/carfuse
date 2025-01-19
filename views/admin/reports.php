@@ -38,13 +38,14 @@ $fleetUsageData = $conn->query("
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Raporty</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="../../styles/settings.css" rel="stylesheet">
 </head>
 <body>
     <?php include '../../views/shared/navbar.php'; ?>
 
     <div class="container mt-5">
         <h1 class="text-center">Raporty</h1>
-        <form method="GET" class="row g-3 mt-4">
+        <form method="GET" class="standard-form row g-3 mt-4">
             <div class="col-md-5">
                 <label for="start_date" class="form-label">Data Początkowa</label>
                 <input type="date" id="start_date" name="start_date" class="form-control" value="<?php echo $startDate; ?>">

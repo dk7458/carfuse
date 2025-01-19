@@ -33,6 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zarządzanie Podpisami Cyfrowymi</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="../../styles/settings.css" rel="stylesheet">
 </head>
 <body>
     <?php include '../../views/shared/navbar.php'; ?>
@@ -58,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
                         <td><img src="/documents/signatures/<?php echo $signature['file_path']; ?>" alt="Podpis" style="width: 150px;"></td>
                         <td><?php echo date('d-m-Y H:i:s', strtotime($signature['created_at'])); ?></td>
                         <td>
-                            <form method="POST" style="display: inline;">
+                            <form method="POST" class="standard-form" style="display: inline;">
                                 <input type="hidden" name="delete_id" value="<?php echo $signature['id']; ?>">
                                 <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Czy na pewno chcesz usunąć ten podpis?');">Usuń</button>
                             </form>
