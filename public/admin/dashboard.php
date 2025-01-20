@@ -7,45 +7,76 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
     redirect('/public/login.php');
 }
 
-// 1. Pobranie parametru "?page=" z adresu, np. dashboard.php?page=konserwacja
+// Handle actions sent to the dashboard
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    // Process actions based on the 'action' parameter
+    switch ($action) {
+        case 'updateFleet':
+            include __DIR__ . '/fleet_management.php';
+            processFleetUpdate($_POST); // Example function in fleet_management.php
+            break;
+
+        case 'deleteUser':
+            include __DIR__ . '/views/admin/manage_users.php';
+            deleteUser($_POST['user_id']); // Example function
+            break;
+
+        case 'saveSettings':
+            include __DIR__ . '/settings_management.php';
+            saveSettings($_POST); // Example function
+            break;
+
+        default:
+            // Handle unknown actions
+            echo "<div class='alert alert-danger'>Nieznana akcja: <code>$action</code></div>";
+    }
+
+    // Redirect back to the relevant section
+    $hash = $_POST['hash'] ?? 'podsumowanie';
+    header("Location: /public/admin/dashboard.php?page=$hash");
+    exit();
+}
+
+// Get the requested page from the URL (default to 'podsumowanie')
 $page = $_GET['page'] ?? 'podsumowanie';
 
-// 2. Mapa "klucz => plik", czyli nazwy sekcji na linki w menu -> pliki, które mają być wczytane.
+// Define valid pages and their corresponding files
 $validPages = [
-    'podsumowanie' => '../../pages/summary.php',             // np. plik powitalny (stwórz sam)
-    'uzytkownicy'   => '../../views/admin/manage_users.php',    // (../../views/admin/user_management.php) dostosuj ścieżkę
-    'rezerwacje'    => 'booking_management.php',             // (pages/booking_management.php) dostosuj ścieżkę
+    'podsumowanie' => '../../pages/summary.php',
+    'uzytkownicy'   => '../../views/admin/manage_users.php',
+    'rezerwacje'    => 'booking_management.php',
     'konserwacja'   => 'maintenance_management.php',
     'raporty'       => 'reports_management.php',
     'umowy'         => 'contract_management.php',
     'flota'         => 'fleet_management.php',
     'powiadomienia' => 'notifications_management.php',
-    'zarzadzaj_adminami' => '../../views/admin/manage_admins.php', // Add admin management
+    'zarzadzaj_adminami' => '../../views/admin/manage_admins.php',
 ];
 
-// 3. Sprawdź, czy klucz istnieje w tablicy $validPages, w przeciwnym razie ładuj "podsumowanie".
+// If the requested page is invalid, default to 'podsumowanie'
 if (!array_key_exists($page, $validPages)) {
     $page = 'podsumowanie';
 }
+
 $contentFile = $validPages[$page];
 ?>
 <!DOCTYPE html>
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel Administratora</title>
   <!-- Bootstrap 5.3.0 CSS -->
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-  >
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <style>
-    /* Proste style dla layoutu z kolumnami */
+    /* Basic styles for layout */
     body {
       overflow-x: hidden;
     }
     .sidebar {
-      min-height: 100vh; /* Pełna wysokość dla sidebaru */
+      min-height: 100vh;
     }
     @media (min-width: 992px) {
       .sidebar {
@@ -65,98 +96,30 @@ $contentFile = $validPages[$page];
   </style>
 </head>
 <body>
-
-  <!-- Górny pasek nawigacji (osobny plik) -->
+  <!-- Navbar -->
   <?php include '../../views/shared/navbar_admin.php'; ?>
+
   <div class="container-fluid">
     <div class="row">
-      <!-- Sidebar: Menu z lewej -->
+      <!-- Sidebar -->
       <nav class="col-12 col-md-3 col-xl-2 bg-dark sidebar p-0">
         <ul class="nav flex-column text-white">
-          <li class="nav-item">
-            <a
-              class="nav-link text-white <?php echo ($page==='podsumowanie')?'bg-secondary':''; ?>"
-              href="?page=podsumowanie"
-            >
-              Podsumowanie
-            </a>
-          </li>
-          <li class="nav-item">
-            <a
-              class="nav-link text-white <?php echo ($page==='uzytkownicy')?'bg-secondary':''; ?>"
-              href="?page=uzytkownicy"
-            >
-              Użytkownicy
-            </a>
-          </li>
-          <li class="nav-item">
-            <a
-              class="nav-link text-white <?php echo ($page==='rezerwacje')?'bg-secondary':''; ?>"
-              href="?page=rezerwacje"
-            >
-              Rezerwacje
-            </a>
-          </li>
-          <li class="nav-item">
-            <a
-              class="nav-link text-white <?php echo ($page==='konserwacja')?'bg-secondary':''; ?>"
-              href="?page=konserwacja"
-            >
-              Konserwacja
-            </a>
-          </li>
-          <li class="nav-item">
-            <a
-              class="nav-link text-white <?php echo ($page==='raporty')?'bg-secondary':''; ?>"
-              href="?page=raporty"
-            >
-              Raporty
-            </a>
-          </li>
-          <li class="nav-item">
-            <a
-              class="nav-link text-white <?php echo ($page==='umowy')?'bg-secondary':''; ?>"
-              href="?page=umowy"
-            >
-              Umowy
-            </a>
-          </li>
-          <li class="nav-item">
-            <a
-              class="nav-link text-white <?php echo ($page==='flota')?'bg-secondary':''; ?>"
-              href="?page=flota"
-            >
-              Flota
-            </a>
-          </li>
-          <li class="nav-item">
-            <a
-              class="nav-link text-white <?php echo ($page==='powiadomienia')?'bg-secondary':''; ?>"
-              href="?page=powiadomienia"
-            >
-              Powiadomienia
-            </a>
-          </li>
-          <li class="nav-item">
-            <a
-              class="nav-link text-white <?php echo ($page==='zarzadzaj_adminami')?'bg-secondary':''; ?>"
-              href="?page=zarzadzaj_adminami"
-            >
-              Zarządzaj Administratorami
-            </a>
-          </li>
+          <?php foreach ($validPages as $key => $file): ?>
+            <li class="nav-item">
+              <a
+                href="?page=<?php echo $key; ?>"
+                class="nav-link text-white <?php echo ($page === $key) ? 'bg-secondary' : ''; ?>"
+              >
+                <?php echo ucfirst(str_replace('_', ' ', $key)); ?>
+              </a>
+            </li>
+          <?php endforeach; ?>
         </ul>
       </nav>
 
-      <!-- Główna treść: ładowanie plików sekcji -->
+      <!-- Main Content -->
       <main class="col-12 col-md-9 col-xl-10 py-3">
         <?php
-        // Start session if not already started
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-
-        // Wczytaj plik odpowiadający aktualnie wybranej stronie
         if (file_exists(__DIR__ . '/' . $contentFile)) {
             include __DIR__ . '/' . $contentFile;
         } else {
@@ -167,9 +130,7 @@ $contentFile = $validPages[$page];
     </div>
   </div>
 
-  <!-- Bootstrap 5.3.0 bundle -->
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-  ></script>
+  <!-- Bootstrap 5.3.0 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
