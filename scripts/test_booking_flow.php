@@ -1,6 +1,6 @@
 <?php
-require once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
-require once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
 echo "Starting Booking Flow Test...\n";
 

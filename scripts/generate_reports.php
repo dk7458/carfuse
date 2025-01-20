@@ -1,5 +1,5 @@
 <?php
-require once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
 
 // Define the reporting period (e.g., last 30 days)
 $startDate = date('Y-m-d', strtotime('-30 days'));

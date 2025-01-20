@@ -1,7 +1,7 @@
 <?php
-require once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
-require once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
-require once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
+require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
 
 $token = $_GET['token'] ?? null;

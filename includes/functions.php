@@ -4,7 +4,7 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 function sendEmail($to, $subject, $message, $template = null, $data = []) {
-    require once '/home/u122931475/domains/carfuse.pl/public_html/vendor/autoload.php';
+    require_once '/home/u122931475/domains/carfuse.pl/public_html/vendor/autoload.php';
 
     $mail = new PHPMailer(true);
 

@@ -1,5 +1,5 @@
 <?php
-require once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
+require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
 $userRole = $_SESSION['user_role'] ?? null;
 ?>
 <nav class="navbar navbar-expand-lg navbar-dark sticky-top" style="background-color: #e8e8e8; color: black;">

@@ -1,5 +1,5 @@
 <?php
-require once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
 use PhpMqtt\Client\MqttClient;
 use PhpMqtt\Client\ConnectionSettings;
