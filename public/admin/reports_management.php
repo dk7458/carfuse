@@ -24,8 +24,6 @@ $reports = array_diff(scandir($reportDir), ['.', '..']);
     <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
-    <?php include '/home/u122931475/domains/carfuse.pl/public_html/views/shared/navbar_admin.php'; ?>
-
     <div class="container mt-5">
         <h1 class="text-center">Raporty</h1>
 
