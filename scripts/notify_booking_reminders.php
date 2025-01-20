@@ -1,6 +1,6 @@
 <?php
-require '../includes/db_connect.php';
-require '../includes/functions.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
 try {
     $currentDate = date('Y-m-d');

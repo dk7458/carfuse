@@ -1,7 +1,5 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
 $userRole = $_SESSION['user_role'] ?? null;
 ?>
 <nav class="navbar navbar-expand-lg" style="background-color: #e8e8e8; height: 70px; color: black;">

@@ -1,5 +1,5 @@
 <?php
-require '../includes/functions.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
 use PhpMqtt\Client\MqttClient;
 use PhpMqtt\Client\ConnectionSettings;

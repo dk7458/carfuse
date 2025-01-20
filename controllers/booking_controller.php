@@ -1,8 +1,8 @@
 <?php
 
-require '../includes/db_connect.php';
-require '../includes/functions.php';
-require '../includes/pdf_generator.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/pdf_generator.php';
 
 session_start();
 

@@ -1,9 +1,9 @@
 <?php
 
-require '../includes/db_connect.php';
-require '../includes/functions.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
-session_start();
 
 // Ensure the user is an admin
 if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
