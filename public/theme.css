@@ -135,14 +135,3 @@ a:hover {
 .hero .btn-primary:hover {
     background-color: #0056b3;
 }
-.sidebar {
-    min-height: 100vh; /* Full-height sidebar */
-    max-width: 250px;
-    overflow-y: auto; /* Prevent dynamic resizing */
-  }
-  
-  .main-content {
-    flex-grow: 1;
-    overflow-x: hidden;
-  }
-  
