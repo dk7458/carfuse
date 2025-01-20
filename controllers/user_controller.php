@@ -1,8 +1,10 @@
 <?php
-require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
-require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
-require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
+require_once __DIR__ . '/../includes/db_connect.php';
+require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/session_middleware.php';
+require_once __DIR__ . '/../includes/user_queries.php';
 
+header('Content-Type: application/json');
 
 // Ensure the user is authenticated
 if (!isset($_SESSION['user_id'])) {
@@ -11,67 +13,83 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// Handle profile update
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_profile') {
-    $name = htmlspecialchars($_POST['name']);
-    $surname = htmlspecialchars($_POST['surname']);
-    $email = sanitizeEmail($_POST['email']);
-    $phone = htmlspecialchars($_POST['phone']);
-    $address = htmlspecialchars($_POST['address_part1'] . ' ' . $_POST['address_part2']);
-    $pesel_or_id = htmlspecialchars($_POST['pesel_or_id']);
+try {
+    // Handle profile update
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_profile') {
+        if (!verifyCsrfToken($_POST['csrf_token'])) {
+            throw new Exception("Invalid CSRF token.");
+        }
 
-    $stmt = $conn->prepare("
-        UPDATE users 
-        SET name = ?, surname = ?, email = ?, phone = ?, address = ?, pesel_or_id = ? 
-        WHERE id = ?
-    ");
-    $stmt->bind_param("ssssssi", $name, $surname, $email, $phone, $address, $pesel_or_id, $_SESSION['user_id']);
+        $userId = $_SESSION['user_id'];
+        $name = sanitizeInput($_POST['name']);
+        $surname = sanitizeInput($_POST['surname']);
+        $email = sanitizeEmail($_POST['email']);
+        $phone = sanitizeInput($_POST['phone']);
+        $address = sanitizeInput($_POST['address_part1'] . ' ' . $_POST['address_part2']);
+        $peselOrId = sanitizeInput($_POST['pesel_or_id']);
 
-    if ($stmt->execute()) {
-        // Verify the update
-        $stmt = $conn->prepare("SELECT name, surname, email, phone, address, pesel_or_id FROM users WHERE id = ?");
-        $stmt->bind_param("i", $_SESSION['user_id']);
-        $stmt->execute();
-        $updatedUser = $stmt->get_result()->fetch_assoc();
+        $stmt = $conn->prepare(
+            "UPDATE users 
+            SET name = ?, surname = ?, email = ?, phone = ?, address = ?, pesel_or_id = ? 
+            WHERE id = ?"
+        );
+        $stmt->bind_param("ssssssi", $name, $surname, $email, $phone, $address, $peselOrId, $userId);
 
-        if ($updatedUser['name'] === $name && $updatedUser['surname'] === $surname && $updatedUser['email'] === $email && $updatedUser['phone'] === $phone && $updatedUser['address'] === $address && $updatedUser['pesel_or_id'] === $pesel_or_id) {
+        if (!$stmt->execute()) {
+            throw new Exception("Failed to update profile.");
+        }
+
+        // Fetch updated details to verify
+        $updatedUser = getUserDetails($conn, $userId);
+        if (
+            $updatedUser['name'] === $name &&
+            $updatedUser['surname'] === $surname &&
+            $updatedUser['email'] === $email &&
+            $updatedUser['phone'] === $phone &&
+            $updatedUser['address'] === $address &&
+            $updatedUser['pesel_or_id'] === $peselOrId
+        ) {
             echo json_encode(['success' => 'Profile updated successfully.']);
         } else {
-            echo json_encode(['error' => 'Failed to verify profile update.']);
+            throw new Exception("Failed to verify profile update.");
         }
-    } else {
-        echo json_encode(['error' => 'Failed to update profile.']);
-    }
-    exit;
-}
-
-// Handle password change
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'change_password') {
-    $currentPassword = $_POST['current_password'];
-    $newPassword = $_POST['new_password'];
-
-    // Verify current password
-    $stmt = $conn->prepare("SELECT password_hash FROM users WHERE id = ?");
-    $stmt->bind_param("i", $_SESSION['user_id']);
-    $stmt->execute();
-    $user = $stmt->get_result()->fetch_assoc();
-
-    if (!password_verify($currentPassword, $user['password_hash'])) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Current password is incorrect.']);
         exit;
     }
 
-    // Update password
-    $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
-    $stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
-    $stmt->bind_param("si", $hashedPassword, $_SESSION['user_id']);
+    // Handle password change
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'change_password') {
+        if (!verifyCsrfToken($_POST['csrf_token'])) {
+            throw new Exception("Invalid CSRF token.");
+        }
 
-    if ($stmt->execute()) {
+        $userId = $_SESSION['user_id'];
+        $currentPassword = $_POST['current_password'];
+        $newPassword = $_POST['new_password'];
+
+        // Verify current password
+        $user = getUserDetails($conn, $userId);
+        if (!password_verify($currentPassword, $user['password_hash'])) {
+            http_response_code(400);
+            throw new Exception("Current password is incorrect.");
+        }
+
+        // Update password
+        $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+        $stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+        $stmt->bind_param("si", $hashedPassword, $userId);
+
+        if (!$stmt->execute()) {
+            throw new Exception("Failed to update password.");
+        }
+
         echo json_encode(['success' => 'Password updated successfully.']);
-    } else {
-        echo json_encode(['error' => 'Failed to update password.']);
+        exit;
     }
+
+} catch (Exception $e) {
+    logError($e->getMessage());
+    echo json_encode(['error' => $e->getMessage()]);
     exit;
 }
 ?>
+

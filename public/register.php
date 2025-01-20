@@ -3,6 +3,24 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connec
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
+function createUserDirectories($userId) {
+    $baseDir = $_SERVER['DOCUMENT_ROOT'] . "/users/user$userId";
+    $uploadsDir = "$baseDir/uploads";
+    $documentsDir = "$baseDir/documents";
+
+    // Ensure the base directory exists
+    if (!is_dir($baseDir)) {
+        mkdir($baseDir, 0755, true);
+    }
+
+    // Create subdirectories
+    if (!is_dir($uploadsDir)) {
+        mkdir($uploadsDir, 0755, true);
+    }
+    if (!is_dir($documentsDir)) {
+        mkdir($documentsDir, 0755, true);
+    }
+}
 
 // Check if the form is submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -37,6 +55,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->bind_param("sssss", $name, $surname, $email, $passwordHash, $phone);
 
             if ($stmt->execute()) {
+                // Get the new user's ID
+                $userId = $stmt->insert_id;
+
+                // Create user directories
+                createUserDirectories($userId);
+
                 // Success message and redirection
                 $_SESSION['success_message'] = "Rejestracja zakończona sukcesem. Możesz się teraz zalogować.";
                 header("Location: login.php");
