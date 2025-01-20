@@ -1,0 +1,85 @@
+relevant directory trees:
+
+views
+├── admin
+│   ├── add_maintenance.php
+│   ├── add_vehicle.php
+│   ├── bookings.php
+│   ├── contract_audit_logs.php
+│   ├── contracts.php
+│   ├── dashboard.php
+│   ├── edit_vehicle.php
+│   ├── fleet.php
+│   ├── maintenance_logs.php
+│   ├── manage_admins.php
+│   ├── manage_users.php
+│   ├── notification_settings.php
+│   ├── notifications.php
+│   ├── reports.php
+│   └── signature_management.php
+├── shared
+│   ├── footer.php
+│   ├── header.php
+│   ├── messages.php
+│   ├── navbar_admin.php
+│   ├── navbar_empty.php
+│   ├── navbar.php
+│   └── navbar_user.php
+└── user
+    ├── booking_details.php
+    ├── booking_success.php
+    ├── dashboard.php
+    └── notification_settings.php
+    
+controllers  
+├── admin_booking_controller.php
+├── admin_controller.php
+├── admin_notification_controller.php
+├── booking_controller.php
+├── contract_controller.php
+├── notification_controller.php
+└── user_controller.php
+
+public
+├── admin
+│   ├── admin_dashboard.php
+│   ├── arch
+│   │   ├── bookings.php
+│   │   ├── contracts.php
+│   │   ├── dddddd.php
+│   │   ├── fleet.php
+│   │   ├── maintenance_logs.php
+│   │   ├── not dashboard.php
+│   │   ├── notification_settings.php
+│   │   └── reports.php
+│   ├── booking_management.php
+│   ├── contract_management.php
+│   ├── dashboard.php
+│   ├── fleet_management.php
+│   ├── maintenance_management.php
+│   ├── notifications_management.php
+│   └── reports_management.php
+├── assets
+│   └── css
+│       ├── styles.css
+│       ├── styles.min.css
+│       └── theme.css
+├── booking.php
+├── index.php
+├── login.php
+├── logout.php
+├── process_reset.php
+├── profile.php
+├── register.php
+├── reset_password.php
+├── theme.css
+└── user
+    ├── booking_details.php
+    ├── dashboard.php
+    ├── get_user_details.php
+    ├── notification_settings_proxy.php
+    ├── profile.php
+    └── user_controller_proxy.php
+
+
+

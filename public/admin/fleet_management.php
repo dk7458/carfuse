@@ -13,41 +13,6 @@ $vehicles = $conn->query("SELECT * FROM fleet ORDER BY make, model");
 if (!$vehicles) {
     die("Database query failed: " . $conn->error);
 }
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['delete_id'])) {
-        $deleteId = intval($_POST['delete_id']);
-        $stmt = $conn->prepare("DELETE FROM fleet WHERE id = ?");
-        $stmt->bind_param("i", $deleteId);
-
-        if ($stmt->execute()) {
-            $_SESSION['success_message'] = "Pojazd został usunięty.";
-        } else {
-            $_SESSION['error_message'] = "Nie udało się usunąć pojazdu.";
-        }
-
-        header('Location: /public/admin/dashboard.php?page=flota');
-        exit();
-    }
-
-    if (isset($_POST['make'], $_POST['model'], $_POST['registration_number'])) {
-        $make = htmlspecialchars(trim($_POST['make']));
-        $model = htmlspecialchars(trim($_POST['model']));
-        $registrationNumber = htmlspecialchars(trim($_POST['registration_number']));
-
-        $stmt = $conn->prepare("INSERT INTO fleet (make, model, registration_number) VALUES (?, ?, ?)");
-        $stmt->bind_param("sss", $make, $model, $registrationNumber);
-
-        if ($stmt->execute()) {
-            $_SESSION['success_message'] = "Pojazd został dodany.";
-        } else {
-            $_SESSION['error_message'] = "Nie udało się dodać pojazdu.";
-        }
-
-        header('Location: /public/admin/dashboard.php?page=flota');
-        exit();
-    }
-}
 ?>
 
 <div class="container mt-5">
@@ -55,7 +20,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <?php include '../../views/shared/messages.php'; ?>
 
-    <form method="POST" action="/public/admin/dashboard.php?page=flota" class="standard-form row g-3 mt-4">
+    <form method="POST" action="/controllers/admin_controller.php" class="standard-form row g-3 mt-4">
+        <input type="hidden" name="action" value="addVehicle">
+        <input type="hidden" name="tab" value="flota">
         <div class="col-md-4">
             <label for="make" class="form-label">Marka</label>
             <input type="text" id="make" name="make" class="form-control" required>
@@ -92,7 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <td><?php echo htmlspecialchars($vehicle['model']); ?></td>
                     <td><?php echo htmlspecialchars($vehicle['registration_number']); ?></td>
                     <td>
-                        <form method="POST" action="/public/admin/dashboard.php?page=flota" style="display: inline;">
+                        <form method="POST" action="/controllers/admin_controller.php" style="display: inline;">
+                            <input type="hidden" name="action" value="deleteVehicle">
+                            <input type="hidden" name="tab" value="flota">
                             <input type="hidden" name="delete_id" value="<?php echo $vehicle['id']; ?>">
                             <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Czy na pewno chcesz usunąć ten pojazd?');">Usuń</button>
                         </form>
