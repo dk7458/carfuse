@@ -46,6 +46,7 @@ $contentFile = $validPages[$page];
     }
     .sidebar {
       min-height: 100vh; /* Pełna wysokość dla sidebaru */
+      padding-top: 1rem; /* Add space at the top */
     }
     @media (min-width: 992px) {
       .sidebar {
@@ -57,7 +58,7 @@ $contentFile = $validPages[$page];
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100%;
+      height: calc(2.5rem + 2px); /* Increased height */
     }
     .navbar .nav-link:hover {
       background-color: #d0d0d0 !important;
