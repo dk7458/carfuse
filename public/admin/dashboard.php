@@ -1,6 +1,6 @@
 <?php
 // Start session if not already started
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
 
 // Ensure the user is an admin
 if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {

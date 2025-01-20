@@ -1,5 +1,5 @@
 <?php
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
 
 try {
     // Define current date

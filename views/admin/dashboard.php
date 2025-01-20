@@ -1,7 +1,7 @@
 <?php
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
 
 
 // Ensure the user is an admin
@@ -102,9 +102,9 @@ $availableFleet = $conn->query("SELECT COUNT(*) AS count FROM fleet WHERE availa
     <div id="mqtt-alerts"></div>
 </div>
 <?php
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
 
 
 // Ensure the user is an admin

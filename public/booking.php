@@ -1,7 +1,7 @@
 <?php
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
 
 // Ensure user is logged in

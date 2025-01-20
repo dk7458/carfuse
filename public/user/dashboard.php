@@ -1,7 +1,7 @@
 <?php
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+require once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
 
 // Ensure user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -32,7 +32,7 @@ $page = $_GET['page'] ?? 'bookings';
 $validPages = [
     'bookings' => 'booking_details.php',
     'profile' => 'profile.php',
-    'personal-data' => 'personal_data.php',
+    'personal-data' => 'user_controller_proxy.php',
     'reset-password' => 'reset_password.php',
     'documents' => 'documents.php',
     'notification-settings' => 'notification_settings_proxy.php',
