@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['error_message'] = "Wystąpił błąd podczas zapisywania preferencji.";
     }
 
-    redirect('/public/admin/notification_settings.php');
+    redirect('/public/admin/dashboard.php?page=powiadomienia');
 }
 ?>
 

@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($stmt->execute()) {
             $_SESSION['success_message'] = "Historia konserwacji została pomyślnie dodana.";
-            redirect('/public/admin/maintenance_management.php');
+            redirect('/public/admin/dashboard.php?page=konserwacja');
         } else {
             $_SESSION['error_message'] = "Nie udało się dodać historii konserwacji.";
         }
