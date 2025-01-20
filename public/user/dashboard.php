@@ -274,29 +274,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.standard-form').forEach(form => {
-                form.addEventListener('submit', function(event) {
-                    event.preventDefault();
-                    const formData = new FormData(this);
-                    fetch(this.action, {
-                        method: this.method,
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        const message = data.success || data.error;
-                        document.getElementById('responseMessage').textContent = message;
-                        const responseModal = new bootstrap.Modal(document.getElementById('responseModal'));
-                        responseModal.show();
-
-                        if (data.success) {
-                            // Update profile section with the latest data
-                            fetch('/user/get_user_details.php')
-                                .then(response => response.json())
-                                .then(userDetails => {
-                                    document.querySelectorAll('#profile .card p').forEach(p => {
