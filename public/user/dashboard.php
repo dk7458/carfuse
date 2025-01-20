@@ -30,12 +30,12 @@ $page = $_GET['page'] ?? 'bookings';
 
 // 2. Mapa "klucz => plik", czyli nazwy sekcji na linki w menu -> pliki, które mają być wczytane.
 $validPages = [
-    'bookings' => 'booking_details.php',
+    'bookings' => '/home/u122931475/domains/carfuse.pl/public_html/views/user/booking_details.php',
     'profile' => 'profile.php',
     'personal-data' => 'user_controller_proxy.php',
-    'reset-password' => 'reset_password.php',
+    'reset-password' => 'process_reset.php',
     'documents' => 'documents.php',
-    'notification-settings' => 'notification_settings_proxy.php',
+    'notification-settings' => 'notification_settings.php',
 ];
 
 // 3. Sprawdź, czy klucz istnieje w tablicy $validPages, w przeciwnym razie ładuj "bookings".
