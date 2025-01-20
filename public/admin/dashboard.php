@@ -1,6 +1,11 @@
 <?php
+// Universal session handling
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+?>
 
-
+<?php
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
