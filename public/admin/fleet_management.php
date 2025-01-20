@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $deleteId = intval($_POST['delete_id']);
         $conn->query("DELETE FROM fleet WHERE id = $deleteId");
         $_SESSION['success_message'] = "Pojazd został usunięty.";
-        redirect('/public/admin/fleet_management.php');
+        redirect('/public/admin/dashboard.php?page=flota');
     }
 
     if (isset($_POST['make'], $_POST['model'], $_POST['registration_number'])) {
@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($stmt->execute()) {
             $_SESSION['success_message'] = "Pojazd został dodany.";
-            redirect('/public/admin/fleet_management.php');
+            redirect('/public/admin/dashboard.php?page=flota');
         } else {
             $_SESSION['error_message'] = "Nie udało się dodać pojazdu.";
         }
