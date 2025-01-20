@@ -1,12 +1,8 @@
-<?php
-// Universal session handling
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-?>
+
 
 <?php
 require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
 require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
 session_start();
