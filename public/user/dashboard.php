@@ -2,7 +2,6 @@
 require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
 require '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 require '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
-require '/home/u122931475/domains/carfuse.pl/public_html/includes/document_manager.php';
 
 // Ensure user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -19,7 +18,12 @@ if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) >
 $_SESSION['last_activity'] = time();
 
 $userId = $_SESSION['user_id'];
-$documentManager = new DocumentManager($userId);
+
+// Ensure user document directory exists
+$userDocumentDir = "../../uploads/users/$userId";
+if (!is_dir($userDocumentDir)) {
+    mkdir($userDocumentDir, 0777, true);
+}
 
 // 1. Pobranie parametru "?page=" z adresu, np. dashboard.php?page=profile
 $page = $_GET['page'] ?? 'bookings';
@@ -56,7 +60,7 @@ $userDetails = $conn->query("SELECT * FROM users WHERE id = $userId")->fetch_ass
 $preferences = $conn->query("SELECT email_notifications, sms_notifications FROM users WHERE id = $userId")->fetch_assoc();
 
 // Fetch user documents
-$userDocuments = $documentManager->getDocuments();
+$userDocuments = glob("$userDocumentDir/*.{pdf}", GLOB_BRACE);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $emailNotifications = isset($_POST['email_notifications']) ? 1 : 0;
