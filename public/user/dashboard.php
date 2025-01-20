@@ -251,26 +251,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <input type="checkbox" id="sms_notifications" name="sms_notifications" class="form-check-input" 
                                     <?php echo $preferences['sms_notifications'] ? 'checked' : ''; ?>>
                                 <label for="sms_notifications" class="form-check-label">Otrzymuj powiadomienia SMS</label>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Zapisz</button>
-                        </form>
-                    </div>
+                        <button type="submit" class="btn btn-primary">Zapisz</button>
+                    </form>
                 </div>
             </main>
         </div>
     </div>
 
-    <!-- Modal for displaying responses -->
-    <div class="modal fade" id="responseModal" tabindex="-1" aria-labelledby="responseModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="responseModalLabel">Response</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body" id="responseMessage">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
+    <!-- Bootstrap 5.3.0 bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
