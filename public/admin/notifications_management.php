@@ -65,19 +65,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="POST" action="" class="standard-form">
             <div class="form-check mb-3">
                 <input type="checkbox" id="contract_alerts" name="contract_alerts" class="form-check-input"
-                    <?php echo $settings['contract_alerts'] ? 'checked' : ''; ?>>
+                    <?php echo isset($settings['contract_alerts']) && $settings['contract_alerts'] ? 'checked' : ''; ?>>
                 <label for="contract_alerts" class="form-check-label">Powiadomienia o wygaśnięciu umów</label>
             </div>
 
             <div class="form-check mb-3">
                 <input type="checkbox" id="maintenance_alerts" name="maintenance_alerts" class="form-check-input"
-                    <?php echo $settings['maintenance_alerts'] ? 'checked' : ''; ?>>
+                    <?php echo isset($settings['maintenance_alerts']) && $settings['maintenance_alerts'] ? 'checked' : ''; ?>>
                 <label for="maintenance_alerts" class="form-check-label">Alerty o konserwacji</label>
             </div>
 
             <div class="form-check mb-3">
                 <input type="checkbox" id="booking_reminders" name="booking_reminders" class="form-check-input"
-                    <?php echo $settings['booking_reminders'] ? 'checked' : ''; ?>>
+                    <?php echo isset($settings['booking_reminders']) && $settings['booking_reminders'] ? 'checked' : ''; ?>>
                 <label for="booking_reminders" class="form-check-label">Przypomnienia o rezerwacjach</label>
             </div>
 

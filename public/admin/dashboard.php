@@ -6,14 +6,15 @@ $page = $_GET['page'] ?? 'podsumowanie';
 
 // 2. Mapa "klucz => plik", czyli nazwy sekcji na linki w menu -> pliki, które mają być wczytane.
 $validPages = [
-    'podsumowanie' => 'pages/podsumowanie.php',             // np. plik powitalny (stwórz sam)
-    'uzytkownicy'   => 'views/admin/user_management.php',    // (../../views/admin/user_management.php) dostosuj ścieżkę
+    'podsumowanie' => '../../pages/summary.php',             // np. plik powitalny (stwórz sam)
+    'uzytkownicy'   => '../../views/admin/manage_users.php',    // (../../views/admin/user_management.php) dostosuj ścieżkę
     'rezerwacje'    => 'booking_management.php',             // (pages/booking_management.php) dostosuj ścieżkę
     'konserwacja'   => 'maintenance_management.php',
     'raporty'       => 'reports_management.php',
     'umowy'         => 'contract_management.php',
     'flota'         => 'fleet_management.php',
     'powiadomienia' => 'notifications_management.php',
+    'zarzadzaj_adminami' => '../../views/admin/manage_admins.php', // Add admin management
 ];
 
 // 3. Sprawdź, czy klucz istnieje w tablicy $validPages, w przeciwnym razie ładuj "podsumowanie".
@@ -51,8 +52,7 @@ $contentFile = $validPages[$page];
 <body>
 
   <!-- Górny pasek nawigacji (osobny plik) -->
-  <?php include '/.../.../views/shared/navbar_admin.php'; ?>
-
+  <?php include '../../views/shared/navbar_admin.php'; ?>
   <div class="container-fluid">
     <div class="row">
       <!-- Sidebar: Menu z lewej -->
@@ -120,6 +120,14 @@ $contentFile = $validPages[$page];
               href="?page=powiadomienia"
             >
               Powiadomienia
+            </a>
+          </li>
+          <li class="nav-item">
+            <a
+              class="nav-link text-white <?php echo ($page==='zarzadzaj_adminami')?'bg-secondary':''; ?>"
+              href="?page=zarzadzaj_adminami"
+            >
+              Zarządzaj Administratorami
             </a>
           </li>
         </ul>
