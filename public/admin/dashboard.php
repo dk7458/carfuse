@@ -72,16 +72,11 @@ $contentFile = $validPages[$page];
     <div class="row">
       <!-- Sidebar: Menu z lewej -->
       <nav class="col-12 col-md-3 col-xl-2 bg-dark sidebar p-0">
-        <ul class="nav flex-column text-white" id="adminTabs" role="tablist">
+        <ul class="nav flex-column text-white">
           <li class="nav-item">
             <a
               class="nav-link text-white <?php echo ($page==='podsumowanie')?'bg-secondary':''; ?>"
-              id="podsumowanie-tab"
-              data-bs-toggle="tab"
-              href="#podsumowanie"
-              role="tab"
-              aria-controls="podsumowanie"
-              aria-selected="<?php echo ($page==='podsumowanie')?'true':'false'; ?>"
+              href="?page=podsumowanie"
             >
               Podsumowanie
             </a>
@@ -89,12 +84,7 @@ $contentFile = $validPages[$page];
           <li class="nav-item">
             <a
               class="nav-link text-white <?php echo ($page==='uzytkownicy')?'bg-secondary':''; ?>"
-              id="uzytkownicy-tab"
-              data-bs-toggle="tab"
-              href="#uzytkownicy"
-              role="tab"
-              aria-controls="uzytkownicy"
-              aria-selected="<?php echo ($page==='uzytkownicy')?'true':'false'; ?>"
+              href="?page=uzytkownicy"
             >
               Użytkownicy
             </a>
@@ -102,12 +92,7 @@ $contentFile = $validPages[$page];
           <li class="nav-item">
             <a
               class="nav-link text-white <?php echo ($page==='rezerwacje')?'bg-secondary':''; ?>"
-              id="rezerwacje-tab"
-              data-bs-toggle="tab"
-              href="#rezerwacje"
-              role="tab"
-              aria-controls="rezerwacje"
-              aria-selected="<?php echo ($page==='rezerwacje')?'true':'false'; ?>"
+              href="?page=rezerwacje"
             >
               Rezerwacje
             </a>
@@ -115,12 +100,7 @@ $contentFile = $validPages[$page];
           <li class="nav-item">
             <a
               class="nav-link text-white <?php echo ($page==='konserwacja')?'bg-secondary':''; ?>"
-              id="konserwacja-tab"
-              data-bs-toggle="tab"
-              href="#konserwacja"
-              role="tab"
-              aria-controls="konserwacja"
-              aria-selected="<?php echo ($page==='konserwacja')?'true':'false'; ?>"
+              href="?page=konserwacja"
             >
               Konserwacja
             </a>
@@ -128,12 +108,7 @@ $contentFile = $validPages[$page];
           <li class="nav-item">
             <a
               class="nav-link text-white <?php echo ($page==='raporty')?'bg-secondary':''; ?>"
-              id="raporty-tab"
-              data-bs-toggle="tab"
-              href="#raporty"
-              role="tab"
-              aria-controls="raporty"
-              aria-selected="<?php echo ($page==='raporty')?'true':'false'; ?>"
+              href="?page=raporty"
             >
               Raporty
             </a>
@@ -141,12 +116,7 @@ $contentFile = $validPages[$page];
           <li class="nav-item">
             <a
               class="nav-link text-white <?php echo ($page==='umowy')?'bg-secondary':''; ?>"
-              id="umowy-tab"
-              data-bs-toggle="tab"
-              href="#umowy"
-              role="tab"
-              aria-controls="umowy"
-              aria-selected="<?php echo ($page==='umowy')?'true':'false'; ?>"
+              href="?page=umowy"
             >
               Umowy
             </a>
@@ -154,12 +124,7 @@ $contentFile = $validPages[$page];
           <li class="nav-item">
             <a
               class="nav-link text-white <?php echo ($page==='flota')?'bg-secondary':''; ?>"
-              id="flota-tab"
-              data-bs-toggle="tab"
-              href="#flota"
-              role="tab"
-              aria-controls="flota"
-              aria-selected="<?php echo ($page==='flota')?'true':'false'; ?>"
+              href="?page=flota"
             >
               Flota
             </a>
@@ -167,12 +132,7 @@ $contentFile = $validPages[$page];
           <li class="nav-item">
             <a
               class="nav-link text-white <?php echo ($page==='powiadomienia')?'bg-secondary':''; ?>"
-              id="powiadomienia-tab"
-              data-bs-toggle="tab"
-              href="#powiadomienia"
-              role="tab"
-              aria-controls="powiadomienia"
-              aria-selected="<?php echo ($page==='powiadomienia')?'true':'false'; ?>"
+              href="?page=powiadomienia"
             >
               Powiadomienia
             </a>
@@ -180,12 +140,7 @@ $contentFile = $validPages[$page];
           <li class="nav-item">
             <a
               class="nav-link text-white <?php echo ($page==='zarzadzaj_adminami')?'bg-secondary':''; ?>"
-              id="zarzadzaj_adminami-tab"
-              data-bs-toggle="tab"
-              href="#zarzadzaj_adminami"
-              role="tab"
-              aria-controls="zarzadzaj_adminami"
-              aria-selected="<?php echo ($page==='zarzadzaj_adminami')?'true':'false'; ?>"
+              href="?page=zarzadzaj_adminami"
             >
               Zarządzaj Administratorami
             </a>
@@ -195,35 +150,19 @@ $contentFile = $validPages[$page];
 
       <!-- Główna treść: ładowanie plików sekcji -->
       <main class="col-12 col-md-9 col-xl-10 py-3">
-        <div class="tab-content" id="adminTabsContent">
-          <div class="tab-pane fade <?php echo ($page==='podsumowanie')?'show active':''; ?>" id="podsumowanie" role="tabpanel" aria-labelledby="podsumowanie-tab">
-            <?php include '../../pages/summary.php'; ?>
-          </div>
-          <div class="tab-pane fade <?php echo ($page==='uzytkownicy')?'show active':''; ?>" id="uzytkownicy" role="tabpanel" aria-labelledby="uzytkownicy-tab">
-            <?php include '../../views/admin/manage_users.php'; ?>
-          </div>
-          <div class="tab-pane fade <?php echo ($page==='rezerwacje')?'show active':''; ?>" id="rezerwacje" role="tabpanel" aria-labelledby="rezerwacje-tab">
-            <?php include 'booking_management.php'; ?>
-          </div>
-          <div class="tab-pane fade <?php echo ($page==='konserwacja')?'show active':''; ?>" id="konserwacja" role="tabpanel" aria-labelledby="konserwacja-tab">
-            <?php include 'maintenance_management.php'; ?>
-          </div>
-          <div class="tab-pane fade <?php echo ($page==='raporty')?'show active':''; ?>" id="raporty" role="tabpanel" aria-labelledby="raporty-tab">
-            <?php include 'reports_management.php'; ?>
-          </div>
-          <div class="tab-pane fade <?php echo ($page==='umowy')?'show active':''; ?>" id="umowy" role="tabpanel" aria-labelledby="umowy-tab">
-            <?php include 'contract_management.php'; ?>
-          </div>
-          <div class="tab-pane fade <?php echo ($page==='flota')?'show active':''; ?>" id="flota" role="tabpanel" aria-labelledby="flota-tab">
-            <?php include 'fleet_management.php'; ?>
-          </div>
-          <div class="tab-pane fade <?php echo ($page==='powiadomienia')?'show active':''; ?>" id="powiadomienia" role="tabpanel" aria-labelledby="powiadomienia-tab">
-            <?php include 'notifications_management.php'; ?>
-          </div>
-          <div class="tab-pane fade <?php echo ($page==='zarzadzaj_adminami')?'show active':''; ?>" id="zarzadzaj_adminami" role="tabpanel" aria-labelledby="zarzadzaj_adminami-tab">
-            <?php include '../../views/admin/manage_admins.php'; ?>
-          </div>
-        </div>
+        <?php
+        // Start session if not already started
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        // Wczytaj plik odpowiadający aktualnie wybranej stronie
+        if (file_exists(__DIR__ . '/' . $contentFile)) {
+            include __DIR__ . '/' . $contentFile;
+        } else {
+            echo "<div class='alert alert-danger'>Nie znaleziono pliku: <code>$contentFile</code></div>";
+        }
+        ?>
       </main>
     </div>
   </div>
