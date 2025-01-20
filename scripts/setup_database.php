@@ -132,5 +132,17 @@ createTable($conn, 'password_resets', "
     )
 ");
 
+// Admin Notification Settings Table
+createTable($conn, 'admin_notification_settings', "
+    CREATE TABLE admin_notification_settings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        admin_id INT NOT NULL,
+        contract_alerts BOOLEAN DEFAULT 0,
+        maintenance_alerts BOOLEAN DEFAULT 0,
+        booking_reminders BOOLEAN DEFAULT 0,
+        FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+");
+
 echo "Database setup completed.<br>";
 ?>

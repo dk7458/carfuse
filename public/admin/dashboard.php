@@ -51,7 +51,7 @@ $contentFile = $validPages[$page];
 <body>
 
   <!-- Górny pasek nawigacji (osobny plik) -->
-  <?php include __DIR__ . '/navbar.php'; ?>
+  <?php include '/.../.../views/shared/navbar_admin.php'; ?>
 
   <div class="container-fluid">
     <div class="row">
