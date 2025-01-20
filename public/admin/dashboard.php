@@ -1,5 +1,15 @@
 <?php
-// dashboard.php (przykładowy główny plik panelu administratora w Bootstrap 5.3)
+
+
+// Start session if not already started
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Ensure the user is an admin
+if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+    redirect('/public/login.php');
+}
 
 // 1. Pobranie parametru "?page=" z adresu, np. dashboard.php?page=konserwacja
 $page = $_GET['page'] ?? 'podsumowanie';
@@ -46,6 +56,15 @@ $contentFile = $validPages[$page];
         position: sticky;
         top: 0;
       }
+    }
+    .navbar .nav-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+    .navbar .nav-link:hover {
+      background-color: #d0d0d0 !important;
     }
   </style>
 </head>
@@ -136,6 +155,11 @@ $contentFile = $validPages[$page];
       <!-- Główna treść: ładowanie plików sekcji -->
       <main class="col-12 col-md-9 col-xl-10 py-3">
         <?php
+        // Start session if not already started
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
         // Wczytaj plik odpowiadający aktualnie wybranej stronie
         if (file_exists(__DIR__ . '/' . $contentFile)) {
             include __DIR__ . '/' . $contentFile;

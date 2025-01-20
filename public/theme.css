@@ -1,4 +1,38 @@
-/* Standard Form Styles */
+/* ---------------------------------------------
+ * 1. Root Theme Variables
+ * --------------------------------------------- */
+ :root {
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --background-color: #f8f9fa;
+    --accent-color: #007bff;
+    --font-family: 'Arial', sans-serif;
+    --font-size: 16px;
+}
+
+/* ---------------------------------------------
+ * 2. Global Styles
+ * --------------------------------------------- */
+body {
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    background-color: var(--background-color);
+    margin: 0;
+    padding: 0;
+}
+
+a {
+    color: black;
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--secondary-color);
+}
+
+/* ---------------------------------------------
+ * 3. Standard Form Styles
+ * --------------------------------------------- */
 .standard-form {
     max-width: 400px;
     margin: 0 auto;
@@ -21,22 +55,27 @@
     padding: 12px;
     font-size: 1rem;
     background-color: var(--primary-color);
-    color: white;
+    color: #fff;
     border: none;
     border-radius: 0;
+    cursor: pointer;
 }
 
 .standard-form button:hover {
     background-color: #0056b3;
 }
 
-/* Button Styles */
+/* ---------------------------------------------
+ * 4. Button Styles
+ * --------------------------------------------- */
 .btn-primary {
     background-color: var(--primary-color);
     border: none;
     padding: 12px 24px;
     font-size: 1rem;
     border-radius: 0;
+    color: #fff;
+    cursor: pointer;
 }
 
 .btn-primary:hover {
@@ -49,40 +88,17 @@
     padding: 12px 24px;
     font-size: 1rem;
     border-radius: 0;
+    color: #fff;
+    cursor: pointer;
 }
 
 .btn-danger:hover {
     background-color: #f70000;
 }
 
-/* General Theme Variables */
-:root {
-    --primary-color: #007bff;
-    --secondary-color: #6c757d;
-    --background-color: #f8f9fa;
-    --accent-color: #007bff;
-    --font-family: 'Arial', sans-serif;
-    --font-size: 16px;
-}
-
-body {
-    font-family: var(--font-family);
-    font-size: var(--font-size);
-    background-color: var(--background-color);
-    margin: 0;
-    padding: 0;
-}
-
-a {
-    color: black;
-    text-decoration: none;
-}
-
-a:hover {
-    color: var(--secondary-color);
-}
-
-/* Navbar Styles */
+/* ---------------------------------------------
+ * 5. Navbar Styles
+ * --------------------------------------------- */
 .navbar {
     background-color: #e8e8e8;
     height: 70px;
@@ -104,7 +120,9 @@ a:hover {
     max-height: 70%;
 }
 
-/* Hero Button Styles */
+/* ---------------------------------------------
+ * 6. Hero Section Styles
+ * --------------------------------------------- */
 .hero .btn-primary {
     background-color: var(--accent-color);
     border: none;

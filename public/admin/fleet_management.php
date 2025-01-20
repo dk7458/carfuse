@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
-    <?php include '../../views/shared/navbar_admin.php'; ?>
+    
 
     <div class="container mt-5">
         <div class="row"            <div class="col-md-9 offset-md-3">
