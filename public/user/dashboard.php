@@ -43,21 +43,6 @@ $preferences = $conn->query("SELECT email_notifications, sms_notifications FROM 
 // Fetch user documents
 $userDocuments = glob("$userDocumentDir/*.{pdf}", GLOB_BRACE);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $emailNotifications = isset($_POST['email_notifications']) ? 1 : 0;
-    $smsNotifications = isset($_POST['sms_notifications']) ? 1 : 0;
-
-    $stmt = $conn->prepare("UPDATE users SET email_notifications = ?, sms_notifications = ? WHERE id = ?");
-    $stmt->bind_param("iii", $emailNotifications, $smsNotifications, $userId);
-
-    if ($stmt->execute()) {
-        $_SESSION['success_message'] = "Preferencje powiadomień zostały zaktualizowane.";
-    } else {
-        $_SESSION['error_message'] = "Wystąpił błąd podczas zapisywania preferencji.";
-    }
-    header("Location: /public/user/dashboard.php#notification-settings");
-    exit();
-}
 ?>
 
 <!DOCTYPE html>
@@ -74,270 +59,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <div class="container-fluid">
         <div class="row">
-            <!-- Sidebar: Menu z lewej -->
-            <nav class="col-12 col-md-3 col-xl-2 bg-dark sidebar p-0">
-                <ul class="nav flex-column text-white" id="userTabs" role="tablist">
+            <nav class="col-md-3 col-lg-2 bg-dark sidebar">
+                <ul class="nav flex-column" id="userTabs" role="tablist">
                     <li class="nav-item">
-                        <a class="nav-link text-white active" id="bookings-tab" data-bs-toggle="tab" href="#bookings" role="tab" aria-controls="bookings" aria-selected="true">Rezerwacje</a>
+                        <a class="nav-link active" data-bs-toggle="tab" href="#bookings" role="tab">Rezerwacje</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link text-white" id="profile-tab" data-bs-toggle="tab" href="#profile" role="tab" aria-controls="profile" aria-selected="false">Profil</a>
+                        <a class="nav-link" data-bs-toggle="tab" href="#profile" role="tab">Profil</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link text-white" id="personal-data-tab" data-bs-toggle="tab" href="#personal-data" role="tab" aria-controls="personal-data" aria-selected="false">Zmień Dane Osobowe</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white" id="reset-password-tab" data-bs-toggle="tab" href="#reset-password" role="tab" aria-controls="reset-password" aria-selected="false">Zresetuj Hasło</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white" id="documents-tab" data-bs-toggle="tab" href="#documents" role="tab" aria-controls="documents" aria-selected="false">Twoje Dokumenty</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white" id="notification-settings-tab" data-bs-toggle="tab" href="#notification-settings" role="tab" aria-controls="notification-settings" aria-selected="false">Ustawienia Powiadomień</a>
+                        <a class="nav-link" data-bs-toggle="tab" href="#notification-settings" role="tab">Powiadomienia</a>
                     </li>
                 </ul>
             </nav>
 
-            <!-- Główna treść: ładowanie plików sekcji -->
-            <main class="col-12 col-md-9 col-xl-10 py-3">
-                <div class="tab-content" id="userTabsContent">
-                    <div class="tab-pane fade show active" id="bookings" role="tabpanel" aria-labelledby="bookings-tab">
-                        <h1 class="text-center">Twoje Rezerwacje</h1>
-                        <p class="text-center">Zarządzaj swoimi rezerwacjami poniżej.</p>
-
-                        <?php if ($bookings->num_rows > 0): ?>
-                            <table class="table table-bordered mt-4">
-                                <thead>
-                                    <tr>
-                                        <th>ID Rezerwacji</th>
-                                        <th>Pojazd</th>
-                                        <th>Numer Rejestracyjny</th>
-                                        <th>Data Odbioru</th>
-                                        <th>Data Zwrotu</th>
-                                        <th>Cena Całkowita</th>
-                                        <th>Status</th>
-                                        <th>Umowa</th>
-                                        <th>Akcje</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php while ($booking = $bookings->fetch_assoc()): ?>
-                                        <tr>
-                                            <td><?php echo $booking['id']; ?></td>
-                                            <td><?php echo "{$booking['make']} {$booking['model']}"; ?></td>
-                                            <td><?php echo $booking['registration_number']; ?></td>
-                                            <td><?php echo date('d-m-Y', strtotime($booking['pickup_date'])); ?></td>
-                                            <td><?php echo date('d-m-Y', strtotime($booking['dropoff_date'])); ?></td>
-                                            <td><?php echo number_format($booking['total_price'], 2, ',', ' '); ?> PLN</td>
-                                            <td><?php echo ucfirst($booking['status']); ?></td>
-                                            <td>
-                                                <?php if ($booking['rental_contract_pdf']): ?>
-                                                    <a href="<?php echo $booking['rental_contract_pdf']; ?>" target="_blank">Pobierz</a>
-                                                <?php else: ?>
-                                                    Niedostępna
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?php if ($booking['status'] === 'active'): ?>
-                                                    <a href="/controllers/booking_controller.php?action=cancel&id=<?php echo $booking['id']; ?>" 
-                                                       class="btn btn-danger btn-sm"
-                                                       onclick="return confirm('Czy na pewno chcesz anulować tę rezerwację?');">Anuluj</a>
-                                                <?php endif; ?>
-                                            </td>
-                                        </tr>
-                                    <?php endwhile; ?>
-                                </tbody>
-                            </table>
-                        <?php else: ?>
-                            <div class="alert alert-info text-center mt-4">
-                                Nie masz żadnych aktywnych rezerwacji.
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="tab-pane fade" id="profile" role="tabpanel" aria-labelledby="profile-tab">
-                        <h2 class="mt-5">Twój Profil</h2>
-                        <div class="card p-4">
-                            <h2>Dane Osobowe</h2>
-                            <p><strong>Imię:</strong> <span><?php echo $userDetails['name']; ?></span></p>
-                            <p><strong>Nazwisko:</strong> <span><?php echo $userDetails['surname']; ?></span></p>
-                            <p><strong>E-mail:</strong> <span><?php echo $userDetails['email']; ?></span></p>
-                            <p><strong>Adres:</strong> <span><?php echo $userDetails['address']; ?></span></p>
-                            <p><strong>PESEL lub Numer Dowodu:</strong> <span><?php echo $userDetails['pesel_or_id']; ?></span></p>
-                            <a href="#personal-data" class="btn btn-primary mt-3" data-bs-toggle="tab" role="tab" aria-controls="personal-data" aria-selected="false">Zmień Dane Osobowe</a>
-                        </div>
-                    </div>
-
-                    <div class="tab-pane fade" id="personal-data" role="tabpanel" aria-labelledby="personal-data-tab">
-                        <h2 class="mt-5">Zmień Dane Osobowe</h2>
-                        <form action="/user/user_controller_proxy.php" method="POST" class="standard-form">
-                            <input type="hidden" name="action" value="update_profile">
-                            <div class="mb-3">
-                                <label for="name" class="form-label">Imię</label>
-                                <input type="text" id="name" name="name" class="form-control" value="<?php echo $userDetails['name']; ?>" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="surname" class="form-label">Nazwisko</label>
-                                <input type="text" id="surname" name="surname" class="form-control" value="<?php echo $userDetails['surname']; ?>" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="email" class="form-label">E-mail</label>
-                                <input type="email" id="email" name="email" class="form-control" value="<?php echo $userDetails['email']; ?>" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="address_part1" class="form-label">Adres - Część 1</label>
-                                <input type="text" id="address_part1" name="address_part1" class="form-control" value="<?php echo explode(' ', $userDetails['address'])[0]; ?>" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="address_part2" class="form-label">Adres - Część 2</label>
-                                <input type="text" id="address_part2" name="address_part2" class="form-control" value="<?php echo implode(' ', array_slice(explode(' ', $userDetails['address']), 1)); ?>" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="pesel_or_id" class="form-label">PESEL lub Numer Dowodu</label>
-                                <input type="text" id="pesel_or_id" name="pesel_or_id" class="form-control" value="<?php echo $userDetails['pesel_or_id']; ?>" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="phone" class="form-label">Telefon</label>
-                                <input type="text" id="phone" name="phone" class="form-control" value="<?php echo $userDetails['phone']; ?>" required>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Zapisz Zmiany</button>
-                        </form>
-                    </div>
-
-                    <div class="tab-pane fade" id="reset-password" role="tabpanel" aria-labelledby="reset-password-tab">
-                        <h2 class="mt-5">Zresetuj Hasło</h2>
-                        <form action="/user/user_controller_proxy.php" method="POST" class="standard-form">
-                            <input type="hidden" name="action" value="reset_password">
-                            <div class="mb-3">
-                                <label for="current_password" class="form-label">Obecne Hasło</label>
-                                <input type="password" id="current_password" name="current_password" class="form-control" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="new_password" class="form-label">Nowe Hasło</label>
-                                <input type="password" id="new_password" name="new_password" class="form-control" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="confirm_password" class="form-label">Potwierdź Nowe Hasło</label>
-                                <input type="password" id="confirm_password" name="confirm_password" class="form-control" required>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Zresetuj Hasło</button>
-                        </form>
-                    </div>
-
-                    <div class="tab-pane fade" id="documents" role="tabpanel" aria-labelledby="documents-tab">
-                        <h2 class="mt-5">Twoje Dokumenty</h2>
-                        <?php if (!empty($userDocuments)): ?>
-                            <ul class="list-group">
-                                <?php foreach ($userDocuments as $document): ?>
-                                    <li class="list-group-item">
-                                        <a href="<?php echo $document; ?>" target="_blank"><?php echo basename($document); ?></a>
-                                        <div id="pdf-viewer-<?php echo basename($document, ".pdf"); ?>" class="pdf-viewer"></div>
-                                    </li>
-                                <?php endforeach; ?>
-                            </ul>
-                        <?php else: ?>
-                            <div class="alert alert-info">Brak dokumentów do wyświetlenia.</div>
-                        <?php endif; ?>
-                    </div>
-                    <div class="tab-pane fade" id="notification-settings" role="tabpanel" aria-labelledby="notification-settings-tab">
-                        <h2 class="mt-5">Ustawienia Powiadomień</h2>
-                        <form method="POST" action="/public/user/notification_settings_proxy.php" class="standard-form">
-                            <div class="form-check mb-3">
-                                <input type="checkbox" id="email_notifications" name="email_notifications" class="form-check-input" 
-                                    <?php echo $preferences['email_notifications'] ? 'checked' : ''; ?>>
-                                <label for="email_notifications" class="form-check-label">Otrzymuj powiadomienia e-mail</label>
-                            </div>
-                            <div class="form-check mb-3">
-                                <input type="checkbox" id="sms_notifications" name="sms_notifications" class="form-check-input" 
-                                    <?php echo $preferences['sms_notifications'] ? 'checked' : ''; ?>>
-                                <label for="sms_notifications" class="form-check-label">Otrzymuj powiadomienia SMS</label>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Zapisz</button>
-                        </form>
-                    </div>
+            <main class="col-md-9 col-lg-10 tab-content" id="userTabsContent">
+                <div class="tab-pane fade show active" id="bookings" role="tabpanel">
+                    <h2>Twoje Rezerwacje</h2>
+                    <!-- Booking details table -->
+                </div>
+                <div class="tab-pane fade" id="profile" role="tabpanel">
+                    <h2>Profil Użytkownika</h2>
+                    <!-- Profile details -->
+                </div>
+                <div class="tab-pane fade" id="notification-settings" role="tabpanel">
+                    <h2>Ustawienia Powiadomień</h2>
+                    <!-- Notification preferences form -->
                 </div>
             </main>
         </div>
     </div>
 
-    <!-- Modal for displaying responses -->
-    <div class="modal fade" id="responseModal" tabindex="-1" aria-labelledby="responseModalLabel" aria-hidden="true">
+    <!-- Modal -->
+    <div class="modal fade" id="responseModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="responseModalLabel">Response</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h5 class="modal-title">Wiadomość</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body" id="responseMessage">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                </div>
+                <div class="modal-body" id="responseMessage"></div>
             </div>
         </div>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.standard-form').forEach(form => {
-                form.addEventListener('submit', function(event) {
-                    event.preventDefault();
-                    const formData = new FormData(this);
-                    fetch(this.action, {
-                        method: this.method,
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        const message = data.success || data.error;
-                        document.getElementById('responseMessage').textContent = message;
-                        const responseModal = new bootstrap.Modal(document.getElementById('responseModal'));
-                        responseModal.show();
-
-                        if (data.success) {
-                            // Update profile section with the latest data
-                            fetch('/user/get_user_details.php')
-                                .then(response => response.json())
-                                .then(userDetails => {
-                                    document.querySelectorAll('#profile .card p').forEach(p => {
-                                        const field = p.querySelector('strong').textContent.toLowerCase().replace(':', '');
-                                        p.querySelector('span').textContent = userDetails[field];
-                                    });
-                                });
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        document.getElementById('responseMessage').textContent = 'An error occurred. Please try again.';
-                        const responseModal = new bootstrap.Modal(document.getElementById('responseModal'));
-                        responseModal.show();
-                    });
-                });
-            });
-
-            document.querySelectorAll('.pdf-viewer').forEach(viewer => {
-                const url = viewer.previousElementSibling.href;
-                const loadingTask = pdfjsLib.getDocument(url);
-                loadingTask.promise.then(pdf => {
-                    pdf.getPage(1).then(page => {
-                        const scale = 1.5;
-                        const viewport = page.getViewport({ scale: scale });
-                        const canvas = document.createElement('canvas');
-                        const context = canvas.getContext('2d');
-                        canvas.height = viewport.height;
-                        canvas.width = viewport.width;
-                        viewer.appendChild(canvas);
-                        const renderContext = {
-                            canvasContext: context,
-                            viewport: viewport
-                        };
-                        page.render(renderContext);
-                    });
+        document.querySelectorAll('.standard-form').forEach(form => {
+            form.addEventListener('submit', function(event) {
+                event.preventDefault();
+                fetch(this.action, {
+                    method: this.method,
+                    body: new FormData(this)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('responseMessage').textContent = data.success || data.error;
+                    new bootstrap.Modal(document.getElementById('responseModal')).show();
                 });
             });
         });
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
