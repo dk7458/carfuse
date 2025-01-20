@@ -10,12 +10,22 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
 
 // Fetch vehicles
 $vehicles = $conn->query("SELECT * FROM fleet ORDER BY make, model");
+if (!$vehicles) {
+    die("Database query failed: " . $conn->error);
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['delete_id'])) {
         $deleteId = intval($_POST['delete_id']);
-        $conn->query("DELETE FROM fleet WHERE id = $deleteId");
-        $_SESSION['success_message'] = "Pojazd został usunięty.";
+        $stmt = $conn->prepare("DELETE FROM fleet WHERE id = ?");
+        $stmt->bind_param("i", $deleteId);
+
+        if ($stmt->execute()) {
+            $_SESSION['success_message'] = "Pojazd został usunięty.";
+        } else {
+            $_SESSION['error_message'] = "Nie udało się usunąć pojazdu.";
+        }
+
         header('Location: /public/admin/dashboard.php?page=flota');
         exit();
     }
