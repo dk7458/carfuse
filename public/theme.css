@@ -135,3 +135,19 @@ a:hover {
 .hero .btn-primary:hover {
     background-color: #0056b3;
 }
+
+/* ---------------------------------------------
+ * 7. Dashboard Styles
+ * --------------------------------------------- */
+.sidebar {
+    min-height: 100vh; /* Full height for sidebar */
+    padding-top: calc(2.75rem + 2px); /* Add space at the top */
+}
+
+.nav-link {
+    height: calc(2.75rem + 2px); /* Increased height by 10% */
+}
+
+.nav-link:hover {
+    background-color: #d0d0d0 !important;
+}

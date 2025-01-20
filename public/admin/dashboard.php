@@ -39,6 +39,7 @@ $contentFile = $validPages[$page];
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
   >
+  <link rel="stylesheet" href="/public/theme.css">
   <style>
     /* Proste style dla layoutu z kolumnami */
     body {
@@ -46,7 +47,7 @@ $contentFile = $validPages[$page];
     }
     .sidebar {
       min-height: 100vh; /* Pełna wysokość dla sidebaru */
-      padding-top: 1rem; /* Add space at the top */
+      padding-top: calc(2.75rem + 2px); /* Add space at the top */
     }
     @media (min-width: 992px) {
       .sidebar {
