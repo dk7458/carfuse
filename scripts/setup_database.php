@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../includes/db_connect.php';
+require '/../includes/db_connect.php';
 
 function createTable($conn, $tableName, $createQuery) {
     $checkTable = $conn->query("SHOW TABLES LIKE '$tableName'");
