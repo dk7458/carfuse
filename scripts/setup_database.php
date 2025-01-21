@@ -40,21 +40,16 @@ $schemas = [
                 address TEXT,
                 pesel_or_id VARCHAR(20),
                 password_hash VARCHAR(255) NOT NULL,
-                role ENUM('user', 'admin') DEFAULT 'user',
+                role ENUM('user', 'admin', 'super_admin') DEFAULT 'user',
                 email_notifications BOOLEAN DEFAULT 0,
                 sms_notifications BOOLEAN DEFAULT 0,
+                active BOOLEAN DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ",
         'columns' => [
-            'name' => 'VARCHAR(255) NOT NULL',
-            'surname' => 'VARCHAR(255) NOT NULL',
-            'email' => 'VARCHAR(255) UNIQUE NOT NULL',
-            'phone' => 'VARCHAR(15)',
-            'address' => 'TEXT',
-            'pesel_or_id' => 'VARCHAR(20)',
-            'email_notifications' => 'BOOLEAN DEFAULT 0',
-            'sms_notifications' => 'BOOLEAN DEFAULT 0',
+            'role' => "ENUM('user', 'admin', 'super_admin') DEFAULT 'user'",
+            'active' => 'BOOLEAN DEFAULT 1',
         ],
     ],
     'fleet' => [
@@ -66,15 +61,12 @@ $schemas = [
                 registration_number VARCHAR(20) UNIQUE NOT NULL,
                 availability BOOLEAN DEFAULT 1,
                 last_maintenance_date DATE,
+                next_maintenance_date DATE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ",
         'columns' => [
-            'make' => 'VARCHAR(255) NOT NULL',
-            'model' => 'VARCHAR(255) NOT NULL',
-            'registration_number' => 'VARCHAR(20) UNIQUE NOT NULL',
-            'availability' => 'BOOLEAN DEFAULT 1',
-            'last_maintenance_date' => 'DATE',
+            'next_maintenance_date' => 'DATE',
         ],
     ],
     'bookings' => [
@@ -86,7 +78,8 @@ $schemas = [
                 pickup_date DATE NOT NULL,
                 dropoff_date DATE NOT NULL,
                 total_price DECIMAL(10, 2) NOT NULL,
-                status ENUM('active', 'canceled') DEFAULT 'active',
+                status ENUM('active', 'canceled', 'paid', 'completed') DEFAULT 'active',
+                refund_status ENUM('none', 'requested', 'processed') DEFAULT 'none',
                 rental_contract_pdf VARCHAR(255),
                 canceled_at TIMESTAMP NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -95,11 +88,21 @@ $schemas = [
             )
         ",
         'columns' => [
-            'pickup_date' => 'DATE NOT NULL',
-            'dropoff_date' => 'DATE NOT NULL',
-            'total_price' => 'DECIMAL(10, 2) NOT NULL',
-            'status' => "ENUM('active', 'canceled') DEFAULT 'active'",
+            'status' => "ENUM('active', 'canceled', 'paid', 'completed') DEFAULT 'active'",
+            'refund_status' => "ENUM('none', 'requested', 'processed') DEFAULT 'none'",
         ],
+    ],
+    'refund_logs' => [
+        'create' => "
+            CREATE TABLE refund_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                booking_id INT NOT NULL,
+                refunded_amount DECIMAL(10, 2) NOT NULL,
+                refund_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+            )
+        ",
+        'columns' => [],
     ],
     'payment_methods' => [
         'create' => "
@@ -113,11 +116,7 @@ $schemas = [
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         ",
-        'columns' => [
-            'method_name' => 'VARCHAR(255) NOT NULL',
-            'details' => 'VARCHAR(255) NOT NULL',
-            'is_default' => 'BOOLEAN DEFAULT 0',
-        ],
+        'columns' => [],
     ],
     'notifications' => [
         'create' => "
@@ -130,10 +129,7 @@ $schemas = [
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         ",
-        'columns' => [
-            'type' => "ENUM('email', 'sms') NOT NULL",
-            'message' => 'TEXT NOT NULL',
-        ],
+        'columns' => [],
     ],
     'logs' => [
         'create' => "
@@ -146,10 +142,7 @@ $schemas = [
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         ",
-        'columns' => [
-            'action' => 'VARCHAR(255) NOT NULL',
-            'details' => 'TEXT',
-        ],
+        'columns' => [],
     ],
     'admin_notification_settings' => [
         'create' => "
@@ -162,11 +155,7 @@ $schemas = [
                 FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
             )
         ",
-        'columns' => [
-            'contract_alerts' => 'BOOLEAN DEFAULT 0',
-            'maintenance_alerts' => 'BOOLEAN DEFAULT 0',
-            'booking_reminders' => 'BOOLEAN DEFAULT 0',
-        ],
+        'columns' => [],
     ],
 ];
 
@@ -180,4 +169,3 @@ foreach ($schemas as $tableName => $schema) {
 
 echo "Database schema verification and update completed.<br>";
 ?>
-

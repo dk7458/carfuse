@@ -27,6 +27,10 @@ $stmt->close();
     <div class="container">
         <h1 class="mt-5">Moje Powiadomienia</h1>
 
+        <div class="mt-4">
+            <a href="/views/user/notifications.php" class="btn btn-link">Zarządzaj Preferencjami Powiadomień</a>
+        </div>
+
         <?php if ($notifications->num_rows > 0): ?>
             <ul class="list-group mt-4">
                 <?php while ($notification = $notifications->fetch_assoc()): ?>

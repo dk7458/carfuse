@@ -3,6 +3,29 @@
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
+function isAdmin() {
+    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+}
+
+function isSuperAdmin() {
+    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'super_admin';
+}
+
+function isUser() {
+    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'user';
+}
+
+function hasAccess($requiredRole) {
+    $rolesHierarchy = ['user' => 1, 'admin' => 2, 'super_admin' => 3];
+    return isset($_SESSION['user_role']) && $rolesHierarchy[$_SESSION['user_role']] >= $rolesHierarchy[$requiredRole];
+}
+function logSensitiveAction($userId, $action, $details) {
+    global $conn;
+    $stmt = $conn->prepare("INSERT INTO logs (user_id, action, details, timestamp) VALUES (?, ?, ?, NOW())");
+    $stmt->bind_param("iss", $userId, $action, $details);
+    $stmt->execute();
+}
+
 function sendEmail($to, $subject, $message, $template = null, $data = []) {
     require_once '/home/u122931475/domains/carfuse.pl/public_html/vendor/autoload.php';
 

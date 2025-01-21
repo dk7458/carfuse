@@ -1,6 +1,8 @@
 <?php
-require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
-session_start();
+// File Path: /public/login.php
+require_once __DIR__ . '/../includes/db_connect.php';
+require_once __DIR__ . '/../includes/session_middleware.php';
+require_once __DIR__ . '/../includes/functions.php';
 
 // Handle login submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -10,17 +12,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $_SESSION['error_message'] = "Nieprawidłowy adres e-mail.";
     } else {
-        $stmt = $conn->prepare("SELECT id, password_hash, role FROM users WHERE email = ?");
+        $stmt = $conn->prepare("SELECT id, password_hash, role, active FROM users WHERE email = ?");
         $stmt->bind_param("s", $email);
         $stmt->execute();
         $stmt->store_result();
 
         if ($stmt->num_rows > 0) {
-            $stmt->bind_result($userId, $hashedPassword, $role);
+            $stmt->bind_result($userId, $hashedPassword, $role, $active);
             $stmt->fetch();
-            if (password_verify($password, $hashedPassword)) {
+
+            if (!$active) {
+                $_SESSION['error_message'] = "Twoje konto zostało dezaktywowane.";
+            } elseif (password_verify($password, $hashedPassword)) {
                 $_SESSION['user_id'] = $userId;
                 $_SESSION['user_role'] = $role;
+                $_SESSION['LAST_ACTIVITY'] = time();
+
+                logAction($userId, 'login', 'Użytkownik zalogowany.');
+                
                 if ($role === 'admin') {
                     header("Location: /public/admin/dashboard.php");
                 } else {
@@ -39,16 +48,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <!DOCTYPE html>
 <html lang="pl">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Logowanie</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../styles/settings.css" rel="stylesheet">
-    <link rel="stylesheet" href="/theme.css">
+    <link href="/assets/css/theme.css" rel="stylesheet">
 </head>
-
 <body>
     <?php include '../views/shared/navbar_empty.php'; ?>
 
@@ -58,10 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <?php if (isset($_SESSION['error_message'])): ?>
                 <div class="alert alert-danger">
-                    <?php
-                    echo $_SESSION['error_message'];
-                    unset($_SESSION['error_message']);
-                    ?>
+                    <?= htmlspecialchars($_SESSION['error_message']); ?>
+                    <?php unset($_SESSION['error_message']); ?>
                 </div>
             <?php endif; ?>
 
@@ -83,5 +87,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 </body>
-
 </html>
