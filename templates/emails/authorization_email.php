@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Potwierdzenie Rezerwacji</title>
+    <title>Email Autoryzacyjny</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -28,6 +28,7 @@
             color: white;
             text-decoration: none;
             border-radius: 5px;
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -35,18 +36,11 @@
     <div class="container">
         <?= generateEmailHeader() ?>
         <p>Szanowny/a <?= htmlspecialchars($data['name']) ?>,</p>
-        <p>Dziękujemy za dokonanie rezerwacji! Twoja rezerwacja została pomyślnie przetworzona.</p>
-        <p><strong>Szczegóły rezerwacji:</strong></p>
-        <ul>
-            <li>Samochód: <?= htmlspecialchars($data['car']) ?></li>
-            <li>Data odbioru: <?= htmlspecialchars($data['pickup_date']) ?></li>
-            <li>Data zwrotu: <?= htmlspecialchars($data['dropoff_date']) ?></li>
-            <li>Łączna cena: <?= htmlspecialchars($data['price']) ?> PLN</li>
-        </ul>
-        <p>Możesz zobaczyć lub pobrać swoją umowę, klikając poniższy link:</p>
-        <a href="<?= htmlspecialchars($data['contract_link']) ?>" class="button">Zobacz umowę</a>
-        <p>Cieszymy się, że możemy Cię obsłużyć. W razie pytań zapraszamy do kontaktu.</p>
+        <p>Poprosiłeś/aś o wykonanie akcji, która wymaga dodatkowej autoryzacji. Prosimy potwierdzić swoje żądanie, klikając poniższy przycisk:</p>
+        <a href="<?= htmlspecialchars($data['authorization_link']) ?>" class="button">Autoryzuj Żądanie</a>
+        <p>Jeśli nie prosiłeś/aś o tę operację, zignoruj tę wiadomość lub skontaktuj się z naszym zespołem wsparcia.</p>
         <p>Z poważaniem,<br>Zespół Carfuse</p>
+        <p style="font-size: 0.9em; color: #777;">Uwaga: Ten e-mail został wygenerowany automatycznie. Prosimy nie odpowiadać na tę wiadomość.</p>
     </div>
 </body>
 </html>

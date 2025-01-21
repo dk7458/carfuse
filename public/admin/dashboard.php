@@ -6,7 +6,6 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_m
 if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
     redirect('/public/login.php');
 }
-
 // 1. Pobranie parametru "?page=" z adresu, np. dashboard.php?page=konserwacja
 $page = $_GET['page'] ?? 'podsumowanie';
 
@@ -22,7 +21,6 @@ $validPages = [
     'powiadomienia' => 'notifications_management.php',
     'zarzadzaj_adminami' => '../../views/admin/manage_admins.php', // Add admin management
 ];
-
 // 3. Sprawdź, czy klucz istnieje w tablicy $validPages, w przeciwnym razie ładuj "podsumowanie".
 if (!array_key_exists($page, $validPages)) {
     $page = 'podsumowanie';
