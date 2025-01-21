@@ -3,6 +3,11 @@ require __DIR__ . '/../includes/db_connect.php';
 
 function createTable($conn, $tableName, $createQuery) {
     $checkTable = $conn->query("SHOW TABLES LIKE '$tableName'");
+    if ($checkTable === false) {
+        echo "Error checking table '$tableName': " . $conn->error . "<br>";
+        return;
+    }
+    
     if ($checkTable->num_rows === 0) {
         if ($conn->query($createQuery)) {
             echo "Table '$tableName' created successfully.<br>";
@@ -16,6 +21,11 @@ function createTable($conn, $tableName, $createQuery) {
 
 function checkAndAddColumn($conn, $tableName, $columnName, $columnDefinition) {
     $result = $conn->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
+    if ($result === false) {
+        echo "Error checking column '$columnName' in table '$tableName': " . $conn->error . "<br>";
+        return;
+    }
+
     if ($result->num_rows === 0) {
         if ($conn->query("ALTER TABLE `$tableName` ADD `$columnName` $columnDefinition")) {
             echo "Column '$columnName' added to table '$tableName'.<br>";
@@ -158,14 +168,20 @@ $schemas = [
         'columns' => [],
     ],
 ];
+// Wrap the operations in a transaction for efficiency
+$conn->begin_transaction();
 
-// Process each table schema
-foreach ($schemas as $tableName => $schema) {
-    createTable($conn, $tableName, $schema['create']);
-    foreach ($schema['columns'] as $columnName => $columnDefinition) {
-        checkAndAddColumn($conn, $tableName, $columnName, $columnDefinition);
+try {
+    foreach ($schemas as $tableName => $schema) {
+        createTable($conn, $tableName, $schema['create']);
+        foreach ($schema['columns'] as $columnName => $columnDefinition) {
+            checkAndAddColumn($conn, $tableName, $columnName, $columnDefinition);
+        }
     }
+    $conn->commit();
+    echo "Database schema verification and update completed.<br>";
+} catch (Exception $e) {
+    $conn->rollback();
+    echo "An error occurred: " . $e->getMessage() . "<br>";
 }
-
-echo "Database schema verification and update completed.<br>";
 ?>
