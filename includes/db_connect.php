@@ -1,5 +1,5 @@
 <?php
-$host = 'carfuse.pl';
+$host = 'localhost';
 $username = 'u122931475_user';
 $password = 'Japierdole1876';
 $database = 'u122931475_carfuse';
