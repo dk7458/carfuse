@@ -1,5 +1,5 @@
 <?php
-require '/../includes/db_connect.php';
+require '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
 
 function createTable($conn, $tableName, $createQuery) {
     $checkTable = $conn->query("SHOW TABLES LIKE '$tableName'");
