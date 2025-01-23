@@ -4,59 +4,67 @@ require_once __DIR__ . '/../includes/session_middleware.php';
 require_once __DIR__ . '/../includes/db_connect.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-// Ensure the user is an admin
-if ($_SESSION['user_role'] !== 'admin') {
-    http_response_code(403);
-    echo json_encode(['error' => 'Brak dostępu.']);
-    exit;
-}
+// Ensure the user has the required role
+enforceRole(['admin', 'super_admin'], '/public/login.php');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $taxRate = $_POST['tax_rate'] ?? null;
-    $emailNotifications = $_POST['email_notifications'] ?? null;
-    $smsNotifications = $_POST['sms_notifications'] ?? null;
-
-    if ($taxRate === null || $emailNotifications === null || $smsNotifications === null) {
-        $_SESSION['error_message'] = "Wszystkie pola są wymagane.";
-        header("Location: /views/admin/settings.php");
-        exit;
-    }
-
     try {
-        // Begin transaction
+        // Begin database transaction
         $conn->begin_transaction();
 
-        // Update tax rate
-        $stmt = $conn->prepare("INSERT INTO system_settings (setting_key, setting_value) 
-                                VALUES ('tax_rate', ?) 
-                                ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-        $stmt->bind_param("s", $taxRate);
-        $stmt->execute();
+        foreach ($_POST as $key => $value) {
+            $sanitizedKey = htmlspecialchars($key);
+            $sanitizedValue = htmlspecialchars(trim($value));
 
-        // Update email notifications
-        $stmt = $conn->prepare("INSERT INTO system_settings (setting_key, setting_value) 
-                                VALUES ('email_notifications', ?) 
-                                ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-        $stmt->bind_param("s", $emailNotifications);
-        $stmt->execute();
+            // Validate settings values
+            if (empty($sanitizedValue)) {
+                throw new Exception("Field '$sanitizedKey' cannot be empty.");
+            }
 
-        // Update SMS notifications
-        $stmt = $conn->prepare("INSERT INTO system_settings (setting_key, setting_value) 
-                                VALUES ('sms_notifications', ?) 
-                                ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-        $stmt->bind_param("s", $smsNotifications);
-        $stmt->execute();
+            // Specific validations for known settings
+            if ($sanitizedKey === 'tax_rate' && (!is_numeric($sanitizedValue) || $sanitizedValue < 0 || $sanitizedValue > 100)) {
+                throw new Exception("Tax rate must be a number between 0 and 100.");
+            }
+
+            if ($sanitizedKey === 'email_notifications' && !in_array($sanitizedValue, ['0', '1'])) {
+                throw new Exception("Invalid value for email notifications.");
+            }
+
+            if ($sanitizedKey === 'sms_notifications' && !in_array($sanitizedValue, ['0', '1'])) {
+                throw new Exception("Invalid value for SMS notifications.");
+            }
+
+            // Insert or update the setting in the database
+            $stmt = $conn->prepare("
+                INSERT INTO system_settings (setting_key, setting_value) 
+                VALUES (?, ?) 
+                ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
+            ");
+            $stmt->bind_param("ss", $sanitizedKey, $sanitizedValue);
+            $stmt->execute();
+        }
 
         // Commit transaction
         $conn->commit();
 
-        $_SESSION['success_message'] = "Ustawienia zostały zaktualizowane pomyślnie.";
+        // Log the settings update
+        logAction($_SESSION['user_id'], 'update_settings', 'System settings updated.');
+
+        // Success message
+        $_SESSION['success_message'] = "Settings updated successfully.";
     } catch (Exception $e) {
+        // Rollback transaction on error
         $conn->rollback();
         logError($e->getMessage());
-        $_SESSION['error_message'] = "Wystąpił błąd podczas zapisywania ustawień.";
+        $_SESSION['error_message'] = "Error: " . $e->getMessage();
     } finally {
+        // Redirect back to the settings page
         header("Location: /views/admin/settings.php");
         exit;
     }
+} else {
+    // Handle invalid request method
+    http_response_code(405);
+    echo json_encode(['error' => 'Invalid request method.']);
+    exit;
 }

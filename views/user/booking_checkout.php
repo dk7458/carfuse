@@ -1,8 +1,8 @@
 <?php
 // File Path: /views/user/booking_checkout.php
-require_once __DIR__ . '/../includes/db_connect.php';
-require_once __DIR__ . '/../includes/session_middleware.php';
-require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../../includes/db_connect.php';
+require_once __DIR__ . '/../../includes/session_middleware.php';
+require_once __DIR__ . '/../../includes/functions.php';
 
 // Ensure the user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -19,7 +19,12 @@ if (!$bookingId) {
 }
 
 // Fetch booking details
-$stmt = $conn->prepare("SELECT b.total_price, f.make, f.model, f.year FROM bookings b JOIN fleet f ON b.vehicle_id = f.id WHERE b.id = ? AND b.user_id = ?");
+$stmt = $conn->prepare("
+    SELECT b.total_price, f.make, f.model, f.year 
+    FROM bookings b 
+    JOIN fleet f ON b.vehicle_id = f.id 
+    WHERE b.id = ? AND b.user_id = ?
+");
 $stmt->bind_param("ii", $bookingId, $userId);
 $stmt->execute();
 $booking = $stmt->get_result()->fetch_assoc();
@@ -30,6 +35,7 @@ if (!$booking) {
     exit();
 }
 
+// Generate CSRF token
 $csrfToken = generateCsrfToken();
 
 ?>
@@ -83,6 +89,11 @@ $csrfToken = generateCsrfToken();
         .navbar {
             margin-bottom: 20px;
         }
+
+        .error-message {
+            color: red;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
@@ -99,12 +110,16 @@ $csrfToken = generateCsrfToken();
             <h1 class="text-center">Podsumowanie Płatności</h1>
 
             <h2>Rezerwacja: <?= htmlspecialchars($booking['make'] . ' ' . $booking['model'] . ' (' . $booking['year'] . ')') ?></h2>
-            <p>Łączna kwota do zapłaty: <strong><?= htmlspecialchars($booking['total_price']) ?> PLN</strong></p>
+            <p>Łączna kwota do zapłaty: <strong><?= htmlspecialchars(number_format($booking['total_price'], 2, ',', ' ')) ?> PLN</strong></p>
+
+            <?php if (isset($_GET['error']) && $_GET['error'] === 'invalid_payment_method'): ?>
+                <p class="error-message">Nieprawidłowa metoda płatności. Spróbuj ponownie.</p>
+            <?php endif; ?>
 
             <form method="POST" action="/controllers/payment_controller.php">
                 <input type="hidden" name="action" value="process_payment">
-                <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
-                <input type="hidden" name="booking_id" value="<?= $bookingId ?>">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                <input type="hidden" name="booking_id" value="<?= intval($bookingId) ?>">
 
                 <div class="payment-method">
                     <label>

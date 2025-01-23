@@ -1,6 +1,9 @@
 <?php
-require_once __DIR__ . '/../../includes/session_middleware.php';
 require_once __DIR__ . '/../../includes/db_connect.php';
+require_once __DIR__ . '/../../includes/session_middleware.php';
+require_once __DIR__ . '/../includes/functions.php';
+
+enforceRole(['admin', 'super_admin']); 
 
 if ($_SESSION['user_role'] !== 'super_admin' && $_SESSION['user_role'] !== 'admin') {
     redirect('/public/login.php');

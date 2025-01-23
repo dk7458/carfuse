@@ -16,38 +16,37 @@
         <!-- Quick Links Section -->
         <div class="row mt-4 text-center">
             <div class="col-md-4">
-                <a href="/views/admin/user_add.php" class="btn btn-primary w-100" title="Dodaj nowego użytkownika">
-                    <i class="bi bi-person-plus"></i> Dodaj Użytkownika
+                <a href="/views/admin/user_manager.php" class="btn btn-primary w-100" title="Zarządzaj użytkownikami">
+                    <i class="bi bi-person-plus"></i> Użytkownicy
                 </a>
             </div>
             <div class="col-md-4">
-                <a href="/views/admin/fleet_add.php" class="btn btn-primary w-100" title="Dodaj nowy pojazd">
-                    <i class="bi bi-car-front"></i> Dodaj Pojazd
+                <a href="/views/admin/fleet_manager.php" class="btn btn-primary w-100" title="Zarządzaj flotą">
+                    <i class="bi bi-car-front"></i> Flota
                 </a>
             </div>
             <div class="col-md-4">
-                <a href="/views/admin/report_manager.php" class="btn btn-primary w-100" title="Wygeneruj raporty">
-                    <i class="bi bi-file-bar-graph"></i> Generuj Raport
+                <a href="/views/admin/report_manager.php" class="btn btn-primary w-100" title="Generuj raporty">
+                    <i class="bi bi-file-bar-graph"></i> Raporty
                 </a>
             </div>
         </div>
-        <div class="row mt-3 text-center">
-            <div class="col-md-4">
-                <a href="/views/admin/notification_manager.php" class="btn btn-secondary w-100" title="Zarządzaj powiadomieniami">
-                    <i class="bi bi-bell"></i> Powiadomienia
-                </a>
+
+        <?php if ($userRole === 'super_admin'): ?>
+            <!-- Super Admin Exclusive Links -->
+            <div class="row mt-3 text-center">
+                <div class="col-md-4">
+                    <a href="/views/admin/settings.php" class="btn btn-secondary w-100" title="Zarządzaj ustawieniami">
+                        <i class="bi bi-gear"></i> Ustawienia
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <a href="/views/admin/logs_manager.php" class="btn btn-warning w-100" title="Przegląd logów">
+                        <i class="bi bi-journal-text"></i> Logi
+                    </a>
+                </div>
             </div>
-            <div class="col-md-4">
-                <a href="/views/admin/maintenance_manager.php" class="btn btn-secondary w-100" title="Przegląd konserwacji">
-                    <i class="bi bi-tools"></i> Konserwacja
-                </a>
-            </div>
-            <div class="col-md-4">
-                <a href="/views/admin/logs_manager.php" class="btn btn-secondary w-100" title="Zarządzaj błędami">
-                    <i class="bi bi-exclamation-circle"></i> Przegląd Błędów
-                </a>
-            </div>
-        </div>
+        <?php endif; ?>
 
         <!-- Summary Metrics -->
         <div class="row mt-5">

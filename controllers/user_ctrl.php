@@ -5,19 +5,12 @@ require_once __DIR__ . '/../includes/functions.php';
 
 header('Content-Type: application/json');
 
-// Ensure the user has sufficient privileges
-if (!isset($_SESSION['user_role']) || !in_array($_SESSION['user_role'], ['admin', 'super_admin'])) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Brak dostępu.']);
-    exit;
-}
+enforceRole(['admin', 'super_admin'],'/public/login.php'); 
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Verify CSRF token
         if (!isset($_POST['csrf_token']) || !verifyCsrfToken($_POST['csrf_token'])) {
-            http_response_code(400);
-            throw new Exception("Nieprawidłowy token CSRF.");
+            throw new Exception("Invalid CSRF token.");
         }
 
         $action = $_POST['action'] ?? '';
@@ -26,20 +19,19 @@ try {
             case 'delete_user':
                 $userId = intval($_POST['user_id']);
                 if ($userId === 0 || $userId === $_SESSION['user_id']) {
-                    throw new Exception("Nieprawidłowy identyfikator użytkownika.");
+                    throw new Exception("Invalid user ID.");
                 }
 
-                // Only allow "super_admin" to delete other admins
                 $targetUser = getUserDetails($conn, $userId);
                 if ($targetUser['role'] === 'admin' && $_SESSION['user_role'] !== 'super_admin') {
-                    throw new Exception("Tylko Super Administrator może usuwać innych administratorów.");
+                    throw new Exception("Only Super Admins can delete Admins.");
                 }
 
                 if (deleteUser($conn, $userId)) {
-                    logAction($_SESSION['user_id'], 'delete_user', "Deleted user ID: $userId");
-                    echo json_encode(['success' => 'Użytkownik został usunięty.']);
+                    logAction($conn, $_SESSION['user_id'], 'delete_user', "Deleted user ID: $userId");
+                    echo json_encode(['success' => 'User deleted successfully.']);
                 } else {
-                    throw new Exception("Nie udało się usunąć użytkownika.");
+                    throw new Exception("Failed to delete user.");
                 }
                 break;
 
@@ -47,31 +39,31 @@ try {
                 $userId = intval($_POST['user_id']);
                 $role = $_POST['role'];
                 if (!in_array($role, ['user', 'admin'])) {
-                    throw new Exception("Nieprawidłowa rola.");
+                    throw new Exception("Invalid role.");
                 }
 
-                // Only allow "super_admin" to promote users to admin
                 if ($role === 'admin' && $_SESSION['user_role'] !== 'super_admin') {
-                    throw new Exception("Tylko Super Administrator może przypisać rolę Administratora.");
+                    throw new Exception("Only Super Admins can assign Admin roles.");
                 }
 
                 if (updateUserRole($conn, $userId, $role)) {
-                    logAction($_SESSION['user_id'], 'update_role', "Updated user ID: $userId to role: $role");
-                    echo json_encode(['success' => 'Rola użytkownika została zaktualizowana.']);
+                    logAction($conn, $_SESSION['user_id'], 'update_role', "Updated user ID: $userId to role: $role");
+                    echo json_encode(['success' => 'User role updated successfully.']);
                 } else {
-                    throw new Exception("Nie udało się zaktualizować roli użytkownika.");
+                    throw new Exception("Failed to update user role.");
                 }
                 break;
 
             default:
-                throw new Exception("Nieznana akcja.");
+                throw new Exception("Unknown action.");
         }
     } else {
-        throw new Exception("Nieprawidłowa metoda żądania.");
+        throw new Exception("Invalid request method.");
     }
 } catch (Exception $e) {
     logError($e->getMessage());
     http_response_code(400);
     echo json_encode(['error' => $e->getMessage()]);
+    exit;
 }
 ?>

@@ -6,12 +6,8 @@ require_once __DIR__ . '/../includes/user_queries.php';
 
 header('Content-Type: application/json');
 
-// Ensure the user is authenticated
-if (!isset($_SESSION['user_id'])) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Access denied.']);
-    exit;
-}
+enforceRole('user', '/public/no_access.php'); // Redirect unauthorized users to a custom page
+
 
 try {
     $userId = $_SESSION['user_id'];

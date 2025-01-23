@@ -2,6 +2,34 @@
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+/**
+ * Enforces role-based access control (RBAC) for the current user.
+ *
+ * @param string|array $requiredRoles A single role or an array of allowed roles.
+ * @param string|null $redirectPage The page to redirect to if access is denied (optional).
+ */
+function enforceRole($requiredRoles, $redirectPage = '/public/403.php') {
+    if (!isset($_SESSION['user_role'])) {
+        // Redirect to login if no role is set
+        $_SESSION['redirect_to'] = $_SERVER['REQUEST_URI'];
+        header('Location: /public/login.php');
+        exit;
+    }
+
+    $userRole = $_SESSION['user_role'];
+
+    // Check if the user role matches the required role(s)
+    if (is_array($requiredRoles)) {
+        if (!in_array($userRole, $requiredRoles)) {
+            header("Location: $redirectPage");
+            exit;
+        }
+    } elseif ($userRole !== $requiredRoles) {
+        header("Location: $redirectPage");
+        exit;
+    }
+}
+
 
 function isAdmin() {
     return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';

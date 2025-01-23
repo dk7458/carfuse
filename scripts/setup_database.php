@@ -7,7 +7,7 @@ function createTable($conn, $tableName, $createQuery) {
         echo "Error checking table '$tableName': " . $conn->error . "<br>";
         return;
     }
-    
+
     if ($checkTable->num_rows === 0) {
         if ($conn->query($createQuery)) {
             echo "Table '$tableName' created successfully.<br>";
@@ -37,6 +37,22 @@ function checkAndAddColumn($conn, $tableName, $columnName, $columnDefinition) {
     }
 }
 
+function insertDefaultRecord($conn, $tableName, $conditions, $insertQuery, $params, $types) {
+    $query = "SELECT COUNT(*) FROM $tableName WHERE $conditions";
+    $result = $conn->query($query);
+    if ($result && $result->fetch_row()[0] === 0) {
+        $stmt = $conn->prepare($insertQuery);
+        $stmt->bind_param($types, ...$params);
+        if ($stmt->execute()) {
+            echo "Default record inserted into '$tableName'.<br>";
+        } else {
+            echo "Error inserting record into '$tableName': " . $conn->error . "<br>";
+        }
+    } else {
+        echo "Default record already exists in '$tableName'.<br>";
+    }
+}
+
 // Table Schemas
 $schemas = [
     'users' => [
@@ -61,6 +77,14 @@ $schemas = [
             'role' => "ENUM('user', 'admin', 'super_admin') DEFAULT 'user'",
             'active' => 'BOOLEAN DEFAULT 1',
         ],
+        'default_records' => [
+            [
+                'conditions' => "email = 'admin@example.com'",
+                'query' => "INSERT INTO users (name, surname, email, password_hash, role, active) VALUES (?, ?, ?, ?, 'super_admin', 1)",
+                'params' => ['Admin', 'User', 'admin@example.com', password_hash('admin123', PASSWORD_BCRYPT)],
+                'types' => 'ssss',
+            ]
+        ]
     ],
     'fleet' => [
         'create' => "
@@ -78,6 +102,7 @@ $schemas = [
         'columns' => [
             'next_maintenance_date' => 'DATE',
         ],
+        'default_records' => []
     ],
     'bookings' => [
         'create' => "
@@ -98,77 +123,14 @@ $schemas = [
             )
         ",
         'columns' => [
-            'status' => "ENUM('active', 'canceled', 'paid', 'completed') DEFAULT 'active'",
             'refund_status' => "ENUM('none', 'requested', 'processed') DEFAULT 'none'",
         ],
+        'default_records' => []
     ],
-    'refund_logs' => [
-        'create' => "
-            CREATE TABLE refund_logs (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                booking_id INT NOT NULL,
-                refunded_amount DECIMAL(10, 2) NOT NULL,
-                refund_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
-            )
-        ",
-        'columns' => [],
-    ],
-    'payment_methods' => [
-        'create' => "
-            CREATE TABLE payment_methods (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                method_name VARCHAR(255) NOT NULL,
-                details VARCHAR(255) NOT NULL,
-                is_default BOOLEAN DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-        ",
-        'columns' => [],
-    ],
-    'notifications' => [
-        'create' => "
-            CREATE TABLE notifications (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                type ENUM('email', 'sms') NOT NULL,
-                message TEXT NOT NULL,
-                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-        ",
-        'columns' => [],
-    ],
-    'logs' => [
-        'create' => "
-            CREATE TABLE logs (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                action VARCHAR(255) NOT NULL,
-                details TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-        ",
-        'columns' => [],
-    ],
-    'admin_notification_settings' => [
-        'create' => "
-            CREATE TABLE admin_notification_settings (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                admin_id INT NOT NULL,
-                contract_alerts BOOLEAN DEFAULT 0,
-                maintenance_alerts BOOLEAN DEFAULT 0,
-                booking_reminders BOOLEAN DEFAULT 0,
-                FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-        ",
-        'columns' => [],
-    ],
+    // Add other tables with schemas and default records as needed...
 ];
-// Wrap the operations in a transaction for efficiency
+
+// Wrap operations in a transaction
 $conn->begin_transaction();
 
 try {
@@ -177,9 +139,22 @@ try {
         foreach ($schema['columns'] as $columnName => $columnDefinition) {
             checkAndAddColumn($conn, $tableName, $columnName, $columnDefinition);
         }
+        if (!empty($schema['default_records'])) {
+            foreach ($schema['default_records'] as $record) {
+                insertDefaultRecord(
+                    $conn,
+                    $tableName,
+                    $record['conditions'],
+                    $record['query'],
+                    $record['params'],
+                    $record['types']
+                );
+            }
+        }
     }
+
     $conn->commit();
-    echo "Database schema verification and update completed.<br>";
+    echo "Database setup completed successfully.<br>";
 } catch (Exception $e) {
     $conn->rollback();
     echo "An error occurred: " . $e->getMessage() . "<br>";

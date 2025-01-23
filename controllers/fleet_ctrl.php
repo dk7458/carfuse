@@ -1,69 +1,66 @@
 <?php
-// File Path: /controllers/fleet_ctrl.php
 require_once __DIR__ . '/../includes/db_connect.php';
 require_once __DIR__ . '/../includes/session_middleware.php';
-require_once __DIR__ . '/../includes/functions.php';
+require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 
-if (!isset($_SESSION['user_role']) || !in_array($_SESSION['user_role'], ['admin', 'super_admin'])) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Brak dostępu.']);
-    exit;
-}
+enforceRole(['admin', 'super_admin'],'/public/login.php'); 
 
 header('Content-Type: application/json');
 
 try {
-    // Handle adding a new vehicle
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_POST['action'] === 'add_vehicle') {
-        $make = htmlspecialchars($_POST['make']);
-        $model = htmlspecialchars($_POST['model']);
-        $registrationNumber = htmlspecialchars($_POST['registration_number']);
-        $availability = intval($_POST['availability']);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $action = $_POST['action'] ?? '';
+        switch ($action) {
+            case 'add_vehicle':
+                $make = htmlspecialchars($_POST['make']);
+                $model = htmlspecialchars($_POST['model']);
+                $registrationNumber = htmlspecialchars($_POST['registration_number']);
+                $availability = intval($_POST['availability']);
 
-        $stmt = $conn->prepare("INSERT INTO fleet (make, model, registration_number, availability, created_at) VALUES (?, ?, ?, ?, NOW())");
-        $stmt->bind_param("sssi", $make, $model, $registrationNumber, $availability);
+                $stmt = $conn->prepare("INSERT INTO fleet (make, model, registration_number, availability, created_at) VALUES (?, ?, ?, ?, NOW())");
+                $stmt->bind_param("sssi", $make, $model, $registrationNumber, $availability);
 
-        if ($stmt->execute()) {
-            echo json_encode(['success' => 'Pojazd został dodany pomyślnie.']);
-        } else {
-            throw new Exception("Błąd podczas dodawania pojazdu.");
+                if ($stmt->execute()) {
+                    echo json_encode(['success' => 'Vehicle added successfully.']);
+                } else {
+                    throw new Exception("Error adding vehicle.");
+                }
+                break;
+
+            case 'toggle_availability':
+                $vehicleId = intval($_POST['vehicle_id']);
+                $availability = intval($_POST['availability']);
+
+                $stmt = $conn->prepare("UPDATE fleet SET availability = ? WHERE id = ?");
+                $stmt->bind_param("ii", $availability, $vehicleId);
+
+                if ($stmt->execute()) {
+                    echo json_encode(['success' => 'Vehicle availability updated successfully.']);
+                } else {
+                    throw new Exception("Error updating availability.");
+                }
+                break;
+
+            case 'delete_vehicle':
+                $vehicleId = intval($_POST['vehicle_id']);
+                if (!$vehicleId) {
+                    throw new Exception("Invalid vehicle ID.");
+                }
+
+                $stmt = $conn->prepare("DELETE FROM fleet WHERE id = ?");
+                $stmt->bind_param("i", $vehicleId);
+
+                if ($stmt->execute()) {
+                    echo json_encode(['success' => 'Vehicle deleted successfully.']);
+                } else {
+                    throw new Exception("Error deleting vehicle.");
+                }
+                break;
+
+            default:
+                throw new Exception("Unknown action: $action");
         }
-        exit;
-    }
-
-    // Handle updating a vehicle's availability
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_POST['action'] === 'toggle_availability') {
-        $vehicleId = intval($_POST['vehicle_id']);
-        $availability = intval($_POST['availability']);
-
-        $stmt = $conn->prepare("UPDATE fleet SET availability = ? WHERE id = ?");
-        $stmt->bind_param("ii", $availability, $vehicleId);
-
-        if ($stmt->execute()) {
-            echo json_encode(['success' => 'Dostępność pojazdu została zaktualizowana.']);
-        } else {
-            throw new Exception("Błąd podczas zmiany dostępności.");
-        }
-        exit;
-    }
-
-    // Handle deleting a vehicle
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_POST['action'] === 'delete_vehicle') {
-        $vehicleId = intval($_POST['vehicle_id']);
-
-        $stmt = $conn->prepare("DELETE FROM fleet WHERE id = ?");
-        $stmt->bind_param("i", $vehicleId);
-
-        if ($stmt->execute()) {
-            echo json_encode(['success' => 'Pojazd został usunięty.']);
-        } else {
-            throw new Exception("Błąd podczas usuwania pojazdu.");
-        }
-        exit;
-    }
-
-    // Fetch fleet data for visualization
-    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $_GET['action'] === 'visualization_data') {
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'GET' && $_GET['action'] === 'visualization_data') {
         $data = [
             'availability' => [],
             'maintenance' => []
@@ -74,7 +71,7 @@ try {
         $availabilityResult = $conn->query($availabilityQuery);
         while ($row = $availabilityResult->fetch_assoc()) {
             $data['availability'][] = [
-                'status' => $row['availability'] ? 'Dostępny' : 'Niedostępny',
+                'status' => $row['availability'] ? 'Available' : 'Unavailable',
                 'count' => $row['count']
             ];
         }
@@ -82,8 +79,8 @@ try {
         // Fetch maintenance data
         $maintenanceQuery = "SELECT 
                                 CASE 
-                                    WHEN last_maintenance_date <= DATE_SUB(NOW(), INTERVAL 6 MONTH) THEN 'Przegląd Wymagany'
-                                    ELSE 'Przegląd Aktualny'
+                                    WHEN last_maintenance_date <= DATE_SUB(NOW(), INTERVAL 6 MONTH) THEN 'Maintenance Required'
+                                    ELSE 'Maintenance Current'
                                 END AS maintenance_status,
                                 COUNT(*) AS count 
                               FROM fleet 
@@ -97,10 +94,11 @@ try {
         }
 
         echo json_encode($data);
-        exit;
+    } else {
+        throw new Exception("Invalid request method.");
     }
-
 } catch (Exception $e) {
+    logError($e->getMessage());
     http_response_code(500);
     echo json_encode(['error' => $e->getMessage()]);
 }

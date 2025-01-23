@@ -6,11 +6,7 @@ require_once __DIR__ . '/../includes/pdf_generator.php';
 
 header('Content-Type: application/json');
 
-if (!hasAccess('admin')) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Access denied.']);
-    exit;
-}
+enforceRole(['admin', 'super_admin'],'/public/login.php'); 
 
 /**
  * Fetch report data based on filters.

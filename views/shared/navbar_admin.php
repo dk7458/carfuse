@@ -2,6 +2,7 @@
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
 $userRole = $_SESSION['user_role'] ?? null;
 ?>
+
 <nav class="navbar navbar-expand-lg" style="background-color: #e8e8e8; height: 70px; color: black;">
     <div class="container">
         <a class="navbar-brand" href="/public/index.php">
@@ -12,8 +13,19 @@ $userRole = $_SESSION['user_role'] ?? null;
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ms-auto">
+                <?php if ($_SESSION['user_role'] === 'super_admin'): ?>
+                    <li class="nav-item"><a class="nav-link" href="/views/super_admin/panel.php">Super Admin Panel</a></li>
+                    <?php endif; ?>
+
                 <?php if (isset($_SESSION['user_id'])): ?>
-                    <li class="nav-item"><a class="nav-link" href="/public/admin/dashboard.php" style="height: 70px;">Panel Administratora</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/views/admin/dashboard.php" style="height: 70px;">Panel Administratora</a></li>
+
+                    <!-- Show additional options for super_admin -->
+                    <?php if ($userRole === 'super_admin'): ?>
+                        <li class="nav-item"><a class="nav-link" href="/views/admin/settings.php" style="height: 70px;">Ustawienia</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/views/admin/logs_manager.php" style="height: 70px;">Logi</a></li>
+                    <?php endif; ?>
+
                     <li class="nav-item"><a class="nav-link" href="/public/logout.php" style="height: 70px;">Wyloguj</a></li>
                 <?php else: ?>
                     <li class="nav-item"><a class="nav-link" href="/public/login.php" style="height: 70px;">Zaloguj</a></li>

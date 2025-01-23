@@ -2,10 +2,9 @@
 // File Path: /views/admin/report_manager.php
 require_once __DIR__ . '/../../includes/session_middleware.php';
 require_once __DIR__ . '/../../controllers/report_ctrl.php';
+require_once __DIR__ . '/../includes/functions.php';
 
-if (!isset($_SESSION['user_role']) || ($_SESSION['user_role'] !== 'super_admin' && $_SESSION['user_role'] !== 'admin')) {
-    redirect('/public/login.php');
-}
+enforceRole(['admin', 'super_admin']); 
 
 $category = $_GET['category'] ?? 'bookings';
 $dateFrom = $_GET['date_from'] ?? date('Y-m-01');

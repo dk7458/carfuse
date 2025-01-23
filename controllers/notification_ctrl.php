@@ -7,12 +7,7 @@ require_once __DIR__ . '/../includes/notification_helpers.php';
 
 header('Content-Type: application/json');
 
-// Ensure the user is an admin
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
-    http_response_code(403);
-    echo json_encode(['error' => 'Brak dostępu.']);
-    exit;
-}
+enforceRole(['admin', 'super_admin'],'/public/login.php'); 
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {

@@ -10,20 +10,38 @@ if (!isset($_SESSION['user_id'])) {
 
 $userId = $_SESSION['user_id'];
 
-// Fetch user-specific data
-$bookingCount = $conn->query("SELECT COUNT(*) FROM bookings WHERE user_id = $userId")->fetch_row()[0];
-$upcomingBookings = $conn->query("SELECT COUNT(*) FROM bookings WHERE user_id = $userId AND pickup_date >= CURDATE()")->fetch_row()[0];
-$pendingPayments = $conn->query("SELECT COUNT(*) FROM bookings WHERE user_id = $userId AND status = 'pending_payment'")->fetch_row()[0];
-$totalSpent = $conn->query("SELECT SUM(total_price) FROM bookings WHERE user_id = $userId AND status = 'paid'")->fetch_row()[0] ?? 0;
+try {
+    // Fetch user-specific summary data
+    $stmt = $conn->prepare("
+        SELECT 
+            (SELECT COUNT(*) FROM bookings WHERE user_id = ?) AS bookingCount,
+            (SELECT COUNT(*) FROM bookings WHERE user_id = ? AND pickup_date >= CURDATE()) AS upcomingBookings,
+            (SELECT COUNT(*) FROM bookings WHERE user_id = ? AND status = 'pending_payment') AS pendingPayments,
+            (SELECT COALESCE(SUM(total_price), 0) FROM bookings WHERE user_id = ? AND status = 'paid') AS totalSpent
+    ");
+    $stmt->bind_param('iiii', $userId, $userId, $userId, $userId);
+    $stmt->execute();
+    $stmt->bind_result($bookingCount, $upcomingBookings, $pendingPayments, $totalSpent);
+    $stmt->fetch();
+    $stmt->close();
 
-// Fetch recent bookings
-$recentBookings = $conn->query("
-    SELECT id, pickup_date, dropoff_date, total_price, status 
-    FROM bookings 
-    WHERE user_id = $userId 
-    ORDER BY created_at DESC 
-    LIMIT 5
-");
+    // Fetch recent bookings
+    $recentStmt = $conn->prepare("
+        SELECT id, pickup_date, dropoff_date, total_price, status 
+        FROM bookings 
+        WHERE user_id = ? 
+        ORDER BY created_at DESC 
+        LIMIT 5
+    ");
+    $recentStmt->bind_param('i', $userId);
+    $recentStmt->execute();
+    $recentBookings = $recentStmt->get_result();
+    $recentStmt->close();
+} catch (Exception $e) {
+    logError($e->getMessage());
+    $bookingCount = $upcomingBookings = $pendingPayments = $totalSpent = 0;
+    $recentBookings = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="pl">
@@ -38,12 +56,13 @@ $recentBookings = $conn->query("
 
     <div class="container mt-5">
         <h1>Podsumowanie</h1>
+
         <div class="row g-4 mt-4">
             <div class="col-md-3">
                 <div class="card text-white bg-primary">
                     <div class="card-body">
                         <h5 class="card-title">Łączna liczba rezerwacji</h5>
-                        <p class="card-text fs-3"><?= $bookingCount ?></p>
+                        <p class="card-text fs-3"><?= htmlspecialchars($bookingCount) ?></p>
                     </div>
                 </div>
             </div>
@@ -51,7 +70,7 @@ $recentBookings = $conn->query("
                 <div class="card text-white bg-success">
                     <div class="card-body">
                         <h5 class="card-title">Nadchodzące rezerwacje</h5>
-                        <p class="card-text fs-3"><?= $upcomingBookings ?></p>
+                        <p class="card-text fs-3"><?= htmlspecialchars($upcomingBookings) ?></p>
                     </div>
                 </div>
             </div>
@@ -59,7 +78,7 @@ $recentBookings = $conn->query("
                 <div class="card text-white bg-warning">
                     <div class="card-body">
                         <h5 class="card-title">Oczekujące płatności</h5>
-                        <p class="card-text fs-3"><?= $pendingPayments ?></p>
+                        <p class="card-text fs-3"><?= htmlspecialchars($pendingPayments) ?></p>
                     </div>
                 </div>
             </div>
@@ -76,7 +95,7 @@ $recentBookings = $conn->query("
         <!-- Recent Bookings -->
         <div class="mt-5">
             <h3>Ostatnie Rezerwacje</h3>
-            <table class="table mt-3">
+            <table class="table table-bordered mt-3">
                 <thead>
                     <tr>
                         <th>ID</th>
@@ -87,14 +106,18 @@ $recentBookings = $conn->query("
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if ($recentBookings->num_rows > 0): ?>
+                    <?php if ($recentBookings && $recentBookings->num_rows > 0): ?>
                         <?php while ($booking = $recentBookings->fetch_assoc()): ?>
                             <tr>
-                                <td><?= $booking['id'] ?></td>
+                                <td><?= htmlspecialchars($booking['id']) ?></td>
                                 <td><?= htmlspecialchars($booking['pickup_date']) ?></td>
                                 <td><?= htmlspecialchars($booking['dropoff_date']) ?></td>
                                 <td><?= number_format($booking['total_price'], 2, ',', ' ') ?> PLN</td>
-                                <td><?= ucfirst($booking['status']) ?></td>
+                                <td>
+                                    <span class="badge <?= $booking['status'] === 'paid' ? 'bg-success' : ($booking['status'] === 'pending_payment' ? 'bg-warning' : 'bg-secondary') ?>">
+                                        <?= ucfirst(htmlspecialchars($booking['status'])) ?>
+                                    </span>
+                                </td>
                             </tr>
                         <?php endwhile; ?>
                     <?php else: ?>

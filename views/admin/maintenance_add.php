@@ -2,11 +2,9 @@
 // File Path: /views/admin/maintenance_add.php
 require_once __DIR__ . '/../../includes/session_middleware.php';
 require_once __DIR__ . '/../../includes/db_connect.php';
-require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../includes/functions.php';
 
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
-    redirect('/public/login.php');
-}
+enforceRole(['admin', 'super_admin']); 
 ?>
 <!DOCTYPE html>
 <html lang="pl">

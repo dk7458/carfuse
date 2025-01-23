@@ -4,7 +4,7 @@ document.querySelectorAll('.refund-button').forEach(button => {
         const refundAmount = button.dataset.amount;
 
         if (confirm(`Czy na pewno chcesz zwrócić ${refundAmount} PLN za tę rezerwację?`)) {
-            fetch('/controllers/payment_ctrl.php', {
+            fetch('/controllers/payment_controller.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'refund', booking_id: bookingId, refund_amount: refundAmount })
@@ -17,6 +17,10 @@ document.querySelectorAll('.refund-button').forEach(button => {
                 } else {
                     alert(data.error || 'Błąd podczas przetwarzania zwrotu.');
                 }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Wystąpił błąd podczas przetwarzania żądania.');
             });
         }
     });

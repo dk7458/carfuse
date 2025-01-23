@@ -2,12 +2,9 @@
 // File Path: /views/admin/settings.php
 require_once __DIR__ . '/../../includes/session_middleware.php';
 require_once __DIR__ . '/../../includes/db_connect.php';
-require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../includes/functions.php';
 
-// Ensure the user is an admin
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
-    redirect('/public/login.php');
-}
+enforceRole(['admin', 'super_admin']); 
 
 // Fetch current settings
 $stmt = $conn->prepare("SELECT setting_key, setting_value FROM system_settings");
@@ -18,7 +15,6 @@ while ($row = $result->fetch_assoc()) {
     $settings[$row['setting_key']] = $row['setting_value'];
 }
 $stmt->close();
-
 ?>
 
 <!DOCTYPE html>
@@ -38,12 +34,12 @@ $stmt->close();
         <p class="text-muted">Zarządzaj preferencjami systemowymi i ustawieniami powiadomień.</p>
 
         <?php if (isset($_SESSION['success_message'])): ?>
-            <div class="alert alert-success">
+            <div class="alert alert-success" role="alert">
                 <?= htmlspecialchars($_SESSION['success_message']); ?>
                 <?php unset($_SESSION['success_message']); ?>
             </div>
         <?php elseif (isset($_SESSION['error_message'])): ?>
-            <div class="alert alert-danger">
+            <div class="alert alert-danger" role="alert">
                 <?= htmlspecialchars($_SESSION['error_message']); ?>
                 <?php unset($_SESSION['error_message']); ?>
             </div>
@@ -52,7 +48,16 @@ $stmt->close();
         <form method="POST" action="/controllers/settings_ctrl.php">
             <div class="mb-3">
                 <label for="tax_rate" class="form-label">Stawka Podatku VAT (%)</label>
-                <input type="number" id="tax_rate" name="tax_rate" class="form-control" value="<?= htmlspecialchars($settings['tax_rate'] ?? 23); ?>" required>
+                <input 
+                    type="number" 
+                    id="tax_rate" 
+                    name="tax_rate" 
+                    class="form-control" 
+                    value="<?= htmlspecialchars($settings['tax_rate'] ?? 23); ?>" 
+                    required 
+                    min="0" 
+                    max="100"
+                >
             </div>
             <div class="mb-3">
                 <label for="email_notifications" class="form-label">Domyślne Powiadomienia E-mail</label>
@@ -67,6 +72,18 @@ $stmt->close();
                     <option value="1" <?= isset($settings['sms_notifications']) && $settings['sms_notifications'] === '1' ? 'selected' : ''; ?>>Włączone</option>
                     <option value="0" <?= isset($settings['sms_notifications']) && $settings['sms_notifications'] === '0' ? 'selected' : ''; ?>>Wyłączone</option>
                 </select>
+            </div>
+            <!-- Placeholder for additional settings -->
+            <div class="mb-3">
+                <label for="other_setting" class="form-label">Inne Ustawienie (Przykład)</label>
+                <input 
+                    type="text" 
+                    id="other_setting" 
+                    name="other_setting" 
+                    class="form-control" 
+                    placeholder="Przykładowe ustawienie" 
+                    value="<?= htmlspecialchars($settings['other_setting'] ?? ''); ?>"
+                >
             </div>
             <button type="submit" class="btn btn-primary">Zapisz Zmiany</button>
         </form>

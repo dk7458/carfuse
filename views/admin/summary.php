@@ -2,10 +2,9 @@
 // File Path: /views/admin/summary.php
 require_once __DIR__ . '/../../includes/session_middleware.php';
 require_once __DIR__ . '/../../controllers/summary_ctrl.php';
+require_once __DIR__ . '/../includes/functions.php';
 
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
-    redirect('/public/login.php');
-}
+enforceRole(['admin', 'super_admin']); 
 
 // Fetch summary data
 $summary = getSummaryData();

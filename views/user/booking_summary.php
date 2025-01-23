@@ -30,11 +30,10 @@ if (!$car) {
 }
 
 $csrfToken = generateCsrfToken();
-
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -55,12 +54,6 @@ $csrfToken = generateCsrfToken();
             max-width: 100%;
             border-radius: 8px;
             margin-bottom: 20px;
-        }
-
-        .summary-container h2 {
-            margin-top: 20px;
-            font-size: 1.5rem;
-            color: #333;
         }
 
         .form-check {
@@ -113,20 +106,20 @@ $csrfToken = generateCsrfToken();
 
             <form method="POST" action="/controllers/booking_controller.php">
                 <input type="hidden" name="action" value="create_booking">
-                <input type="hidden" name="car_id" value="<?= $carId ?>">
+                <input type="hidden" name="vehicle_id" value="<?= $carId ?>">
                 <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
 
                 <div class="form-check">
-                    <input type="checkbox" id="terms" name="terms" class="form-check-input" required>
-                    <label for="terms" class="form-check-label">
+                    <input type="checkbox" id="agree_tnc" name="agree_tnc" class="form-check-input" value="yes" required>
+                    <label for="agree_tnc" class="form-check-label">
                         Akceptuję <a href="/public/terms.php" target="_blank">Regulamin</a>
                     </label>
                 </div>
 
                 <div class="form-check">
-                    <input type="checkbox" id="sign" name="sign" class="form-check-input" required>
-                    <label for="sign" class="form-check-label">
-                        Podpisuję umowę wynajmu swoim imieniem i nazwiskiem
+                    <input type="checkbox" id="agree_contract" name="agree_contract" class="form-check-input" value="yes" required>
+                    <label for="agree_contract" class="form-check-label">
+                        Podpisuję umowę wynajmu swoim imieniem i nazwiskiem (<a href="/public/contract.php" target="_blank">Przejrzyj umowę</a>)
                     </label>
                 </div>
 
