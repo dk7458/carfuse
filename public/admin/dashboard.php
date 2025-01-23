@@ -29,6 +29,9 @@ if (!array_key_exists($page, $validPages)) {
     $page = 'podsumowanie';
 }
 $contentFile = $validPages[$page];
+
+// Start output buffering to prevent header issues
+ob_start();
 ?>
 <!DOCTYPE html>
 <html lang="pl">
@@ -76,3 +79,7 @@ $contentFile = $validPages[$page];
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+<?php
+// End output buffering and flush output
+ob_end_flush();
+?>
