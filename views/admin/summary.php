@@ -20,7 +20,7 @@ $summary = getSummaryData();
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <?php include '../shared/navbar_admin.php'; ?>
+    <?php include '../../views/shared/navbar_admin.php'; ?>
 
     <div class="container mt-5">
         <h1>Podsumowanie</h1>

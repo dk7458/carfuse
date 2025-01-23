@@ -40,7 +40,7 @@ $contentFile = $validPages[$page];
 </head>
 <body>
     <!-- Admin Navbar -->
-    <?php include '../shared/navbar_admin.php'; ?>
+    <?php include '../../views/shared/navbar_admin.php'; ?>
 
     <div class="container-fluid">
         <div class="row">

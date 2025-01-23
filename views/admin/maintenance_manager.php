@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <?php include '../shared/navbar_admin.php'; 
+    <?php include '../../views/shared/navbar_admin.php'; 
     require_once __DIR__ . '/../includes/functions.php';
 
     enforceRole(['admin', 'super_admin']); 

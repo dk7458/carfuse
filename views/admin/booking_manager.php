@@ -31,7 +31,7 @@ $bookings = $conn->query("
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 </head>
 <body>
-    <?php include '../shared/navbar_admin.php'; ?>
+    <?php include '../../views/shared/navbar_admin.php'; ?>
 
     <div class="container mt-5">
         <h1>Manager Rezerwacji</h1>

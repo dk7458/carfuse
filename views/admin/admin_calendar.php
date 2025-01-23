@@ -43,7 +43,7 @@ $maintenanceSchedules = $conn->query("
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> <!-- SweetAlert2 for better notifications -->
 </head>
 <body>
-    <?php include '../shared/navbar_admin.php'; ?>
+    <?php include '../../views/shared/navbar_admin.php'; ?>
 
     <div class="container mt-5">
         <h1 class="text-center">Kalendarz Administratora</h1>

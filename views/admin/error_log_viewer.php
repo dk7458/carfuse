@@ -54,7 +54,7 @@ $totalPages = ceil($totalLogs / $itemsPerPage);
     <script src="/assets/js/error_log_viewer.js"></script>
 </head>
 <body>
-    <?php include '../shared/navbar_admin.php'; ?>
+    <?php include '../../views/shared/navbar_admin.php'; ?>
 
     <div class="container">
         <h1 class="mt-5">Podgląd Błędów</h1>

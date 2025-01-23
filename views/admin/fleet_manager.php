@@ -80,7 +80,7 @@ $totalPages = ceil($totalRows / $itemsPerPage);
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <?php include '../shared/navbar_admin.php'; ?>
+    <?php include '../../views/shared/navbar_admin.php'; ?>
 
     <div class="container">
         <h1 class="mt-5">Zarządzanie Flotą</h1>
