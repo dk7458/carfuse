@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 // File Path: /views/admin/maintenance_manager.php
 // Description: Allows admins to manage vehicle maintenance logs with filtering and export options.
 

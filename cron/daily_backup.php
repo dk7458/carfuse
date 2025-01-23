@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 /**
  * File Path: /cron/daily_backup.php
  * Description: Creates a daily backup of the database and stores it in the backups directory.

@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 /**
  * File Path: /cron/weekly_backup.php
  * Description: Creates a weekly backup of the database and stores it in the backups directory.

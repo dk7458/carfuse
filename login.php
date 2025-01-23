@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 session_start();
 if (isset($_SESSION['user_id'])) {
     header("Location: ./views/user/profile.php");

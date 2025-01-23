@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 /**
  * File Path: /includes/export_helpers.php
  * Description: Provides helper functions for exporting data in CSV and PDF formats.

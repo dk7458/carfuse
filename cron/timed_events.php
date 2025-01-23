@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 /**
  * File Path: /cron/timed_events.php
  * Description: Processes scheduled events, including maintenance notifications, booking reminders, and expired payment cleanup.

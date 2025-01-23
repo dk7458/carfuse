@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 // File Path: /views/admin/dynamic_pricing_manager.php
 // Description: Admin interface for creating, editing, and logging dynamic pricing rules.
 // Changelog:

@@ -1,4 +1,4 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 // File Path: /views/admin/notification_manager.php
 // Description: Allows admins to view, filter, resend, delete notifications, and manage the notification queue.

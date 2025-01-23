@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 /**
  * File Path: /cron/database_maintenance.php
  * Description: Performs database maintenance tasks such as optimizing tables and cleaning up old logs.

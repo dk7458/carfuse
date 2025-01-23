@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 /**
  * File Path: /controllers/maintenance_ctrl.php
  * Description: Manages maintenance logs and reminders for vehicles.

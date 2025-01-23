@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 /**
  * File Path: /controllers/calendar_ctrl.php
  * Description: Handles calendar data for users, admins, and super admins, including bookings, availability, and rescheduling.

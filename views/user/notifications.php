@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 // File Path: /views/user/notifications.php
 // Description: Allows users to manage their notification preferences and view past notifications.
 // Changelog:

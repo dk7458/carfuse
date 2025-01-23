@@ -1,6 +1,6 @@
-$1
+<?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-?php
+
 /**
  * File Path: /cron/weekly_reports.php
  * Description: Generates and sends weekly reports (e.g., bookings and revenue stats) to admins.
