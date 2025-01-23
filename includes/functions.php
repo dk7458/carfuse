@@ -1,5 +1,5 @@
 <?php
-define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html/');
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 /**
