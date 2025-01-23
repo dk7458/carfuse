@@ -141,21 +141,6 @@ function logAction($userId, $action, $details = null) {
 }
 
 /**
- * Send a notification via email or SMS (future extension).
- * 
- * @param string $type 'email' or 'sms'
- * @param string $recipient
- * @param string $subject
- * @param string $message
- */
-function sendNotification($type, $recipient, $subject, $message) {
-    if ($type === 'email') {
-        sendEmail($recipient, $subject, $message);
-    }
-    // Extend for SMS support
-}
-
-/**
  * Sanitize and validate email input.
  * 
  * @param string $email

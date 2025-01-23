@@ -4,9 +4,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const dateFromInput = document.querySelector('#date_from');
     const dateToInput = document.querySelector('#date_to');
     const reportChart = document.getElementById('reportChart');
-    const exportCsvButton = document.getElementById('exportCsv');
-    const exportPdfButton = document.getElementById('exportPdf');
-    const reportTable = document.getElementById('reportTable');
+    const exportCsvButton = document.querySelector('.btn-success');
+    const exportPdfButton = document.querySelector('.btn-secondary');
+    const reportTable = document.querySelector('.table');
 
     let chartInstance = null;
 
