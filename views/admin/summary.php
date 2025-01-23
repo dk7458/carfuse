@@ -1,8 +1,8 @@
 <?php
 // File Path: /views/admin/summary.php
-require_once BASE_PATH . '../includes/session_middleware.php';
+require_once BASE_PATH . 'includes/session_middleware.php';
 
-require_once BASE_PATH . '../controllers/summary_ctrl.php';
+require_once BASE_PATH . 'controllers/summary_ctrl.php';
 
 require_once BASE_PATH . 'includes/functions.php';
 

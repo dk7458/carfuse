@@ -5,11 +5,11 @@
 // - Initial creation of the dynamic pricing manager interface.
 // - Added functionality to view, edit, and delete existing pricing rules.
 
-require_once BASE_PATH . '../includes/session_middleware.php';
+require_once BASE_PATH . 'includes/session_middleware.php';
 
-require_once BASE_PATH . '../includes/db_connect.php';
+require_once BASE_PATH . 'includes/db_connect.php';
 
-require_once BASE_PATH . '../includes/functions.php';
+require_once BASE_PATH . 'includes/functions.php';
 
 
 enforceRole(['admin', 'super_admin']);

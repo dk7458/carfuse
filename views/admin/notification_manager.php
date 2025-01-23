@@ -7,13 +7,13 @@
 // - Added support for scheduling push notifications.
 // - Added options for configuring maintenance reminder templates.
 
-require_once BASE_PATH . '../includes/session_middleware.php';
+require_once BASE_PATH . 'includes/session_middleware.php';
 
-require_once BASE_PATH . '../includes/db_connect.php';
+require_once BASE_PATH . 'includes/db_connect.php';
 
-require_once BASE_PATH . '../includes/notification_helpers.php';
+require_once BASE_PATH . 'includes/notification_helpers.php';
 
-require_once BASE_PATH . '../includes/functions.php';
+require_once BASE_PATH . 'includes/functions.php';
 
 
 enforceRole(['admin', 'super_admin']);

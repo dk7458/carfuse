@@ -1,10 +1,10 @@
 <?php
 // File Path: /views/user/my_bookings.php
-require_once BASE_PATH . '../includes/session_middleware.php';
+require_once BASE_PATH . 'includes/session_middleware.php';
 
-require_once BASE_PATH . '../includes/db_connect.php';
+require_once BASE_PATH . 'includes/db_connect.php';
 
-require_once BASE_PATH . '../includes/functions.php';
+require_once BASE_PATH . 'includes/functions.php';
 
 
 $userId = $_SESSION['user_id'];

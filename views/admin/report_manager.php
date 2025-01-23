@@ -7,11 +7,11 @@
 // - Enhanced export functionality with dynamic parameters.
 // - Added support for weekly and comparative reporting.
 
-require_once BASE_PATH . '../includes/session_middleware.php';
+require_once BASE_PATH . 'includes/session_middleware.php';
 
-require_once BASE_PATH . '../controllers/report_ctrl.php';
+require_once BASE_PATH . 'controllers/report_ctrl.php';
 
-require_once BASE_PATH . '../includes/functions.php';
+require_once BASE_PATH . 'includes/functions.php';
 
 
 enforceRole(['admin', 'super_admin']); 

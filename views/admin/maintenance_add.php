@@ -1,8 +1,8 @@
 <?php
 // File Path: /views/admin/maintenance_add.php
-require_once BASE_PATH . '../includes/session_middleware.php';
+require_once BASE_PATH . 'includes/session_middleware.php';
 
-require_once BASE_PATH . '../includes/db_connect.php';
+require_once BASE_PATH . 'includes/db_connect.php';
 
 require_once BASE_PATH . 'includes/functions.php';
 
