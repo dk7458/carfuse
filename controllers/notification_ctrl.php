@@ -15,7 +15,7 @@ require_once BASE_PATH . 'includes/session_middleware.php';
 
 require_once BASE_PATH . 'includes/functions.php';
 
-require_once BASE_PATH . 'includes/notification_helpers.php';
+require_once BASE_PATH . 'includes/notifications.php';
 
 
 header('Content-Type: application/json');

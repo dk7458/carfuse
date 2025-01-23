@@ -10,7 +10,7 @@ require_once BASE_PATH . 'includes/db_connect.php';
 
 require_once BASE_PATH . 'includes/functions.php';
 
-require_once BASE_PATH . 'includes/notification_helpers.php';
+require_once BASE_PATH . 'includes/notifications.php';
 
 
 echo "Starting notification queue processing...\n";

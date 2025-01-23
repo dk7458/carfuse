@@ -100,8 +100,8 @@ $totalPages = ceil($totalUsers / $itemsPerPage);
                 </tr>
             </thead>
             <tbody>
-                <?php if ($users->num_rows > 0): ?>
-                    <?php while ($user = $users->fetch_assoc()): ?>
+                <?php if (count($users) > 0): ?>
+                    <?php foreach ($users as $user): ?>
                         <tr>
                             <td><input type="checkbox" class="user-checkbox" value="<?= $user['id'] ?>"></td>
                             <td><?= $user['id'] ?></td>
@@ -123,7 +123,7 @@ $totalPages = ceil($totalUsers / $itemsPerPage);
                                 <button class="btn btn-sm btn-danger delete-user" data-id="<?= $user['id'] ?>">Usuń</button>
                             </td>
                         </tr>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
                         <td colspan="7" class="text-center">Brak użytkowników w bazie danych.</td>
