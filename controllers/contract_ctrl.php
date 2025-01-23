@@ -39,7 +39,7 @@ function getContracts($search, $dateFrom, $dateTo, $page)
 
     $query = "
         SELECT c.id, CONCAT(u.name, ' ', u.surname) AS user_name, CONCAT(f.make, ' ', f.model) AS vehicle, 
-               c.created_at, c.file_path
+               c.created_at, c.contract_pdf
         FROM contracts c
         JOIN users u ON c.user_id = u.id
         JOIN fleet f ON c.vehicle_id = f.id
