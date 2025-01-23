@@ -127,7 +127,21 @@ $schemas = [
         ],
         'default_records' => []
     ],
-    // Add other tables with schemas and default records as needed...
+    'availability' => [
+        'create' => "
+            CREATE TABLE availability (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id INT NOT NULL,
+                date DATE NOT NULL,
+                status ENUM('available', 'unavailable') DEFAULT 'available',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (vehicle_id) REFERENCES fleet(id) ON DELETE CASCADE,
+                UNIQUE (vehicle_id, date)
+            )
+        ",
+        'columns' => [],
+        'default_records' => []
+    ],
 ];
 
 // Wrap operations in a transaction
