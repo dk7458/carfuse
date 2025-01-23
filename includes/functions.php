@@ -286,4 +286,162 @@ function fetchUsers($conn) {
     }
     return $users;
 }
+
+/**
+ * Count users based on filters.
+ * 
+ * @param mysqli $conn
+ * @param string $search
+ * @param string $role
+ * @param string $status
+ * @return int
+ */
+function countUsers($conn, $search = '', $role = '', $status = '') {
+    $query = "SELECT COUNT(*) AS total FROM users WHERE 1";
+    $params = [];
+    $types = '';
+
+    if (!empty($search)) {
+        $query .= " AND (name LIKE ? OR surname LIKE ? OR email LIKE ?)";
+        $searchParam = '%' . $search . '%';
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $types .= 'sss';
+    }
+
+    if (!empty($role)) {
+        $query .= " AND role = ?";
+        $params[] = $role;
+        $types .= 's';
+    }
+
+    if ($status !== '') {
+        $query .= " AND active = ?";
+        $params[] = $status;
+        $types .= 'i';
+    }
+
+    $stmt = $conn->prepare($query);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    return $row['total'];
+}
+
+/**
+ * Fetch maintenance logs based on filters.
+ * 
+ * @param mysqli $conn
+ * @param string $search
+ * @param string $dateRange
+ * @param string $startDate
+ * @param string $endDate
+ * @param int $offset
+ * @param int $limit
+ * @return mysqli_result
+ */
+function fetchMaintenanceLogs($conn, $search = '', $dateRange = '', $startDate = '', $endDate = '', $offset = 0, $limit = 10) {
+    $query = "SELECT * FROM maintenance_logs WHERE 1";
+    $params = [];
+    $types = '';
+
+    if (!empty($search)) {
+        $query .= " AND (make LIKE ? OR model LIKE ? OR description LIKE ?)";
+        $searchParam = '%' . $search . '%';
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $types .= 'sss';
+    }
+
+    if (!empty($dateRange)) {
+        if ($dateRange === 'last_week') {
+            $query .= " AND maintenance_date >= DATE_SUB(CURDATE(), INTERVAL 1 WEEK)";
+        } elseif ($dateRange === 'last_month') {
+            $query .= " AND maintenance_date >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)";
+        }
+    }
+
+    if (!empty($startDate)) {
+        $query .= " AND maintenance_date >= ?";
+        $params[] = $startDate;
+        $types .= 's';
+    }
+
+    if (!empty($endDate)) {
+        $query .= " AND maintenance_date <= ?";
+        $params[] = $endDate;
+        $types .= 's';
+    }
+
+    $query .= " LIMIT ?, ?";
+    $params[] = $offset;
+    $params[] = $limit;
+    $types .= 'ii';
+
+    $stmt = $conn->prepare($query);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    $stmt->execute();
+    return $stmt->get_result();
+}
+
+/**
+ * Count maintenance logs based on filters.
+ * 
+ * @param mysqli $conn
+ * @param string $search
+ * @param string $dateRange
+ * @param string $startDate
+ * @param string $endDate
+ * @return int
+ */
+function countMaintenanceLogs($conn, $search = '', $dateRange = '', $startDate = '', $endDate = '') {
+    $query = "SELECT COUNT(*) AS total FROM maintenance_logs WHERE 1";
+    $params = [];
+    $types = '';
+
+    if (!empty($search)) {
+        $query .= " AND (make LIKE ? OR model LIKE ? OR description LIKE ?)";
+        $searchParam = '%' . $search . '%';
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $types .= 'sss';
+    }
+
+    if (!empty($dateRange)) {
+        if ($dateRange === 'last_week') {
+            $query .= " AND maintenance_date >= DATE_SUB(CURDATE(), INTERVAL 1 WEEK)";
+        } elseif ($dateRange === 'last_month') {
+            $query .= " AND maintenance_date >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)";
+        }
+    }
+
+    if (!empty($startDate)) {
+        $query .= " AND maintenance_date >= ?";
+        $params[] = $startDate;
+        $types .= 's';
+    }
+
+    if (!empty($endDate)) {
+        $query .= " AND maintenance_date <= ?";
+        $params[] = $endDate;
+        $types .= 's';
+    }
+
+    $stmt = $conn->prepare($query);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    return $row['total'];
+}
 ?>

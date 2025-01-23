@@ -9,11 +9,8 @@
  */
 
 require_once BASE_PATH . 'includes/db_connect.php';
-
 require_once BASE_PATH . 'includes/functions.php';
-
 require_once BASE_PATH . 'includes/pdf_generator.php';
-
 require_once BASE_PATH . 'includes/export_helpers.php';
 
 // Enforce admin or super admin access

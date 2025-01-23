@@ -77,7 +77,9 @@ function getContracts($search, $dateFrom, $dateTo, $page)
         throw new Exception("Failed to prepare query.");
     }
 
-    $stmt->bind_param($types, ...$params);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
     $stmt->execute();
     $result = $stmt->get_result();
     return $result->fetch_all(MYSQLI_ASSOC);
@@ -125,7 +127,9 @@ function countContracts($search, $dateFrom, $dateTo)
         throw new Exception("Failed to prepare query.");
     }
 
-    $stmt->bind_param($types, ...$params);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
     $stmt->execute();
     $result = $stmt->get_result();
     return $result->fetch_row()[0];

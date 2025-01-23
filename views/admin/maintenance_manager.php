@@ -1,3 +1,27 @@
+<?php
+// File Path: /views/admin/maintenance_manager.php
+// Description: Allows admins to manage vehicle maintenance logs with filtering and export options.
+
+require_once BASE_PATH . 'includes/session_middleware.php';
+require_once BASE_PATH . 'includes/db_connect.php';
+require_once BASE_PATH . 'includes/functions.php';
+
+enforceRole(['admin', 'super_admin']);
+
+// Filters
+$search = $_GET['search'] ?? '';
+$dateRange = $_GET['date_range'] ?? '';
+$startDate = $_GET['start_date'] ?? '';
+$endDate = $_GET['end_date'] ?? '';
+$page = max(1, intval($_GET['page'] ?? 1));
+$itemsPerPage = 10;
+$offset = ($page - 1) * $itemsPerPage;
+
+// Fetch maintenance logs with filters
+$logs = fetchMaintenanceLogs($conn, $search, $dateRange, $startDate, $endDate, $offset, $itemsPerPage);
+$totalLogs = countMaintenanceLogs($conn, $search, $dateRange, $startDate, $endDate);
+$totalPages = ceil($totalLogs / $itemsPerPage);
+?>
 <!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -8,12 +32,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <?php include '../../views/shared/navbar_admin.php'; 
-    require_once BASE_PATH . 'includes/functions.php';
-
-
-    enforceRole(['admin', 'super_admin']); 
-    ?>
+    <?php include '../../views/shared/navbar_admin.php'; ?>
 
     <div class="container">
         <h1 class="mt-5">Zarządzanie Przeglądami</h1>
@@ -26,8 +45,8 @@
             <div class="col-md-3">
                 <select name="date_range" class="form-select">
                     <option value="">Wybierz okres</option>
-                    <option value="last_week">Ostatni tydzień</option>
-                    <option value="last_month">Ostatni miesiąc</option>
+                    <option value="last_week" <?= $dateRange === 'last_week' ? 'selected' : '' ?>>Ostatni tydzień</option>
+                    <option value="last_month" <?= $dateRange === 'last_month' ? 'selected' : '' ?>>Ostatni miesiąc</option>
                 </select>
             </div>
             <div class="col-md-3">
