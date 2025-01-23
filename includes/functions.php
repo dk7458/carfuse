@@ -54,7 +54,7 @@ function logSensitiveAction($userId, $action, $details) {
     $stmt->execute();
 }
 
-function sendEmail($to, $subject, $message, $template = null, $data = []) {
+function sendEmail($to, $subject, $message, $template = null, $data = [], $attachment = null) {
     require_once '/home/u122931475/domains/carfuse.pl/public_html/vendor/autoload.php';
 
     $mail = new PHPMailer(true);
@@ -82,6 +82,10 @@ function sendEmail($to, $subject, $message, $template = null, $data = []) {
         }
 
         $mail->Body = $message;
+
+        if ($attachment) {
+            $mail->addAttachment($attachment);
+        }
 
         $mail->send();
         return true;
@@ -236,5 +240,50 @@ function generateNotificationReport($conn, $type, $startDate, $endDate) {
     $stmt->execute();
     $result = $stmt->get_result();
     return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+/**
+ * Generate a contract and send it to the user via email.
+ * 
+ * @param mysqli $conn
+ * @param int $userId
+ * @param int $vehicleId
+ * @param int $bookingId
+ * @param string $pickupDate
+ * @param string $dropoffDate
+ * @param float $totalPrice
+ */
+function generateAndSendContract($conn, $userId, $vehicleId, $bookingId, $pickupDate, $dropoffDate, $totalPrice) {
+    // Logic to generate the contract PDF
+    $contractFilePath = generateContractPDF($userId, $vehicleId, $bookingId, $pickupDate, $dropoffDate, $totalPrice);
+
+    // Fetch user email
+    $stmt = $conn->prepare("SELECT email FROM users WHERE id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $user = $result->fetch_assoc();
+    $userEmail = $user['email'];
+
+    // Send the contract via email
+    $subject = "Your Booking Contract";
+    $message = "Dear User,\n\nPlease find attached your booking contract.\n\nThank you.";
+    sendEmail($userEmail, $subject, $message, null, [], $contractFilePath);
+}
+
+/**
+ * Fetch all users from the database.
+ * 
+ * @param mysqli $conn
+ * @return array
+ */
+function fetchUsers($conn) {
+    $users = [];
+    $query = "SELECT * FROM users";
+    $result = $conn->query($query);
+    while ($row = $result->fetch_assoc()) {
+        $users[] = $row;
+    }
+    return $users;
 }
 ?>

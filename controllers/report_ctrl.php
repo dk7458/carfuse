@@ -16,11 +16,10 @@ require_once BASE_PATH . 'includes/pdf_generator.php';
 
 require_once BASE_PATH . 'includes/export_helpers.php';
 
-
-header('Content-Type: application/json');
-
 // Enforce admin or super admin access
 enforceRole(['admin', 'super_admin'], '/public/login.php');
+
+header('Content-Type: application/json');
 
 /**
  * Fetch report data based on filters.
@@ -199,3 +198,4 @@ function generateReportPDFContent($data, $category, $dateFrom, $dateTo) {
     <?php
     return ob_get_clean();
 }
+?>

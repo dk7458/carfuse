@@ -158,6 +158,23 @@ $schemas = [
         'columns' => [],
         'default_records' => []
     ],
+    'contracts' => [
+        'create' => "
+            CREATE TABLE contracts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                booking_id INT NOT NULL,
+                user_id INT NOT NULL,
+                vehicle_id INT NOT NULL,
+                contract_pdf VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (vehicle_id) REFERENCES fleet(id) ON DELETE CASCADE
+            )
+        ",
+        'columns' => [],
+        'default_records' => []
+    ],
 ];
 
 // Wrap operations in a transaction

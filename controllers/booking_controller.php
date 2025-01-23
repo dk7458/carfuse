@@ -19,6 +19,7 @@ require_once BASE_PATH . 'includes/user_queries.php';
 
 require_once BASE_PATH . 'includes/session_middleware.php';
 
+require_once BASE_PATH . 'includes/contract_generator.php'; // Include the contract generator
 
 header('Content-Type: application/json');
 
