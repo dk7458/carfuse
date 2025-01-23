@@ -9,7 +9,8 @@
 </head>
 <body>
     <?php include '../../views/shared/navbar_admin.php';
-    require_once __DIR__ . '/../includes/functions.php';
+    require_once BASE_PATH . 'includes/functions.php';
+
 
     enforceRole(['admin', 'super_admin']); 
      ?>

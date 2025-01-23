@@ -1,5 +1,5 @@
 <?php
-
+define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html/');
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 /**
@@ -236,5 +236,21 @@ function generateNotificationReport($conn, $type, $startDate, $endDate) {
     $stmt->execute();
     $result = $stmt->get_result();
     return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+/**
+ * Fetch all admin emails from the database.
+ * 
+ * @param mysqli $conn
+ * @return array
+ */
+function fetchAdminEmails($conn) {
+    $emails = [];
+    $query = "SELECT email FROM users WHERE role = 'admin'";
+    $result = $conn->query($query);
+    while ($row = $result->fetch_assoc()) {
+        $emails[] = $row['email'];
+    }
+    return $emails;
 }
 ?>

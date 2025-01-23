@@ -1,6 +1,7 @@
 <?php
 // File Path: /public/logout.php
-require_once __DIR__ . '/../includes/session_middleware.php';
+require_once BASE_PATH . 'includes/session_middleware.php';
+
 
 // Destroy session and log out user
 if (isset($_SESSION['user_id'])) {

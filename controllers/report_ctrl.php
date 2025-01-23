@@ -8,10 +8,14 @@
  * - Refactored PDF generation for dynamic content.
  */
 
-require_once __DIR__ . '/../includes/db_connect.php';
-require_once __DIR__ . '/../includes/functions.php';
-require_once __DIR__ . '/../includes/pdf_generator.php';
-require_once __DIR__ . '/../includes/export_helpers.php';
+require_once BASE_PATH . 'includes/db_connect.php';
+
+require_once BASE_PATH . 'includes/functions.php';
+
+require_once BASE_PATH . 'includes/pdf_generator.php';
+
+require_once BASE_PATH . 'includes/export_helpers.php';
+
 
 header('Content-Type: application/json');
 

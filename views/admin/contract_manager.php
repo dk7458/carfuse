@@ -1,7 +1,9 @@
 <?php
 // File Path: /views/admin/contract_manager.php
-require_once __DIR__ . '/../../includes/session_middleware.php';
-require_once __DIR__ . '/../../controllers/contract_ctrl.php';
+require_once BASE_PATH . '../includes/session_middleware.php';
+
+require_once BASE_PATH . '../controllers/contract_ctrl.php';
+
 enforceRole(['admin', 'super_admin']); // Allow only admins and super admins
 
 if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {

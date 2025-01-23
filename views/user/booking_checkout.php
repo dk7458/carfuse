@@ -1,8 +1,11 @@
 <?php
 // File Path: /views/user/booking_checkout.php
-require_once __DIR__ . '/../../includes/db_connect.php';
-require_once __DIR__ . '/../../includes/session_middleware.php';
-require_once __DIR__ . '/../../includes/functions.php';
+require_once BASE_PATH . '../includes/db_connect.php';
+
+require_once BASE_PATH . '../includes/session_middleware.php';
+
+require_once BASE_PATH . '../includes/functions.php';
+
 
 // Ensure the user is logged in
 if (!isset($_SESSION['user_id'])) {

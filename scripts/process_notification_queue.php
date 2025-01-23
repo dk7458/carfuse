@@ -6,9 +6,12 @@
  * - Initial script to process and send queued notifications.
  */
 
-require_once __DIR__ . '/../includes/db_connect.php';
-require_once __DIR__ . '/../includes/functions.php';
-require_once __DIR__ . '/../includes/notification_helpers.php';
+require_once BASE_PATH . 'includes/db_connect.php';
+
+require_once BASE_PATH . 'includes/functions.php';
+
+require_once BASE_PATH . 'includes/notification_helpers.php';
+
 
 echo "Starting notification queue processing...\n";
 

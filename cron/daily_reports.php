@@ -7,13 +7,25 @@
  * - Improved logging format.
  */
 
-require_once __DIR__ . '/../includes/db_connect.php';
-require_once __DIR__ . '/../includes/functions.php';
+require_once BASE_PATH . 'includes/db_connect.php';
+
+require_once BASE_PATH . 'includes/functions.php';
+
 
 header('Content-Type: text/plain; charset=UTF-8');
 
 function logDailyReportAction($message) {
     echo date('[Y-m-d H:i:s] ') . $message . "\n";
+}
+
+function fetchAdminEmails($conn) {
+    $emails = [];
+    $query = "SELECT email FROM users WHERE role = 'admin'";
+    $result = $conn->query($query);
+    while ($row = $result->fetch_assoc()) {
+        $emails[] = $row['email'];
+    }
+    return $emails;
 }
 
 try {
@@ -32,8 +44,7 @@ try {
     }
 
     $totalBookings = $bookingStats['total_bookings'] ?? 0;
-    $totalRevenue = pa
-    $bookingStats['total_revenue'] ?? 0;
+    $totalRevenue = $bookingStats['total_revenue'] ?? 0;
 
     // Construct the report
     $report = "Daily Report - " . date('Y-m-d') . ":\n";

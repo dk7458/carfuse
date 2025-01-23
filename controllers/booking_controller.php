@@ -9,11 +9,16 @@
  * - Added support for booking cancellation.
  */
 
-require_once __DIR__ . '/../includes/db_connect.php';
-require_once __DIR__ . '/../includes/functions.php';
-require_once __DIR__ . '/../includes/pdf_generator.php';
-require_once __DIR__ . '/../includes/user_queries.php';
-require_once __DIR__ . '/../includes/session_middleware.php';
+require_once BASE_PATH . 'includes/db_connect.php';
+
+require_once BASE_PATH . 'includes/functions.php';
+
+require_once BASE_PATH . 'includes/pdf_generator.php';
+
+require_once BASE_PATH . 'includes/user_queries.php';
+
+require_once BASE_PATH . 'includes/session_middleware.php';
+
 
 header('Content-Type: application/json');
 

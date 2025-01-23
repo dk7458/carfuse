@@ -1,5 +1,6 @@
 <?php
-require_once __DIR__ . '/../../../includes/functions.php';
+require_once BASE_PATH . '../../includes/functions.php';
+
 ?>
 
 <div class="container">

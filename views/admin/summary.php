@@ -1,8 +1,11 @@
 <?php
 // File Path: /views/admin/summary.php
-require_once __DIR__ . '/../../includes/session_middleware.php';
-require_once __DIR__ . '/../../controllers/summary_ctrl.php';
-require_once __DIR__ . '/../includes/functions.php';
+require_once BASE_PATH . '../includes/session_middleware.php';
+
+require_once BASE_PATH . '../controllers/summary_ctrl.php';
+
+require_once BASE_PATH . 'includes/functions.php';
+
 
 enforceRole(['admin', 'super_admin']); 
 

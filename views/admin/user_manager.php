@@ -1,8 +1,11 @@
 <?php
 // File Path: /views/admin/user_manager.php
-require_once __DIR__ . '/../../includes/session_middleware.php';
-require_once __DIR__ . '/../../includes/db_connect.php';
-require_once __DIR__ . '/../../includes/user_helpers.php';
+require_once BASE_PATH . '../includes/session_middleware.php';
+
+require_once BASE_PATH . '../includes/db_connect.php';
+
+require_once BASE_PATH . '../includes/user_helpers.php';
+
 
 if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
     redirect('/public/login.php');

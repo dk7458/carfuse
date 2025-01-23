@@ -8,8 +8,10 @@
  * - Added more granular maintenance reminders (e.g., daily check for vehicles with upcoming service needs).
  */
 
-require_once __DIR__ . '/../includes/db_connect.php';
-require_once __DIR__ . '/../includes/functions.php';
+require_once BASE_PATH . 'includes/db_connect.php';
+
+require_once BASE_PATH . 'includes/functions.php';
+
 
 enforceRole(['admin', 'super_admin'], '/public/login.php'); 
 
@@ -66,7 +68,8 @@ try {
         ";
         $result = $conn->query($query);
 
-        require_once __DIR__ . '/../includes/pdf_generator.php';
+        require_once BASE_PATH . 'includes/pdf_generator.php';
+
         $data = [];
         while ($row = $result->fetch_assoc()) {
             $data[] = $row;

@@ -1,8 +1,11 @@
 <?php
 // File Path: /controllers/settings_ctrl.php
-require_once __DIR__ . '/../includes/session_middleware.php';
-require_once __DIR__ . '/../includes/db_connect.php';
-require_once __DIR__ . '/../includes/functions.php';
+require_once BASE_PATH . 'includes/session_middleware.php';
+
+require_once BASE_PATH . 'includes/db_connect.php';
+
+require_once BASE_PATH . 'includes/functions.php';
+
 
 // Ensure the user has the required role
 enforceRole(['admin', 'super_admin'], '/public/login.php');

@@ -5,9 +5,12 @@
 // - Added functionality to display past notifications.
 // - Improved the user interface with a separate section for notification history.
 
-require_once __DIR__ . '/../../includes/session_middleware.php';
-require_once __DIR__ . '/../../includes/db_connect.php';
-require_once __DIR__ . '/../../includes/functions.php';
+require_once BASE_PATH . '../includes/session_middleware.php';
+
+require_once BASE_PATH . '../includes/db_connect.php';
+
+require_once BASE_PATH . '../includes/functions.php';
+
 
 $userId = $_SESSION['user_id'];
 
