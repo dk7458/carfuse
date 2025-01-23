@@ -1,4 +1,6 @@
 <?php
+
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
@@ -102,6 +104,8 @@ $availableFleet = $conn->query("SELECT COUNT(*) AS count FROM fleet WHERE availa
     <div id="mqtt-alerts"></div>
 </div>
 <?php
+
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';

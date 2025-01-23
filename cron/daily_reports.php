@@ -18,16 +18,6 @@ function logDailyReportAction($message) {
     echo date('[Y-m-d H:i:s] ') . $message . "\n";
 }
 
-function fetchAdminEmails($conn) {
-    $emails = [];
-    $query = "SELECT email FROM users WHERE role = 'admin'";
-    $result = $conn->query($query);
-    while ($row = $result->fetch_assoc()) {
-        $emails[] = $row['email'];
-    }
-    return $emails;
-}
-
 try {
     logDailyReportAction("Starting daily reports...");
 
@@ -44,7 +34,8 @@ try {
     }
 
     $totalBookings = $bookingStats['total_bookings'] ?? 0;
-    $totalRevenue = $bookingStats['total_revenue'] ?? 0;
+    $totalRevenue = pa
+    $bookingStats['total_revenue'] ?? 0;
 
     // Construct the report
     $report = "Daily Report - " . date('Y-m-d') . ":\n";
