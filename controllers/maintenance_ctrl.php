@@ -1,9 +1,17 @@
 <?php
-// File Path: /controllers/maintenance_ctrl.php
-require_once __DIR__ . '/../includes/db_connect.php';
-require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+/**
+ * File Path: /controllers/maintenance_ctrl.php
+ * Description: Manages maintenance logs and reminders for vehicles.
+ * Changelog:
+ * - Added batch delete functionality for maintenance logs.
+ * - Added export functionality for maintenance logs (CSV and PDF).
+ * - Added more granular maintenance reminders (e.g., daily check for vehicles with upcoming service needs).
+ */
 
-enforceRole(['admin', 'super_admin'],'/public/login.php'); 
+require_once __DIR__ . '/../includes/db_connect.php';
+require_once __DIR__ . '/../includes/functions.php';
+
+enforceRole(['admin', 'super_admin'], '/public/login.php'); 
 
 header('Content-Type: application/json');
 
@@ -69,6 +77,37 @@ try {
 
         header('Content-Type: application/pdf');
         header('Content-Disposition: attachment; filename="maintenance_logs.pdf"');
+        exit;
+    }
+
+    // Daily check for vehicles with upcoming service needs
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $_GET['action'] === 'daily_check') {
+        $query = "
+            SELECT f.make, f.model, f.registration_number, ml.description, ml.maintenance_date
+            FROM maintenance_logs ml
+            JOIN fleet f ON ml.vehicle_id = f.id
+            WHERE ml.maintenance_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+        ";
+        $result = $conn->query($query);
+        $upcomingServices = $result->fetch_all(MYSQLI_ASSOC);
+
+        foreach ($upcomingServices as $service) {
+            $message = sprintf(
+                "Upcoming maintenance for %s %s (Registration: %s) on %s. Description: %s",
+                htmlspecialchars($service['make']),
+                htmlspecialchars($service['model']),
+                htmlspecialchars($service['registration_number']),
+                htmlspecialchars($service['maintenance_date']),
+                htmlspecialchars($service['description'])
+            );
+
+            // Send notification to admin
+            foreach (fetchAdminEmails($conn) as $email) {
+                sendNotification('email', $email, 'Upcoming Vehicle Maintenance', $message);
+            }
+        }
+
+        echo json_encode(['success' => 'Daily check completed.']);
         exit;
     }
 

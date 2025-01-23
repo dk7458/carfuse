@@ -97,9 +97,6 @@ function applyTemplate($templateFile, $data) {
     include "../templates/emails/$templateFile";
     return ob_get_clean();
 }
-?>
-
-<?php
 
 /**
  * Generate a CSRF token for forms.
@@ -182,6 +179,62 @@ function sendMQTTNotification($topic, $message) {
     shell_exec($mqttCommand);
 }
 
+/**
+ * Fetch a notification by its ID.
+ * 
+ * @param mysqli $conn
+ * @param int $notificationId
+ * @return array|null
+ */
+function fetchNotificationById($conn, $notificationId) {
+    $stmt = $conn->prepare("SELECT * FROM notifications WHERE id = ?");
+    $stmt->bind_param("i", $notificationId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    return $result->fetch_assoc();
+}
 
+/**
+ * Resend a notification.
+ * 
+ * @param mysqli $conn
+ * @param array $notification
+ * @return bool
+ */
+function resendNotification($conn, $notification) {
+    // Logic to resend the notification
+    // This could involve sending an email or SMS again
+    return true;
+}
 
+/**
+ * Delete a notification.
+ * 
+ * @param mysqli $conn
+ * @param int $notificationId
+ * @return bool
+ */
+function deleteNotification($conn, $notificationId) {
+    $stmt = $conn->prepare("DELETE FROM notifications WHERE id = ?");
+    $stmt->bind_param("i", $notificationId);
+    return $stmt->execute();
+}
+
+/**
+ * Generate a notification report.
+ * 
+ * @param mysqli $conn
+ * @param string $type
+ * @param string $startDate
+ * @param string $endDate
+ * @return array
+ */
+function generateNotificationReport($conn, $type, $startDate, $endDate) {
+    $query = "SELECT * FROM notifications WHERE type = ? AND sent_at BETWEEN ? AND ?";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("sss", $type, $startDate, $endDate);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    return $result->fetch_all(MYSQLI_ASSOC);
+}
 ?>

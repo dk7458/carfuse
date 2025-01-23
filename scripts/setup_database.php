@@ -55,6 +55,22 @@ function insertDefaultRecord($conn, $tableName, $conditions, $insertQuery, $para
 
 // Table Schemas
 $schemas = [
+    'notifications' => [
+        'create' => "
+            CREATE TABLE notifications (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                message TEXT NOT NULL,
+                type ENUM('general', 'reschedule', 'reminder') DEFAULT 'general',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        ",
+        'columns' => [
+            'is_read' => 'BOOLEAN DEFAULT 0',
+        ],
+        'default_records' => []
+    ],
     'users' => [
         'create' => "
             CREATE TABLE users (

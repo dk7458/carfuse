@@ -1,4 +1,14 @@
 <?php
+/**
+ * File Path: /controllers/booking_controller.php
+ * Description: Manages booking operations including availability checks, booking creation, and fetching user bookings.
+ * Changelog:
+ * - Added CSRF token validation for booking creation.
+ * - Improved error handling and validation.
+ * - Added logging for booking actions.
+ * - Added support for booking cancellation.
+ */
+
 require_once __DIR__ . '/../includes/db_connect.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/pdf_generator.php';
@@ -99,6 +109,23 @@ try {
                 echo json_encode(['success' => true, 'message' => "Booking created successfully."]);
                 break;
 
+            case 'cancel_booking':
+                $bookingId = intval($_POST['booking_id']);
+                if ($bookingId === 0) {
+                    throw new Exception("Invalid booking ID.");
+                }
+
+                $stmt = $conn->prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ? AND user_id = ?");
+                $stmt->bind_param("ii", $bookingId, $userId);
+
+                if ($stmt->execute()) {
+                    logAction($conn, $userId, 'cancel_booking', "Booking ID: $bookingId");
+                    echo json_encode(['success' => true, 'message' => "Booking cancelled successfully."]);
+                } else {
+                    throw new Exception("Failed to cancel booking.");
+                }
+                break;
+
             default:
                 throw new Exception("Unknown action.");
         }
@@ -154,3 +181,4 @@ try {
     echo json_encode(['error' => $e->getMessage()]);
     exit;
 }
+?>

@@ -1,0 +1,143 @@
+<?php
+// File Path: /views/admin/admin_calendar.php
+/**
+ * Description: Enhanced admin calendar with tooltips and conflict notifications for rescheduling.
+ * Changelog:
+ * - Added tooltips for detailed event information.
+ * - Improved conflict notifications with detailed messages.
+ * - Added visual indicators for vehicle maintenance schedules.
+ */
+
+require_once __DIR__ . '/../../includes/session_middleware.php';
+require_once __DIR__ . '/../../includes/db_connect.php';
+require_once __DIR__ . '/../../includes/functions.php';
+
+// Enforce role-based access
+enforceRole(['admin', 'super_admin'], '/public/login.php');
+
+// Fetch all bookings and maintenance schedules for the calendar
+$bookings = $conn->query("
+    SELECT b.id, f.make, f.model, b.pickup_date, b.dropoff_date, CONCAT(u.name, ' ', u.surname) AS user, b.total_price 
+    FROM bookings b
+    JOIN fleet f ON b.vehicle_id = f.id
+    JOIN users u ON b.user_id = u.id
+")->fetch_all(MYSQLI_ASSOC);
+
+$maintenanceSchedules = $conn->query("
+    SELECT ml.id, f.make, f.model, ml.maintenance_date, ml.description 
+    FROM maintenance_logs ml
+    JOIN fleet f ON ml.vehicle_id = f.id
+")->fetch_all(MYSQLI_ASSOC);
+?>
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalendarz Administratora</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.8/index.global.min.css">
+    <link rel="stylesheet" href="/public/assets/css/theme.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.8/index.global.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> <!-- SweetAlert2 for better notifications -->
+</head>
+<body>
+    <?php include '../shared/navbar_admin.php'; ?>
+
+    <div class="container mt-5">
+        <h1 class="text-center">Kalendarz Administratora</h1>
+        <div id="calendar"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const calendarEl = document.getElementById('calendar');
+            const calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                editable: true,
+                eventDidMount: function (info) {
+                    // Add tooltips with event details
+                    const tooltipContent = `
+                        <strong>${info.event.title}</strong><br>
+                        <strong>Data odbioru:</strong> ${info.event.start.toLocaleDateString()}<br>
+                        <strong>Data zwrotu:</strong> ${info.event.end.toLocaleDateString()}<br>
+                    `;
+                    info.el.setAttribute('title', tooltipContent);
+                },
+                events: [
+                    <?php foreach ($bookings as $booking): ?>
+                    {
+                        id: '<?= $booking['id'] ?>',
+                        title: '<?= htmlspecialchars($booking['user'] . ': ' . $booking['make'] . ' ' . $booking['model']) ?>',
+                        start: '<?= $booking['pickup_date'] ?>',
+                        end: '<?= date('Y-m-d', strtotime($booking['dropoff_date'] . ' +1 day')) ?>',
+                        backgroundColor: 'rgba(75, 192, 192, 1)',
+                        extendedProps: {
+                            totalPrice: '<?= $booking['total_price'] ?> PLN'
+                        }
+                    },
+                    <?php endforeach; ?>
+                    <?php foreach ($maintenanceSchedules as $maintenance): ?>
+                    {
+                        id: 'maintenance-<?= $maintenance['id'] ?>',
+                        title: 'Maintenance: <?= htmlspecialchars($maintenance['make'] . ' ' . $maintenance['model']) ?>',
+                        start: '<?= $maintenance['maintenance_date'] ?>',
+                        backgroundColor: 'rgba(255, 99, 132, 1)',
+                        extendedProps: {
+                            description: '<?= htmlspecialchars($maintenance['description']) ?>'
+                        }
+                    },
+                    <?php endforeach; ?>
+                ],
+                eventDrop: function (info) {
+                    // Send rescheduling data to the back-end
+                    fetch('/controllers/calendar_ctrl.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            action: 'reschedule_booking',
+                            booking_id: info.event.id,
+                            new_start: info.event.start.toISOString().split('T')[0],
+                            new_end: info.event.end.toISOString().split('T')[0]
+                        })
+                    })
+                        .then(response => response.json())
+                        .then((data) => {
+                            if (data.success) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Zaktualizowano',
+                                    text: data.message,
+                                    confirmButtonText: 'OK'
+                                });
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Błąd',
+                                    text: data.error || "Wystąpił problem podczas zmiany rezerwacji.",
+                                    confirmButtonText: 'OK'
+                                });
+                                info.revert(); // Revert the event to its original position
+                            }
+                        })
+                        .catch((error) => {
+                            console.error("Error:", error);
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Błąd sieci',
+                                text: 'Nie udało się połączyć z serwerem. Spróbuj ponownie później.',
+                                confirmButtonText: 'OK'
+                            });
+                            info.revert(); // Revert the event to its original position
+                        });
+                }
+            });
+
+            calendar.render();
+        });
+    </script>
+</body>
+</html>

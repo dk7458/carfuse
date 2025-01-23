@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const categorySelect = document.querySelector('#category');
+    const reportTypeSelect = document.querySelector('#report_type');
     const dateFromInput = document.querySelector('#date_from');
     const dateToInput = document.querySelector('#date_to');
     const reportChart = document.getElementById('reportChart');
@@ -12,11 +13,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fetch and render report data
     const fetchReportData = async () => {
         const category = categorySelect.value;
+        const reportType = reportTypeSelect.value;
         const dateFrom = dateFromInput.value;
         const dateTo = dateToInput.value;
 
         try {
-            const response = await fetch(`/controllers/report_ctrl.php?action=fetch&category=${category}&date_from=${dateFrom}&date_to=${dateTo}`);
+            const response = await fetch(`/controllers/report_ctrl.php?action=fetch&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`);
             const data = await response.json();
 
             if (data.success) {
@@ -76,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
             chartInstance.destroy();
         }
 
-        const labels = data.map(row => row.date);
+        const labels = data.map(row => row.date || row.week);
         const values = data.map(row => category === 'revenue' ? row.total : row.count);
 
         chartInstance = new Chart(reportChart, {
@@ -104,26 +106,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // Export CSV
     exportCsvButton.addEventListener('click', () => {
         const category = categorySelect.value;
+        const reportType = reportTypeSelect.value;
         const dateFrom = dateFromInput.value;
         const dateTo = dateToInput.value;
 
-        window.location.href = `/controllers/report_ctrl.php?action=export_csv&category=${category}&date_from=${dateFrom}&date_to=${dateTo}`;
+        window.location.href = `/controllers/report_ctrl.php?action=export_csv&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
     });
 
     // Export PDF
     exportPdfButton.addEventListener('click', () => {
         const category = categorySelect.value;
+        const reportType = reportTypeSelect.value;
         const dateFrom = dateFromInput.value;
         const dateTo = dateToInput.value;
 
-        window.location.href = `/controllers/report_ctrl.php?action=export_pdf&category=${category}&date_from=${dateFrom}&date_to=${dateTo}`;
+        window.location.href = `/controllers/report_ctrl.php?action=export_pdf&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
     });
 
     // Fetch initial data
     fetchReportData();
 
     // Re-fetch data when filters change
-    [categorySelect, dateFromInput, dateToInput].forEach(element => {
+    [categorySelect, reportTypeSelect, dateFromInput, dateToInput].forEach(element => {
         element.addEventListener('change', fetchReportData);
     });
 });

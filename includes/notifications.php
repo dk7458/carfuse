@@ -1,68 +1,87 @@
 <?php
-// File Path: /includes/notifications.php
-require_once __DIR__ . '/email.php';
+/**
+ * File Path: /includes/notifications.php
+ * Description: Helper functions to manage notifications.
+ * Changelog:
+ * - Added `sendNotification` function to insert notifications.
+ * - Added `fetchNotificationById` function to retrieve specific notifications.
+ * - Added `fetchNotificationsByUser` function to fetch notifications for a user.
+ * - Added `deleteNotification` function to remove a notification.
+ */
 
 /**
- * Send a notification to the user via email or SMS.
+ * Sends a notification to a user.
  *
- * @param string $type 'email' or 'sms'
- * @param string $recipient Recipient's email or phone number.
- * @param string|null $subject Subject of the notification (email only).
- * @param string $message The content of the notification.
- * @return bool True if the notification was sent successfully, false otherwise.
+ * @param mysqli $conn Database connection.
+ * @param array $data Notification data (user_id, message, type).
+ * @return bool True if the notification is sent successfully, false otherwise.
  */
-function sendNotification($type, $recipient, $subject = null, $message) {
-    if ($type === 'email') {
-        if (empty($subject)) {
-            error_log("Email subject is required for email notifications.");
-            return false;
-        }
-        return sendEmail($recipient, $subject, $message);
-    } elseif ($type === 'sms') {
-        return sendSmsNotification($recipient, $message);
-    }
-
-    error_log("Invalid notification type: $type");
-    return false;
-}
-
-/**
- * Send an SMS notification to the user.
- * Integrates with a hypothetical SMS API (future enhancement).
- *
- * @param string $phoneNumber Recipient's phone number.
- * @param string $message The SMS content.
- * @return bool True if the SMS was sent successfully, false otherwise.
- */
-function sendSmsNotification($phoneNumber, $message) {
-    // Validate phone number
-    if (!preg_match('/^\+?[1-9]\d{1,14}$/', $phoneNumber)) {
-        error_log("Invalid phone number format: $phoneNumber");
-        return false;
-    }
-
-    // Placeholder for SMS gateway integration
-    // Example: Twilio API integration or similar
-    error_log("SMS notification simulated to $phoneNumber: $message");
-
-    // Log successful SMS simulation
-    logAction($_SESSION['user_id'] ?? 0, 'sms_sent', json_encode(['phone' => $phoneNumber, 'message' => $message]));
-
-    return true; // Simulate successful SMS sending
-}
-
-/**
- * Log actions performed by the notification system.
- *
- * @param int $userId User ID associated with the action.
- * @param string $action Action performed (e.g., 'email_sent', 'sms_sent').
- * @param string|null $details Additional details about the action.
- */
-function logNotificationAction($userId, $action, $details = null) {
-    global $conn;
-    $stmt = $conn->prepare("INSERT INTO logs (user_id, action, details, timestamp) VALUES (?, ?, ?, NOW())");
-    $stmt->bind_param("iss", $userId, $action, $details);
-    $stmt->execute();
+function sendNotification($conn, $data) {
+    $stmt = $conn->prepare("
+        INSERT INTO notifications (user_id, message, type, created_at) 
+        VALUES (?, ?, ?, NOW())
+    ");
+    $stmt->bind_param("iss", $data['user_id'], $data['message'], $data['type']);
+    $result = $stmt->execute();
     $stmt->close();
+    return $result;
+}
+
+/**
+ * Fetches a notification by ID.
+ *
+ * @param mysqli $conn Database connection.
+ * @param int $id Notification ID.
+ * @return array|null Notification data or null if not found.
+ */
+function fetchNotificationById($conn, $id) {
+    $stmt = $conn->prepare("
+        SELECT id, user_id, message, type, created_at 
+        FROM notifications 
+        WHERE id = ?
+    ");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $result;
+}
+
+/**
+ * Fetches notifications for a specific user.
+ *
+ * @param mysqli $conn Database connection.
+ * @param int $userId User ID.
+ * @param int $limit Number of notifications to fetch.
+ * @return array List of notifications.
+ */
+function fetchNotificationsByUser($conn, $userId, $limit = 10) {
+    $stmt = $conn->prepare("
+        SELECT id, message, type, created_at 
+        FROM notifications 
+        WHERE user_id = ? 
+        ORDER BY created_at DESC 
+        LIMIT ?
+    ");
+    $stmt->bind_param("ii", $userId, $limit);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $result;
+}
+
+/**
+ * Deletes a notification by ID.
+ *
+ * @param mysqli $conn Database connection.
+ * @param int $id Notification ID.
+ * @return bool True if the notification is deleted successfully, false otherwise.
+ */
+function deleteNotification($conn, $id) {
+    $stmt = $conn->prepare("DELETE FROM notifications WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $result = $stmt->execute();
+    $stmt->close();
+    return $result;
 }
 ?>
