@@ -1,4 +1,5 @@
-<?php
+$1
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 // File Path: /controllers/export_ctrl.php
 require_once BASE_PATH . 'includes/session_middleware.php';
 

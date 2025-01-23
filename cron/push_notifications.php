@@ -1,4 +1,6 @@
-<?php
+$1
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
+?php
 /**
  * File Path: /cron/push_notifications.php
  * Description: Processes queued push notifications and sends them to users.

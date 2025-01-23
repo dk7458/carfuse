@@ -1,4 +1,5 @@
-<?php
+$1
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 // File Path: /includes/report_helpers.php
 
 require_once __DIR__ . '/db_connect.php';

@@ -1,4 +1,5 @@
-<?php
+$1
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 // File Path: /views/admin/admin_calendar.php
 /**
  * Description: Enhanced admin calendar with tooltips and conflict notifications for rescheduling.

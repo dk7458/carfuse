@@ -1,4 +1,6 @@
-<?php
+$1
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
+?php
 /**
  * File Path: /controllers/dynamic_pricing_ctrl.php
  * Description: Manages dynamic pricing rules based on demand, season, and availability.

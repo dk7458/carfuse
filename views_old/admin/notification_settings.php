@@ -1,5 +1,6 @@
 
-<?php
+$1
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';

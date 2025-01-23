@@ -1,4 +1,5 @@
-<?php
+$1
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 /**
  * File Path: /controllers/booking_controller.php
  * Description: Manages booking operations including availability checks, booking creation, and fetching user bookings.

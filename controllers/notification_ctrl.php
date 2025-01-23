@@ -1,4 +1,5 @@
-<?php
+$1
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 /**
  * File Path: /controllers/notification_ctrl.php
  * Description: Handles notifications for admins and users, including sending, resending, deleting, reporting, and queuing.

@@ -1,4 +1,5 @@
-<?php
+$1
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 // File Path: /views/admin/dashboard.php
 
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';

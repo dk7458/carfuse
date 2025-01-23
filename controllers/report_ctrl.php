@@ -1,4 +1,6 @@
-<?php
+$1
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
+?php
 /**
  * File Path: /controllers/report_ctrl.php
  * Description: Handles advanced reporting features, including data fetching, CSV and PDF export.

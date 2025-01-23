@@ -1,4 +1,6 @@
-<?php
+$1
+require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
+?php
 /**
  * Ścieżka pliku: /cron/booking_follow_up.php
  * Opis: Wysyła powiadomienia przypominające o rezerwacjach, takie jak przypomnienia o nadchodzących rezerwacjach, prośby o opinię po zakończeniu rezerwacji lub powiadomienia o niedokończonych rezerwacjach.
