@@ -20,28 +20,23 @@ $itemsPerPage = 10;
 $offset = ($page - 1) * $itemsPerPage;
 
 // Fetch data using the centralized proxy
-$filters = [
-    'search' => $_GET['search'] ?? '',
-    'startDate' => $_GET['start_date'] ?? '',
-    'endDate' => $_GET['end_date'] ?? ''
-];
-$queryString = http_build_query($filters);
-$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=user&action=fetch_users&" . $queryString);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=user&action=fetch_users");
 $data = json_decode($response, true);
 
-if ($data['success']) {
-    $users = $data['users'];
-    foreach ($users as $user) {
-        echo "<tr>
-            <td>{$user['name']}</td>
-            <td>{$user['email']}</td>
-            <td>{$user['role']}</td>
-            <td>{$user['created_at']}</td>
-        </tr>";
-    }
+$users = $data['success'] ? $data['users'] : [];
+if (!$data['success']) {
+    echo "<p>Error fetching user data.</p>";
 }
 
-if (isset($users) && is_array($users)) {
+if (is_array($users)) {
+    foreach ($users as $user) {
+        echo "<tr>
+            <td>" . htmlspecialchars($user['name']) . "</td>
+            <td>" . htmlspecialchars($user['email']) . "</td>
+            <td>" . htmlspecialchars($user['role']) . "</td>
+            <td>" . htmlspecialchars($user['created_at']) . "</td>
+        </tr>";
+    }
     echo "<p>Total Users: " . count($users) . "</p>";
 } else {
     echo "<p>No user data available.</p>";
