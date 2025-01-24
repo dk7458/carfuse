@@ -4,7 +4,7 @@
  * Description: Centralized API proxy to route requests to appropriate controllers with rate limiting and logging.
  */
 
-require_once '../config.php'; // Global configuration
+require_once 'config.php'; // Global configuration
 require_once BASE_PATH . 'includes/global.php'; // Global functions
 
 // Define endpoint categories
