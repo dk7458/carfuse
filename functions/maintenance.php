@@ -1,6 +1,6 @@
 <?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-require_once '/home/u122931475/domains/carfuse.pl/public_html/api.php';
+require_once BASE_PATH . 'api.php';
 
 /**
  * Fetches maintenance logs from the database with optional filters.
