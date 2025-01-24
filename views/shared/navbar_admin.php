@@ -33,7 +33,7 @@ $userRole = $_SESSION['user_role'] ?? null;
 
 <script>
     function fetchNotifications() {
-        fetch('notification_ctrl.php?action=fetch_unread')
+        fetch('/controllers/notification_ctrl.php?action=fetch_unread')
             .then(response => response.json())
             .then(data => {
                 const unreadCount = document.getElementById('unreadCount');
