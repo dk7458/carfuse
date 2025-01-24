@@ -3,13 +3,111 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 
 /**
  * File Path: /functions/notification.php
- * Purpose: Manages all notification-related operations, including sending email, SMS, MQTT notifications, and reporting.
+ * Purpose: Manages all notification-related operations, including database operations, sending email, SMS, MQTT notifications, and reporting.
  *
  * Changelog:
- * - Refactored from functions.php to notification.php (Date).
+ * - Merged functionality from /includes/notifications.php into /functions/notification.php.
  * - Added modular support for SMS APIs and MQTT notifications.
  * - Enhanced error handling for notification management.
  */
+
+// Database-related functions
+
+/**
+ * Sends a notification to a user.
+ *
+ * @param mysqli $conn Database connection.
+ * @param array $data Notification data (user_id, message, type).
+ * @return bool True if the notification is sent successfully, false otherwise.
+ */
+function sendNotification($conn, $data) {
+    $stmt = $conn->prepare("
+        INSERT INTO notifications (user_id, message, type, created_at) 
+        VALUES (?, ?, ?, NOW())
+    ");
+    $stmt->bind_param("iss", $data['user_id'], $data['message'], $data['type']);
+    $result = $stmt->execute();
+    $stmt->close();
+    return $result;
+}
+
+/**
+ * Fetches a notification by ID.
+ *
+ * @param mysqli $conn Database connection.
+ * @param int $id Notification ID.
+ * @return array|null Notification data or null if not found.
+ */
+function fetchNotificationById($conn, $id) {
+    $stmt = $conn->prepare("
+        SELECT id, user_id, message, type, created_at 
+        FROM notifications 
+        WHERE id = ?
+    ");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $result;
+}
+
+/**
+ * Fetches notifications for a specific user.
+ *
+ * @param mysqli $conn Database connection.
+ * @param int $userId User ID.
+ * @param int $limit Number of notifications to fetch.
+ * @return array List of notifications.
+ */
+function fetchNotificationsByUser($conn, $userId, $limit = 10) {
+    $stmt = $conn->prepare("
+        SELECT id, message, type, created_at 
+        FROM notifications 
+        WHERE user_id = ? 
+        ORDER BY created_at DESC 
+        LIMIT ?
+    ");
+    $stmt->bind_param("ii", $userId, $limit);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $result;
+}
+
+/**
+ * Deletes a notification by ID.
+ *
+ * @param mysqli $conn Database connection.
+ * @param int $id Notification ID.
+ * @return bool True if the notification is deleted successfully, false otherwise.
+ */
+function deleteNotification($conn, $id) {
+    $stmt = $conn->prepare("DELETE FROM notifications WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $result = $stmt->execute();
+    $stmt->close();
+    return $result;
+}
+
+/**
+ * Generate a notification report.
+ * 
+ * @param mysqli $conn Database connection.
+ * @param string $type Notification type.
+ * @param string $startDate Start date for the report.
+ * @param string $endDate End date for the report.
+ * @return array List of notifications.
+ */
+function generateNotificationReport($conn, $type, $startDate, $endDate) {
+    $query = "SELECT * FROM notifications WHERE type = ? AND created_at BETWEEN ? AND ?";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("sss", $type, $startDate, $endDate);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+// External notification functions
 
 /**
  * Sends an MQTT notification.
@@ -18,70 +116,10 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
  * @param string $message Notification message.
  */
 function sendMQTTNotification($topic, $message) {
-    // Ensure the topic and message are properly escaped for shell execution
     $escapedTopic = escapeshellarg($topic);
     $escapedMessage = escapeshellarg($message);
     $mqttCommand = "mosquitto_pub -t $escapedTopic -m $escapedMessage";
     shell_exec($mqttCommand);
-}
-
-/**
- * Fetch a notification by its ID.
- * 
- * @param mysqli $conn
- * @param int $notificationId
- * @return array|null
- */
-function fetchNotificationById($conn, $notificationId) {
-    $stmt = $conn->prepare("SELECT * FROM notifications WHERE id = ?");
-    $stmt->bind_param("i", $notificationId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    return $result->fetch_assoc();
-}
-
-/**
- * Resend a notification.
- * 
- * @param mysqli $conn
- * @param array $notification
- * @return bool
- */
-function resendNotification($conn, $notification) {
-    // Logic to resend the notification
-    // This could involve sending an email or SMS again
-    return true;
-}
-
-/**
- * Delete a notification.
- * 
- * @param mysqli $conn
- * @param int $notificationId
- * @return bool
- */
-function deleteNotification($conn, $notificationId) {
-    $stmt = $conn->prepare("DELETE FROM notifications WHERE id = ?");
-    $stmt->bind_param("i", $notificationId);
-    return $stmt->execute();
-}
-
-/**
- * Generate a notification report.
- * 
- * @param mysqli $conn
- * @param string $type
- * @param string $startDate
- * @param string $endDate
- * @return array
- */
-function generateNotificationReport($conn, $type, $startDate, $endDate) {
-    $query = "SELECT * FROM notifications WHERE type = ? AND sent_at BETWEEN ? AND ?";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("sss", $type, $startDate, $endDate);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    return $result->fetch_all(MYSQLI_ASSOC);
 }
 
 /**
@@ -94,24 +132,20 @@ function generateNotificationReport($conn, $type, $startDate, $endDate) {
  * @throws Exception If validation fails or the API call fails.
  */
 function sendSmsNotification($phoneNumber, $message, $sender = null) {
-    // Validate phone number format
     if (!preg_match('/^\+\d{10,15}$/', $phoneNumber)) {
         throw new Exception("Invalid phone number format.");
     }
 
-    // Load API credentials from configuration
     $apiKey = getenv('SMS_API_KEY');
     $apiSecret = getenv('SMS_API_SECRET');
     $apiUrl = getenv('SMS_API_URL');
 
-    // Prepare API request data
     $postData = [
         'to' => $phoneNumber,
         'message' => $message,
         'from' => $sender ?? 'Carfuse'
     ];
 
-    // Initialize cURL
     $ch = curl_init($apiUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
@@ -121,12 +155,10 @@ function sendSmsNotification($phoneNumber, $message, $sender = null) {
         'Content-Type: application/x-www-form-urlencoded'
     ]);
 
-    // Execute API request
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    // Handle API response
     if ($httpCode === 200) {
         $responseData = json_decode($response, true);
         if ($responseData['status'] === 'success') {
@@ -137,5 +169,18 @@ function sendSmsNotification($phoneNumber, $message, $sender = null) {
     } else {
         throw new Exception("Failed to send SMS. HTTP status code: $httpCode");
     }
+}
+
+/**
+ * Resend a notification.
+ * 
+ * @param mysqli $conn Database connection.
+ * @param array $notification Notification data.
+ * @return bool True if the notification is resent successfully.
+ */
+function resendNotification($conn, $notification) {
+    // Placeholder logic to resend the notification
+    // This could involve sending an email or SMS again
+    return true;
 }
 ?>
