@@ -94,6 +94,6 @@ $summary = getSummaryData();
         </div>
     </div>
 
-    <script src="/home/u122931475/domains/carfuse.pl/public_html/assets/js/summary.js"></script>
+    <script src="/assets/js/summary.js"></script>
 </body>
 </html>
