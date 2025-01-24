@@ -5,8 +5,9 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_m
 $userRole = $_SESSION['user_role'] ?? null;
 
 // Replace the direct fetch with API call for notifications count
-$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=notifications&action=get_unread_count");
-$data = json_decode($response, true);
+$apiUrl = BASE_URL . "/public/api.php?endpoint=notifications&action=get_unread_count";
+$response = @file_get_contents($apiUrl);
+$data = $response ? json_decode($response, true) : null;
 $unreadCount = $data['success'] ? $data['count'] : 0;
 ?>
 
@@ -22,51 +23,51 @@ $unreadCount = $data['success'] ? $data['count'] : 0;
             <ul class="navbar-nav ms-auto">
                 <?php if ($_SESSION['user_role'] === 'super_admin'): ?>
                     <li class="nav-item"><a class="nav-link" href="/views/super_admin/panel.php">Super Admin Panel</a></li>
-                    <?php endif; ?>
+                <?php endif; ?>
 
                 <?php if (isset($_SESSION['user_id'])): ?>
                     <li class="nav-item"><a class="nav-link" href="/views/admin/dashboard.php" style="height: 70px;">Panel Administratora</a></li>
                     <li class="nav-item"><a class="nav-link" href="/views/admin/admin_calendar.php" style="height: 70px;">Kalendarz</a></li>
-<li class="nav-item dropdown">
-    <a class="nav-link dropdown-toggle" href="#" id="notificationsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-        <i class="bi bi-bell"></i>
-        <span id="unreadCount" class="badge bg-danger"></span>
-    </a>
-    <ul class="dropdown-menu" aria-labelledby="notificationsDropdown">
-        <div id="notificationsList" class="p-2"></div>
-    </ul>
-</li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="notificationsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-bell"></i>
+                            <span id="unreadCount" class="badge bg-danger"><?= $unreadCount ?></span>
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="notificationsDropdown">
+                            <div id="notificationsList" class="p-2"></div>
+                        </ul>
+                    </li>
 
-<script>
-    function fetchNotifications() {
-        fetch('/public/api.php?endpoint=notifications&action=fetch_unread')
-            .then(response => response.json())
-            .then(data => {
-                const unreadCount = document.getElementById('unreadCount');
-                const notificationsList = document.getElementById('notificationsList');
+                    <script>
+                        function fetchNotifications() {
+                            fetch('/public/api.php?endpoint=notifications&action=fetch_unread')
+                                .then(response => response.json())
+                                .then(data => {
+                                    const unreadCount = document.getElementById('unreadCount');
+                                    const notificationsList = document.getElementById('notificationsList');
 
-                unreadCount.textContent = data.unread_count || '';
-                notificationsList.innerHTML = '';
+                                    unreadCount.textContent = data.unread_count || '';
+                                    notificationsList.innerHTML = '';
 
-                if (data.notifications && data.notifications.length) {
-                    data.notifications.forEach(notif => {
-                        const notifItem = document.createElement('li');
-                        notifItem.classList.add('dropdown-item');
-                        notifItem.textContent = notif.message;
-                        notificationsList.appendChild(notifItem);
-                    });
-                } else {
-                    notificationsList.innerHTML = '<p class="text-center">No notifications</p>';
-                }
-            });
-    }
+                                    if (data.notifications && data.notifications.length) {
+                                        data.notifications.forEach(notif => {
+                                            const notifItem = document.createElement('li');
+                                            notifItem.classList.add('dropdown-item');
+                                            notifItem.textContent = notif.message;
+                                            notificationsList.appendChild(notifItem);
+                                        });
+                                    } else {
+                                        notificationsList.innerHTML = '<p class="text-center">No notifications</p>';
+                                    }
+                                });
+                        }
 
-    // Fetch notifications on load
-    fetchNotifications();
+                        // Fetch notifications on load
+                        fetchNotifications();
 
-    // Poll every 30 seconds
-    setInterval(fetchNotifications, 30000);
-</script>
+                        // Poll every 30 seconds
+                        setInterval(fetchNotifications, 30000);
+                    </script>
 
                     <!-- Show additional options for super_admin -->
                     <?php if ($userRole === 'super_admin'): ?>
