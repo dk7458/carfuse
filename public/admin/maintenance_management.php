@@ -1,46 +1,46 @@
-
-
 <?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-
-require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
-require_once BASE_PATH . 'functions/global.php';
 
-// Ensure the user is an admin
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
-    redirect('/public/login.php');
-}
+enforceRole(['admin', 'super_admin']);
 
-// Fetch maintenance logs
-$logs = $conn->query("
-    SELECT ml.id, f.make, f.model, ml.description, ml.maintenance_date 
-    FROM maintenance_logs ml
-    JOIN fleet f ON ml.vehicle_id = f.id
-    ORDER BY ml.maintenance_date DESC
-");
+// Replace direct DB queries with API calls
+$logsResponse = file_get_contents(BASE_URL . "/public/api.php?endpoint=maintenance&action=fetch_logs");
+$vehiclesResponse = file_get_contents(BASE_URL . "/public/api.php?endpoint=fleet&action=fetch_vehicles");
 
+$logsData = json_decode($logsResponse, true);
+$vehiclesData = json_decode($vehiclesResponse, true);
+
+$logs = $logsData['success'] ? $logsData['logs'] : [];
+$vehicles = $vehiclesData['success'] ? $vehiclesData['vehicles'] : [];
+
+// Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['vehicle_id'], $_POST['description'], $_POST['maintenance_date'])) {
-        $vehicleId = intval($_POST['vehicle_id']);
-        $description = htmlspecialchars(trim($_POST['description']));
-        $maintenanceDate = $_POST['maintenance_date'];
-
-        $stmt = $conn->prepare("INSERT INTO maintenance_logs (vehicle_id, description, maintenance_date) VALUES (?, ?, ?)");
-        $stmt->bind_param("iss", $vehicleId, $description, $maintenanceDate);
-
-        if ($stmt->execute()) {
-            $_SESSION['success_message'] = "Historia konserwacji została pomyślnie dodana.";
-            redirect('/public/admin/dashboard.php?page=konserwacja');
-        } else {
-            $_SESSION['error_message'] = "Nie udało się dodać historii konserwacji.";
-        }
+    $postData = http_build_query([
+        'vehicle_id' => $_POST['vehicle_id'],
+        'description' => $_POST['description'],
+        'maintenance_date' => $_POST['maintenance_date']
+    ]);
+    
+    $options = [
+        'http' => [
+            'method' => 'POST',
+            'header' => 'Content-Type: application/x-www-form-urlencoded',
+            'content' => $postData
+        ]
+    ];
+    
+    $context = stream_context_create($options);
+    $response = file_get_contents(BASE_URL . "/public/api.php?endpoint=maintenance&action=add_log", false, $context);
+    $result = json_decode($response, true);
+    
+    if ($result['success']) {
+        $_SESSION['success_message'] = "Historia konserwacji została pomyślnie dodana.";
+        redirect('/public/admin/dashboard.php?page=konserwacja');
+    } else {
+        $_SESSION['error_message'] = $result['error'] ?? "Nie udało się dodać historii konserwacji.";
     }
 }
-
-// Fetch vehicles for the dropdown
-$vehicles = $conn->query("SELECT id, make, model FROM fleet ORDER BY make, model");
 ?>
 
 <!DOCTYPE html>
@@ -63,9 +63,9 @@ $vehicles = $conn->query("SELECT id, make, model FROM fleet ORDER BY make, model
             <div class="col-md-4">
                 <label for="vehicle_id" class="form-label">Pojazd</label>
                 <select id="vehicle_id" name="vehicle_id" class="form-select" required>
-                    <?php while ($vehicle = $vehicles->fetch_assoc()): ?>
+                    <?php foreach ($vehicles as $vehicle): ?>
                         <option value="<?php echo $vehicle['id']; ?>"><?php echo "{$vehicle['make']} {$vehicle['model']}"; ?></option>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="col-md-4">
@@ -82,7 +82,7 @@ $vehicles = $conn->query("SELECT id, make, model FROM fleet ORDER BY make, model
         </form>
 
         <h2 class="mt-5">Logi Konserwacji</h2>
-        <?php if ($logs->num_rows > 0): ?>
+        <?php if (count($logs) > 0): ?>
             <table class="table table-bordered mt-4">
                 <thead>
                     <tr>
@@ -93,14 +93,14 @@ $vehicles = $conn->query("SELECT id, make, model FROM fleet ORDER BY make, model
                     </tr>
                 </thead>
                 <tbody>
-                    <?php while ($log = $logs->fetch_assoc()): ?>
+                    <?php foreach ($logs as $log): ?>
                         <tr>
                             <td><?php echo $log['id']; ?></td>
                             <td><?php echo "{$log['make']} {$log['model']}"; ?></td>
                             <td><?php echo htmlspecialchars($log['description']); ?></td>
                             <td><?php echo date('d-m-Y', strtotime($log['maintenance_date'])); ?></td>
                         </tr>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                 </tbody>
             </table>
         <?php else: ?>

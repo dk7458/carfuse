@@ -1,7 +1,13 @@
 <?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
+
 $userRole = $_SESSION['user_role'] ?? null;
+
+// Replace the direct fetch with API call for notifications count
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=notifications&action=get_unread_count");
+$data = json_decode($response, true);
+$unreadCount = $data['success'] ? $data['count'] : 0;
 ?>
 
 <nav class="navbar navbar-expand-lg" style="background-color: #e8e8e8; height: 70px; color: black;">
@@ -33,7 +39,7 @@ $userRole = $_SESSION['user_role'] ?? null;
 
 <script>
     function fetchNotifications() {
-        fetch('/controllers/notification_ctrl.php?action=fetch_unread')
+        fetch('/public/api.php?endpoint=notifications&action=fetch_unread')
             .then(response => response.json())
             .then(data => {
                 const unreadCount = document.getElementById('unreadCount');
