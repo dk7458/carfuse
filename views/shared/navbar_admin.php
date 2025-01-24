@@ -33,7 +33,7 @@ $userRole = $_SESSION['user_role'] ?? null;
 
 <script>
     function fetchNotifications() {
-        fetch(BASE_PATH . 'controllers/notification_ctrl.php?action=fetch_unread')
+        fetch('/home/u122931475/domains/carfuse.pl/public_html/controllers/notification_ctrl.php?action=fetch_unread')
             .then(response => response.json())
             .then(data => {
                 const unreadCount = document.getElementById('unreadCount');
