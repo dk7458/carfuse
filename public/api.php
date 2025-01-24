@@ -5,7 +5,7 @@
  */
 
 require_once BASE_PATH . 'config.php'; // Global configuration
-require_once BASE_PATH . 'includes/global.php'; // Global functions
+require_once BASE_PATH . 'functions/global.php'; // Global functions
 
 // Define endpoint categories
 $publicEndpoints = ['notifications', 'login', 'register']; // Publicly accessible endpoints
