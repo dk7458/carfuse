@@ -4,7 +4,7 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 require_once BASE_PATH . 'includes/session_middleware.php';
 require_once BASE_PATH . 'includes/db_connect.php';
 require_once BASE_PATH . 'includes/user_helpers.php';
-require_once BASE_PATH . 'functions/global.php'; // Include functions.php to use fetchUsers
+require_once BASE_PATH . 'functions/global.php'; 
 require_once BASE_PATH . 'functions/user.php';
 
 if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
@@ -37,7 +37,7 @@ $totalPages = ceil($totalUsers / $itemsPerPage);
     <meta charset="UTF-8">
     <title>Menadżer Użytkowników</title>
     <link rel="stylesheet" href="/assets/css/theme.css">
-    <link rel="stylesheet" href="/assets/css/user_manager.css">
+    <link rel="stylesheet" href="/home/u122931475/domains/carfuse.pl/public_html/assets/css/user_manager.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 </head>
 <body>
@@ -238,6 +238,6 @@ $totalPages = ceil($totalUsers / $itemsPerPage);
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/assets/js/user_manager.js"></script>
+    <script src="/home/u122931475/domains/carfuse.pl/public_html/assets/js/user_manager.js"></script>
 </body>
 </html>
