@@ -22,7 +22,7 @@ $action = $_GET['action'] ?? null;
 
 // Logging function
 function logApiRequest($endpoint, $action, $status, $message = '') {
-    $logFile = BASE_PATH . '/logs/api_requests.log';
+    $logFile = BASE_PATH . 'logs/api_requests.log';
     $logMessage = sprintf(
         "[%s] Endpoint: %s | Action: %s | Status: %s | Message: %s\n",
         date('Y-m-d H:i:s'),
@@ -36,7 +36,7 @@ function logApiRequest($endpoint, $action, $status, $message = '') {
 
 // Rate limiting function
 function enforceRateLimit($ip, $limit = 100, $timeWindow = 3600) {
-    $rateLimitFile = BASE_PATH . '/logs/rate_limit.json';
+    $rateLimitFile = BASE_PATH . 'logs/rate_limit.json';
 
     // Load or initialize rate limit data
     $rateLimits = file_exists($rateLimitFile) ? json_decode(file_get_contents($rateLimitFile), true) : [];
