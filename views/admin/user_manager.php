@@ -2,11 +2,10 @@
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 // File Path: /views/admin/user_manager.php
 require_once BASE_PATH . 'includes/session_middleware.php';
-
 require_once BASE_PATH . 'includes/db_connect.php';
-
 require_once BASE_PATH . 'includes/user_helpers.php';
-require_once BASE_PATH . 'includes/functions.php'; // Include functions.php to use fetchUsers
+require_once BASE_PATH . 'functions/global.php'; // Include functions.php to use fetchUsers
+require_once BASE_PATH . 'functions/user.php';
 
 if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
     redirect('/public/login.php');
@@ -90,7 +89,7 @@ $totalPages = ceil($totalUsers / $itemsPerPage);
 
         <!-- Add User Button -->
         <div class="mt-4">
-            <a href="user_add.php" class="btn btn-success">Dodaj Nowego Użytkownika</a>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">Dodaj Nowego Użytkownika</button>
             <a href="/controllers/export_users.php" class="btn btn-secondary">Eksportuj dane użytkowników</a>
         </div>
 
@@ -122,9 +121,10 @@ $totalPages = ceil($totalUsers / $itemsPerPage);
                                 </select>
                             </td>
                             <td>
-                                <button class="btn btn-sm toggle-status" data-id="<?= $user['id'] ?>" data-status="<?= $user['status'] ?>">
-                                    <?= $user['status'] ? 'Aktywny' : 'Nieaktywny' ?>
-                                </button>
+                                <select class="form-select toggle-status" data-id="<?= $user['id'] ?>">
+                                    <option value="Active" <?= $user['status'] === 'Active' ? 'selected' : '' ?>>Aktywny</option>
+                                    <option value="Inactive" <?= $user['status'] === 'Inactive' ? 'selected' : '' ?>>Nieaktywny</option>
+                                </select>
                             </td>
                             <td>
                                 <a href="user_edit.php?id=<?= $user['id'] ?>" class="btn btn-sm btn-warning">Edytuj</a>
@@ -158,6 +158,86 @@ $totalPages = ceil($totalUsers / $itemsPerPage);
         </nav>
     </div>
 
+    <!-- Add User Modal -->
+    <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addUserModalLabel">Dodaj Nowego Użytkownika</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addUserForm">
+                        <div class="mb-3">
+                            <label for="addUserName" class="form-label">Imię i Nazwisko</label>
+                            <input type="text" class="form-control" id="addUserName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="addUserEmail" class="form-label">E-mail</label>
+                            <input type="email" class="form-control" id="addUserEmail" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="addUserRole" class="form-label">Rola</label>
+                            <select class="form-select" id="addUserRole" required>
+                                <option value="user">Użytkownik</option>
+                                <option value="admin">Administrator</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="addUserStatus" class="form-label">Status</label>
+                            <select class="form-select" id="addUserStatus" required>
+                                <option value="Active">Aktywny</option>
+                                <option value="Inactive">Nieaktywny</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Dodaj Użytkownika</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editUserModalLabel">Edytuj Użytkownika</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editUserForm">
+                        <input type="hidden" id="editUserId">
+                        <div class="mb-3">
+                            <label for="editUserName" class="form-label">Imię i Nazwisko</label>
+                            <input type="text" class="form-control" id="editUserName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editUserEmail" class="form-label">E-mail</label>
+                            <input type="email" class="form-control" id="editUserEmail" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editUserRole" class="form-label">Rola</label>
+                            <select class="form-select" id="editUserRole" required>
+                                <option value="user">Użytkownik</option>
+                                <option value="admin">Administrator</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editUserStatus" class="form-label">Status</label>
+                            <select class="form-select" id="editUserStatus" required>
+                                <option value="Active">Aktywny</option>
+                                <option value="Inactive">Nieaktywny</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Zapisz zmiany</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/assets/js/user_manager.js"></script>
 </body>
 </html>

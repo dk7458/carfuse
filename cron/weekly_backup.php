@@ -26,10 +26,10 @@ try {
     // Command to dump the database
     $command = sprintf(
         'mysqldump --user=%s --password=%s --host=%s %s | gzip > %s',
-        escapeshellarg(DB_USER),
-        escapeshellarg(DB_PASSWORD),
-        escapeshellarg(DB_HOST),
-        escapeshellarg(DB_NAME),
+        escapeshellarg($username),
+        escapeshellarg($password),
+        escapeshellarg($host),
+        escapeshellarg($database),
         escapeshellarg($backupFile)
     );
 

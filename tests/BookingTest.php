@@ -4,7 +4,7 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 use PHPUnit\Framework\TestCase;
 
 require_once './includes/db_connect.php';
-require_once './includes/functions.php';
+require_once BASE_PATH . 'functions/global.php';
 
 class BookingTest extends TestCase
 {

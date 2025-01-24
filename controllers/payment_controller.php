@@ -4,7 +4,7 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 require_once BASE_PATH . 'includes/db_connect.php';
 
-require_once BASE_PATH . 'includes/functions.php';
+require_once BASE_PATH . 'functions/global.php';
 
 require_once BASE_PATH . 'includes/session_middleware.php';
 
@@ -72,7 +72,7 @@ try {
                     $stmt->execute();
 
                     // Log payment action
-                    logAction($conn, $userId, 'process_payment', "Booking ID: $bookingId, Payment: $totalPrice PLN");
+                    logAction($_SESSION['user_id'], 'process_payment', "Booking ID: $bookingId, Payment: $totalPrice PLN");
 
                     echo json_encode(['success' => true, 'message' => "Payment processed successfully."]);
                 } else {
@@ -144,7 +144,7 @@ try {
                         $stmt->execute();
                     }
 
-                    logAction($conn, $_SESSION['user_id'], 'refund', "Booking ID: $bookingId, Refund: $refundAmount PLN");
+                    logAction($_SESSION['user_id'], 'refund', "Booking ID: $bookingId, Refund: $refundAmount PLN");
 
                     echo json_encode(['success' => true, 'message' => "Refund processed successfully."]);
                 } else {
@@ -163,3 +163,4 @@ try {
     http_response_code(400);
     echo json_encode(['error' => $e->getMessage()]);
 }
+?>

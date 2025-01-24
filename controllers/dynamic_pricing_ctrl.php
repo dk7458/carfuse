@@ -13,7 +13,7 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 
 require_once BASE_PATH . 'includes/db_connect.php';
 
-require_once BASE_PATH . 'includes/functions.php';
+require_once BASE_PATH . 'functions/global.php';
 
 
 header('Content-Type: application/json');

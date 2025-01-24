@@ -1,10 +1,11 @@
 <?php
+require_once BASE_PATH . '/functions/email.php';?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/db_connect.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
-require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/functions.php';
+require_once BASE_PATH . 'functions/global.php';
 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

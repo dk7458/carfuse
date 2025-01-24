@@ -2,7 +2,7 @@
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 // File Path: /public/logout.php
 require_once BASE_PATH . 'includes/session_middleware.php';
-require_once BASE_PATH . 'includes/functions.php'; // Include functions.php to use logAction
+require_once BASE_PATH . 'functions/global.php'; // Include functions.php to use logAction
 
 // Destroy session and log out user
 if (isset($_SESSION['user_id'])) {

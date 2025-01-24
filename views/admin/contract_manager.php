@@ -2,7 +2,7 @@
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 // File Path: /views/admin/contract_manager.php
 require_once BASE_PATH . 'includes/session_middleware.php';
-
+require_once BASE_PATH . 'functions/email.php';
 require_once BASE_PATH . 'controllers/contract_ctrl.php';
 
 enforceRole(['admin', 'super_admin']); // Allow only admins and super admins

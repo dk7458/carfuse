@@ -1,13 +1,10 @@
 <?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 // File Path: /views/user/profile.php
-
 require_once BASE_PATH . 'includes/session_middleware.php';
-
 require_once BASE_PATH . 'includes/db_connect.php';
-
-require_once BASE_PATH . 'includes/functions.php';
-
+require_once BASE_PATH . 'functions/global.php';
+require_once BASE_PATH . 'functions/user.php';
 
 if (!isset($_SESSION['user_id'])) {
     redirect('/public/login.php');

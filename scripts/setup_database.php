@@ -54,6 +54,15 @@ function insertDefaultRecord($conn, $tableName, $conditions, $insertQuery, $para
     }
 }
 
+function addStatusColumnToUsers($conn) {
+    $query = "ALTER TABLE users ADD COLUMN status ENUM('Active', 'Inactive') DEFAULT 'Active'";
+    if ($conn->query($query)) {
+        echo "Column 'status' added to table 'users'.<br>";
+    } else {
+        echo "Error adding column 'status' to table 'users': " . $conn->error . "<br>";
+    }
+}
+
 // Table Schemas
 $schemas = [
     'notifications' => [
@@ -200,6 +209,8 @@ try {
             }
         }
     }
+
+    addStatusColumnToUsers($conn);
 
     $conn->commit();
     echo "Database setup completed successfully.<br>";

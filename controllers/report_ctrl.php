@@ -11,9 +11,10 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
  */
 
 require_once BASE_PATH . 'includes/db_connect.php';
-require_once BASE_PATH . 'includes/functions.php';
+require_once BASE_PATH . 'functions/global.php';
 require_once BASE_PATH . 'includes/pdf_generator.php';
 require_once BASE_PATH . 'includes/export_helpers.php';
+require_once BASE_PATH . 'functions/report.php';
 
 // Enforce admin or super admin access
 enforceRole(['admin', 'super_admin'], '/public/login.php');

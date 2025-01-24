@@ -1,5 +1,5 @@
 <?php
-require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
+require_once BASE_PATH . '/functions/email.php';require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 /**
  * File Path: /cron/daily_reports.php
  * Description: Generates and sends daily reports (e.g., booking stats, revenue) to admins.
@@ -9,9 +9,8 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
  */
 
 require_once BASE_PATH . 'includes/db_connect.php';
-
-require_once BASE_PATH . 'includes/functions.php';
-
+require_once BASE_PATH . 'functions/global.php';
+require_once BASE_PATH . 'includes/email.php'; // Include email functions
 
 header('Content-Type: text/plain; charset=UTF-8');
 
@@ -35,8 +34,7 @@ try {
     }
 
     $totalBookings = $bookingStats['total_bookings'] ?? 0;
-    $totalRevenue = pa
-    $bookingStats['total_revenue'] ?? 0;
+    $totalRevenue = $bookingStats['total_revenue'] ?? 0;
 
     // Construct the report
     $report = "Daily Report - " . date('Y-m-d') . ":\n";
@@ -45,7 +43,7 @@ try {
 
     // Send report to admins
     foreach (fetchAdminEmails($conn) as $email) {
-        if (sendNotification('email', $email, 'Daily Report', $report)) {
+        if (sendEmail($email, 'Daily Report', $report)) {
             logDailyReportAction("Report sent to $email.");
         } else {
             logDailyReportAction("Failed to send report to $email.");
@@ -57,3 +55,4 @@ try {
     logError("Daily Report Cron Error: " . $e->getMessage());
     logDailyReportAction("Error: " . $e->getMessage());
 }
+?>

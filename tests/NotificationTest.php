@@ -1,9 +1,10 @@
 <?php
+require_once BASE_PATH . '/functions/email.php';?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 
 use PHPUnit\Framework\TestCase;
 
-require_once './includes/functions.php';
+require_once BASE_PATH . 'functions/global.php';
 
 class NotificationTest extends TestCase
 {

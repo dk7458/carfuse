@@ -10,7 +10,6 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 
 require_once BASE_PATH . 'includes/db_connect.php';
 
-
 header('Content-Type: text/plain; charset=UTF-8');
 
 // Directory for storing backups
@@ -26,10 +25,10 @@ try {
     // Command to dump the database
     $command = sprintf(
         'mysqldump --user=%s --password=%s --host=%s %s | gzip > %s',
-        escapeshellarg(DB_USER),
-        escapeshellarg(DB_PASSWORD),
-        escapeshellarg(DB_HOST),
-        escapeshellarg(DB_NAME),
+        escapeshellarg($username),
+        escapeshellarg($password),
+        escapeshellarg($host),
+        escapeshellarg($database),
         escapeshellarg($backupFile)
     );
 
@@ -44,3 +43,4 @@ try {
 } catch (Exception $e) {
     echo date('[Y-m-d H:i:s] ') . "Error: " . $e->getMessage() . "\n";
 }
+?>

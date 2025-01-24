@@ -1,5 +1,5 @@
 <?php
-require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
+require_once BASE_PATH . '/functions/email.php';require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 
 /**
  * File Path: /controllers/maintenance_ctrl.php
@@ -11,9 +11,8 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
  */
 
 require_once BASE_PATH . 'includes/db_connect.php';
-
-require_once BASE_PATH . 'includes/functions.php';
-
+require_once BASE_PATH . 'functions/global.php';
+require_once BASE_PATH . 'includes/email.php'; // Include email functions
 
 enforceRole(['admin', 'super_admin'], '/public/login.php'); 
 
@@ -108,7 +107,7 @@ try {
 
             // Send notification to admin
             foreach (fetchAdminEmails($conn) as $email) {
-                sendNotification('email', $email, 'Upcoming Vehicle Maintenance', $message);
+                sendEmail($email, 'Upcoming Vehicle Maintenance', $message);
             }
         }
 
@@ -121,6 +120,28 @@ try {
     http_response_code(400);
     echo json_encode(['error' => $e->getMessage()]);
     exit;
+}
+
+/**
+ * Fetches email addresses of all admin users.
+ *
+ * @param mysqli $conn Database connection.
+ * @return array Array of admin email addresses.
+ */
+function fetchAdminEmails($conn) {
+    $query = "SELECT email FROM users WHERE role IN ('admin', 'super_admin')";
+    $result = $conn->query($query);
+
+    if (!$result) {
+        throw new Exception("Database error: " . $conn->error);
+    }
+
+    $emails = [];
+    while ($row = $result->fetch_assoc()) {
+        $emails[] = $row['email'];
+    }
+
+    return $emails;
 }
 
 /**

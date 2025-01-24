@@ -12,7 +12,7 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 
 require_once BASE_PATH . 'includes/db_connect.php';
 
-require_once BASE_PATH . 'includes/functions.php';
+require_once BASE_PATH . 'functions/global.php';
 
 require_once BASE_PATH . 'includes/pdf_generator.php';
 
@@ -21,6 +21,9 @@ require_once BASE_PATH . 'includes/user_queries.php';
 require_once BASE_PATH . 'includes/session_middleware.php';
 
 require_once BASE_PATH . 'includes/contract_generator.php'; // Include the contract generator
+
+require_once BASE_PATH . 'functions/vehicle.php';
+
 
 header('Content-Type: application/json');
 
@@ -112,7 +115,7 @@ try {
                 // Generate contract and send email
                 generateAndSendContract($conn, $userId, $vehicleId, $bookingId, $pickupDate, $dropoffDate, $totalPrice);
 
-                logAction($conn, $userId, 'create_booking', "Booking ID: $bookingId");
+                logAction($userId, 'create_booking', "Booking ID: $bookingId");
                 echo json_encode(['success' => true, 'message' => "Booking created successfully."]);
                 break;
 
@@ -126,7 +129,7 @@ try {
                 $stmt->bind_param("ii", $bookingId, $userId);
 
                 if ($stmt->execute()) {
-                    logAction($conn, $userId, 'cancel_booking', "Booking ID: $bookingId");
+                    logAction($userId, 'cancel_booking', "Booking ID: $bookingId");
                     echo json_encode(['success' => true, 'message' => "Booking cancelled successfully."]);
                 } else {
                     throw new Exception("Failed to cancel booking.");
