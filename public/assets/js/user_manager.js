@@ -16,14 +16,12 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        fetch("/controllers/user_ctrl.php", {
+        fetch(`/public/api.php?endpoint=user&action=bulk_${action}`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                action: "bulk_action",
-                bulk_action: action,
                 user_ids: selectedUsers,
             }),
         })
@@ -86,13 +84,12 @@ document.addEventListener("DOMContentLoaded", () => {
             if (confirm("Czy na pewno chcesz usunąć tego użytkownika?")) {
                 const userId = button.dataset.id;
 
-                fetch("/controllers/user_ctrl.php", {
+                fetch(`/public/api.php?endpoint=user&action=delete`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        action: "delete_user",
                         user_id: userId,
                     }),
                 })

@@ -9,7 +9,7 @@ document.getElementById("sendNotification").addEventListener("click", function (
         return;
     }
 
-    fetch("/controllers/notification_ctrl.php", {
+    fetch("/public/api.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -30,4 +30,31 @@ document.getElementById("sendNotification").addEventListener("click", function (
             }
         })
         .catch((error) => console.error("Błąd:", error));
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    // Fetch unread notifications
+    function fetchUnreadNotifications() {
+        fetch('/public/api.php?endpoint=notifications&action=fetch_unread')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch unread notifications');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Update the UI with unread notifications
+                    console.log('Unread Notifications:', data.notifications);
+                } else {
+                    console.error('Error:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Unexpected error:', error);
+            });
+    }
+
+    // Example usage
+    fetchUnreadNotifications();
 });

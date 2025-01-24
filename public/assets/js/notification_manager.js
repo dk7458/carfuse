@@ -23,7 +23,7 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        fetch("/controllers/notification_ctrl.php", {
+        fetch("/public/api.php", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -62,7 +62,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            fetch("/controllers/notification_ctrl.php", {
+            fetch("/public/api.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -97,7 +97,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            fetch("/controllers/notification_ctrl.php", {
+            fetch("/public/api.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -132,7 +132,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const formData = new FormData(reportForm);
             const data = Object.fromEntries(formData.entries());
 
-            fetch("/controllers/notification_ctrl.php", {
+            fetch("/public/api.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -168,7 +168,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const formData = new FormData(reminderTemplateForm);
             const data = Object.fromEntries(formData.entries());
 
-            fetch("/controllers/notification_ctrl.php", {
+            fetch("/public/api.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -218,7 +218,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            fetch("/controllers/notification_ctrl.php", {
+            fetch("/public/api.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -241,4 +241,29 @@ document.addEventListener("DOMContentLoaded", function () {
                 });
         });
     });
+
+    // Fetch notifications
+    function fetchNotifications() {
+        fetch('/public/api.php?endpoint=notifications&action=fetch_all')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch notifications');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Update the UI with notifications
+                    console.log('Notifications:', data.notifications);
+                } else {
+                    console.error('Error:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Unexpected error:', error);
+            });
+    }
+
+    // Example usage
+    fetchNotifications();
 });

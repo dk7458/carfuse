@@ -17,10 +17,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const action = data.rule_id ? "edit_rule" : "create_rule";
 
-        fetch("/controllers/dynamic_pricing_ctrl.php", {
+        fetch("/public/api.php", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+                endpoint: "dynamic_pricing",
                 action: action,
                 ...data,
             }),
@@ -68,10 +69,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            fetch("/controllers/dynamic_pricing_ctrl.php", {
+            fetch("/public/api.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    endpoint: "dynamic_pricing",
                     action: "delete_rule",
                     rule_id: ruleId,
                 }),
@@ -91,4 +93,29 @@ document.addEventListener("DOMContentLoaded", function () {
                 });
         });
     });
+
+    // Fetch dynamic pricing data
+    function fetchDynamicPricing() {
+        fetch('/public/api.php?endpoint=dynamic_pricing&action=fetch')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch dynamic pricing data');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Update the UI with dynamic pricing data
+                    console.log('Dynamic Pricing Data:', data.pricing);
+                } else {
+                    console.error('Error:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Unexpected error:', error);
+            });
+    }
+
+    // Example usage
+    fetchDynamicPricing();
 });

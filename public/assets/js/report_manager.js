@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateTo = dateToInput.value;
 
         try {
-            const response = await fetch(`/controllers/report_ctrl.php?action=fetch&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`);
+            const response = await fetch(`/public/api.php?endpoint=report&action=fetch&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`);
             const data = await response.json();
 
             if (data.success) {
@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateFrom = dateFromInput.value;
         const dateTo = dateToInput.value;
 
-        window.location.href = `/controllers/report_ctrl.php?action=export_csv&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
+        window.location.href = `/public/api.php?endpoint=report&action=export_csv&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
     });
 
     // Export PDF
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateFrom = dateFromInput.value;
         const dateTo = dateToInput.value;
 
-        window.location.href = `/controllers/report_ctrl.php?action=export_pdf&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
+        window.location.href = `/public/api.php?endpoint=report&action=export_pdf&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
     });
 
     // Fetch initial data

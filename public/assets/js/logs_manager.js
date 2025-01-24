@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fetch logs
     function fetchLogs() {
         const params = new URLSearchParams(new FormData(document.querySelector('form')));
-        fetch(`/controllers/logs_ctrl.php?action=fetch&${params.toString()}`)
+        fetch(`/public/api.php?endpoint=logs&action=fetch&${params.toString()}`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fetch chart data
     function fetchChartData() {
-        fetch('/controllers/logs_ctrl.php?action=chart_data')
+        fetch('/public/api.php?endpoint=logs&action=chart_data')
             .then(response => response.json())
             .then(data => {
                 const ctx = document.getElementById('logsChart').getContext('2d');
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.view-details').forEach(button => {
             button.addEventListener('click', () => {
                 const logId = button.dataset.id;
-                fetch(`/controllers/logs_ctrl.php?action=view&id=${logId}`)
+                fetch(`/public/api.php?endpoint=logs&action=view&id=${logId}`)
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Clear logs
     document.getElementById('clearLogs').addEventListener('click', () => {
         if (confirm('Czy na pewno chcesz usunąć logi starsze niż 30 dni?')) {
-            fetch('/controllers/logs_ctrl.php?action=clear_logs', { method: 'POST' })
+            fetch('/public/api.php?endpoint=logs&action=clear_logs', { method: 'POST' })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams(new FormData(document.querySelector('form')));
         params.append('action', 'export_csv');
 
-        fetch(`/controllers/logs_ctrl.php?${params.toString()}`)
+        fetch(`/public/api.php?endpoint=logs&${params.toString()}`)
             .then(response => response.blob())
             .then(blob => {
                 const url = window.URL.createObjectURL(blob);

@@ -12,13 +12,14 @@ document.getElementById('checkAvailability').addEventListener('click', (e) => {
         return;
     }
 
-    fetch('/controllers/booking_controller.php', {
+    fetch('/public/api.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRF-Token': csrfToken,
         },
         body: JSON.stringify({
+            endpoint: 'booking',
             action: 'check_availability',
             pickup_date: pickupDate,
             dropoff_date: dropoffDate,
@@ -46,4 +47,32 @@ document.getElementById('checkAvailability').addEventListener('click', (e) => {
             }
         })
         .catch((error) => console.error('Error fetching cars:', error));
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    // Fetch booking details
+    function fetchBookingDetails(bookingId) {
+        fetch(`/public/api.php?endpoint=booking&action=fetch_details&booking_id=${bookingId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch booking details');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Update the UI with booking details
+                    console.log('Booking Details:', data.booking);
+                } else {
+                    console.error('Error:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Unexpected error:', error);
+            });
+    }
+
+    // Example usage
+    const bookingId = 1; // Replace with actual booking ID
+    fetchBookingDetails(bookingId);
 });

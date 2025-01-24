@@ -6,7 +6,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Fetch and render chart data
     function fetchChartData(type = 'bookings') {
-        fetch(`/controllers/dashboard_ctrl.php?action=get_chart_data&type=${type}`, {
+        fetch(`/public/api.php?endpoint=dashboard&action=fetch_${type}`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',

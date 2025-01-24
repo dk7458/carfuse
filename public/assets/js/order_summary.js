@@ -1,5 +1,33 @@
 // File Path: /assets/js/order_summary.js
 
+document.addEventListener('DOMContentLoaded', function () {
+    // Fetch order summary
+    function fetchOrderSummary(orderId) {
+        fetch(`/public/api.php?endpoint=order&action=fetch_summary&order_id=${orderId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch order summary');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Update the UI with order summary
+                    console.log('Order Summary:', data.summary);
+                } else {
+                    console.error('Error:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Unexpected error:', error);
+            });
+    }
+
+    // Example usage
+    const orderId = 1; // Replace with actual order ID
+    fetchOrderSummary(orderId);
+});
+
 document.getElementById('confirmBooking').addEventListener('click', (e) => {
     e.preventDefault();
 
@@ -9,7 +37,7 @@ document.getElementById('confirmBooking').addEventListener('click', (e) => {
     const dropoffDate = document.getElementById('dropoffDate').value;
     const totalPrice = document.getElementById('totalPrice').textContent;
 
-    fetch('/controllers/booking_controller.php', {
+    fetch('/public/api.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

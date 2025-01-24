@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function () {
     // Fetch data for visualization
-    fetch('/controllers/fleet_ctrl.php?action=visualization_data')
+    fetch('/public/api.php?endpoint=fleet&action=visualization_data')
         .then(response => response.json())
         .then(data => {
             drawChart('availabilityChart', 'Dostępność Pojazdów', data.availability);

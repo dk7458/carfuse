@@ -56,33 +56,35 @@ document.addEventListener("DOMContentLoaded", function () {
     // Handle contract deletion
     document.querySelectorAll(".delete-contract").forEach((button) => {
         button.addEventListener("click", function () {
-            if (!confirm("Czy na pewno chcesz usunąć tę umowę?")) return;
-
             const contractId = this.dataset.id;
 
-            fetch("/controllers/contract_ctrl.php", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    action: "delete_contract",
-                    contract_id: contractId,
-                }),
-            })
-                .then((response) => response.json())
-                .then((data) => {
-                    if (data.success) {
-                        alert("Umowa została pomyślnie usunięta.");
-                        location.reload();
-                    } else {
-                        alert(`Błąd: ${data.error}`);
-                    }
+            if (confirm("Czy na pewno chcesz usunąć tę umowę?")) {
+                fetch("/public/api.php?endpoint=contract&action=delete", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        contract_id: contractId,
+                    }),
                 })
-                .catch((error) => {
-                    console.error("Error deleting contract:", error);
-                    alert("Wystąpił błąd podczas usuwania umowy.");
-                });
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error("Failed to delete contract");
+                        }
+                        return response.json();
+                    })
+                    .then((data) => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert("Error: " + data.error);
+                        }
+                    })
+                    .catch((error) => {
+                        console.error("Unexpected error:", error);
+                    });
+            }
         });
     });
 });

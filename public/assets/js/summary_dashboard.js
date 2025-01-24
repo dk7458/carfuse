@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const fetchSummaryData = async () => {
         try {
-            const response = await fetch('/controllers/dashboard_summary_ctrl.php');
+            const response = await fetch('/public/api.php?endpoint=summary&action=fetch_dashboard');
             const data = await response.json();
 
             if (data.success) {

@@ -22,12 +22,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Fetch report data
     function fetchReportData(reportType, startDate, endDate) {
-        fetch('/controllers/report_ctrl.php', {
+        fetch('/public/api.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+                endpoint: 'report',
                 action: 'fetch',
                 category: reportType,
                 date_from: startDate,
@@ -134,7 +135,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
 
-        window.location.href = `/controllers/report_ctrl.php?action=export_csv&category=${reportType}&date_from=${startDate}&date_to=${endDate}`;
+        window.location.href = `/public/api.php?endpoint=report&action=export_csv&category=${reportType}&date_from=${startDate}&date_to=${endDate}`;
     });
 
     exportPdfButton.addEventListener('click', function () {
@@ -142,7 +143,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
 
-        window.location.href = `/controllers/report_ctrl.php?action=export_pdf&category=${reportType}&date_from=${startDate}&date_to=${endDate}`;
+        window.location.href = `/public/api.php?endpoint=report&action=export_pdf&category=${reportType}&date_from=${startDate}&date_to=${endDate}`;
     });
 
     // Show alert
@@ -156,4 +157,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Initial fetch
     fetchReportData(reportTypeSelect.value, startDateInput.value, endDateInput.value);
+
+    // Fetch report details
+    function fetchReportDetails(reportId) {
+        fetch(`/public/api.php?endpoint=report&action=fetch_details&report_id=${reportId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch report details');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Update the UI with report details
+                    console.log('Report Details:', data.report);
+                } else {
+                    console.error('Error:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Unexpected error:', error);
+            });
+    }
+
+    // Example usage
+    const reportId = 1; // Replace with actual report ID
+    fetchReportDetails(reportId);
 });

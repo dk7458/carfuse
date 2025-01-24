@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         editable: true, // Enable drag-and-drop
-        events: '/controllers/calendar_ctrl.php?action=fetch_calendar_data',
+        events: '/public/api.php?endpoint=calendar&action=fetch_calendar_data',
         eventDidMount: function (info) {
             // Add tooltips with event details
             const tooltipContent = `
@@ -21,11 +21,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 : newStart;
 
             // Send reschedule request
-            fetch('/controllers/calendar_ctrl.php', {
+            fetch('/public/api.php?endpoint=calendar&action=reschedule_booking', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    action: 'reschedule_booking',
                     booking_id: eventId,
                     new_start: newStart,
                     new_end: newEnd,

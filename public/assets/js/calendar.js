@@ -3,10 +3,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const calendarEl = document.getElementById('calendar');
     const userRole = document.getElementById('calendar').dataset.role; // "user" or "admin"
     const fetchEventsUrl = userRole === 'admin' 
-        ? '/controllers/calendar_ctrl.php?action=fetch_all_events' 
-        : '/controllers/calendar_ctrl.php?action=fetch_user_events';
-    const saveEventUrl = '/controllers/calendar_ctrl.php?action=save_event';
-    const deleteEventUrl = '/controllers/calendar_ctrl.php?action=delete_event';
+        ? '/public/api.php?endpoint=calendar&action=fetch_all_events' 
+        : '/public/api.php?endpoint=calendar&action=fetch_user_events';
+    const saveEventUrl = '/public/api.php?endpoint=calendar&action=save_event';
+    const deleteEventUrl = '/public/api.php?endpoint=calendar&action=delete_event';
 
     // Initialize the FullCalendar instance
     const calendar = new FullCalendar.Calendar(calendarEl, {
