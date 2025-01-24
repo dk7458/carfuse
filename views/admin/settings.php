@@ -10,15 +10,19 @@ require_once BASE_PATH . 'functions/global.php';
 
 enforceRole(['admin', 'super_admin']); 
 
-// Fetch current settings
-$stmt = $conn->prepare("SELECT setting_key, setting_value FROM system_settings");
-$stmt->execute();
-$result = $stmt->get_result();
-$settings = [];
-while ($row = $result->fetch_assoc()) {
-    $settings[$row['setting_key']] = $row['setting_value'];
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=settings&action=fetch_settings&" . $queryString);
+$data = json_decode($response, true);
+
+if ($data['success']) {
+    $settings = $data['settings'];
 }
-$stmt->close();
 ?>
 
 <!DOCTYPE html>
@@ -49,7 +53,7 @@ $stmt->close();
             </div>
         <?php endif; ?>
 
-        <form method="POST" action="/controllers/settings_ctrl.php">
+        <form method="POST" action="/public/api.php?endpoint=settings&action=update_settings">
             <div class="mb-3">
                 <label for="tax_rate" class="form-label">Stawka Podatku VAT (%)</label>
                 <input 

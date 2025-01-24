@@ -19,15 +19,28 @@ $page = max(1, intval($_GET['page'] ?? 1));
 $itemsPerPage = 10;
 $offset = ($page - 1) * $itemsPerPage;
 
-// Fetch users with filters
+// Fetch data using the centralized proxy
 $filters = [
-    'search' => $search,
-    'role' => $role,
-    'status' => $status,
-    'offset' => $offset,
-    'itemsPerPage' => $itemsPerPage
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
 ];
-$users = fetchUsers($conn, $filters);
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=user&action=fetch_users&" . $queryString);
+$data = json_decode($response, true);
+
+if ($data['success']) {
+    $users = $data['users'];
+    foreach ($users as $user) {
+        echo "<tr>
+            <td>{$user['name']}</td>
+            <td>{$user['email']}</td>
+            <td>{$user['role']}</td>
+            <td>{$user['created_at']}</td>
+        </tr>";
+    }
+}
+
 $totalUsers = countUsers($conn, $search, $role, $status);
 $totalPages = ceil($totalUsers / $itemsPerPage);
 ?>
@@ -167,7 +180,7 @@ $totalPages = ceil($totalUsers / $itemsPerPage);
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="addUserForm">
+                    <form id="addUserForm" method="POST" action="/public/api.php?endpoint=users&action=add_user">
                         <div class="mb-3">
                             <label for="addUserName" class="form-label">Imię i Nazwisko</label>
                             <input type="text" class="form-control" id="addUserName" required>

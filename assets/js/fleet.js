@@ -1,12 +1,23 @@
 document.addEventListener('DOMContentLoaded', function () {
     // Fetch data for visualization
-    fetch('/controllers/fleet_ctrl.php?action=visualization_data')
-        .then(response => response.json())
-        .then(data => {
-            drawChart('availabilityChart', 'Dostępność Pojazdów', data.availability);
-            drawChart('maintenanceChart', 'Status Przeglądów', data.maintenance);
+    fetch('/public/api.php?endpoint=fleet&action=visualization_data')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch visualization data');
+            }
+            return response.json();
         })
-        .catch(error => console.error('Error fetching visualization data:', error));
+        .then(data => {
+            if (data.success) {
+                drawChart('availabilityChart', 'Dostępność Pojazdów', data.availability);
+                drawChart('maintenanceChart', 'Status Przeglądów', data.maintenance);
+            } else {
+                console.error('Error:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Unexpected error:', error);
+        });
 
     // Draw chart function
     function drawChart(canvasId, title, chartData) {
@@ -30,5 +41,29 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         });
+    }
+
+    function fetchFilteredData() {
+        const search = document.getElementById('searchInput').value;
+        const startDate = document.getElementById('startDateInput').value;
+        const endDate = document.getElementById('endDateInput').value;
+
+        fetch(`/public/api.php?endpoint=fleet&action=fetch_vehicles&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const fleetTableBody = document.getElementById('fleetTableBody');
+                    fleetTableBody.innerHTML = '';
+                    data.vehicles.forEach(vehicle => {
+                        const row = `<tr>
+                            <td>${vehicle.make}</td>
+                            <td>${vehicle.model}</td>
+                            <td>${vehicle.year}</td>
+                        </tr>`;
+                        fleetTableBody.innerHTML += row;
+                    });
+                }
+            })
+            .catch(error => console.error('Error:', error));
     }
 });

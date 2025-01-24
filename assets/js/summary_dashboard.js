@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const fetchSummaryData = async () => {
         try {
-            const response = await fetch('/controllers/dashboard_summary_ctrl.php');
+            const response = await fetch('/public/api.php?endpoint=summary_dashboard&action=get_summary');
             const data = await response.json();
 
             if (data.success) {
@@ -65,4 +65,27 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     fetchSummaryData();
+
+    function fetchFilteredData() {
+        const search = document.getElementById('searchInput').value;
+        const startDate = document.getElementById('startDateInput').value;
+        const endDate = document.getElementById('endDateInput').value;
+
+        fetch(`/public/api.php?endpoint=summary_dashboard&action=fetch_summary&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const summaryTableBody = document.getElementById('summaryTableBody');
+                    summaryTableBody.innerHTML = '';
+                    data.summary.forEach(item => {
+                        const row = `<tr>
+                            <td>${item.metric}</td>
+                            <td>${item.value}</td>
+                        </tr>`;
+                        summaryTableBody.innerHTML += row;
+                    });
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
 });

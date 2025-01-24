@@ -20,31 +20,27 @@ $page = max(1, intval($_GET['page'] ?? 1));
 $itemsPerPage = 20;
 $offset = ($page - 1) * $itemsPerPage;
 
-// Fetch logs with optional search and pagination
-$query = "SELECT id, timestamp, user_id, action, details FROM logs WHERE 1";
-$params = [];
-$types = "";
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=logs&action=fetch_errors&" . $queryString);
+$data = json_decode($response, true);
 
-// Add search filter
-if (!empty($search)) {
-    $query .= " AND (action LIKE ? OR details LIKE ?)";
-    $searchParam = '%' . $search . '%';
-    $params[] = $searchParam;
-    $params[] = $searchParam;
-    $types .= 'ss';
+if ($data['success']) {
+    $logs = $data['logs'];
+    foreach ($logs as $log) {
+        echo "<tr>
+            <td>{$log['timestamp']}</td>
+            <td>{$log['message']}</td>
+            <td>{$log['file']}</td>
+            <td>{$log['line']}</td>
+        </tr>";
+    }
 }
-
-// Add pagination
-$query .= " ORDER BY timestamp DESC LIMIT ?, ?";
-$params[] = $offset;
-$params[] = $itemsPerPage;
-$types .= 'ii';
-
-$stmt = $conn->prepare($query);
-$stmt->bind_param($types, ...$params);
-$stmt->execute();
-$logs = $stmt->get_result();
-$stmt->close();
 
 // Count total logs for pagination
 $countQuery = "SELECT COUNT(*) FROM logs";
@@ -91,8 +87,8 @@ $totalPages = ceil($totalLogs / $itemsPerPage);
                 </tr>
             </thead>
             <tbody>
-                <?php if ($logs->num_rows > 0): ?>
-                    <?php while ($log = $logs->fetch_assoc()): ?>
+                <?php if ($data['success'] && count($logs) > 0): ?>
+                    <?php foreach ($logs as $log): ?>
                         <tr>
                             <td><?= $log['id'] ?></td>
                             <td><?= htmlspecialchars($log['timestamp']) ?></td>
@@ -100,7 +96,7 @@ $totalPages = ceil($totalLogs / $itemsPerPage);
                             <td><?= htmlspecialchars($log['action']) ?></td>
                             <td><?= htmlspecialchars($log['details']) ?></td>
                         </tr>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
                         <td colspan="5" class="text-center">Brak logów w systemie.</td>

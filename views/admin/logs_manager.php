@@ -19,7 +19,7 @@
         <h1>Logi Systemowe</h1>
 
         <!-- Filters -->
-        <form class="row g-3 my-3">
+        <form class="row g-3 my-3" method="POST" action="/public/api.php?endpoint=logs&action=add_log">
             <div class="col-md-3">
                 <select name="log_type" class="form-select">
                     <option value="">Wszystkie typy</option>
@@ -57,7 +57,31 @@
                         <th>Data</th>
                     </tr>
                 </thead>
-                <tbody></tbody>
+                <tbody>
+                    <?php
+                    // Fetch data using the centralized proxy
+                    $filters = [
+                        'search' => $_GET['search'] ?? '',
+                        'startDate' => $_GET['start_date'] ?? '',
+                        'endDate' => $_GET['end_date'] ?? ''
+                    ];
+                    $queryString = http_build_query($filters);
+                    $response = file_get_contents(BASE_URL . "/public/api.php?endpoint=logs&action=fetch_logs&" . $queryString);
+                    $data = json_decode($response, true);
+
+                    if ($data['success']) {
+                        $logs = $data['logs'];
+                        foreach ($logs as $log) {
+                            echo "<tr>
+                                <td>{$log['timestamp']}</td>
+                                <td>{$log['message']}</td>
+                                <td>{$log['file']}</td>
+                                <td>{$log['line']}</td>
+                            </tr>";
+                        }
+                    }
+                    ?>
+                </tbody>
             </table>
         </div>
 

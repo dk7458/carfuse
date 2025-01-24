@@ -9,6 +9,28 @@ require_once BASE_PATH . 'functions/global.php';
 
 
 enforceRole(['admin', 'super_admin']); 
+
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=maintenance&action=fetch_maintenance&" . $queryString);
+$data = json_decode($response, true);
+
+if ($data['success']) {
+    $maintenance = $data['maintenance'];
+    foreach ($maintenance as $item) {
+        echo "<tr>
+            <td>{$item['make']}</td>
+            <td>{$item['model']}</td>
+            <td>{$item['description']}</td>
+            <td>{$item['maintenance_date']}</td>
+        </tr>";
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="pl">
@@ -23,7 +45,7 @@ enforceRole(['admin', 'super_admin']);
 
     <div class="container">
         <h1 class="mt-5">Dodaj Przegląd</h1>
-        <form method="POST" action="/controllers/maintenance_ctrl.php">
+        <form method="POST" action="/public/api.php?endpoint=maintenance&action=add_maintenance">
             <input type="hidden" name="action" value="add_maintenance">
             <div class="mb-3">
                 <label for="vehicle_id" class="form-label">Pojazd</label>

@@ -17,11 +17,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const action = data.rule_id ? "edit_rule" : "create_rule";
 
-        fetch("/controllers/dynamic_pricing_ctrl.php", {
+        fetch("/public/api.php?endpoint=pricing&action=" + action, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                action: action,
                 ...data,
             }),
         })
@@ -68,11 +67,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            fetch("/controllers/dynamic_pricing_ctrl.php", {
+            fetch("/public/api.php?endpoint=pricing&action=delete_rule", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    action: "delete_rule",
                     rule_id: ruleId,
                 }),
             })
@@ -90,5 +88,48 @@ document.addEventListener("DOMContentLoaded", function () {
                     alert("Błąd sieci. Spróbuj ponownie później.");
                 });
         });
+    });
+
+    fetch('/public/api.php?endpoint=pricing&action=fetch_dynamic')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch dynamic pricing');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                console.log('Dynamic Pricing:', data.pricing);
+            } else {
+                console.error('Error:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Unexpected error:', error);
+        });
+
+    document.getElementById('filterButton').addEventListener('click', () => {
+        const search = document.getElementById('searchInput').value;
+        const startDate = document.getElementById('startDateInput').value;
+        const endDate = document.getElementById('endDateInput').value;
+
+        fetch(`/public/api.php?endpoint=dynamic_pricing&action=fetch_pricing&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const pricingTableBody = document.getElementById('pricingTableBody');
+                    pricingTableBody.innerHTML = '';
+                    data.pricing.forEach(price => {
+                        const row = `<tr>
+                            <td>${price.id}</td>
+                            <td>${price.name}</td>
+                            <td>${price.value}</td>
+                            <td>${price.date}</td>
+                        </tr>`;
+                        pricingTableBody.innerHTML += row;
+                    });
+                }
+            })
+            .catch(error => console.error('Error:', error));
     });
 });

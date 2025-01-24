@@ -13,17 +13,21 @@ if (!in_array($_SESSION['user_role'], ['admin', 'super_admin'])) {
     redirect('/public/login.php');
 }
 
-// Fetch bookings
-$bookings = $conn->query("
-    SELECT 
-        b.id, b.user_id, u.name AS user_name, u.email AS user_email, 
-        f.make AS vehicle_make, f.model AS vehicle_model, 
-        b.pickup_date, b.dropoff_date, b.total_price, b.status, b.refund_status 
-    FROM bookings b
-    JOIN users u ON b.user_id = u.id
-    JOIN fleet f ON b.vehicle_id = f.id
-    ORDER BY b.created_at DESC
-");
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=booking&action=fetch_bookings&" . $queryString);
+$data = json_decode($response, true);
+
+if ($data['success']) {
+    $bookings = $data['bookings'];
+} else {
+    $bookings = [];
+}
 
 ?>
 <!DOCTYPE html>
@@ -39,6 +43,10 @@ $bookings = $conn->query("
 
     <div class="container mt-5">
         <h1>Manager Rezerwacji</h1>
+        <form method="POST" action="/public/api.php?endpoint=bookings&action=add_booking">
+            <input type="text" name="customer_name" placeholder="Enter customer name">
+            <button type="submit">Add Booking</button>
+        </form>
         <div class="table-responsive">
             <table class="table table-bordered mt-4">
                 <thead>
@@ -55,7 +63,7 @@ $bookings = $conn->query("
                     </tr>
                 </thead>
                 <tbody>
-                    <?php while ($booking = $bookings->fetch_assoc()): ?>
+                    <?php foreach ($bookings as $booking): ?>
                         <tr>
                             <td><?= htmlspecialchars($booking['id']) ?></td>
                             <td><?= htmlspecialchars($booking['user_name']) ?> (<?= htmlspecialchars($booking['user_email']) ?>)</td>
@@ -87,7 +95,7 @@ $bookings = $conn->query("
                                    class="btn btn-primary btn-sm" target="_blank">Pobierz Umowę</a>
                             </td>
                         </tr>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                 </tbody>
             </table>
         </div>

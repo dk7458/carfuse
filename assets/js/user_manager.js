@@ -16,13 +16,12 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        fetch("/controllers/user_ctrl.php", {
+        fetch("/public/api.php?endpoint=users&action=bulk_action", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                action: "bulk_action",
                 bulk_action: action,
                 user_ids: selectedUsers,
             }),
@@ -54,13 +53,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const userId = select.dataset.id;
             const newRole = select.value;
 
-            fetch("/controllers/user_ctrl.php", {
+            fetch("/public/api.php?endpoint=users&action=change_role", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    action: "change_role",
                     user_id: userId,
                     role: newRole,
                 }),
@@ -86,13 +84,12 @@ document.addEventListener("DOMContentLoaded", () => {
             if (confirm("Czy na pewno chcesz usunąć tego użytkownika?")) {
                 const userId = button.dataset.id;
 
-                fetch("/controllers/user_ctrl.php", {
+                fetch("/public/api.php?endpoint=users&action=delete_user", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        action: "delete_user",
                         user_id: userId,
                     }),
                 })
@@ -120,13 +117,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const currentStatus = button.dataset.status;
             const newStatus = currentStatus === "1" ? "0" : "1";
 
-            fetch("/controllers/user_ctrl.php", {
+            fetch("/public/api.php?endpoint=users&action=update_status", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    action: "update_status",
                     user_id: userId,
                     status: newStatus,
                 }),
@@ -165,13 +161,12 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        fetch("/controllers/user_ctrl.php", {
+        fetch("/public/api.php?endpoint=users&action=edit_user", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                action: "edit_user",
                 user_id: userId,
                 name: userName,
                 email: userEmail,
@@ -200,7 +195,7 @@ document.addEventListener("DOMContentLoaded", () => {
         button.addEventListener("click", () => {
             const userId = button.dataset.id;
 
-            fetch(`/controllers/user_ctrl.php?action=fetch_user&id=${userId}`)
+            fetch(`/public/api.php?endpoint=users&action=fetch_user&id=${userId}`)
                 .then((response) => response.json())
                 .then((data) => {
                     if (data.success) {
@@ -236,13 +231,12 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        fetch("/controllers/user_ctrl.php", {
+        fetch("/public/api.php?endpoint=users&action=add_user", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                action: "add_user",
                 name: userName,
                 email: userEmail,
                 role: userRole,
@@ -268,5 +262,50 @@ document.addEventListener("DOMContentLoaded", () => {
                 console.error("Error:", error);
                 alert("Wystąpił błąd podczas dodawania użytkownika.");
             });
+    });
+
+    // Fetch all users
+    fetch('/public/api.php?endpoint=users&action=fetch_all')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch users');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                console.log('Users:', data.users);
+            } else {
+                console.error('Error:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Unexpected error:', error);
+        });
+
+    // Filter Users
+    document.getElementById('filterButton').addEventListener('click', () => {
+        const search = document.getElementById('searchInput').value;
+        const startDate = document.getElementById('startDateInput').value;
+        const endDate = document.getElementById('endDateInput').value;
+
+        fetch(`/public/api.php?endpoint=user_manager&action=fetch_users&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const usersTableBody = document.getElementById('usersTableBody');
+                    usersTableBody.innerHTML = '';
+                    data.users.forEach(user => {
+                        const row = `<tr>
+                            <td>${user.id}</td>
+                            <td>${user.name}</td>
+                            <td>${user.email}</td>
+                            <td>${user.registration_date}</td>
+                        </tr>`;
+                        usersTableBody.innerHTML += row;
+                    });
+                }
+            })
+            .catch(error => console.error('Error:', error));
     });
 });

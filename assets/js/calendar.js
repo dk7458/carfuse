@@ -3,10 +3,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const calendarEl = document.getElementById('calendar');
     const userRole = document.getElementById('calendar').dataset.role; // "user" or "admin"
     const fetchEventsUrl = userRole === 'admin' 
-        ? '/controllers/calendar_ctrl.php?action=fetch_all_events' 
-        : '/controllers/calendar_ctrl.php?action=fetch_user_events';
-    const saveEventUrl = '/controllers/calendar_ctrl.php?action=save_event';
-    const deleteEventUrl = '/controllers/calendar_ctrl.php?action=delete_event';
+        ? '/public/api.php?endpoint=calendar&action=fetch_all_events' 
+        : '/public/api.php?endpoint=calendar&action=fetch_user_events';
+    const saveEventUrl = '/public/api.php?endpoint=calendar&action=save_event';
+    const deleteEventUrl = '/public/api.php?endpoint=calendar&action=delete_event';
 
     // Initialize the FullCalendar instance
     const calendar = new FullCalendar.Calendar(calendarEl, {
@@ -182,4 +182,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Example usage of sendNotification
     sendNotification('You have an upcoming event!');
+
+    // Handle filter button click
+    document.getElementById('filterButton').addEventListener('click', () => {
+        const search = document.getElementById('searchInput').value;
+        const startDate = document.getElementById('startDateInput').value;
+        const endDate = document.getElementById('endDateInput').value;
+
+        fetch(`/public/api.php?endpoint=calendar&action=fetch_events&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const eventsContainer = document.getElementById('eventsContainer');
+                    eventsContainer.innerHTML = '';
+                    data.events.forEach(event => {
+                        const eventElement = `<div class="event">
+                            <h3>${event.title}</h3>
+                            <p>${event.date}</p>
+                            <p>${event.description}</p>
+                        </div>`;
+                        eventsContainer.innerHTML += eventElement;
+                    });
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    });
 });

@@ -80,7 +80,19 @@ try {
         exit;
     }
 
-    if (in_array($endpoint, $publicEndpoints)) {
+    if ($endpoint === 'notifications') {
+        require_once BASE_PATH . 'controllers/notification_ctrl.php';
+        if ($action === 'fetch_unread') {
+            $notifications = fetchUnreadNotifications();
+            echo json_encode(['success' => true, 'notifications' => $notifications]);
+        } elseif ($action === 'add_notification') {
+            $message = $_POST['message'];
+            $result = addNotification($message);
+            echo json_encode(['success' => $result]);
+        } else {
+            echo json_encode(['success' => false, 'error' => 'Invalid action']);
+        }
+    } elseif (in_array($endpoint, $publicEndpoints)) {
         // Public endpoints
         $controllerPath = BASE_PATH . "controllers/{$endpoint}_ctrl.php";
     } elseif (in_array($endpoint, $sensitiveEndpoints)) {

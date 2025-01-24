@@ -17,60 +17,27 @@ $page = max(1, intval($_GET['page'] ?? 1));
 $itemsPerPage = 10;
 $offset = ($page - 1) * $itemsPerPage;
 
-// Build query for fleet
-$query = "SELECT id, make, model, registration_number, availability, last_maintenance_date FROM fleet WHERE 1";
-$params = [];
-$types = "";
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=fleet&action=fetch_vehicles&" . $queryString);
+$data = json_decode($response, true);
 
-// Add search filter
-if (!empty($search)) {
-    $query .= " AND (make LIKE ? OR model LIKE ? OR registration_number LIKE ?)";
-    $searchParam = '%' . $search . '%';
-    $params[] = $searchParam;
-    $params[] = $searchParam;
-    $params[] = $searchParam;
-    $types .= 'sss';
+if ($data['success']) {
+    $vehicles = $data['vehicles'];
+    foreach ($vehicles as $vehicle) {
+        echo "<tr>
+            <td>{$vehicle['make']}</td>
+            <td>{$vehicle['model']}</td>
+            <td>{$vehicle['year']}</td>
+            <td>{$vehicle['status']}</td>
+        </tr>";
+    }
 }
-
-// Add availability filter
-if ($availability !== '') {
-    $query .= " AND availability = ?";
-    $params[] = intval($availability);
-    $types .= 'i';
-}
-
-// Add maintenance filter
-if ($maintenance === 'overdue') {
-    $query .= " AND last_maintenance_date <= DATE_SUB(NOW(), INTERVAL 6 MONTH)";
-}
-
-// Add date range filter for maintenance
-if (!empty($startDate) && !empty($endDate)) {
-    $query .= " AND last_maintenance_date BETWEEN ? AND ?";
-    $params[] = $startDate;
-    $params[] = $endDate;
-    $types .= 'ss';
-}
-
-// Add pagination
-$query .= " ORDER BY make, model LIMIT ?, ?";
-$params[] = $offset;
-$params[] = $itemsPerPage;
-$types .= 'ii';
-
-$stmt = $conn->prepare($query);
-$stmt->bind_param($types, ...$params);
-$stmt->execute();
-$vehicles = $stmt->get_result();
-$stmt->close();
-
-// Count total rows for pagination
-$countQuery = "SELECT COUNT(*) FROM fleet WHERE 1";
-$countStmt = $conn->prepare($countQuery);
-$countStmt->execute();
-$totalRows = $countStmt->get_result()->fetch_row()[0];
-$countStmt->close();
-$totalPages = ceil($totalRows / $itemsPerPage);
 ?>
 <!DOCTYPE html>
 <html lang="pl">

@@ -25,10 +25,26 @@ $page = max(1, intval($_GET['page'] ?? 1));
 $itemsPerPage = 10;
 $offset = ($page - 1) * $itemsPerPage;
 
-// Fetch notifications
-$notifications = fetchNotifications($conn, $type, $startDate, $endDate, $search, $offset, $itemsPerPage);
-$totalNotifications = countNotifications($conn, $type, $startDate, $endDate, $search);
-$totalPages = ceil($totalNotifications / $itemsPerPage);
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=notifications&action=fetch_notifications&" . $queryString);
+$data = json_decode($response, true);
+
+if ($data['success']) {
+    $notifications = $data['notifications'];
+    foreach ($notifications as $notification) {
+        echo "<tr>
+            <td>{$notification['title']}</td>
+            <td>{$notification['message']}</td>
+            <td>{$notification['created_at']}</td>
+        </tr>";
+    }
+}
 
 // Fetch queued notifications
 $queueResult = $conn->query("SELECT * FROM notification_queue WHERE status = 'pending'");

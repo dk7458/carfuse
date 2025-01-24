@@ -22,16 +22,25 @@ $dateFrom = $_GET['date_from'] ?? date('Y-m-01');
 $dateTo = $_GET['date_to'] ?? date('Y-m-d');
 $reportType = $_GET['report_type'] ?? 'daily';
 
-// Fetch data for the report
-$data = [];
-try {
-    if ($reportType === 'comparative_weekly') {
-        $data = fetchComparativeWeeklyReportData($conn, $category);
-    } else {
-        $data = fetchReportData($conn, $dateFrom, $dateTo, $category);
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=reports&action=fetch_reports&" . $queryString);
+$data = json_decode($response, true);
+
+if ($data['success']) {
+    $reports = $data['reports'];
+    foreach ($reports as $report) {
+        echo "<tr>
+            <td>{$report['title']}</td>
+            <td>{$report['created_at']}</td>
+            <td>{$report['status']}</td>
+        </tr>";
     }
-} catch (Exception $e) {
-    $errorMessage = $e->getMessage();
 }
 ?>
 <!DOCTYPE html>

@@ -11,12 +11,26 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
     redirect('/public/login.php');
 }
 
-// Get contracts and admin resources
-$search = $_GET['search'] ?? '';
-$page = max(1, intval($_GET['page'] ?? 1));
-$contracts = getContracts($search, '', '', $page);
-$totalContracts = countContracts($search, '', '');
-$totalPages = ceil($totalContracts / 10);
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=contracts&action=fetch_contracts&" . $queryString);
+$data = json_decode($response, true);
+
+if ($data['success']) {
+    $contracts = $data['contracts'];
+    $totalContracts = $data['totalContracts'];
+    $totalPages = ceil($totalContracts / 10);
+} else {
+    $contracts = [];
+    $totalContracts = 0;
+    $totalPages = 1;
+}
+
 $adminSignature = getAdminSignature();
 $contractTemplates = getContractTemplates();
 ?>
@@ -115,6 +129,11 @@ $contractTemplates = getContractTemplates();
                 <?php endif; ?>
             </tbody>
         </table>
+
+        <form method="POST" action="/public/api.php?endpoint=contracts&action=add_contract">
+            <input type="text" name="contract_details" placeholder="Enter contract details">
+            <button type="submit">Add Contract</button>
+        </form>
     </div>
 
     <!-- Include JavaScript -->

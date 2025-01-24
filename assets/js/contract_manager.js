@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", function () {
             e.preventDefault();
             const formData = new FormData(signatureForm);
 
-            fetch(signatureForm.action, {
+            fetch('/public/api.php?endpoint=signatures&action=upload', {
                 method: "POST",
                 body: formData,
             })
@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", function () {
             e.preventDefault();
             const formData = new FormData(templateForm);
 
-            fetch(templateForm.action, {
+            fetch('/public/api.php?endpoint=templates&action=upload', {
                 method: "POST",
                 body: formData,
             })
@@ -60,13 +60,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
             const contractId = this.dataset.id;
 
-            fetch("/controllers/contract_ctrl.php", {
+            fetch('/public/api.php?endpoint=contracts&action=delete', {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    action: "delete_contract",
                     contract_id: contractId,
                 }),
             })
@@ -84,5 +83,50 @@ document.addEventListener("DOMContentLoaded", function () {
                     alert("Wystąpił błąd podczas usuwania umowy.");
                 });
         });
+    });
+
+    // Fetch all contracts
+    fetch('/public/api.php?endpoint=contracts&action=fetch_all')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch contracts');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                console.log('Contracts:', data.contracts);
+            } else {
+                console.error('Error:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Unexpected error:', error);
+        });
+
+    // Handle contract filters
+    document.getElementById('filterButton').addEventListener('click', () => {
+        const search = document.getElementById('searchInput').value;
+        const startDate = document.getElementById('startDateInput').value;
+        const endDate = document.getElementById('endDateInput').value;
+
+        fetch(`/public/api.php?endpoint=contract_manager&action=fetch_contracts&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const contractsTableBody = document.getElementById('contractsTableBody');
+                    contractsTableBody.innerHTML = '';
+                    data.contracts.forEach(contract => {
+                        const row = `<tr>
+                            <td>${contract.id}</td>
+                            <td>${contract.client}</td>
+                            <td>${contract.start_date}</td>
+                            <td>${contract.end_date}</td>
+                        </tr>`;
+                        contractsTableBody.innerHTML += row;
+                    });
+                }
+            })
+            .catch(error => console.error('Error:', error));
     });
 });

@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateTo = dateToInput.value;
 
         try {
-            const response = await fetch(`/controllers/report_ctrl.php?action=fetch&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`);
+            const response = await fetch(`/public/api.php?endpoint=report_manager&action=fetch_reports&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`);
             const data = await response.json();
 
             if (data.success) {
@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateFrom = dateFromInput.value;
         const dateTo = dateToInput.value;
 
-        window.location.href = `/controllers/report_ctrl.php?action=export_csv&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
+        window.location.href = `/public/api.php?endpoint=report_manager&action=export_csv&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
     });
 
     // Export PDF
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateFrom = dateFromInput.value;
         const dateTo = dateToInput.value;
 
-        window.location.href = `/controllers/report_ctrl.php?action=export_pdf&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
+        window.location.href = `/public/api.php?endpoint=report_manager&action=export_pdf&category=${category}&report_type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
     });
 
     // Fetch initial data
@@ -130,4 +130,29 @@ document.addEventListener('DOMContentLoaded', () => {
     [categorySelect, reportTypeSelect, dateFromInput, dateToInput].forEach(element => {
         element.addEventListener('change', fetchReportData);
     });
+
+    // Fetch filtered data
+    function fetchFilteredData() {
+        const search = document.getElementById('searchInput').value;
+        const startDate = document.getElementById('startDateInput').value;
+        const endDate = document.getElementById('endDateInput').value;
+
+        fetch(`/public/api.php?endpoint=report_manager&action=fetch_reports&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const reportsTableBody = document.getElementById('reportsTableBody');
+                    reportsTableBody.innerHTML = '';
+                    data.reports.forEach(report => {
+                        const row = `<tr>
+                            <td>${report.title}</td>
+                            <td>${report.date}</td>
+                            <td>${report.summary}</td>
+                        </tr>`;
+                        reportsTableBody.innerHTML += row;
+                    });
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
 });

@@ -23,11 +23,10 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        fetch("/controllers/notification_ctrl.php", {
+        fetch("/public/api.php?endpoint=notifications&action=send_notification", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                action: "send_notification",
                 type: type,
                 recipient: recipient,
                 subject: subject,
@@ -62,11 +61,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            fetch("/controllers/notification_ctrl.php", {
+            fetch("/public/api.php?endpoint=notifications&action=resend_notification", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    action: "resend_notification",
                     notification_id: notificationId,
                 }),
             })
@@ -97,11 +95,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            fetch("/controllers/notification_ctrl.php", {
+            fetch("/public/api.php?endpoint=notifications&action=delete_notification", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    action: "delete_notification",
                     notification_id: notificationId,
                 }),
             })
@@ -132,11 +129,10 @@ document.addEventListener("DOMContentLoaded", function () {
             const formData = new FormData(reportForm);
             const data = Object.fromEntries(formData.entries());
 
-            fetch("/controllers/notification_ctrl.php", {
+            fetch("/public/api.php?endpoint=notifications&action=generate_report", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    action: "generate_report",
                     ...data,
                 }),
             })
@@ -168,11 +164,10 @@ document.addEventListener("DOMContentLoaded", function () {
             const formData = new FormData(reminderTemplateForm);
             const data = Object.fromEntries(formData.entries());
 
-            fetch("/controllers/notification_ctrl.php", {
+            fetch("/public/api.php?endpoint=notifications&action=save_template", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    action: "save_template",
                     ...data,
                 }),
             })
@@ -218,11 +213,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            fetch("/controllers/notification_ctrl.php", {
+            fetch("/public/api.php?endpoint=notifications&action=delete_template", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    action: "delete_template",
                     template_id: templateId,
                 }),
             })
@@ -240,5 +234,49 @@ document.addEventListener("DOMContentLoaded", function () {
                     alert("Błąd sieci. Spróbuj ponownie później.");
                 });
         });
+    });
+
+    // Fetch all notifications
+    fetch('/public/api.php?endpoint=notifications&action=fetch_all')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch notifications');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                console.log('Notifications:', data.notifications);
+            } else {
+                console.error('Error:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Unexpected error:', error);
+        });
+
+    // Filter notifications
+    document.getElementById('filterButton').addEventListener('click', () => {
+        const search = document.getElementById('searchInput').value;
+        const startDate = document.getElementById('startDateInput').value;
+        const endDate = document.getElementById('endDateInput').value;
+
+        fetch(`/public/api.php?endpoint=notification_manager&action=fetch_notifications&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const notificationsTableBody = document.getElementById('notificationsTableBody');
+                    notificationsTableBody.innerHTML = '';
+                    data.notifications.forEach(notification => {
+                        const row = `<tr>
+                            <td>${notification.title}</td>
+                            <td>${notification.message}</td>
+                            <td>${notification.date}</td>
+                        </tr>`;
+                        notificationsTableBody.innerHTML += row;
+                    });
+                }
+            })
+            .catch(error => console.error('Error:', error));
     });
 });

@@ -12,14 +12,13 @@ document.getElementById('checkAvailability').addEventListener('click', (e) => {
         return;
     }
 
-    fetch('/controllers/booking_controller.php', {
+    fetch('/public/api.php?endpoint=booking&action=check_availability', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRF-Token': csrfToken,
         },
         body: JSON.stringify({
-            action: 'check_availability',
             pickup_date: pickupDate,
             dropoff_date: dropoffDate,
         }),
@@ -47,3 +46,27 @@ document.getElementById('checkAvailability').addEventListener('click', (e) => {
         })
         .catch((error) => console.error('Error fetching cars:', error));
 });
+
+function fetchFilteredData() {
+    const search = document.getElementById('searchInput').value;
+    const startDate = document.getElementById('startDateInput').value;
+    const endDate = document.getElementById('endDateInput').value;
+
+    fetch(`/public/api.php?endpoint=bookings&action=fetch_bookings&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const bookingsTableBody = document.getElementById('bookingsTableBody');
+                bookingsTableBody.innerHTML = '';
+                data.bookings.forEach(booking => {
+                    const row = `<tr>
+                        <td>${booking.customer}</td>
+                        <td>${booking.date}</td>
+                        <td>${booking.status}</td>
+                    </tr>`;
+                    bookingsTableBody.innerHTML += row;
+                });
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}

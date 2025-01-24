@@ -11,6 +11,29 @@ require_once BASE_PATH . 'functions/global.php';
 enforceRole(['admin', 'super_admin']); 
 
 $logId = intval($_GET['id'] ?? 0);
+
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=maintenance&action=fetch_maintenance&" . $queryString);
+$data = json_decode($response, true);
+
+if ($data['success']) {
+    $maintenance = $data['maintenance'];
+    foreach ($maintenance as $item) {
+        echo "<tr>
+            <td>{$item['make']}</td>
+            <td>{$item['model']}</td>
+            <td>{$item['description']}</td>
+            <td>{$item['maintenance_date']}</td>
+        </tr>";
+    }
+}
+
 $stmt = $conn->prepare("SELECT * FROM maintenance_logs WHERE id = ?");
 $stmt->bind_param("i", $logId);
 $stmt->execute();
@@ -34,7 +57,7 @@ if (!$log) {
 
     <div class="container">
         <h1 class="mt-5">Edytuj Przegląd</h1>
-        <form method="POST" action="/controllers/maintenance_ctrl.php">
+        <form method="POST" action="/public/api.php?endpoint=maintenance&action=edit_maintenance">
             <input type="hidden" name="action" value="update_maintenance">
             <input type="hidden" name="id" value="<?= $log['id'] ?>">
             <div class="mb-3">

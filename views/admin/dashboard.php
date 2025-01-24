@@ -96,8 +96,36 @@
             </select>
             <canvas id="dashboardChart"></canvas>
         </div>
+
+        <!-- Notification Form -->
+        <form method="POST" action="/public/api.php?endpoint=notifications&action=add_notification">
+            <input type="text" name="message" placeholder="Enter notification message">
+            <button type="submit">Send Notification</button>
+        </form>
     </div>
 
     <script src="/assets/js/dashboard.js"></script>
+
+    <?php
+    // Fetch data using the centralized proxy
+    $filters = [
+        'search' => $_GET['search'] ?? '',
+        'startDate' => $_GET['start_date'] ?? '',
+        'endDate' => $_GET['end_date'] ?? ''
+    ];
+    $queryString = http_build_query($filters);
+    $response = file_get_contents(BASE_URL . "/public/api.php?endpoint=dashboard&action=fetch_data&" . $queryString);
+    $data = json_decode($response, true);
+
+    if ($data['success']) {
+        $dashboardData = $data['dashboardData'];
+        foreach ($dashboardData as $item) {
+            echo "<tr>
+                <td>{$item['name']}</td>
+                <td>{$item['value']}</td>
+            </tr>";
+        }
+    }
+    ?>
 </body>
 </html>

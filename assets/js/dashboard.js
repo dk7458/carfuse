@@ -6,7 +6,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Fetch and render chart data
     function fetchChartData(type = 'bookings') {
-        fetch(`/controllers/dashboard_ctrl.php?action=get_chart_data&type=${type}`, {
+        fetch(`/public/api.php?endpoint=dashboard&action=get_chart_data&type=${type}`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -103,5 +103,29 @@ window.addEventListener('DOMContentLoaded', () => {
     chartSelector.addEventListener('change', (event) => {
         const selectedType = event.target.value;
         fetchChartData(selectedType);
+    });
+
+    // Handle filter button click
+    document.getElementById('filterButton').addEventListener('click', () => {
+        const search = document.getElementById('searchInput').value;
+        const startDate = document.getElementById('startDateInput').value;
+        const endDate = document.getElementById('endDateInput').value;
+
+        fetch(`/public/api.php?endpoint=dashboard&action=fetch_stats&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const statsContainer = document.getElementById('statsContainer');
+                    statsContainer.innerHTML = '';
+                    data.stats.forEach(stat => {
+                        const statElement = `<div class="stat">
+                            <h3>${stat.title}</h3>
+                            <p>${stat.value}</p>
+                        </div>`;
+                        statsContainer.innerHTML += statElement;
+                    });
+                }
+            })
+            .catch(error => console.error('Error:', error));
     });
 });

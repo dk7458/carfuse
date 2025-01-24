@@ -10,8 +10,19 @@ require_once BASE_PATH . 'functions/global.php';
 
 enforceRole(['admin', 'super_admin']); 
 
-// Fetch summary data
-$summary = getSummaryData();
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=summary&action=fetch_summary&" . $queryString);
+$data = json_decode($response, true);
+
+if ($data['success']) {
+    $summary = $data['summary'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="pl">
@@ -92,6 +103,12 @@ $summary = getSummaryData();
                 <canvas id="fleetChart"></canvas>
             </div>
         </div>
+
+        <!-- Form to generate summary -->
+        <form method="POST" action="/public/api.php?endpoint=summary&action=generate_summary">
+            <input type="text" name="summary_details" placeholder="Enter summary details">
+            <button type="submit">Generate Summary</button>
+        </form>
     </div>
 
     <script src="/assets/js/summary.js"></script>

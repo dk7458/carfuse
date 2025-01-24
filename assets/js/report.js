@@ -22,13 +22,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Fetch report data
     function fetchReportData(reportType, startDate, endDate) {
-        fetch('/controllers/report_ctrl.php', {
+        fetch('/public/api.php?endpoint=report&action=fetch', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                action: 'fetch',
                 category: reportType,
                 date_from: startDate,
                 date_to: endDate,
@@ -134,7 +133,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
 
-        window.location.href = `/controllers/report_ctrl.php?action=export_csv&category=${reportType}&date_from=${startDate}&date_to=${endDate}`;
+        window.location.href = `/public/api.php?endpoint=report&action=export_csv&category=${reportType}&date_from=${startDate}&date_to=${endDate}`;
     });
 
     exportPdfButton.addEventListener('click', function () {
@@ -142,7 +141,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
 
-        window.location.href = `/controllers/report_ctrl.php?action=export_pdf&category=${reportType}&date_from=${startDate}&date_to=${endDate}`;
+        window.location.href = `/public/api.php?endpoint=report&action=export_pdf&category=${reportType}&date_from=${startDate}&date_to=${endDate}`;
     });
 
     // Show alert
@@ -156,4 +155,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Initial fetch
     fetchReportData(reportTypeSelect.value, startDateInput.value, endDateInput.value);
+
+    // Fetch filtered data
+    function fetchFilteredData() {
+        const search = document.getElementById('searchInput').value;
+        const startDate = document.getElementById('startDateInput').value;
+        const endDate = document.getElementById('endDateInput').value;
+
+        fetch(`/public/api.php?endpoint=reports&action=fetch_reports&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const reportsTableBody = document.getElementById('reportsTableBody');
+                    reportsTableBody.innerHTML = '';
+                    data.reports.forEach(report => {
+                        const row = `<tr>
+                            <td>${report.title}</td>
+                            <td>${report.date}</td>
+                            <td>${report.summary}</td>
+                        </tr>`;
+                        reportsTableBody.innerHTML += row;
+                    });
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
 });

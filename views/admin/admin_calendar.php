@@ -19,19 +19,27 @@ require_once BASE_PATH . 'functions/global.php';
 // Enforce role-based access
 enforceRole(['admin', 'super_admin'], '/public/login.php');
 
-// Fetch all bookings and maintenance schedules for the calendar
-$bookings = $conn->query("
-    SELECT b.id, f.make, f.model, b.pickup_date, b.dropoff_date, CONCAT(u.name, ' ', u.surname) AS user, b.total_price 
-    FROM bookings b
-    JOIN fleet f ON b.vehicle_id = f.id
-    JOIN users u ON b.user_id = u.id
-")->fetch_all(MYSQLI_ASSOC);
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=calendar&action=fetch_events&" . $queryString);
+$data = json_decode($response, true);
 
-$maintenanceSchedules = $conn->query("
-    SELECT ml.id, f.make, f.model, ml.maintenance_date, ml.description 
-    FROM maintenance_logs ml
-    JOIN fleet f ON ml.vehicle_id = f.id
-")->fetch_all(MYSQLI_ASSOC);
+if ($data['success']) {
+    $events = $data['events'];
+    foreach ($events as $event) {
+        echo "<tr>
+            <td>{$event['title']}</td>
+            <td>{$event['start_date']}</td>
+            <td>{$event['end_date']}</td>
+            <td>{$event['description']}</td>
+        </tr>";
+    }
+}
 ?>
 
 <!DOCTYPE html>

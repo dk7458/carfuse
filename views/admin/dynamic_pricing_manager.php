@@ -16,8 +16,31 @@ require_once BASE_PATH . 'functions/global.php';
 
 enforceRole(['admin', 'super_admin']);
 
-// Fetch existing pricing rules
-$rulesResult = $conn->query("SELECT * FROM pricing_rules");
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=pricing&action=fetch_pricing&" . $queryString);
+$data = json_decode($response, true);
+
+if ($data['success']) {
+    $pricingData = $data['pricingData'];
+    foreach ($pricingData as $item) {
+        echo "<tr>
+            <td>{$item['vehicle']}</td>
+            <td>{$item['price']}</td>
+            <td>{$item['date']}</td>
+        </tr>";
+    }
+}
+
+// Fetch existing pricing rules from the database
+$rulesQuery = "SELECT * FROM pricing_rules";
+$rulesResult = $db->query($rulesQuery);
+
 ?>
 <!DOCTYPE html>
 <html lang="pl">
@@ -34,7 +57,7 @@ $rulesResult = $conn->query("SELECT * FROM pricing_rules");
         <h1>Menadżer Dynamicznego Cennika</h1>
 
         <!-- Form for creating/editing pricing rules -->
-        <form id="pricingRuleForm" class="row g-3 mt-4">
+        <form id="pricingRuleForm" class="row g-3 mt-4" method="POST" action="/public/api.php?endpoint=pricing&action=update_pricing">
             <input type="hidden" name="rule_id" id="rule_id">
             <div class="col-md-4">
                 <label for="rule_name" class="form-label">Nazwa Reguły:</label>
@@ -67,7 +90,7 @@ $rulesResult = $conn->query("SELECT * FROM pricing_rules");
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if ($rulesResult->num_rows > 0): ?>
+                    <?php if ($rulesResult && $rulesResult->num_rows > 0): ?>
                         <?php while ($rule = $rulesResult->fetch_assoc()): ?>
                             <tr>
                                 <td><?= htmlspecialchars($rule['id']) ?></td>

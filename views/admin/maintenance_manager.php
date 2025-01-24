@@ -20,8 +20,27 @@ $page = max(1, intval($_GET['page'] ?? 1));
 $itemsPerPage = 10;
 $offset = ($page - 1) * $itemsPerPage;
 
-// Fetch maintenance logs with filters
-$logs = fetchMaintenanceLogs($conn, $search, $dateRange, $startDate, $endDate, $offset, $itemsPerPage);
+// Fetch data using the centralized proxy
+$filters = [
+    'search' => $_GET['search'] ?? '',
+    'startDate' => $_GET['start_date'] ?? '',
+    'endDate' => $_GET['end_date'] ?? ''
+];
+$queryString = http_build_query($filters);
+$response = file_get_contents(BASE_URL . "/public/api.php?endpoint=maintenance&action=fetch_logs&" . $queryString);
+$data = json_decode($response, true);
+
+if ($data['success']) {
+    $logs = $data['logs'];
+    foreach ($logs as $log) {
+        echo "<tr>
+            <td>{$log['make']}</td>
+            <td>{$log['model']}</td>
+            <td>{$log['description']}</td>
+            <td>{$log['maintenance_date']}</td>
+        </tr>";
+    }
+}
 $totalLogs = countMaintenanceLogs($conn, $search, $dateRange, $startDate, $endDate);
 $totalPages = ceil($totalLogs / $itemsPerPage);
 ?>
@@ -71,6 +90,12 @@ $totalPages = ceil($totalLogs / $itemsPerPage);
                 <button id="exportPdf" class="btn btn-outline-secondary">Eksportuj PDF</button>
             </div>
         </div>
+
+        <!-- Add Maintenance Form -->
+        <form method="POST" action="/public/api.php?endpoint=maintenance&action=add_maintenance">
+            <input type="text" name="maintenance_details" placeholder="Enter maintenance details">
+            <button type="submit">Add Maintenance</button>
+        </form>
 
         <!-- Summary and Visualization -->
         <div class="mt-5">

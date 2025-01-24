@@ -3,7 +3,27 @@ document.addEventListener('DOMContentLoaded', function () {
     const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         editable: true, // Enable drag-and-drop
-        events: '/controllers/calendar_ctrl.php?action=fetch_calendar_data',
+        events: function (fetchInfo, successCallback, failureCallback) {
+            fetch('/public/api.php?endpoint=calendar&action=get_events')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch calendar events');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        successCallback(data.events);
+                    } else {
+                        console.error('Error:', data.error);
+                        failureCallback(data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Unexpected error:', error);
+                    failureCallback(error);
+                });
+        },
         eventDidMount: function (info) {
             // Add tooltips with event details
             const tooltipContent = `
@@ -21,11 +41,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 : newStart;
 
             // Send reschedule request
-            fetch('/controllers/calendar_ctrl.php', {
+            fetch('/public/api.php?endpoint=calendar&action=reschedule_booking', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    action: 'reschedule_booking',
                     booking_id: eventId,
                     new_start: newStart,
                     new_end: newEnd,
@@ -65,3 +84,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
     calendar.render();
 });
+
+function fetchFilteredData() {
+    const search = document.getElementById('searchInput').value;
+    const startDate = document.getElementById('startDateInput').value;
+    const endDate = document.getElementById('endDateInput').value;
+
+    fetch(`/public/api.php?endpoint=calendar&action=fetch_events&search=${search}&startDate=${startDate}&endDate=${endDate}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const calendarBody = document.getElementById('calendarBody');
+                calendarBody.innerHTML = '';
+                data.events.forEach(event => {
+                    const row = `<tr>
+                        <td>${event.title}</td>
+                        <td>${event.date}</td>
+                        <td>${event.description}</td>
+                    </tr>`;
+                    calendarBody.innerHTML += row;
+                });
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
