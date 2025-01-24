@@ -3,6 +3,9 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+
+require_once '/home/u122931475/domains/carfuse.pl/public_html/vendor/autoload.php'; // Ensure PHPMailer is autoloaded
+
 /**
  * Enforces role-based access control (RBAC) for the current user.
  *
@@ -258,15 +261,69 @@ function generateAndSendContract($conn, $userId, $vehicleId, $bookingId, $pickup
 }
 
 /**
- * Fetch all users from the database.
+ * Generate a contract PDF.
+ * 
+ * @param int $userId
+ * @param int $vehicleId
+ * @param int $bookingId
+ * @param string $pickupDate
+ * @param string $dropoffDate
+ * @param float $totalPrice
+ * @return string Path to the generated PDF file
+ */
+function generateContractPDF($userId, $vehicleId, $bookingId, $pickupDate, $dropoffDate, $totalPrice) {
+    // Logic to generate the contract PDF
+    // This is a placeholder function. You need to implement the actual PDF generation logic.
+    $pdfFilePath = "/path/to/generated/contract_$bookingId.pdf";
+    // Generate the PDF and save it to $pdfFilePath
+    return $pdfFilePath;
+}
+
+/**
+ * Fetch users based on filters.
  * 
  * @param mysqli $conn
+ * @param array $filters
  * @return array
  */
-function fetchUsers($conn) {
+function fetchUsers($conn, $filters) {
+    $query = "SELECT * FROM users WHERE 1";
+    $params = [];
+    $types = '';
+
+    if (!empty($filters['search'])) {
+        $query .= " AND (name LIKE ? OR surname LIKE ? OR email LIKE ?)";
+        $searchParam = '%' . $filters['search'] . '%';
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $types .= 'sss';
+    }
+
+    if (!empty($filters['role'])) {
+        $query .= " AND role = ?";
+        $params[] = $filters['role'];
+        $types .= 's';
+    }
+
+    if ($filters['status'] !== '') {
+        $query .= " AND active = ?";
+        $params[] = $filters['status'];
+        $types .= 'i';
+    }
+
+    $query .= " LIMIT ?, ?";
+    $params[] = $filters['offset'];
+    $params[] = $filters['itemsPerPage'];
+    $types .= 'ii';
+
+    $stmt = $conn->prepare($query);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
     $users = [];
-    $query = "SELECT * FROM users";
-    $result = $conn->query($query);
     while ($row = $result->fetch_assoc()) {
         $users[] = $row;
     }

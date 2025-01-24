@@ -21,7 +21,14 @@ $itemsPerPage = 10;
 $offset = ($page - 1) * $itemsPerPage;
 
 // Fetch users with filters
-$users = fetchUsers($conn, $search, $role, $status, $offset, $itemsPerPage);
+$filters = [
+    'search' => $search,
+    'role' => $role,
+    'status' => $status,
+    'offset' => $offset,
+    'itemsPerPage' => $itemsPerPage
+];
+$users = fetchUsers($conn, $filters);
 $totalUsers = countUsers($conn, $search, $role, $status);
 $totalPages = ceil($totalUsers / $itemsPerPage);
 ?>

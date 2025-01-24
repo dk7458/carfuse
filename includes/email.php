@@ -4,8 +4,7 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-require_once '/path/to/vendor/autoload.php';
-
+require_once BASE_PATH . '/vendor/autoload.php';
 /**
  * Sends an email using PHPMailer.
  *
