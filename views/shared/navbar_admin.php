@@ -1,7 +1,5 @@
 <?php
 require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
-
-require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 require_once '/home/u122931475/domains/carfuse.pl/public_html/includes/session_middleware.php';
 $userRole = $_SESSION['user_role'] ?? null;
 ?>
@@ -35,7 +33,7 @@ $userRole = $_SESSION['user_role'] ?? null;
 
 <script>
     function fetchNotifications() {
-        fetch('/controllers/notifications_ctrl.php?action=fetch_unread')
+        fetch(BASE_PATH . 'controllers/notification_ctrl.php?action=fetch_unread')
             .then(response => response.json())
             .then(data => {
                 const unreadCount = document.getElementById('unreadCount');

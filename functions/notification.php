@@ -107,6 +107,98 @@ function generateNotificationReport($conn, $type, $startDate, $endDate) {
     return $result->fetch_all(MYSQLI_ASSOC);
 }
 
+/**
+ * Fetches notifications with optional filters.
+ *
+ * @param mysqli $conn Database connection.
+ * @param string $type Notification type filter.
+ * @param string $startDate Start date filter.
+ * @param string $endDate End date filter.
+ * @param string $search Search term for recipient.
+ * @param int $offset Offset for pagination.
+ * @param int $limit Number of notifications to fetch.
+ * @return mysqli_result Result set of notifications.
+ */
+function fetchNotifications($conn, $type, $startDate, $endDate, $search, $offset, $limit) {
+    $query = "SELECT * FROM notifications WHERE 1=1";
+    $params = [];
+    $types = '';
+
+    if ($type) {
+        $query .= " AND type = ?";
+        $params[] = $type;
+        $types .= 's';
+    }
+    if ($startDate) {
+        $query .= " AND created_at >= ?";
+        $params[] = $startDate;
+        $types .= 's';
+    }
+    if ($endDate) {
+        $query .= " AND created_at <= ?";
+        $params[] = $endDate;
+        $types .= 's';
+    }
+    if ($search) {
+        $query .= " AND recipient LIKE ?";
+        $params[] = "%$search%";
+        $types .= 's';
+    }
+
+    $query .= " ORDER BY created_at DESC LIMIT ?, ?";
+    $params[] = $offset;
+    $params[] = $limit;
+    $types .= 'ii';
+
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param($types, ...$params);
+    $stmt->execute();
+    return $stmt->get_result();
+}
+
+/**
+ * Counts notifications with optional filters.
+ *
+ * @param mysqli $conn Database connection.
+ * @param string $type Notification type filter.
+ * @param string $startDate Start date filter.
+ * @param string $endDate End date filter.
+ * @param string $search Search term for recipient.
+ * @return int Total number of notifications.
+ */
+function countNotifications($conn, $type, $startDate, $endDate, $search) {
+    $query = "SELECT COUNT(*) as total FROM notifications WHERE 1=1";
+    $params = [];
+    $types = '';
+
+    if ($type) {
+        $query .= " AND type = ?";
+        $params[] = $type;
+        $types .= 's';
+    }
+    if ($startDate) {
+        $query .= " AND created_at >= ?";
+        $params[] = $startDate;
+        $types .= 's';
+    }
+    if ($endDate) {
+        $query .= " AND created_at <= ?";
+        $params[] = $endDate;
+        $types .= 's';
+    }
+    if ($search) {
+        $query .= " AND recipient LIKE ?";
+        $params[] = "%$search%";
+        $types .= 's';
+    }
+
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param($types, ...$params);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    return $result['total'];
+}
+
 // External notification functions
 
 /**
