@@ -14,7 +14,7 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
 // Filters
 $search = $_GET['search'] ?? '';
 $role = $_GET['role'] ?? '';
-$status = $_GET['status'] ?? '';
+$status = $_GET['status'] ?? 'default_status'; // Provide a default value for status
 $page = max(1, intval($_GET['page'] ?? 1));
 $itemsPerPage = 10;
 $offset = ($page - 1) * $itemsPerPage;

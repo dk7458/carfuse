@@ -32,7 +32,7 @@
             </div>
         </div>
 
-        <?php if ($userRole === 'super_admin'): ?>
+        <?php if (isset($userRole) && $userRole === 'super_admin'): ?>
             <!-- Super Admin Exclusive Links -->
             <div class="row mt-3 text-center">
                 <div class="col-md-4">
