@@ -20,7 +20,9 @@ $queryString = http_build_query($filters);
 $response = file_get_contents(BASE_URL . "/public/api.php?endpoint=summary&action=fetch_summary&" . $queryString);
 $data = json_decode($response, true);
 
-if ($data['success']) {
+if (!$data || !$data['success']) {
+    echo "<p>Error fetching summary data. Please try again later.</p>";
+} else {
     $summary = $data['summary'];
 }
 ?>

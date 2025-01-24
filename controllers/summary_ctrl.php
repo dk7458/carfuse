@@ -8,6 +8,18 @@ require_once BASE_PATH . 'includes/session_middleware.php';
 require_once BASE_PATH . 'functions/global.php';
 
 enforceRole(['admin', 'super_admin'],'/public/login.php'); 
+
+function fetchSummaryData() {
+    // Fetch summary data from the database
+    // Example implementation
+    $summaryData = [
+        'total_users' => 150,
+        'total_bookings' => 75,
+        'total_revenue' => 5000,
+    ];
+    return $summaryData;
+}
+
 function getSummaryData() {
     global $conn;
 

@@ -6,6 +6,9 @@
 
  require_once BASE_PATH . 'config.php'; // Global functions
  require_once BASE_PATH . 'functions/global.php'; // Global functions
+ require_once BASE_PATH . 'functions/auth.php'; // Authentication functions
+ require_once BASE_PATH . 'functions/notifications.php'; // Notification functions
+ require_once BASE_PATH . 'functions/summary.php'; // Summary functions
 
 // Define endpoint categories
 $publicEndpoints = ['notifications', 'login', 'register']; // Publicly accessible endpoints
@@ -91,6 +94,13 @@ try {
             echo json_encode(['success' => $result]);
         } else {
             echo json_encode(['success' => false, 'error' => 'Invalid action']);
+        }
+    } elseif ($endpoint === 'summary') {
+        require_once BASE_PATH . 'controllers/summary_ctrl.php';
+        if ($action === 'fetch_summary') {
+            $summaryData = fetchSummaryData(); // Implement this function in summary_ctrl.php if needed.
+            echo json_encode(['success' => true, 'data' => $summaryData]);
+            exit;
         }
     } elseif (in_array($endpoint, $publicEndpoints)) {
         // Public endpoints

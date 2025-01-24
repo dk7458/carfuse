@@ -220,4 +220,34 @@ function sendPushNotification($deviceToken, $message) {
     // Return true if successful, false otherwise
     return true;
 }
+
+/**
+ * Fetch unread notifications from the database.
+ * 
+ * @return array List of unread notifications.
+ */
+function fetchUnreadNotifications() {
+    // Fetch unread notifications from the database
+    // Example implementation
+    $notifications = [
+        ['id' => 1, 'message' => 'New booking received', 'read' => false],
+        ['id' => 2, 'message' => 'Payment processed', 'read' => false],
+    ];
+    return $notifications;
+}
+
+/**
+ * Add a new notification to the database.
+ * 
+ * @param string $message Notification message.
+ * @return bool True if the notification was added successfully, false otherwise.
+ */
+function addNotification($message) {
+    // Add a new notification to the database
+    // Example implementation
+    // Assuming a database connection is available as $db
+    global $db;
+    $stmt = $db->prepare("INSERT INTO notifications (message, read) VALUES (?, 0)");
+    return $stmt->execute([$message]);
+}
 ?>

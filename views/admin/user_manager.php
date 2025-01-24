@@ -41,6 +41,12 @@ if ($data['success']) {
     }
 }
 
+if (isset($users) && is_array($users)) {
+    echo "<p>Total Users: " . count($users) . "</p>";
+} else {
+    echo "<p>No user data available.</p>";
+}
+
 $totalUsers = countUsers($conn, $search, $role, $status);
 $totalPages = ceil($totalUsers / $itemsPerPage);
 ?>
