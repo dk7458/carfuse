@@ -8,7 +8,7 @@ $userRole = $_SESSION['user_role'] ?? null;
 $apiUrl = BASE_URL . "/public/api.php?endpoint=notifications&action=get_unread_count";
 $response = @file_get_contents($apiUrl);
 $data = $response ? json_decode($response, true) : null;
-$unreadCount = $data['success'] ? $data['count'] : 0;
+$unreadCount = ($data && isset($data['success']) && $data['success']) ? $data['count'] : 0;
 ?>
 
 <nav class="navbar navbar-expand-lg" style="background-color: #e8e8e8; height: 70px; color: black;">
