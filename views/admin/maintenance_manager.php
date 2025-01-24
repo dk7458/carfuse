@@ -7,6 +7,7 @@ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
 require_once BASE_PATH . 'includes/session_middleware.php';
 require_once BASE_PATH . 'includes/db_connect.php';
 require_once BASE_PATH . 'functions/global.php';
+require_once BASE_PATH . 'functions/maintenance.php';
 
 enforceRole(['admin', 'super_admin']);
 
