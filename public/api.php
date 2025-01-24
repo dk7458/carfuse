@@ -4,7 +4,7 @@
  * Description: Centralized API proxy to route requests to appropriate controllers with rate limiting and logging.
  */
 
- require_once BASE_PATH . 'config.php'; // Global functions
+ require_once '/home/u122931475/domains/carfuse.pl/public_html/config.php';
  require_once BASE_PATH . 'functions/global.php'; // Global functions
  require_once BASE_PATH . 'functions/auth.php'; // Authentication functions
  require_once BASE_PATH . 'functions/notifications.php'; // Notification functions
