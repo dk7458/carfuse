@@ -1,0 +1,73 @@
+/**
+ * File: /assets/css/pages/reports.css
+ * Description: Styles specific to the reports page.
+ * Changelog:
+ * - Refactored to use global styles and reduced redundancy.
+ */
+
+/* ---------------------------------------------
+ * Container Styles
+ * --------------------------------------------- */
+.container {
+    margin-top: var(--spacing-large);
+}
+
+/* ---------------------------------------------
+ * Heading Styles
+ * --------------------------------------------- */
+h1 {
+    font-size: 2.5rem;
+    color: #333;
+}
+
+/* ---------------------------------------------
+ * Form Styles
+ * --------------------------------------------- */
+form {
+    margin-bottom: var(--spacing-large);
+}
+
+/* ---------------------------------------------
+ * Table Styles
+ * --------------------------------------------- */
+.table {
+    margin-top: var(--spacing-large);
+}
+
+.table th,
+.table td {
+    text-align: center;
+    vertical-align: middle;
+}
+
+/* ---------------------------------------------
+ * Alert Styles
+ * --------------------------------------------- */
+.alert {
+    margin-top: var(--spacing-large);
+}
+
+/* ---------------------------------------------
+ * Canvas Styles
+ * --------------------------------------------- */
+canvas {
+    margin-top: var(--spacing-large);
+}
+
+/* ---------------------------------------------
+ * Button Styles
+ * --------------------------------------------- */
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-success {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}

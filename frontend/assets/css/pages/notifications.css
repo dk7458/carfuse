@@ -1,0 +1,30 @@
+/**
+ * File: /assets/css/pages/notifications.css
+ * Description: Styles specific to the notifications page.
+ * Changelog:
+ * - Refactored to use global styles and reduced redundancy.
+ */
+
+/* ---------------------------------------------
+ * Heading Styles
+ * --------------------------------------------- */
+h1 {
+    color: var(--primary-color);
+    text-align: center;
+    margin-bottom: var(--spacing-large);
+}
+
+/* ---------------------------------------------
+ * Table Styles
+ * --------------------------------------------- */
+.table-bordered {
+    border: 1px solid var(--secondary-color);
+}
+
+/* ---------------------------------------------
+ * Pagination Styles
+ * --------------------------------------------- */
+.pagination .page-link:hover {
+    background-color: var(--secondary-color);
+    color: #fff;
+}
