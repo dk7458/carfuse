@@ -7,7 +7,7 @@
  * - 2025-01-25: Enhanced to allow singleton and factory services.
  */
 
-namespace App\Core;
+ namespace App\Controllers\Utils;
 
 class DependencyInjector
 {
