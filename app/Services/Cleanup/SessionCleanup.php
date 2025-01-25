@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Cleanup;
 
 use Illuminate\Support\Facades\DB;
 use Exception;
