@@ -110,8 +110,16 @@
 </template>
 
 <script>
-import axios from 'axios'
+import { fetchData, handleError } from '../shared/utils'
 
+/**
+ * @component UserProfile
+ * @description User profile management component
+ * 
+ * @api {GET} /api/users/:id - Fetch user profile
+ * @api {PUT} /api/users/:id - Update user profile
+ * @api {PUT} /api/users/:id/password - Update password
+ */
 export default {
   name: 'UserProfile',
   props: {
@@ -141,30 +149,36 @@ export default {
   },
 
   async created() {
-    await this.fetchUserProfile()
+    await this.fetchUserProfile();
   },
 
   methods: {
     async fetchUserProfile() {
       try {
-        const response = await axios.get(`/api/users/${this.userId}`)
-        this.formData = response.data
+        const response = await fetchData(`/api/users/${this.userId}`);
+        this.formData = response;
       } catch (error) {
-        this.showMessage('Error loading profile', 'error')
+        const { message } = handleError(error, 'UserProfile');
+        this.showMessage(message, 'error');
       }
     },
 
     async saveProfile() {
-      if (!this.validateForm()) return
+      if (!this.validateForm()) return;
 
-      this.loading = true
+      this.loading = true;
       try {
-        await axios.put(`/api/users/${this.userId}`, this.formData)
-        this.showMessage('Profile updated successfully', 'success')
+        await fetchData(`/api/users/${this.userId}`, {
+          method: 'PUT',
+          body: JSON.stringify(this.formData),
+          noCache: true
+        });
+        this.showMessage('Profile updated successfully', 'success');
       } catch (error) {
-        this.showMessage('Error updating profile', 'error')
+        const { message } = handleError(error, 'UserProfile');
+        this.showMessage(message, 'error');
       } finally {
-        this.loading = false
+        this.loading = false;
       }
     },
 

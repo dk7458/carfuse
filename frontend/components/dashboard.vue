@@ -75,9 +75,17 @@
 import { Line, Bar } from 'vue-chartjs'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend } from 'chart.js'
 import { format } from 'date-fns'
+import { fetchData, useLoading } from '../shared/utils'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend)
 
+/**
+ * @component Dashboard
+ * @description Main dashboard with metrics and charts
+ * 
+ * @api {GET} /api/dashboard/metrics - Get dashboard metrics
+ * @api {GET} /api/dashboard/activities - Get recent activities
+ */
 export default {
   name: 'Dashboard',
   components: { Line, Bar },
@@ -110,6 +118,10 @@ export default {
       }
     }
   },
+  setup() {
+    const loading = useLoading('dashboard')
+    return { loading }
+  },
   methods: {
     selectMetric(metric) {
       this.selectedMetric = metric
@@ -118,11 +130,16 @@ export default {
 
     async updateData() {
       try {
-        const response = await fetch(`/api/dashboard/metrics?start=${this.dateRange.start}&end=${this.dateRange.end}&metric=${this.selectedMetric}`)
-        const data = await response.json()
+        const data = await fetchData(`/api/dashboard/metrics`, {
+          params: {
+            start: this.dateRange.start,
+            end: this.dateRange.end,
+            metric: this.selectedMetric
+          }
+        })
         this.$emit('data-updated', data)
       } catch (error) {
-        console.error('Error fetching data:', error)
+        this.$emit('error', error)
       }
     },
 

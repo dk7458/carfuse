@@ -62,7 +62,16 @@
 <script>
 import { io } from 'socket.io-client'
 import { format } from 'date-fns'
+import { fetchData, useLoading } from '../shared/utils'
 
+/**
+ * @component NotificationsManager
+ * @description Manages system notifications
+ * 
+ * @api {GET} /api/notifications - Get notifications
+ * @api {PUT} /api/notifications/:id/read - Mark notification as read
+ * @api {DELETE} /api/notifications/:id - Delete notification
+ */
 export default {
   name: 'NotificationsManager',
   
@@ -111,21 +120,23 @@ export default {
     }
   },
 
+  setup() {
+    const loading = useLoading('notifications')
+    return { loading }
+  },
+
   methods: {
     // Fetch notifications from server
     // GET /api/notifications?userId={userId}&role={userRole}
     async fetchNotifications() {
-      this.loading = true
       try {
-        const response = await fetch(
-          `/api/notifications?userId=${this.userId}&role=${this.userRole}`
-        )
-        this.notifications = await response.json()
+        const data = await fetchData(`/api/notifications`, {
+          params: { userId: this.userId, role: this.userRole }
+        })
+        this.notifications = data
         this.newNotification = false
       } catch (error) {
         console.error('Failed to fetch notifications:', error)
-      } finally {
-        this.loading = false
       }
     },
 
@@ -133,11 +144,12 @@ export default {
     // PUT /api/notifications/{id}/read
     async markAsRead(id) {
       try {
-        await fetch(`/api/notifications/${id}/read`, {
-          method: 'PUT'
+        await fetchData(`/api/notifications/${id}/read`, {
+          method: 'PUT',
+          noCache: true
         })
-        this.notifications = this.notifications.map(notif =>
-          notif.id === id ? { ...notif, read: true } : notif
+        this.notifications = this.notifications.map(n => 
+          n.id === id ? { ...n, read: true } : n
         )
       } catch (error) {
         console.error('Failed to mark notification as read:', error)

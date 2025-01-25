@@ -51,6 +51,8 @@
 </template>
 
 <script>
+import { fetchData, useLoading } from '../shared/utils'
+
 /**
  * @component Table
  * @description A reusable table component with sorting and pagination
@@ -70,6 +72,8 @@
  *     <StatusBadge :status="item.status" />
  *   </template>
  * </Table>
+ * 
+ * @api {GET} {dataUrl} - Fetch table data (when dataUrl prop is provided)
  */
 export default {
   name: 'Table',
@@ -93,6 +97,22 @@ export default {
     hover: {
       type: Boolean,
       default: true
+    },
+    // Add dataUrl prop for dynamic data fetching
+    dataUrl: {
+      type: String,
+      default: ''
+    }
+  },
+
+  setup() {
+    const loading = useLoading('table')
+    return { loading }
+  },
+
+  async created() {
+    if (this.dataUrl) {
+      await this.fetchTableData()
     }
   },
 
@@ -136,6 +156,17 @@ export default {
       } else {
         this.sortKey = key
         this.sortOrder = 'asc'
+      }
+    },
+
+    async fetchTableData() {
+      if (!this.dataUrl) return
+
+      try {
+        const data = await fetchData(this.dataUrl)
+        this.$emit('update:data', data)
+      } catch (error) {
+        this.$emit('error', error)
       }
     }
   },

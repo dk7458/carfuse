@@ -53,6 +53,15 @@
 </template>
 
 <script>
+import { fetchData, useLoading } from '../shared/utils'
+
+/**
+ * @component AdminLayout
+ * @description Admin panel layout with navigation and user management
+ * 
+ * @api {POST} /api/auth/logout - Logout admin user
+ * @api {GET} /api/admin/profile - Get admin profile
+ */
 export default {
   name: 'AdminLayout',
   props: {
@@ -74,6 +83,11 @@ export default {
     }
   },
 
+  setup() {
+    const loading = useLoading('adminLayout')
+    return { loading }
+  },
+
   data() {
     return {
       isSidebarCollapsed: false
@@ -85,9 +99,16 @@ export default {
       this.isSidebarCollapsed = !this.isSidebarCollapsed
     },
 
-    logout() {
-      // Implement logout logic
-      this.$router.push('/login')
+    async logout() {
+      try {
+        await fetchData('/api/auth/logout', {
+          method: 'POST',
+          noCache: true
+        })
+        this.$router.push('/login')
+      } catch (error) {
+        console.error('Logout failed:', error)
+      }
     }
   },
 

@@ -1,7 +1,7 @@
 <template>
   <Transition name="modal">
     <div v-if="modelValue" class="modal-overlay" @click="closeOnBackdrop && close()">
-      <div class="modal" :class="size" @click.stop>
+      <div class="modal" :class="[size, { 'loading': loading.value }]" @click.stop>
         <div class="modal-header">
           <slot name="header">
             <h3>{{ title }}</h3>
@@ -15,8 +15,8 @@
 
         <div class="modal-footer">
           <slot name="footer">
-            <Button @click="close" variant="secondary">Cancel</Button>
-            <Button @click="confirm" variant="primary">Confirm</Button>
+            <Button @click="close" variant="secondary" :disabled="loading.value">Cancel</Button>
+            <Button @click="confirm" variant="primary" :loading="loading.value">Confirm</Button>
           </slot>
         </div>
       </div>
@@ -25,22 +25,11 @@
 </template>
 
 <script>
+import { useLoading } from '../shared/utils'
+
 /**
  * @component Modal
- * @description A reusable modal dialog component with customizable header, body, and footer
- * 
- * @example
- * <Modal
- *   v-model="showModal"
- *   title="Confirm Action"
- *   size="md"
- *   :closeable="true"
- *   @confirm="handleConfirm"
- * >
- *   <template #header>Custom Header</template>
- *   Modal content goes here
- *   <template #footer>Custom Footer</template>
- * </Modal>
+ * @description Enhanced modal with loading state management
  */
 export default {
   name: 'Modal',
@@ -68,16 +57,31 @@ export default {
     }
   },
   
-  emits: ['update:modelValue', 'confirm', 'close'],
+  emits: ['update:modelValue', 'confirm', 'close', 'error'],
+
+  setup() {
+    const loading = useLoading('modal')
+    return { loading }
+  },
   
   methods: {
+    async confirm() {
+      this.loading.value = true
+      try {
+        await this.$emit('confirm')
+        this.close()
+      } catch (error) {
+        console.error('Modal confirmation failed:', error)
+        this.$emit('error', error)
+      } finally {
+        this.loading.value = false
+      }
+    },
+
     close() {
+      if (this.loading.value) return
       this.$emit('update:modelValue', false)
       this.$emit('close')
-    },
-    confirm() {
-      this.$emit('confirm')
-      this.close()
     }
   }
 }

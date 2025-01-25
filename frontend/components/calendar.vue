@@ -19,7 +19,20 @@ import FullCalendar from '@fullcalendar/vue3'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
+import { fetchData, handleError } from '../shared/utils'
 
+/**
+ * @component Calendar
+ * @description Calendar component with dynamic event loading
+ * 
+ * @api {GET} /api/events - Fetch events
+ * @apiParam {string} start - Start date
+ * @apiParam {string} end - End date
+ * 
+ * @api {POST} /api/events - Create event
+ * @api {PUT} /api/events/:id - Update event
+ * @api {DELETE} /api/events/:id - Delete event
+ */
 export default defineComponent({
   name: 'Calendar',
   components: {
@@ -51,7 +64,15 @@ export default defineComponent({
         },
         editable: this.userRole === 'admin',
         selectable: this.userRole === 'admin',
-        events: this.eventsUrl,
+        events: async (info, successCallback, failureCallback) => {
+          try {
+            const events = await fetchData(`${this.eventsUrl}?start=${info.startStr}&end=${info.endStr}`);
+            successCallback(events);
+          } catch (error) {
+            handleError(error, 'Calendar');
+            failureCallback(error);
+          }
+        },
         eventClick: this.handleEventClick,
         dateClick: this.handleDateClick,
         eventDrop: this.handleEventDrop,
@@ -72,12 +93,21 @@ export default defineComponent({
       }
     },
 
-    handleEventDrop(info) {
-      if (this.userRole === 'admin') {
-        this.$emit('event-drop', {
-          event: info.event,
-          oldEvent: info.oldEvent
-        })
+    async handleEventDrop(info) {
+      if (this.userRole !== 'admin') return;
+
+      try {
+        await fetchData(`/api/events/${info.event.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            start: info.event.startStr,
+            end: info.event.endStr
+          }),
+          noCache: true
+        });
+      } catch (error) {
+        handleError(error, 'Calendar');
+        info.revert();
       }
     },
 

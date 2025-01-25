@@ -4,31 +4,22 @@
       'custom-button',
       size,
       variant,
-      { 'loading': loading, 'block': block }
+      { 'loading': loading || componentLoading.value, 'block': block }
     ]"
-    :disabled="disabled || loading"
+    :disabled="isDisabled"
     @click="$emit('click', $event)"
   >
-    <span v-if="loading" class="spinner"></span>
+    <span v-if="loading || componentLoading.value" class="spinner"></span>
     <slot></slot>
   </button>
 </template>
 
 <script>
+import { useLoading } from '../shared/utils'
+
 /**
  * @component Button
- * @description A customizable button component with various sizes, colors, and states
- * 
- * @example
- * <Button
- *   size="lg"
- *   variant="primary"
- *   :loading="isLoading"
- *   :block="true"
- *   @click="handleClick"
- * >
- *   Submit
- * </Button>
+ * @description Enhanced button component with loading state management
  */
 export default {
   name: 'Button',
@@ -64,7 +55,18 @@ export default {
     }
   },
   
-  emits: ['click']
+  emits: ['click'],
+
+  setup(props) {
+    const loading = useLoading(`button-${props.variant}`)
+    return { componentLoading: loading }
+  },
+
+  computed: {
+    isDisabled() {
+      return this.disabled || this.loading || this.componentLoading.value
+    }
+  }
 }
 </script>
 

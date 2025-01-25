@@ -53,32 +53,14 @@
 </template>
 
 <script>
+import { fetchData, useLoading } from '../shared/utils'
+
 /**
  * @component UserLayout
- * @description Base layout for user-facing pages with navigation and breadcrumbs
+ * @description Enhanced user layout with data fetching and loading states
  * 
- * @example
- * <UserLayout
- *   page-title="My Bookings"
- *   :breadcrumbs="[
- *     { text: 'Home', link: '/' },
- *     { text: 'My Bookings' }
- *   ]"
- *   :secondary-nav-items="[
- *     { label: 'Active Bookings', path: '/bookings/active' },
- *     { label: 'History', path: '/bookings/history' }
- *   ]"
- * >
- *   <template #navbar>
- *     <CustomNavbar />
- *   </template>
- *   
- *   <template #footer>
- *     <CustomFooter />
- *   </template>
- *   
- *   <MainContent />
- * </UserLayout>
+ * @api {POST} /api/auth/logout - User logout
+ * @api {GET} /api/users/profile - Get user profile
  */
 export default {
   name: 'UserLayout',
@@ -109,6 +91,11 @@ export default {
     }
   },
 
+  setup() {
+    const loading = useLoading('userLayout')
+    return { loading }
+  },
+
   computed: {
     currentYear() {
       return new Date().getFullYear()
@@ -116,14 +103,30 @@ export default {
   },
 
   methods: {
-    logout() {
-      // Implement logout logic here
-      this.$router.push('/login')
+    async logout() {
+      try {
+        await fetchData('/api/auth/logout', {
+          method: 'POST',
+          noCache: true
+        })
+        this.$router.push('/login')
+      } catch (error) {
+        console.error('Logout failed:', error)
+      }
     },
 
-    isCurrentPath(path) {
-      return this.$route.path === path
+    async fetchUserProfile() {
+      try {
+        const profile = await fetchData('/api/users/profile')
+        this.$emit('profile-loaded', profile)
+      } catch (error) {
+        console.error('Failed to load profile:', error)
+      }
     }
+  },
+
+  async created() {
+    await this.fetchUserProfile()
   }
 }
 </script>
