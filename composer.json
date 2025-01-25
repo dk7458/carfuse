@@ -42,16 +42,17 @@
         }
     },
     "scripts": {
-        "post-install-cmd": [
-            "@php artisan key:generate",
-            "@php artisan migrate",
-            "@php artisan config:cache"
-        ],
-        "post-update-cmd": [
-            "@php artisan migrate",
-            "@php artisan config:cache"
-        ]
-    },
+    "post-install-cmd": [
+        "@php artisan key:generate || true",
+        "@php artisan migrate || true",
+        "@php artisan config:cache || true"
+    ],
+    "post-update-cmd": [
+        "@php artisan migrate || true",
+        "@php artisan config:cache || true"
+    ]
+},
+
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
