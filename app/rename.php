@@ -7,7 +7,7 @@
  * - Converts directory names (e.g., my_folder -> MyFolder).
  */
 
-$baseDir = /app; // Change this to the root directory of your project if needed
+$baseDir = __DIR__; // Change this to the root directory of your project if needed
 
 /**
  * Recursively renames files and directories.
