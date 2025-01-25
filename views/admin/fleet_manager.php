@@ -27,16 +27,11 @@ $queryString = http_build_query($filters);
 $response = file_get_contents(BASE_URL . "/public/api.php?endpoint=fleet&action=fetch_vehicles&" . $queryString);
 $data = json_decode($response, true);
 
-if ($data['success']) {
+if (!$data || !$data['success']) {
+    echo "<p>Error fetching fleet data. Please try again later.</p>";
+    $vehicles = [];
+} else {
     $vehicles = $data['vehicles'];
-    foreach ($vehicles as $vehicle) {
-        echo "<tr>
-            <td>{$vehicle['make']}</td>
-            <td>{$vehicle['model']}</td>
-            <td>{$vehicle['year']}</td>
-            <td>{$vehicle['status']}</td>
-        </tr>";
-    }
 }
 ?>
 <!DOCTYPE html>

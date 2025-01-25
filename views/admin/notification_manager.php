@@ -35,15 +35,11 @@ $queryString = http_build_query($filters);
 $response = file_get_contents(BASE_URL . "/public/api.php?endpoint=notifications&action=fetch_notifications&" . $queryString);
 $data = json_decode($response, true);
 
-if ($data['success']) {
+if (!$data || !$data['success']) {
+    echo "<p>Error fetching notification data. Please try again later.</p>";
+    $notifications = [];
+} else {
     $notifications = $data['notifications'];
-    foreach ($notifications as $notification) {
-        echo "<tr>
-            <td>{$notification['title']}</td>
-            <td>{$notification['message']}</td>
-            <td>{$notification['created_at']}</td>
-        </tr>";
-    }
 }
 
 // Fetch queued notifications

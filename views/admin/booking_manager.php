@@ -23,10 +23,11 @@ $queryString = http_build_query($filters);
 $response = file_get_contents(BASE_URL . "/public/api.php?endpoint=booking&action=fetch_bookings&" . $queryString);
 $data = json_decode($response, true);
 
-if ($data['success']) {
-    $bookings = $data['bookings'];
-} else {
+if (!$data || !$data['success']) {
+    echo "<p>Error fetching booking data. Please try again later.</p>";
     $bookings = [];
+} else {
+    $bookings = $data['bookings'];
 }
 
 ?>

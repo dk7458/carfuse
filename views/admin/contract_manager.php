@@ -21,14 +21,15 @@ $queryString = http_build_query($filters);
 $response = file_get_contents(BASE_URL . "/public/api.php?endpoint=contracts&action=fetch_contracts&" . $queryString);
 $data = json_decode($response, true);
 
-if ($data['success']) {
-    $contracts = $data['contracts'];
-    $totalContracts = $data['totalContracts'];
-    $totalPages = ceil($totalContracts / 10);
-} else {
+if (!$data || !$data['success']) {
+    echo "<p>Error fetching contract data. Please try again later.</p>";
     $contracts = [];
     $totalContracts = 0;
     $totalPages = 1;
+} else {
+    $contracts = $data['contracts'];
+    $totalContracts = $data['totalContracts'];
+    $totalPages = ceil($totalContracts / 10);
 }
 
 $adminSignature = getAdminSignature();

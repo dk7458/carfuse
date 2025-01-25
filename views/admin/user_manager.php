@@ -23,23 +23,11 @@ $offset = ($page - 1) * $itemsPerPage;
 $response = file_get_contents(BASE_URL . "/public/api.php?endpoint=user&action=fetch_users");
 $data = json_decode($response, true);
 
-$users = $data['success'] ? $data['users'] : [];
-if (!$data['success']) {
-    echo "<p>Error fetching user data.</p>";
-}
-
-if (is_array($users)) {
-    foreach ($users as $user) {
-        echo "<tr>
-            <td>" . htmlspecialchars($user['name']) . "</td>
-            <td>" . htmlspecialchars($user['email']) . "</td>
-            <td>" . htmlspecialchars($user['role']) . "</td>
-            <td>" . htmlspecialchars($user['created_at']) . "</td>
-        </tr>";
-    }
-    echo "<p>Total Users: " . count($users) . "</p>";
+if (!$data || !$data['success']) {
+    echo "<p>Error fetching user data. Please try again later.</p>";
+    $users = [];
 } else {
-    echo "<p>No user data available.</p>";
+    $users = $data['users'];
 }
 
 $totalUsers = countUsers($conn, $search, $role, $status);

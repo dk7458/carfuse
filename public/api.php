@@ -83,52 +83,115 @@ try {
         exit;
     }
 
-    if ($endpoint === 'notifications') {
-        require_once BASE_PATH . 'controllers/notification_ctrl.php';
-        if ($action === 'fetch_unread') {
-            $notifications = fetchUnreadNotifications();
-            echo json_encode(['success' => true, 'notifications' => $notifications]);
-        } elseif ($action === 'add_notification') {
-            $message = $_POST['message'];
-            $result = addNotification($message);
-            echo json_encode(['success' => $result]);
-        } else {
-            echo json_encode(['success' => false, 'error' => 'Invalid action']);
-        }
-    } elseif ($endpoint === 'summary') {
-        require_once BASE_PATH . 'controllers/summary_ctrl.php';
-        if ($action === 'fetch_summary') {
-            $summaryData = fetchSummaryData(); // Implement this function in summary_ctrl.php if needed.
-            echo json_encode(['success' => true, 'data' => $summaryData]);
-            exit;
-        }
-    } elseif (in_array($endpoint, $publicEndpoints)) {
-        // Public endpoints
-        $controllerPath = BASE_PATH . "controllers/{$endpoint}_ctrl.php";
-    } elseif (in_array($endpoint, $sensitiveEndpoints)) {
-        // Sensitive endpoints require authentication
-        if (!isAuthenticated()) {
-            throw new Exception('Unauthorized access.');
-        }
+    switch ($endpoint) {
+        case 'user':
+            require_once BASE_PATH . 'controllers/user_ctrl.php';
+            switch ($action) {
+                case 'fetch_users':
+                    $users = fetchUsers($conn);
+                    echo json_encode(['success' => true, 'users' => $users]);
+                    exit;
+                // ...other user actions...
+            }
+            break;
 
-        // Check if the user has the required role
-        if (!hasAccess('admin')) { // Example role check
-            throw new Exception('Insufficient permissions.');
-        }
+        case 'summary':
+            require_once BASE_PATH . 'controllers/summary_ctrl.php';
+            switch ($action) {
+                case 'get_summary':
+                    $summary = getSummary($conn);
+                    echo json_encode(['success' => true, 'summary' => $summary]);
+                    exit;
+                // ...other summary actions...
+            }
+            break;
 
-        $controllerPath = BASE_PATH . "controllers/{$endpoint}_ctrl.php";
-    } else {
-        throw new Exception('Invalid endpoint.');
+        case 'contracts':
+            require_once BASE_PATH . 'controllers/contracts_ctrl.php';
+            switch ($action) {
+                case 'list_contracts':
+                    $contracts = listContracts($conn);
+                    echo json_encode(['success' => true, 'contracts' => $contracts]);
+                    exit;
+                // ...other contracts actions...
+            }
+            break;
+
+        case 'fleet':
+            require_once BASE_PATH . 'controllers/fleet_ctrl.php';
+            switch ($action) {
+                case 'get_fleet':
+                    $fleet = getFleet($conn);
+                    echo json_encode(['success' => true, 'fleet' => $fleet]);
+                    exit;
+                // ...other fleet actions...
+            }
+            break;
+
+        case 'notifications':
+            require_once BASE_PATH . 'controllers/notifications_ctrl.php';
+            switch ($action) {
+                case 'get_notifications':
+                    $notifications = getNotifications($conn);
+                    echo json_encode(['success' => true, 'notifications' => $notifications]);
+                    exit;
+                // ...other notifications actions...
+            }
+            break;
+
+        case 'notifications':
+            require_once BASE_PATH . 'controllers/notification_ctrl.php';
+            if ($action === 'fetch_unread') {
+                $notifications = fetchUnreadNotifications();
+                echo json_encode(['success' => true, 'notifications' => $notifications]);
+            } elseif ($action === 'add_notification') {
+                $message = $_POST['message'];
+                $result = addNotification($message);
+                echo json_encode(['success' => $result]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Invalid action']);
+            }
+            break;
+
+        case 'summary':
+            require_once BASE_PATH . 'controllers/summary_ctrl.php';
+            if ($action === 'fetch_summary') {
+                $summaryData = fetchSummaryData(); // Implement this function in summary_ctrl.php if needed.
+                echo json_encode(['success' => true, 'data' => $summaryData]);
+                exit;
+            }
+            break;
+
+        default:
+            if (in_array($endpoint, $publicEndpoints)) {
+                // Public endpoints
+                $controllerPath = BASE_PATH . "controllers/{$endpoint}_ctrl.php";
+            } elseif (in_array($endpoint, $sensitiveEndpoints)) {
+                // Sensitive endpoints require authentication
+                if (!isAuthenticated()) {
+                    throw new Exception('Unauthorized access.');
+                }
+
+                // Check if the user has the required role
+                if (!hasAccess('admin')) { // Example role check
+                    throw new Exception('Insufficient permissions.');
+                }
+
+                $controllerPath = BASE_PATH . "controllers/{$endpoint}_ctrl.php";
+            } else {
+                throw new Exception('Invalid endpoint.');
+            }
+
+            // Ensure the controller file exists
+            if (!file_exists($controllerPath)) {
+                throw new Exception("Controller file for endpoint '{$endpoint}' not found.");
+            }
+
+            // Include the controller
+            require_once $controllerPath;
+            logApiRequest($endpoint, $action, 'success', 'Request handled successfully');
+            break;
     }
-
-    // Ensure the controller file exists
-    if (!file_exists($controllerPath)) {
-        throw new Exception("Controller file for endpoint '{$endpoint}' not found.");
-    }
-
-    // Include the controller
-    require_once $controllerPath;
-    logApiRequest($endpoint, $action, 'success', 'Request handled successfully');
 } catch (Exception $e) {
     // Log and handle errors
     logApiRequest($endpoint, $action, 'error', $e->getMessage());
