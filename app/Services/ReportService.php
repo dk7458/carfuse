@@ -2,140 +2,188 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\View;
-use Carbon\Carbon;
-use Exception;
+use PDO;
 
 class ReportService
 {
-    private $config;
-    private $logger;
-    private $validator;
+    private PDO $db;
 
-    public function __construct()
+    public function __construct(PDO $db)
     {
-        $this->config = Config::get('reports');
-        $this->logger = Log::channel('reports');
-        $this->validator = new ReportValidator();
+        $this->db = $db;
     }
 
-    public function generateReport(
-        string $type,
-        string $period,
-        Carbon $startDate,
-        Carbon $endDate,
-        array $options = []
-    ): array {
-        try {
-            $this->logger->info("Generating {$type} report for period: {$period}");
+    /**
+     * Generate a report for admin
+     */
+    public function generateReport(string $reportType, array $dateRange, array $filters = [], string $format): string
+    {
+        $data = match ($reportType) {
+            'bookings' => $this->getBookingReportData($dateRange, $filters),
+            'payments' => $this->getPaymentReportData($dateRange, $filters),
+            'users' => $this->getUserReportData($dateRange, $filters),
+            default => throw new \InvalidArgumentException("Invalid report type: $reportType"),
+        };
 
-            $data = $this->fetchReportData($type, $startDate, $endDate);
-            $template = $this->config['types'][$type]['template'];
-            
-            $report = [
-                'type' => $type,
-                'period' => $period,
-                'start_date' => $startDate->toDateString(),
-                'end_date' => $endDate->toDateString(),
-                'generated_at' => now(),
-                'data' => $data,
-            ];
+        return $this->exportReport($data, $reportType, $format);
+    }
 
-            return [
-                'success' => true,
-                'report' => $report,
-                'template' => $template,
-            ];
-        } catch (Exception $e) {
-            $this->logger->error("Report generation failed", ['error' => $e->getMessage()]);
-            return ['success' => false, 'error' => $e->getMessage()];
+    /**
+     * Generate a user-specific report
+     */
+    public function generateUserReport(int $userId, string $reportType, array $dateRange, string $format): string
+    {
+        $data = match ($reportType) {
+            'bookings' => $this->getUserBookingReportData($userId, $dateRange),
+            'payments' => $this->getUserPaymentReportData($userId, $dateRange),
+            default => throw new \InvalidArgumentException("Invalid report type: $reportType"),
+        };
+
+        return $this->exportReport($data, "{$reportType}_user_{$userId}", $format);
+    }
+
+    /**
+     * Fetch booking report data
+     */
+    private function getBookingReportData(array $dateRange, array $filters): array
+    {
+        $query = "
+            SELECT b.id, b.pickup_date, b.dropoff_date, b.status, b.total_price, u.email AS user_email
+            FROM bookings b
+            JOIN users u ON b.user_id = u.id
+            WHERE b.created_at BETWEEN :start AND :end
+        ";
+
+        if (!empty($filters['status'])) {
+            $query .= " AND b.status = :status";
         }
+
+        $stmt = $this->db->prepare($query);
+        $params = [
+            ':start' => $dateRange['start'],
+            ':end' => $dateRange['end'],
+        ];
+
+        if (!empty($filters['status'])) {
+            $params[':status'] = $filters['status'];
+        }
+
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public function exportReport(array $report, string $format): string
+    /**
+     * Fetch payment report data
+     */
+    private function getPaymentReportData(array $dateRange, array $filters): array
     {
-        try {
-            if (!$this->validator->validate($report)) {
-                throw new Exception("Report validation failed");
+        $query = "
+            SELECT t.id, t.amount, t.type, t.status, t.created_at, u.email AS user_email
+            FROM transaction_logs t
+            JOIN users u ON t.user_id = u.id
+            WHERE t.created_at BETWEEN :start AND :end
+        ";
+
+        if (!empty($filters['type'])) {
+            $query .= " AND t.type = :type";
+        }
+
+        $stmt = $this->db->prepare($query);
+        $params = [
+            ':start' => $dateRange['start'],
+            ':end' => $dateRange['end'],
+        ];
+
+        if (!empty($filters['type'])) {
+            $params[':type'] = $filters['type'];
+        }
+
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Fetch user report data
+     */
+    private function getUserReportData(array $dateRange, array $filters): array
+    {
+        $query = "
+            SELECT id, email, created_at, active
+            FROM users
+            WHERE created_at BETWEEN :start AND :end
+        ";
+
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([
+            ':start' => $dateRange['start'],
+            ':end' => $dateRange['end'],
+        ]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Fetch user-specific booking report data
+     */
+    private function getUserBookingReportData(int $userId, array $dateRange): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT id, pickup_date, dropoff_date, status, total_price
+            FROM bookings
+            WHERE user_id = :user_id AND created_at BETWEEN :start AND :end
+        ");
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':start' => $dateRange['start'],
+            ':end' => $dateRange['end'],
+        ]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Fetch user-specific payment report data
+     */
+    private function getUserPaymentReportData(int $userId, array $dateRange): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT id, amount, type, status, created_at
+            FROM transaction_logs
+            WHERE user_id = :user_id AND created_at BETWEEN :start AND :end
+        ");
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':start' => $dateRange['start'],
+            ':end' => $dateRange['end'],
+        ]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Export the report data
+     */
+    private function exportReport(array $data, string $reportName, string $format): string
+    {
+        $filePath = __DIR__ . "/../../storage/reports/{$reportName}_" . date('YmdHis') . ".{$format}";
+
+        if ($format === 'csv') {
+            $file = fopen($filePath, 'w');
+            if (!empty($data)) {
+                fputcsv($file, array_keys($data[0])); // Add headers
+                foreach ($data as $row) {
+                    fputcsv($file, $row);
+                }
             }
-
-            $formatter = $this->getFormatter($format);
-            $filename = $this->generateFilename($report['type'], $format);
-            $content = $formatter->format($report);
-            $path = $this->config['delivery']['local']['path'] . '/' . $filename;
-
-            file_put_contents($path, $content);
-            $this->logger->info("Report exported", ['format' => $format, 'path' => $path]);
-
-            return $path;
-        } catch (Exception $e) {
-            $this->logger->error("Report export failed", ['error' => $e->getMessage()]);
-            throw $e;
-        }
-    }
-
-    public function sendReport(string $path, string $method, array $options = []): bool
-    {
-        try {
-            $delivery = $this->getDeliveryMethod($method);
-            return $delivery->send($path, $options);
-        } catch (Exception $e) {
-            $this->logger->error("Report delivery failed", ['error' => $e->getMessage()]);
-            return false;
-        }
-    }
-
-    private function fetchReportData(string $type, Carbon $startDate, Carbon $endDate): array
-    {
-        $chunkSize = $this->config['types'][$type]['query_chunk_size'];
-        $data = [];
-
-        switch ($type) {
-            case 'revenue':
-                DB::table('transactions')
-                    ->whereBetween('created_at', [$startDate, $endDate])
-                    ->orderBy('id')
-                    ->chunk($chunkSize, function ($transactions) use (&$data) {
-                        foreach ($transactions as $transaction) {
-                            $data[] = $transaction;
-                        }
-                    });
-                break;
-            // Add other report types here
+            fclose($file);
+        } elseif ($format === 'pdf') {
+            // For simplicity, we use plain text for PDF export (enhance later with libraries like FPDF or TCPDF)
+            $content = '';
+            foreach ($data as $row) {
+                $content .= implode(' | ', $row) . "\n";
+            }
+            file_put_contents($filePath, $content);
+        } else {
+            throw new \InvalidArgumentException("Unsupported format: $format");
         }
 
-        return $data;
-    }
-
-    private function getFormatter(string $format): ReportFormatter
-    {
-        return match($format) {
-            'csv' => new CSVFormatter(),
-            'pdf' => new PDFFormatter(),
-            'json' => new JSONFormatter(),
-            default => throw new Exception("Unsupported format: {$format}"),
-        };
-    }
-
-    private function generateFilename(string $type, string $format): string
-    {
-        return sprintf(
-            '%s_%s.%s',
-            $type,
-            date('Y-m-d_His'),
-            $format
-        );
-    }
-
-    private function getDeliveryMethod(string $method): ReportDelivery
-    {
-        return match($method) {
-            'email' => new EmailDelivery(),
-            'sftp' => new SFTPDelivery(),
-            default => throw new Exception("Unsupported delivery method: {$method}"),
-        };
+        return $filePath;
     }
 }

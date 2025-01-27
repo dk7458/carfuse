@@ -2,195 +2,208 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\DB;
-use App\Models\User;
-use Exception;
-
-abstract class NotificationType
-{
-    protected $logger;
-    protected $config;
-
-    public function __construct()
-    {
-        $this->logger = Log::channel('notifications');
-        $this->config = Config::get('notifications');
-    }
-
-    abstract public function sendNotification(User $user, string $template, array $data): bool;
-
-    protected function getTemplateContent(string $template, array $data, string $locale): string
-    {
-        $path = $this->config['templates_path'] . "/{$locale}/{$template}.blade.php";
-        
-        if (!file_exists($path)) {
-            $path = $this->config['templates_path'] . "/en/{$template}.blade.php";
-        }
-
-        // Template rendering logic here
-        // ...
-
-        return view($path, $data)->render();
-    }
-}
-
-class EmailNotification extends NotificationType
-{
-    public function sendNotification(User $user, string $template, array $data): bool
-    {
-        try {
-            $content = $this->getTemplateContent($template, $data, $user->locale);
-            // Email sending logic here using configured provider
-            // ...
-            $this->logger->info("Email sent to user: {$user->id}");
-            return true;
-        } catch (Exception $e) {
-            return false;
-        }
-    }
-}
-
-class SMSNotification extends NotificationType
-{
-    public function sendNotification(User $user, string $template, array $data): bool
-    {
-        try {
-            $content = $this->getTemplateContent($template, $data, $user->locale);
-            // SMS sending logic here using configured provider
-            // ...
-            $this->logger->info("SMS sent to user: {$user->id}");
-            return true;
-        } catch (Exception $e) {
-            return false;
-        }
-    }
-}
-
-class PushNotification extends NotificationType
-{
-    public function sendNotification(User $user, string $template, array $data): bool
-    {
-        try {
-            $content = $this->getTemplateContent($template, $data, $user->locale);
-            // Push notification logic here using configured provider
-            // ...
-            $this->logger->info("Push notification sent to user: {$user->id}");
-            return true;
-        } catch (Exception $e) {
-            return false;
-        }
-    }
-}
-
-class RetryManager
-{
-    private $retryCount = [];
-    private $logger;
-    private $config;
-
-    public function __construct()
-    {
-        $this->logger = Log::channel('notifications');
-        $this->config = Config::get('notifications');
-    }
-
-    public function handleRetry(string $type, User $user, string $template, array $data): bool
-    {
-        $key = "{$type}:{$user->id}:{$template}";
-        $this->retryCount[$key] = ($this->retryCount[$key] ?? 0) + 1;
-
-        $this->logger->error("Failed to send {$type} notification to user: {$user->id}", [
-            'error' => $exception->getMessage(),
-            'attempt' => $this->retryCount[$key]
-        ]);
-
-        if ($this->retryCount[$key] < $this->config['retry']['max_attempts']) {
-            $this->queueFailedNotification($type, $user, $template, $data);
-            return true;
-        }
-
-        return false;
-    }
-
-    private function queueFailedNotification(string $type, User $user, string $template, array $data): void
-    {
-        // Queue the notification for retry
-        DB::table('failed_notifications')->insert([
-            'type' => $type,
-            'user_id' => $user->id,
-            'template' => $template,
-            'data' => json_encode($data),
-            'attempts' => $this->retryCount["{$type}:{$user->id}:{$template}"],
-            'retry_after' => now()->addSeconds($this->config['retry']['interval']),
-            'created_at' => now(),
-        ]);
-    }
-}
+use PDO;
+use Psr\Log\LoggerInterface;
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
 class NotificationService
 {
-    private $config;
-    private $logger;
-    private $retryManager;
-    private $notificationTypes = [];
+    private PDO $db;
+    private LoggerInterface $logger;
+    private array $config;
+    private array $retryCount = [];
+    private const MAX_RETRY_ATTEMPTS = 3;
 
-    public function __construct()
+    public function __construct(PDO $db, LoggerInterface $logger, array $config)
     {
-        $this->config = Config::get('notifications');
-        $this->logger = Log::channel('notifications');
-        $this->retryManager = new RetryManager();
-
-        $this->registerNotificationType('email', new EmailNotification());
-        $this->registerNotificationType('sms', new SMSNotification());
-        $this->registerNotificationType('push', new PushNotification());
+        $this->db = $db;
+        $this->logger = $logger;
+        $this->config = $config;
     }
 
-    public function registerNotificationType(string $type, NotificationType $notificationType): void
-    {
-        $this->notificationTypes[$type] = $notificationType;
+    /**
+     * Send notification to a user
+     */
+    public function sendNotification(
+        int $userId,
+        string $type,
+        string $message,
+        array $options = []
+    ): bool {
+        try {
+            // Store notification in the database
+            $stmt = $this->db->prepare("
+                INSERT INTO notifications (user_id, type, message, sent_at, is_read)
+                VALUES (:user_id, :type, :message, NOW(), 0)
+            ");
+            $stmt->execute([
+                'user_id' => $userId,
+                'type' => $type,
+                'message' => $message,
+            ]);
+
+            $this->logger->info('Notification stored in database', [
+                'user_id' => $userId,
+                'type' => $type,
+                'message' => $message,
+            ]);
+
+            // Handle specific notification delivery methods
+            return match ($type) {
+                'email' => $this->sendEmail($options['email'] ?? '', $message, $options['subject'] ?? 'Notification'),
+                'sms' => $this->sendSMS($options['phone'] ?? '', $message),
+                'webhook' => $this->sendWebhook($options['url'] ?? '', $message),
+                'push' => $this->sendPushNotification($options['device_token'] ?? '', $message),
+                default => throw new \InvalidArgumentException("Unsupported notification type: $type"),
+            };
+        } catch (\Exception $e) {
+            $this->logger->error('Notification sending failed', [
+                'user_id' => $userId,
+                'type' => $type,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
     }
 
-    public function sendNotification(string $type, User $user, string $template, array $data, array $options = []): bool
+    /**
+     * Send an email using PHPMailer
+     */
+    private function sendEmail(string $to, string $message, string $subject): bool
     {
-        if (!isset($this->notificationTypes[$type])) {
-            throw new Exception("Notification type {$type} not supported.");
+        if (empty($to)) {
+            $this->logger->warning('Email not sent: No recipient specified');
+            return false;
+        }
+
+        $mail = new PHPMailer(true);
+
+        try {
+            // SMTP configuration
+            $mail->isSMTP();
+            $mail->Host = $this->config['smtp_host'];
+            $mail->SMTPAuth = true;
+            $mail->Username = $this->config['smtp_user'];
+            $mail->Password = $this->config['smtp_password'];
+            $mail->SMTPSecure = $this->config['smtp_secure'] ?? 'tls';
+            $mail->Port = $this->config['smtp_port'];
+
+            // Email settings
+            $mail->setFrom($this->config['from_email'], $this->config['from_name']);
+            $mail->addAddress($to);
+            $mail->Subject = $subject;
+            $mail->Body = $message;
+            $mail->isHTML(true);
+
+            $mail->send();
+
+            $this->logger->info("Email sent to $to");
+            return true;
+        } catch (Exception $e) {
+            $this->logger->error('Email sending failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Send an SMS
+     */
+    private function sendSMS(string $phone, string $message): bool
+    {
+        if (empty($phone)) {
+            $this->logger->warning('SMS not sent: No phone number specified');
+            return false;
         }
 
         try {
-            if (!$this->shouldSendNotification($user, $type)) {
-                return false;
-            }
-
-            return $this->notificationTypes[$type]->sendNotification($user, $template, $data);
-        } catch (Exception $e) {
-            return $this->retryManager->handleRetry($type, $user, $template, $data);
+            // Simulate SMS API integration
+            $this->logger->info("Sending SMS to $phone: $message");
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('SMS sending failed', ['error' => $e->getMessage()]);
+            return false;
         }
     }
 
-    public function sendBatchNotifications(array $users, string $type, string $template, array $data): array
+    /**
+     * Send a webhook notification
+     */
+    private function sendWebhook(string $url, string $message): bool
     {
-        $results = ['success' => 0, 'failed' => 0];
-        $chunks = array_chunk($users, $this->config['batch']['size']);
-
-        foreach ($chunks as $chunk) {
-            foreach ($chunk as $user) {
-                $success = $this->sendNotification($type, $user, $template, $data);
-                $results[$success ? 'success' : 'failed']++;
-            }
-            sleep($this->config['batch']['delay']);
+        if (empty($url)) {
+            $this->logger->warning('Webhook not sent: No URL specified');
+            return false;
         }
 
-        return $results;
+        try {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['message' => $message]));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            $response = curl_exec($ch);
+            curl_close($ch);
+
+            if ($response === false) {
+                throw new \Exception('Webhook request failed');
+            }
+
+            $this->logger->info("Webhook sent to $url");
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('Webhook sending failed', ['error' => $e->getMessage()]);
+            return false;
+        }
     }
 
-    private function shouldSendNotification(User $user, string $type): bool
+    /**
+     * Send a push notification
+     */
+    private function sendPushNotification(string $deviceToken, string $message): bool
     {
-        $preferences = DB::table('notification_preferences')
-            ->where('user_id', $user->id)
-            ->first();
+        if (empty($deviceToken)) {
+            $this->logger->warning('Push notification not sent: No device token specified');
+            return false;
+        }
 
-        return $preferences?->{$type . '_enabled'} ?? true;
+        try {
+            $payload = [
+                'to' => $deviceToken,
+                'notification' => [
+                    'title' => 'Notification',
+                    'body' => $message,
+                ],
+            ];
+
+            $this->sendFCMRequest($payload);
+            $this->logger->info("Push notification sent to device token $deviceToken");
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('Push notification failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Send Firebase Cloud Messaging (FCM) request
+     */
+    private function sendFCMRequest(array $payload): void
+    {
+        $ch = curl_init('https://fcm.googleapis.com/fcm/send');
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: key=' . $this->config['fcm_api_key'],
+        ]);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        $response = curl_exec($ch);
+
+        if (curl_errno($ch) || !$response || json_decode($response, true)['failure'] > 0) {
+            throw new \Exception('FCM push notification failed: ' . curl_error($ch));
+        }
+
+        curl_close($ch);
     }
 }
