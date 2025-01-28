@@ -5,16 +5,22 @@ namespace App\Controllers;
 use App\Services\BookingService;
 use App\Services\PaymentService;
 use App\Services\Validator;
-use App\Services\AuditLogger;
+use AuditManager\Services\AuditService;
 use App\Services\NotificationService;
 use Psr\Log\LoggerInterface;
 
+/**
+ * Booking Controller
+ *
+ * Handles booking operations, including creating, rescheduling,
+ * canceling bookings, and fetching booking details or logs.
+ */
 class BookingController
 {
     private BookingService $bookingService;
     private PaymentService $paymentService;
     private Validator $validator;
-    private AuditLogger $auditLogger;
+    private AuditService $auditService;
     private NotificationService $notificationService;
     private LoggerInterface $logger;
 
@@ -22,14 +28,14 @@ class BookingController
         BookingService $bookingService,
         PaymentService $paymentService,
         Validator $validator,
-        AuditLogger $auditLogger,
+        AuditService $auditService,
         NotificationService $notificationService,
         LoggerInterface $logger
     ) {
         $this->bookingService = $bookingService;
         $this->paymentService = $paymentService;
         $this->validator = $validator;
-        $this->auditLogger = $auditLogger;
+        $this->auditService = $auditService;
         $this->notificationService = $notificationService;
         $this->logger = $logger;
     }
@@ -71,7 +77,13 @@ class BookingController
 
         try {
             $this->bookingService->rescheduleBooking($id, $data['pickup_date'], $data['dropoff_date']);
-            $this->auditLogger->log('booking_rescheduled', ['booking_id' => $id]);
+            $this->auditService->log(
+                'booking_rescheduled',
+                'Booking successfully rescheduled.',
+                $this->bookingService->getUserIdByBooking($id),
+                $id,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
             $this->notificationService->sendNotification(
                 $this->bookingService->getUserIdByBooking($id),
                 'email',
@@ -98,7 +110,13 @@ class BookingController
                 $this->paymentService->processRefundForBooking($id, $refundAmount);
             }
 
-            $this->auditLogger->log('booking_canceled', ['booking_id' => $id]);
+            $this->auditService->log(
+                'booking_canceled',
+                'Booking successfully canceled.',
+                $this->bookingService->getUserIdByBooking($id),
+                $id,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
             $this->notificationService->sendNotification(
                 $this->bookingService->getUserIdByBooking($id),
                 'email',
@@ -160,7 +178,13 @@ class BookingController
         try {
             $bookingId = $this->bookingService->createBooking($data);
 
-            $this->auditLogger->log('booking_created', ['booking_id' => $bookingId]);
+            $this->auditService->log(
+                'booking_created',
+                'New booking created.',
+                $data['user_id'],
+                $bookingId,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
             $this->notificationService->sendNotification(
                 $data['user_id'],
                 'email',

@@ -5,7 +5,7 @@ namespace App\Controllers;
 use App\Services\NotificationService;
 use App\Services\Validator;
 use App\Services\RateLimiter;
-use App\Services\AuditLogger;
+use AuditManager\Services\AuditService;
 use PDO;
 use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
@@ -18,29 +18,32 @@ use Firebase\JWT\JWT;
  */
 class UserController
 {
-    private PDO $db;
+    private PDO $appDb;
+    private PDO $secureDb;
     private LoggerInterface $logger;
     private array $config;
     private Validator $validator;
     private RateLimiter $rateLimiter;
-    private AuditLogger $auditLogger;
+    private AuditService $auditService;
     private NotificationService $notificationService;
 
     public function __construct(
-        PDO $db,
+        PDO $appDb,
+        PDO $secureDb,
         LoggerInterface $logger,
         array $config,
         Validator $validator,
         RateLimiter $rateLimiter,
-        AuditLogger $auditLogger,
+        AuditService $auditService,
         NotificationService $notificationService
     ) {
-        $this->db = $db;
+        $this->appDb = $appDb;
+        $this->secureDb = $secureDb;
         $this->logger = $logger;
         $this->config = $config;
         $this->validator = $validator;
         $this->rateLimiter = $rateLimiter;
-        $this->auditLogger = $auditLogger;
+        $this->auditService = $auditService;
         $this->notificationService = $notificationService;
     }
 
@@ -62,8 +65,9 @@ class UserController
         }
 
         try {
-            $stmt = $this->db->prepare("
-                INSERT INTO users (name, email, password, phone, address, role, created_at)
+            // Store user in secure database
+            $stmt = $this->secureDb->prepare("
+                INSERT INTO users (name, email, password_hash, phone, address, role, created_at)
                 VALUES (:name, :email, :password, :phone, :address, 'user', NOW())
             ");
             $stmt->execute([
@@ -74,11 +78,20 @@ class UserController
                 'address' => $data['address'],
             ]);
 
-            $this->auditLogger->log('user_registered', ['email' => $data['email']]);
+            $userId = $this->secureDb->lastInsertId();
 
-            // Send welcome notification
+            // Log action in secure database
+            $this->auditService->log(
+                'user_registered',
+                'A new user has been registered.',
+                $userId,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            // Send notification
             $this->notificationService->sendNotification(
-                $this->db->lastInsertId(),
+                $userId,
                 'email',
                 'Welcome to Carfuse! Your account has been created successfully.',
                 ['email' => $data['email']]
@@ -100,19 +113,31 @@ class UserController
             return ['status' => 'error', 'message' => 'Too many attempts'];
         }
 
-        $stmt = $this->db->prepare("SELECT * FROM users WHERE email = ?");
+        // Fetch user from secure database
+        $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
         $stmt->execute([$email]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$user || !password_verify($password, $user['password'])) {
-            $this->auditLogger->log('failed_login_attempt', ['ip' => $ip, 'email' => $email]);
+        if (!$user || !password_verify($password, $user['password_hash'])) {
+            $this->auditService->log(
+                'failed_login_attempt',
+                'Failed login attempt.',
+                null,
+                null,
+                $ip
+            );
             return ['status' => 'error', 'message' => 'Invalid credentials'];
         }
 
         $token = $this->generateJWT($user);
 
-        // Log successful login
-        $this->auditLogger->log('user_logged_in', ['user_id' => $user['id'], 'ip' => $ip]);
+        $this->auditService->log(
+            'user_logged_in',
+            'User logged in successfully.',
+            $user['id'],
+            null,
+            $ip
+        );
 
         return ['status' => 'success', 'token' => $token];
     }
@@ -137,10 +162,16 @@ class UserController
             $updates = array_intersect_key($data, array_flip($allowedFields));
             $sql = "UPDATE users SET " . implode(', ', array_map(fn($k) => "$k = :$k", array_keys($updates))) . " WHERE id = :id";
 
-            $stmt = $this->db->prepare($sql);
+            $stmt = $this->secureDb->prepare($sql);
             $stmt->execute([...$updates, 'id' => $userId]);
 
-            $this->auditLogger->log('user_profile_updated', ['user_id' => $userId]);
+            $this->auditService->log(
+                'user_profile_updated',
+                'User profile updated.',
+                $userId,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
 
             return ['status' => 'success', 'message' => 'Profile updated'];
         } catch (\PDOException $e) {
@@ -154,7 +185,7 @@ class UserController
      */
     public function requestPasswordReset(string $email): array
     {
-        $stmt = $this->db->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
         $stmt->execute([$email]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -165,7 +196,7 @@ class UserController
         $token = bin2hex(random_bytes(32));
         $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
 
-        $stmt = $this->db->prepare("
+        $stmt = $this->secureDb->prepare("
             INSERT INTO password_resets (email, token, expires_at) 
             VALUES (:email, :token, :expires)
         ");

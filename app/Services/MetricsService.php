@@ -31,7 +31,11 @@ class MetricsService
 
         // Fetch total and active users
         $stmt = $this->db->query("SELECT COUNT(*) AS total_users, SUM(active = 1) AS active_users FROM users");
-        $metrics = array_merge($metrics, $stmt->fetch(PDO::FETCH_ASSOC));
+        $userData = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($userData) {
+            $metrics['total_users'] = $userData['total_users'];
+            $metrics['active_users'] = $userData['active_users'];
+        }
 
         // Fetch bookings data
         $stmt = $this->db->query("
@@ -41,7 +45,12 @@ class MetricsService
                 SUM(status = 'canceled') AS canceled_bookings
             FROM bookings
         ");
-        $metrics = array_merge($metrics, $stmt->fetch(PDO::FETCH_ASSOC));
+        $bookingData = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($bookingData) {
+            $metrics['total_bookings'] = $bookingData['total_bookings'];
+            $metrics['completed_bookings'] = $bookingData['completed_bookings'];
+            $metrics['canceled_bookings'] = $bookingData['canceled_bookings'];
+        }
 
         // Fetch revenue and refunds
         $stmt = $this->db->query("
@@ -52,9 +61,11 @@ class MetricsService
             WHERE status = 'completed'
         ");
         $revenueData = $stmt->fetch(PDO::FETCH_ASSOC);
-        $metrics['total_revenue'] = $revenueData['total_revenue'];
-        $metrics['total_refunds'] = $revenueData['total_refunds'];
-        $metrics['net_revenue'] = $metrics['total_revenue'] - $metrics['total_refunds'];
+        if ($revenueData) {
+            $metrics['total_revenue'] = $revenueData['total_revenue'] ?? 0.0;
+            $metrics['total_refunds'] = $revenueData['total_refunds'] ?? 0.0;
+            $metrics['net_revenue'] = $metrics['total_revenue'] - $metrics['total_refunds'];
+        }
 
         return $metrics;
     }

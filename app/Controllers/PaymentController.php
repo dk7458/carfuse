@@ -5,7 +5,7 @@ namespace App\Controllers;
 use App\Services\PaymentService;
 use App\Services\Validator;
 use App\Services\NotificationService;
-use App\Services\AuditLogger;
+use AuditManager\Services\AuditService;
 use PDO;
 use Psr\Log\LoggerInterface;
 
@@ -19,7 +19,7 @@ class PaymentController
     private PaymentService $paymentService;
     private Validator $validator;
     private NotificationService $notificationService;
-    private AuditLogger $auditLogger;
+    private AuditService $auditService;
     private PDO $db;
     private LoggerInterface $logger;
 
@@ -27,20 +27,20 @@ class PaymentController
         PaymentService $paymentService,
         Validator $validator,
         NotificationService $notificationService,
-        AuditLogger $auditLogger,
+        AuditService $auditService,
         PDO $db,
         LoggerInterface $logger
     ) {
         $this->paymentService = $paymentService;
         $this->validator = $validator;
         $this->notificationService = $notificationService;
-        $this->auditLogger = $auditLogger;
+        $this->auditService = $auditService;
         $this->db = $db;
         $this->logger = $logger;
     }
 
     /**
-     * Process a payment
+     * Process a payment.
      */
     public function processPayment(array $data): array
     {
@@ -61,7 +61,13 @@ class PaymentController
                 $data['amount']
             );
 
-            $this->auditLogger->log('payment_processed', ['transaction_id' => $transaction['id']]);
+            $this->auditService->log(
+                'payment_processed',
+                'Payment successfully processed.',
+                $data['user_id'],
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
 
             $this->notificationService->sendNotification(
                 $data['user_id'],
@@ -78,7 +84,7 @@ class PaymentController
     }
 
     /**
-     * Refund a payment
+     * Refund a payment.
      */
     public function refundPayment(array $data): array
     {
@@ -97,7 +103,13 @@ class PaymentController
                 $data['amount']
             );
 
-            $this->auditLogger->log('refund_processed', ['refund_id' => $refund['id']]);
+            $this->auditService->log(
+                'refund_processed',
+                'Refund successfully processed.',
+                null,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
 
             $this->notificationService->sendNotification(
                 $refund['user_id'],
@@ -114,7 +126,7 @@ class PaymentController
     }
 
     /**
-     * Set up installment payments
+     * Set up installment payments.
      */
     public function setupInstallment(array $data): array
     {
@@ -137,7 +149,13 @@ class PaymentController
                 $data['payment_method_id']
             );
 
-            $this->auditLogger->log('installment_plan_created', ['installment_plan_id' => $installmentPlan['id']]);
+            $this->auditService->log(
+                'installment_plan_created',
+                'Installment plan successfully created.',
+                $data['user_id'],
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
 
             $this->notificationService->sendNotification(
                 $data['user_id'],
@@ -154,7 +172,7 @@ class PaymentController
     }
 
     /**
-     * Fetch all user transactions
+     * Fetch all user transactions.
      */
     public function getUserTransactions(int $userId): array
     {
@@ -168,7 +186,7 @@ class PaymentController
     }
 
     /**
-     * Fetch payment details
+     * Fetch payment details.
      */
     public function getPaymentDetails(int $transactionId): array
     {

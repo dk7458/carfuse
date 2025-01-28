@@ -36,7 +36,6 @@ class NotificationController
     {
         try {
             $notifications = $this->notificationService->getUserNotifications($userId);
-
             require_once __DIR__ . '/../views/user/notifications.php';
         } catch (\Exception $e) {
             $this->logger->error('Failed to load notifications view', ['error' => $e->getMessage()]);

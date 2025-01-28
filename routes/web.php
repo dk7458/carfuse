@@ -54,4 +54,9 @@ $router->post('admin/reports/generate', [App\Controllers\ReportController::class
 $router->get('user/reports', [App\Controllers\ReportController::class, 'viewUserReports']);
 $router->post('user/reports/generate', [App\Controllers\ReportController::class, 'generateUserReport']);
 
+// Audit Log Routes
+$router->get('admin/audit-logs', [AuditManager\Controllers\AuditController::class, 'index']);
+$router->post('admin/audit-logs/fetch', [AuditManager\Controllers\AuditController::class, 'fetchLogs']);
+$router->post('admin/audit-logs/log', [AuditManager\Controllers\AuditController::class, 'logAction']);
+
 return $router;
