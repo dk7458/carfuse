@@ -31,6 +31,22 @@ try {
 // Load dependencies
 $dependencies = require __DIR__ . '/config/dependencies.php';
 
+// Validate required services
+$requiredServices = [
+    'NotificationService',
+    'TokenService',
+    'Validator',
+];
+
+foreach ($requiredServices as $service) {
+    if (!isset($dependencies[$service])) {
+        $logger->error("Required service {$service} is missing in dependencies.");
+        // Run composer dump-autoload to regenerate the autoload files
+        exec('composer dump-autoload');
+        break;
+    }
+}
+
 // Ensure all dependencies are correctly initialized
 foreach ($dependencies as $dependency) {
     if (is_callable($dependency)) {

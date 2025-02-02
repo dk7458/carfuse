@@ -6,6 +6,8 @@
     <title>Admin Dashboard - CarFuse</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/public/css/styles.css">
+    <script src="/public/js/dashboard.js"></script>
 </head>
 <body>
     <div class="container mt-5">

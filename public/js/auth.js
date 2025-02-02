@@ -1,3 +1,5 @@
+import ajax from './ajax';
+
 document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
@@ -11,53 +13,39 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Handle login form submission
-    function handleLogin(event) {
+    async function handleLogin(event) {
         event.preventDefault();
 
         const formData = new FormData(loginForm);
+        const username = formData.get('username');
+        const password = formData.get('password');
 
-        fetch('/login', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                localStorage.setItem('token', data.token);
-                redirectToDashboard();
-            } else {
-                showError(data.error || 'Login failed.');
-            }
-        })
-        .catch(error => {
+        try {
+            const response = await ajax.post('/login', { username, password });
+            ajax.setToken(response.token);
+            redirectToDashboard();
+        } catch (error) {
             console.error('Error during login:', error);
             showError('Error during login.');
-        });
+        }
     }
 
     // Handle registration form submission
-    function handleRegister(event) {
+    async function handleRegister(event) {
         event.preventDefault();
 
         const formData = new FormData(registerForm);
+        const username = formData.get('username');
+        const password = formData.get('password');
 
-        fetch('/register', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                localStorage.setItem('token', data.token);
-                redirectToDashboard();
-            } else {
-                showError(data.error || 'Registration failed.');
-            }
-        })
-        .catch(error => {
+        try {
+            const response = await ajax.post('/register', { username, password });
+            ajax.setToken(response.token);
+            redirectToDashboard();
+        } catch (error) {
             console.error('Error during registration:', error);
             showError('Error during registration.');
-        });
+        }
     }
 
     // Redirect to dashboard

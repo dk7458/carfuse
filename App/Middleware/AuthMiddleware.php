@@ -6,7 +6,7 @@ use App\Services\Auth\TokenService;
 use Closure;
 use Illuminate\Http\Request;
 
-class AuthenticationMiddleware
+class AuthMiddleware
 {
     protected $tokenService;
 

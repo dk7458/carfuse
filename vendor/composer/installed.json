@@ -2832,17 +2832,17 @@
         },
         {
             "name": "phpunit/phpunit",
-            "version": "10.5.41",
-            "version_normalized": "10.5.41.0",
+            "version": "10.5.44",
+            "version_normalized": "10.5.44.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "e76586fa3d49714f230221734b44892e384109d7"
+                "reference": "1381c62769be4bb88fa4c5aec1366c7c66ca4f36"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/e76586fa3d49714f230221734b44892e384109d7",
-                "reference": "e76586fa3d49714f230221734b44892e384109d7",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/1381c62769be4bb88fa4c5aec1366c7c66ca4f36",
+                "reference": "1381c62769be4bb88fa4c5aec1366c7c66ca4f36",
                 "shasum": ""
             },
             "require": {
@@ -2876,7 +2876,7 @@
             "suggest": {
                 "ext-soap": "To be able to generate mocks based on WSDL files"
             },
-            "time": "2025-01-13T09:33:05+00:00",
+            "time": "2025-01-31T07:00:38+00:00",
             "bin": [
                 "phpunit"
             ],
@@ -2916,7 +2916,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/phpunit/issues",
                 "security": "https://github.com/sebastianbergmann/phpunit/security/policy",
-                "source": "https://github.com/sebastianbergmann/phpunit/tree/10.5.41"
+                "source": "https://github.com/sebastianbergmann/phpunit/tree/10.5.44"
             },
             "funding": [
                 {
@@ -4944,17 +4944,17 @@
         },
         {
             "name": "symfony/http-client",
-            "version": "v6.4.17",
-            "version_normalized": "6.4.17.0",
+            "version": "v6.4.18",
+            "version_normalized": "6.4.18.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/http-client.git",
-                "reference": "88898d842eb29d7e1a903724c94e90a6ca9c0509"
+                "reference": "394b440934056b8d9d6ba250001458e9d7998b7f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/http-client/zipball/88898d842eb29d7e1a903724c94e90a6ca9c0509",
-                "reference": "88898d842eb29d7e1a903724c94e90a6ca9c0509",
+                "url": "https://api.github.com/repos/symfony/http-client/zipball/394b440934056b8d9d6ba250001458e9d7998b7f",
+                "reference": "394b440934056b8d9d6ba250001458e9d7998b7f",
                 "shasum": ""
             },
             "require": {
@@ -4989,7 +4989,7 @@
                 "symfony/process": "^5.4|^6.0|^7.0",
                 "symfony/stopwatch": "^5.4|^6.0|^7.0"
             },
-            "time": "2024-12-18T12:18:31+00:00",
+            "time": "2025-01-28T15:49:13+00:00",
             "type": "library",
             "installation-source": "dist",
             "autoload": {
@@ -5020,7 +5020,7 @@
                 "http"
             ],
             "support": {
-                "source": "https://github.com/symfony/http-client/tree/v6.4.17"
+                "source": "https://github.com/symfony/http-client/tree/v6.4.18"
             },
             "funding": [
                 {
@@ -5121,17 +5121,17 @@
         },
         {
             "name": "symfony/http-foundation",
-            "version": "v6.4.16",
-            "version_normalized": "6.4.16.0",
+            "version": "v6.4.18",
+            "version_normalized": "6.4.18.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/http-foundation.git",
-                "reference": "431771b7a6f662f1575b3cfc8fd7617aa9864d57"
+                "reference": "d0492d6217e5ab48f51fca76f64cf8e78919d0db"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/http-foundation/zipball/431771b7a6f662f1575b3cfc8fd7617aa9864d57",
-                "reference": "431771b7a6f662f1575b3cfc8fd7617aa9864d57",
+                "url": "https://api.github.com/repos/symfony/http-foundation/zipball/d0492d6217e5ab48f51fca76f64cf8e78919d0db",
+                "reference": "d0492d6217e5ab48f51fca76f64cf8e78919d0db",
                 "shasum": ""
             },
             "require": {
@@ -5153,7 +5153,7 @@
                 "symfony/mime": "^5.4|^6.0|^7.0",
                 "symfony/rate-limiter": "^5.4|^6.0|^7.0"
             },
-            "time": "2024-11-13T18:58:10+00:00",
+            "time": "2025-01-09T15:48:56+00:00",
             "type": "library",
             "installation-source": "dist",
             "autoload": {
@@ -5181,7 +5181,7 @@
             "description": "Defines an object-oriented layer for the HTTP specification",
             "homepage": "https://symfony.com",
             "support": {
-                "source": "https://github.com/symfony/http-foundation/tree/v6.4.16"
+                "source": "https://github.com/symfony/http-foundation/tree/v6.4.18"
             },
             "funding": [
                 {
@@ -5318,17 +5318,17 @@
         },
         {
             "name": "symfony/mailer",
-            "version": "v6.4.13",
-            "version_normalized": "6.4.13.0",
+            "version": "v6.4.18",
+            "version_normalized": "6.4.18.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/mailer.git",
-                "reference": "c2f7e0d8d7ac8fe25faccf5d8cac462805db2663"
+                "reference": "e93a6ae2767d7f7578c2b7961d9d8e27580b2b11"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/mailer/zipball/c2f7e0d8d7ac8fe25faccf5d8cac462805db2663",
-                "reference": "c2f7e0d8d7ac8fe25faccf5d8cac462805db2663",
+                "url": "https://api.github.com/repos/symfony/mailer/zipball/e93a6ae2767d7f7578c2b7961d9d8e27580b2b11",
+                "reference": "e93a6ae2767d7f7578c2b7961d9d8e27580b2b11",
                 "shasum": ""
             },
             "require": {
@@ -5353,7 +5353,7 @@
                 "symfony/messenger": "^6.2|^7.0",
                 "symfony/twig-bridge": "^6.2|^7.0"
             },
-            "time": "2024-09-25T14:18:03+00:00",
+            "time": "2025-01-24T15:27:15+00:00",
             "type": "library",
             "installation-source": "dist",
             "autoload": {
@@ -5381,7 +5381,7 @@
             "description": "Helps sending emails",
             "homepage": "https://symfony.com",
             "support": {
-                "source": "https://github.com/symfony/mailer/tree/v6.4.13"
+                "source": "https://github.com/symfony/mailer/tree/v6.4.18"
             },
             "funding": [
                 {
@@ -5401,17 +5401,17 @@
         },
         {
             "name": "symfony/mime",
-            "version": "v6.4.17",
-            "version_normalized": "6.4.17.0",
+            "version": "v6.4.18",
+            "version_normalized": "6.4.18.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/mime.git",
-                "reference": "ea87c8850a54ff039d3e0ab4ae5586dd4e6c0232"
+                "reference": "917d77981eb1ea963608d5cda4d9c0cf72eaa68e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/mime/zipball/ea87c8850a54ff039d3e0ab4ae5586dd4e6c0232",
-                "reference": "ea87c8850a54ff039d3e0ab4ae5586dd4e6c0232",
+                "url": "https://api.github.com/repos/symfony/mime/zipball/917d77981eb1ea963608d5cda4d9c0cf72eaa68e",
+                "reference": "917d77981eb1ea963608d5cda4d9c0cf72eaa68e",
                 "shasum": ""
             },
             "require": {
@@ -5437,7 +5437,7 @@
                 "symfony/property-info": "^5.4|^6.0|^7.0",
                 "symfony/serializer": "^6.4.3|^7.0.3"
             },
-            "time": "2024-12-02T11:09:41+00:00",
+            "time": "2025-01-23T13:10:52+00:00",
             "type": "library",
             "installation-source": "dist",
             "autoload": {
@@ -5469,7 +5469,7 @@
                 "mime-type"
             ],
             "support": {
-                "source": "https://github.com/symfony/mime/tree/v6.4.17"
+                "source": "https://github.com/symfony/mime/tree/v6.4.18"
             },
             "funding": [
                 {

@@ -1,14 +1,16 @@
+import ajax from './ajax';
+
 document.addEventListener('DOMContentLoaded', function() {
     fetchNotifications();
 
     // Fetch notifications from the server
-    function fetchNotifications() {
-        fetch('/notifications')
-            .then(response => response.json())
-            .then(data => {
-                displayNotifications(data);
-            })
-            .catch(error => console.error('Error fetching notifications:', error));
+    async function fetchNotifications() {
+        try {
+            const notifications = await ajax.get('/notifications');
+            displayNotifications(notifications);
+        } catch (error) {
+            console.error('Error fetching notifications:', error);
+        }
     }
 
     // Display notifications on the UI

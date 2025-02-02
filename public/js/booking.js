@@ -1,3 +1,5 @@
+import ajax from './ajax';
+
 document.addEventListener('DOMContentLoaded', function() {
     const pickupDateInput = document.getElementById('pickup-date');
     const bookingForm = document.getElementById('booking-form');
@@ -101,6 +103,16 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error creating booking:', error);
             showError('Error creating booking.');
         });
+    }
+
+    // Example usage in booking.js
+    async function createBooking(bookingDetails) {
+        try {
+            const response = await ajax.post('/bookings', bookingDetails);
+            // ...handle successful booking...
+        } catch (error) {
+            // ...handle booking error...
+        }
     }
 
     // Show loading indicator

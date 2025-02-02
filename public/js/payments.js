@@ -1,10 +1,13 @@
+import ajax from './ajax';
+
 document.addEventListener('DOMContentLoaded', function() {
     const paymentForm = document.getElementById('paymentForm');
 
     paymentForm.addEventListener('submit', function(event) {
         event.preventDefault();
         if (validateForm()) {
-            processPayment();
+            const paymentDetails = new FormData(paymentForm);
+            processPayment(paymentDetails);
         }
     });
 
@@ -33,23 +36,17 @@ document.addEventListener('DOMContentLoaded', function() {
         return isValid;
     }
 
-    function processPayment() {
-        const formData = new FormData(paymentForm);
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/payment/process', true);
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                const response = JSON.parse(xhr.responseText);
-                if (response.success) {
-                    window.location.href = '/booking/confirmation';
-                } else {
-                    displayErrors(response.errors);
-                }
+    async function processPayment(paymentDetails) {
+        try {
+            const response = await ajax.post('/payments', paymentDetails);
+            if (response.success) {
+                window.location.href = '/booking/confirmation';
             } else {
-                displayErrors(['An error occurred while processing the payment. Please try again.']);
+                displayErrors(response.errors);
             }
-        };
-        xhr.send(formData);
+        } catch (error) {
+            displayErrors(['An error occurred while processing the payment. Please try again.']);
+        }
     }
 
     function displayErrors(errors) {
