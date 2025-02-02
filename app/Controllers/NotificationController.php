@@ -32,7 +32,7 @@ class NotificationController
     /**
      * Display user notifications in the view.
      */
-    public function viewNotifications(int $userId)
+    public function viewNotifications(int $userId): void
     {
         try {
             $notifications = $this->notificationService->getUserNotifications($userId);
@@ -65,6 +65,8 @@ class NotificationController
     {
         try {
             $this->notificationService->markAsRead($notificationId);
+            $this->logger->info("Notification marked as read", ['notification_id' => $notificationId]);
+
             return ['status' => 'success', 'message' => 'Notification marked as read'];
         } catch (\Exception $e) {
             $this->logger->error('Failed to mark notification as read', ['error' => $e->getMessage()]);
@@ -79,6 +81,8 @@ class NotificationController
     {
         try {
             $this->notificationService->deleteNotification($notificationId);
+            $this->logger->info("Notification deleted", ['notification_id' => $notificationId]);
+
             return ['status' => 'success', 'message' => 'Notification deleted'];
         } catch (\Exception $e) {
             $this->logger->error('Failed to delete notification', ['error' => $e->getMessage()]);
@@ -99,6 +103,7 @@ class NotificationController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
+            $this->logger->warning('Notification validation failed', ['data' => $data]);
             return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
         }
 
@@ -110,9 +115,12 @@ class NotificationController
                 $data['options'] ?? []
             );
 
-            return $success
-                ? ['status' => 'success', 'message' => 'Notification sent successfully']
-                : ['status' => 'error', 'message' => 'Notification delivery failed'];
+            if ($success) {
+                $this->logger->info('Notification sent successfully', ['data' => $data]);
+                return ['status' => 'success', 'message' => 'Notification sent successfully'];
+            }
+
+            return ['status' => 'error', 'message' => 'Notification delivery failed'];
         } catch (\Exception $e) {
             $this->logger->error('Failed to send notification', ['error' => $e->getMessage()]);
             return ['status' => 'error', 'message' => 'Failed to send notification'];
@@ -132,6 +140,7 @@ class NotificationController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
+            $this->logger->warning('Retry validation failed', ['data' => $data]);
             return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
         }
 
@@ -143,9 +152,12 @@ class NotificationController
                 $data['options'] ?? []
             );
 
-            return $success
-                ? ['status' => 'success', 'message' => 'Notification sent successfully after retries']
-                : ['status' => 'error', 'message' => 'Notification delivery failed after retries'];
+            if ($success) {
+                $this->logger->info('Notification retry succeeded', ['data' => $data]);
+                return ['status' => 'success', 'message' => 'Notification sent successfully after retries'];
+            }
+
+            return ['status' => 'error', 'message' => 'Notification delivery failed after retries'];
         } catch (\Exception $e) {
             $this->logger->error('Retry failed', ['error' => $e->getMessage()]);
             return ['status' => 'error', 'message' => 'Retry failed'];

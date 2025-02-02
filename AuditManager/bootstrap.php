@@ -1,17 +1,33 @@
 <?php
 
-// Bootstrap file for Audit Manager module
+/**
+ * Bootstrap file for Audit Manager module
+ * Path: audit_manager/bootstrap.php
+ */
+
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use AuditManager\Services\AuditService;
 use AuditManager\Middleware\AuditTrailMiddleware;
-use Psr\Log\LoggerInterface;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
+use Monolog\Formatter\LineFormatter;
 
-// Initialize database connection
+// Load database configuration
+$dbConfig = require __DIR__ . '/../config/database.php';
+$dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=%s', 
+    $dbConfig['host'], 
+    $dbConfig['port'], 
+    $dbConfig['database'], 
+    $dbConfig['charset']
+);
+
 try {
-    $pdo = new PDO(DB_DSN, DB_USER, DB_PASS, [
+    // Initialize database connection
+    $pdo = new PDO($dsn, $dbConfig['username'], $dbConfig['password'], [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
     echo "Connected to the database successfully.\n";
 } catch (PDOException $e) {
@@ -19,9 +35,12 @@ try {
     exit(1);
 }
 
-// Initialize logger (assuming Monolog or similar is being used)
-$logger = new Monolog\Logger('audit_manager');
-$logger->pushHandler(new Monolog\Handler\StreamHandler(__DIR__ . '/../logs/audit_manager.log', Monolog\Logger::INFO));
+// Initialize logger
+$logFilePath = __DIR__ . '/../logs/audit_manager.log';
+$logger = new Logger('audit_manager');
+$streamHandler = new StreamHandler($logFilePath, Logger::DEBUG);
+$streamHandler->setFormatter(new LineFormatter(null, null, true, true));
+$logger->pushHandler($streamHandler);
 
 // Initialize AuditService
 $auditService = new AuditService($pdo);
@@ -29,14 +48,10 @@ $auditService = new AuditService($pdo);
 // Initialize middleware
 $auditMiddleware = new AuditTrailMiddleware($auditService, $logger);
 
-// Register middleware globally (example)
-$router->middleware($auditMiddleware);
+// Register middleware globally (example, depends on framework/router used)
+if (isset($router)) {
+    $router->middleware($auditMiddleware);
+}
 
-// Configuration (optional)
-$config = [
-    'audit_log_file' => __DIR__ . '/../logs/audit_manager.log',
-    'audit_log_level' => Monolog\Logger::INFO,
-];
-
-// Print confirmation
+// Optional: Print confirmation
 echo "Audit Manager bootstrap completed.\n";

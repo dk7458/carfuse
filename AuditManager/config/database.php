@@ -1,9 +1,9 @@
 <?php
 return [
-    'host' => '127.0.0.1',
-    'port' => '3306',
-    'database' => 'secure_database',
-    'username' => 'secure_user',
-    'password' => 'secure_password',
+    'host' => $_ENV['SECURE_DB_HOST'] ?? '127.0.0.1',
+    'port' => $_ENV['SECURE_DB_PORT'] ?? '3306',
+    'database' => $_ENV['SECURE_DB_NAME'] ?? 'secure_database',
+    'username' => $_ENV['SECURE_DB_USER'] ?? 'secure_user',
+    'password' => $_ENV['SECURE_DB_PASSWORD'] ?? 'secure_password',
     'charset' => 'utf8mb4',
 ];

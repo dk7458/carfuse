@@ -4,27 +4,27 @@ namespace DocumentManager\Controllers;
 
 use DocumentManager\Services\DocumentService;
 use DocumentManager\Services\EncryptionService;
-use DocumentManager\Services\FileStorage; // Add this if FileStorage is injected
+use DocumentManager\Services\FileStorage;
 use App\Services\Validator;
-use AuditManager\Services\AuditLogger;
+use AuditManager\Services\AuditService;
 use Psr\Log\LoggerInterface;
 
 class DocumentController
 {
     private DocumentService $documentService;
     private Validator $validator;
-    private AuditLogger $auditLogger;
+    private AuditService $auditService;
     private LoggerInterface $logger;
 
     public function __construct(
         DocumentService $documentService,
         Validator $validator,
-        AuditLogger $auditLogger,
+        AuditService $auditService,
         LoggerInterface $logger
     ) {
         $this->documentService = $documentService;
         $this->validator = $validator;
-        $this->auditLogger = $auditLogger;
+        $this->auditService = $auditService;
         $this->logger = $logger;
     }
     
@@ -44,7 +44,13 @@ class DocumentController
 
         try {
             $templateId = $this->documentService->uploadTemplate($data['name'], $data['file']);
-            $this->auditLogger->log('template_uploaded', ['template_id' => $templateId]);
+            $this->auditService->log(
+                'template_uploaded',
+                'Template uploaded successfully.',
+                null,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
 
             return ['status' => 'success', 'message' => 'Template uploaded successfully', 'template_id' => $templateId];
         } catch (\Exception $e) {
@@ -60,7 +66,13 @@ class DocumentController
     {
         try {
             $contractPath = $this->documentService->generateContract($bookingId, $userId);
-            $this->auditLogger->log('contract_generated', ['booking_id' => $bookingId, 'user_id' => $userId]);
+            $this->auditService->log(
+                'contract_generated',
+                'Contract generated successfully.',
+                $userId,
+                $bookingId,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
 
             return ['status' => 'success', 'message' => 'Contract generated successfully', 'contract_path' => $contractPath];
         } catch (\Exception $e) {
@@ -84,7 +96,13 @@ class DocumentController
 
         try {
             $path = $this->documentService->uploadTerms($data['file']);
-            $this->auditLogger->log('terms_uploaded', ['path' => $path]);
+            $this->auditService->log(
+                'terms_uploaded',
+                'Terms and Conditions document uploaded.',
+                null,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
 
             return ['status' => 'success', 'message' => 'T&C document uploaded successfully'];
         } catch (\Exception $e) {
@@ -100,7 +118,13 @@ class DocumentController
     {
         try {
             $invoicePath = $this->documentService->generateInvoice($bookingId);
-            $this->auditLogger->log('invoice_generated', ['booking_id' => $bookingId]);
+            $this->auditService->log(
+                'invoice_generated',
+                'Invoice generated successfully.',
+                null,
+                $bookingId,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
 
             return ['status' => 'success', 'message' => 'Invoice generated successfully', 'invoice_path' => $invoicePath];
         } catch (\Exception $e) {
@@ -116,7 +140,13 @@ class DocumentController
     {
         try {
             $this->documentService->deleteDocument($documentId);
-            $this->auditLogger->log('document_deleted', ['document_id' => $documentId]);
+            $this->auditService->log(
+                'document_deleted',
+                'Document deleted successfully.',
+                null,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
 
             return ['status' => 'success', 'message' => 'Document deleted successfully'];
         } catch (\Exception $e) {

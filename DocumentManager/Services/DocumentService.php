@@ -8,12 +8,13 @@ use AuditManager\Services\AuditService;
 use DocumentManager\Services\FileStorage;
 use DocumentManager\Services\TemplateService;
 use DocumentManager\Services\EncryptionService;
+use Psr\Log\LoggerInterface;
 
 /**
  * Document Service
  *
  * Manages documents including templates, contracts, and Terms & Conditions (T&C).
- * Supports encryption, secure storage, and dynamic document generation.
+ * Supports encryption, secure storage, logging, and dynamic document generation.
  */
 class DocumentService
 {
@@ -22,19 +23,22 @@ class DocumentService
     private FileStorage $fileStorage;
     private EncryptionService $encryptionService;
     private TemplateService $templateService;
+    private LoggerInterface $logger;
 
     public function __construct(
         PDO $db,
         AuditService $auditService,
         FileStorage $fileStorage,
         EncryptionService $encryptionService,
-        TemplateService $templateService
+        TemplateService $templateService,
+        LoggerInterface $logger
     ) {
         $this->db = $db;
         $this->auditService = $auditService;
         $this->fileStorage = $fileStorage;
         $this->encryptionService = $encryptionService;
         $this->templateService = $templateService;
+        $this->logger = $logger;
     }
 
     /**
@@ -43,6 +47,8 @@ class DocumentService
     public function uploadTemplate(string $name, string $content): int
     {
         try {
+            $this->logger->info('Uploading document template', ['name' => $name]);
+
             // Encrypt the content
             $encryptedContent = $this->encryptionService->encrypt($content);
 
@@ -54,6 +60,7 @@ class DocumentService
 
             return 1; // Placeholder for additional logic if needed
         } catch (Exception $e) {
+            $this->logger->error('Failed to upload template', ['error' => $e->getMessage()]);
             throw new Exception("Failed to upload template: " . $e->getMessage());
         }
     }
@@ -64,6 +71,8 @@ class DocumentService
     public function generateContract(int $bookingId, int $userId): string
     {
         try {
+            $this->logger->info('Generating contract', ['bookingId' => $bookingId, 'userId' => $userId]);
+
             // Load the rental contract template
             $templateName = 'rental_contract.html';
             $templateContent = $this->templateService->loadTemplate($templateName);
@@ -85,7 +94,7 @@ class DocumentService
 
             // Encrypt and store the contract
             $encryptedContract = $this->encryptionService->encrypt($renderedContent);
-            $filePath = $this->fileStorage->storeFile("contract_{$bookingId}.pdf", $encryptedContract);
+            $filePath = $this->fileStorage->storeFile("contracts", "contract_{$bookingId}.pdf", $encryptedContract);
 
             // Store contract metadata in the database
             $stmt = $this->db->prepare("
@@ -98,8 +107,11 @@ class DocumentService
                 'contract_pdf' => $filePath,
             ]);
 
+            $this->auditService->log('contract_generated', ['booking_id' => $bookingId, 'user_id' => $userId]);
+
             return $filePath;
         } catch (Exception $e) {
+            $this->logger->error('Failed to generate contract', ['error' => $e->getMessage()]);
             throw new Exception("Failed to generate contract: " . $e->getMessage());
         }
     }
@@ -110,15 +122,18 @@ class DocumentService
     public function uploadTerms(string $content): string
     {
         try {
+            $this->logger->info('Uploading Terms & Conditions document');
+
             // Encrypt and store the T&C content
             $encryptedContent = $this->encryptionService->encrypt($content);
-            $filePath = $this->fileStorage->storeFile('terms_and_conditions.html', $encryptedContent);
+            $filePath = $this->fileStorage->storeFile('templates', 'terms_and_conditions.html', $encryptedContent);
 
             // Log the upload
-            $this->auditService->log('terms_uploaded', []);
+            $this->auditService->log('terms_uploaded', ['file_path' => $filePath]);
 
             return $filePath;
         } catch (Exception $e) {
+            $this->logger->error('Failed to upload Terms & Conditions', ['error' => $e->getMessage()]);
             throw new Exception("Failed to upload Terms and Conditions: " . $e->getMessage());
         }
     }
@@ -129,6 +144,8 @@ class DocumentService
     public function deleteDocument(int $documentId): void
     {
         try {
+            $this->logger->info('Deleting document', ['documentId' => $documentId]);
+
             // Fetch the document metadata
             $stmt = $this->db->prepare("SELECT * FROM documents WHERE id = :document_id");
             $stmt->execute(['document_id' => $documentId]);
@@ -143,9 +160,9 @@ class DocumentService
             $stmt = $this->db->prepare("DELETE FROM documents WHERE id = :document_id");
             $stmt->execute(['document_id' => $documentId]);
 
-            // Log the deletion
             $this->auditService->log('document_deleted', ['document_id' => $documentId]);
         } catch (Exception $e) {
+            $this->logger->error('Failed to delete document', ['error' => $e->getMessage()]);
             throw new Exception("Failed to delete document: " . $e->getMessage());
         }
     }

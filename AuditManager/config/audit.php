@@ -7,6 +7,7 @@
  * Changelog:
  * - [2025-01-25] Initial creation of the file.
  * - [2025-01-27] Added logging level configuration and encryption details.
+ * - [2025-01-28] Updated access control and notification settings.
  */
 
 return [
@@ -29,12 +30,13 @@ return [
         'info' => true, // Log informational messages
         'warning' => true, // Log warnings
         'error' => true, // Log errors
+        'critical' => true, // Log critical system events
     ],
 
     // Encryption settings
     'encryption' => [
         'enabled' => true, // Enable AES encryption for sensitive log entries
-        'key' => 'your-encryption-key-here', // AES encryption key (store securely)
+        'key' => $_ENV['ENCRYPTION_KEY'] ?? 'your-encryption-key-here', // AES encryption key (store securely)
         'cipher' => 'AES-256-CBC', // Cipher method
     ],
 
@@ -53,6 +55,6 @@ return [
     // Notification settings
     'notifications' => [
         'enabled' => true, // Enable email notifications for critical events
-        'email_recipients' => ['admin@example.com'], // Recipients for critical event notifications
+        'email_recipients' => explode(',', $_ENV['AUDIT_NOTIFICATION_EMAILS'] ?? 'admin@example.com'), // Recipients for critical event notifications
     ],
 ];

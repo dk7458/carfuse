@@ -29,10 +29,10 @@ class EncryptionService
     }
 
     /**
-     * Encrypts a string.
+     * Encrypt a string.
      *
      * @param string $data The data to encrypt.
-     * @return string The encrypted data, base64 encoded.
+     * @return string The encrypted data (base64 encoded).
      */
     public function encrypt(string $data): string
     {
@@ -47,7 +47,7 @@ class EncryptionService
     }
 
     /**
-     * Decrypts an encrypted string.
+     * Decrypt a string.
      *
      * @param string $encryptedData The encrypted data (base64 encoded).
      * @return string The decrypted string.
@@ -76,54 +76,78 @@ class EncryptionService
     }
 
     /**
-     * Encrypts a file.
+     * Encrypt a file.
      *
      * @param string $inputFile The path to the file to encrypt.
      * @param string $outputFile The path to save the encrypted file.
-     * @return bool True on success, false on failure.
+     * @return bool True on success.
      */
     public function encryptFile(string $inputFile, string $outputFile): bool
     {
-        if (!file_exists($inputFile) || !is_readable($inputFile)) {
-            throw new \InvalidArgumentException("Input file does not exist or is not readable: $inputFile");
-        }
-
-        $data = file_get_contents($inputFile);
-        if ($data === false) {
-            throw new \RuntimeException("Failed to read the input file: $inputFile");
-        }
-
+        $this->validateFile($inputFile, 'Input file does not exist or is not readable');
+        $data = $this->readFile($inputFile);
         $encryptedData = $this->encrypt($data);
 
-        if (file_put_contents($outputFile, $encryptedData) === false) {
-            throw new \RuntimeException("Failed to write the encrypted file: $outputFile");
-        }
-
-        return true;
+        return $this->writeFile($outputFile, $encryptedData, 'Failed to write the encrypted file');
     }
 
     /**
-     * Decrypts an encrypted file.
+     * Decrypt a file.
      *
      * @param string $inputFile The path to the encrypted file.
      * @param string $outputFile The path to save the decrypted file.
-     * @return bool True on success, false on failure.
+     * @return bool True on success.
      */
     public function decryptFile(string $inputFile, string $outputFile): bool
     {
-        if (!file_exists($inputFile) || !is_readable($inputFile)) {
-            throw new \InvalidArgumentException("Input file does not exist or is not readable: $inputFile");
-        }
-
-        $encryptedData = file_get_contents($inputFile);
-        if ($encryptedData === false) {
-            throw new \RuntimeException("Failed to read the input file: $inputFile");
-        }
-
+        $this->validateFile($inputFile, 'Input file does not exist or is not readable');
+        $encryptedData = $this->readFile($inputFile);
         $decryptedData = $this->decrypt($encryptedData);
 
-        if (file_put_contents($outputFile, $decryptedData) === false) {
-            throw new \RuntimeException("Failed to write the decrypted file: $outputFile");
+        return $this->writeFile($outputFile, $decryptedData, 'Failed to write the decrypted file');
+    }
+
+    /**
+     * Validate if a file exists and is readable.
+     *
+     * @param string $filePath The path to the file.
+     * @param string $errorMessage The error message to throw if invalid.
+     */
+    private function validateFile(string $filePath, string $errorMessage): void
+    {
+        if (!file_exists($filePath) || !is_readable($filePath)) {
+            throw new \InvalidArgumentException($errorMessage . ": $filePath");
+        }
+    }
+
+    /**
+     * Read the contents of a file.
+     *
+     * @param string $filePath The path to the file.
+     * @return string The file content.
+     */
+    private function readFile(string $filePath): string
+    {
+        $content = file_get_contents($filePath);
+        if ($content === false) {
+            throw new \RuntimeException("Failed to read the file: $filePath");
+        }
+
+        return $content;
+    }
+
+    /**
+     * Write data to a file.
+     *
+     * @param string $filePath The path to the file.
+     * @param string $data The data to write.
+     * @param string $errorMessage The error message to throw if writing fails.
+     * @return bool True on success.
+     */
+    private function writeFile(string $filePath, string $data, string $errorMessage): bool
+    {
+        if (file_put_contents($filePath, $data) === false) {
+            throw new \RuntimeException("$errorMessage: $filePath");
         }
 
         return true;

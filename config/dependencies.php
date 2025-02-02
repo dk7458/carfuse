@@ -1,7 +1,6 @@
 <?php
 
 use App\Services\Validator;
-use App\Services\AuditLogger;
 use App\Services\RateLimiter;
 use App\Services\Auth\TokenService;
 use App\Services\NotificationService;
@@ -9,6 +8,10 @@ use App\Services\UserService;
 use App\Services\PaymentService;
 use App\Controllers\UserController;
 use App\Queues\NotificationQueue;
+use DocumentManager\Services\DocumentService;
+use DocumentManager\Services\EncryptionService;
+use DocumentManager\Services\FileStorage;
+use AuditManager\Services\AuditService;
 use PDO;
 use Psr\Log\LoggerInterface;
 use Monolog\Logger;
@@ -16,22 +19,9 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 
-
 return [
-    PayUService::class => function ($container) {
-        return new PayUService(
-            new GuzzleHttp\Client(),
-            $container[Psr\Log\LoggerInterface::class],
-            [
-                'merchant_key' => $_ENV['PAYU_MERCHANT_KEY'],
-                'merchant_salt' => $_ENV['PAYU_MERCHANT_SALT'],
-                'endpoint' => $_ENV['PAYU_API_ENDPOINT'],
-            ]
-        );
-    },
     /**
-     * Database Connection
-     * Configure PDO for database operations
+     * Database Connection for App
      */
     PDO::class => function () {
         $dsn = sprintf(
@@ -50,8 +40,27 @@ return [
     },
 
     /**
+     * Secure Database Connection
+     * Handles sensitive user data and audits.
+     */
+    'SecurePDO' => function () {
+        $dsn = sprintf(
+            'mysql:host=%s;dbname=%s;charset=utf8mb4',
+            $_ENV['SECURE_DB_HOST'] ?? '127.0.0.1',
+            $_ENV['SECURE_DB_NAME'] ?? 'carfuse_secure'
+        );
+        $username = $_ENV['SECURE_DB_USER'] ?? 'root';
+        $password = $_ENV['SECURE_DB_PASSWORD'] ?? '';
+
+        return new PDO($dsn, $username, $password, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+    },
+
+    /**
      * Logger Configuration
-     * Using Monolog for structured application logging
      */
     LoggerInterface::class => function () {
         $logger = new Logger('carfuse');
@@ -64,7 +73,6 @@ return [
 
     /**
      * Validator Service
-     * A custom service for data validation
      */
     Validator::class => function () {
         return new Validator();
@@ -72,23 +80,49 @@ return [
 
     /**
      * Rate Limiter Service
-     * A simple rate limiter using a static store
      */
     RateLimiter::class => function () {
         return new RateLimiter(5, 900); // 5 attempts, 15-minute window
     },
 
     /**
-     * Audit Logger
-     * Logs critical system events for auditing purposes
+     * Audit Service
+     * Logs critical system events for auditing purposes.
      */
-    AuditLogger::class => function ($container) {
-        return new AuditLogger($container[LoggerInterface::class]);
+    AuditService::class => function ($container) {
+        return new AuditService($container['SecurePDO']);
+    },
+
+    /**
+     * Encryption Service
+     * Provides encryption and decryption functionality.
+     */
+    EncryptionService::class => function () {
+        return new EncryptionService($_ENV['ENCRYPTION_KEY'] ?? 'your-encryption-key');
+    },
+
+    /**
+     * Document File Storage Service
+     * Handles file operations for document storage.
+     */
+    FileStorage::class => function () {
+        return new FileStorage(__DIR__ . '/../storage/documents');
+    },
+
+    /**
+     * Document Service
+     */
+    DocumentService::class => function ($container) {
+        return new DocumentService(
+            $container['SecurePDO'],
+            $container[AuditService::class],
+            $container[FileStorage::class],
+            $container[EncryptionService::class]
+        );
     },
 
     /**
      * Token Service
-     * Handles token-based authentication for APIs
      */
     TokenService::class => function () {
         return new TokenService($_ENV['JWT_SECRET'] ?? 'your-secret-key');
@@ -96,7 +130,6 @@ return [
 
     /**
      * Notification Queue
-     * Handles asynchronous notification processing
      */
     NotificationQueue::class => function ($container) {
         return new NotificationQueue(
@@ -107,7 +140,6 @@ return [
 
     /**
      * Notification Service
-     * Handles notification operations and delivery
      */
     NotificationService::class => function ($container) {
         return new NotificationService(
@@ -118,18 +150,16 @@ return [
 
     /**
      * User Service
-     * Handles user-related operations
      */
     UserService::class => function ($container) {
         return new UserService(
-            $container[PDO::class],
+            $container['SecurePDO'],
             $container[LoggerInterface::class]
         );
     },
 
     /**
      * Payment Service
-     * Handles all payment gateway integrations
      */
     PaymentService::class => function ($container) {
         return new PaymentService(
@@ -139,17 +169,33 @@ return [
     },
 
     /**
+     * PayU Service
+     */
+    PayUService::class => function ($container) {
+        return new PayUService(
+            new GuzzleHttp\Client(),
+            $container[LoggerInterface::class],
+            [
+                'merchant_key' => $_ENV['PAYU_MERCHANT_KEY'],
+                'merchant_salt' => $_ENV['PAYU_MERCHANT_SALT'],
+                'endpoint' => $_ENV['PAYU_API_ENDPOINT'],
+            ]
+        );
+    },
+
+    /**
      * User Controller
-     * Manages user operations
      */
     UserController::class => function ($container) {
         return new UserController(
             $container[PDO::class],
+            $container['SecurePDO'],
             $container[LoggerInterface::class],
             ['jwt_secret' => $_ENV['JWT_SECRET'] ?? 'your-secret-key'],
             $container[Validator::class],
             $container[RateLimiter::class],
-            $container[AuditLogger::class]
+            $container[AuditService::class],
+            $container[NotificationService::class]
         );
     },
 ];

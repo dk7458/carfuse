@@ -59,4 +59,11 @@ $router->get('admin/audit-logs', [AuditManager\Controllers\AuditController::clas
 $router->post('admin/audit-logs/fetch', [AuditManager\Controllers\AuditController::class, 'fetchLogs']);
 $router->post('admin/audit-logs/log', [AuditManager\Controllers\AuditController::class, 'logAction']);
 
+// Document Manager Routes
+$router->post('documents/upload-template', [DocumentManager\Controllers\DocumentController::class, 'uploadTemplate']);
+$router->post('documents/generate-contract/{bookingId}/{userId}', [DocumentManager\Controllers\DocumentController::class, 'generateContract']);
+$router->post('documents/upload-terms', [DocumentManager\Controllers\DocumentController::class, 'uploadTerms']);
+$router->post('documents/generate-invoice/{bookingId}', [DocumentManager\Controllers\DocumentController::class, 'generateInvoice']);
+$router->delete('documents/{documentId}', [DocumentManager\Controllers\DocumentController::class, 'deleteDocument']);
+
 return $router;
