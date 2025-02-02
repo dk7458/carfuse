@@ -5,8 +5,10 @@ namespace App\Models;
 use App\Models\BaseModel;
 use App\Models\Booking;
 use App\Models\Notification;
+use App\Models\Payment;
 use App\Traits\HasUuid;
 use App\Traits\SoftDeletes;
+use App\Helpers\HashHelper;
 
 /**
  * User Model
@@ -74,6 +76,12 @@ class User extends BaseModel
         return $this->hasMany(Booking::class, 'user_id', 'id');
     }
 
+    // Get user's payments
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'user_id', 'id');
+    }
+
     // Get user's notifications
     public function notifications()
     {
@@ -97,7 +105,7 @@ class User extends BaseModel
     // Set password (automatically hash)
     public function setPasswordAttribute(string $value): void
     {
-        $this->attributes['password_hash'] = password_hash($value, PASSWORD_BCRYPT);
+        $this->attributes['password_hash'] = HashHelper::hash($value);
     }
 
     /**

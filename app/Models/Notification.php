@@ -5,6 +5,8 @@ namespace App\Models;
 use DateTime;
 use PDO;
 use PDOException;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Notification Model
@@ -18,14 +20,42 @@ use PDOException;
  * @property DateTime $sent_at
  * @property bool $is_read
  */
-class Notification
+class Notification extends BaseModel
 {
+    use SoftDeletes;
+
     private int $id;
     private int $user_id;
     private string $type;
     private string $message;
     private DateTime $sent_at;
     private bool $is_read;
+
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'user_id',
+        'type',
+        'message',
+        'sent_at',
+        'is_read'
+    ];
+
+    /**
+     * Validation rules for the model.
+     *
+     * @var array
+     */
+    public static $rules = [
+        'user_id' => 'required|exists:users,id',
+        'type' => 'required|string|max:255',
+        'message' => 'required|string',
+        'sent_at' => 'required|date',
+        'is_read' => 'boolean',
+    ];
 
     public function __construct(
         int $user_id,
@@ -174,5 +204,34 @@ class Notification
         } catch (PDOException $e) {
             return false;
         }
+    }
+
+    /**
+     * Relationships
+     */
+
+    /**
+     * Get the user associated with the notification.
+     *
+     * @return BelongsTo
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Scopes
+     */
+
+    /**
+     * Scope a query to filter unread notifications.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeUnread($query)
+    {
+        return $query->where('is_read', false);
     }
 }

@@ -2,68 +2,103 @@
 
 namespace App\Models;
 
-use DateTime;
-use PDO;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Booking Model
  *
  * Represents a booking and handles database interactions.
  */
-class Booking
+class Booking extends BaseModel
 {
-    private PDO $db;
+    use SoftDeletes;
 
-    public function __construct(PDO $db)
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'user_id',
+        'vehicle_id',
+        'pickup_date',
+        'dropoff_date',
+        'status'
+    ];
+
+    /**
+     * Validation rules for the model.
+     *
+     * @var array
+     */
+    public static $rules = [
+        'user_id' => 'required|exists:users,id',
+        'vehicle_id' => 'required|exists:vehicles,id',
+        'pickup_date' => 'required|date',
+        'dropoff_date' => 'required|date|after_or_equal:pickup_date',
+        'status' => 'required|string|in:pending,confirmed,cancelled,completed',
+    ];
+
+    /**
+     * Relationships
+     */
+
+    /**
+     * Get the user who made the booking.
+     *
+     * @return BelongsTo
+     */
+    public function user(): BelongsTo
     {
-        $this->db = $db;
+        return $this->belongsTo(User::class);
     }
 
     /**
-     * Get booking by ID.
+     * Get the vehicle associated with the booking.
+     *
+     * @return BelongsTo
      */
-    public function getById(int $id): ?array
+    public function vehicle(): BelongsTo
     {
-        $stmt = $this->db->prepare("SELECT * FROM bookings WHERE id = :id");
-        $stmt->execute([':id' => $id]);
-        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        return $this->belongsTo(Vehicle::class);
     }
 
     /**
-     * Get bookings for a specific user.
+     * Get the payment associated with the booking.
+     *
+     * @return HasOne
      */
-    public function getByUserId(int $userId): array
+    public function payment(): HasOne
     {
-        $stmt = $this->db->prepare("SELECT * FROM bookings WHERE user_id = :user_id ORDER BY created_at DESC");
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        return $this->hasOne(Payment::class);
     }
 
     /**
-     * Create a new booking.
+     * Scopes
      */
-    public function create(array $data): int
+
+    /**
+     * Scope a query to filter active bookings.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeActive($query)
     {
-        $stmt = $this->db->prepare("
-            INSERT INTO bookings (user_id, vehicle_id, pickup_date, dropoff_date, status, created_at)
-            VALUES (:user_id, :vehicle_id, :pickup_date, :dropoff_date, :status, NOW())
-        ");
-        $stmt->execute([
-            ':user_id' => $data['user_id'],
-            ':vehicle_id' => $data['vehicle_id'],
-            ':pickup_date' => $data['pickup_date'],
-            ':dropoff_date' => $data['dropoff_date'],
-            ':status' => $data['status'] ?? 'pending',
-        ]);
-        return $this->db->lastInsertId();
+        return $query->where('status', 'confirmed');
     }
 
     /**
-     * Update booking status.
+     * Scope a query to filter bookings by user.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param int $userId
+     * @return \Illuminate\Database\Eloquent\Builder
      */
-    public function updateStatus(int $id, string $status): bool
+    public function scopeByUser($query, int $userId)
     {
-        $stmt = $this->db->prepare("UPDATE bookings SET status = :status WHERE id = :id");
-        return $stmt->execute([':status' => $status, ':id' => $id]);
+        return $query->where('user_id', $userId);
     }
 }

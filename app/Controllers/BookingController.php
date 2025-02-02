@@ -8,6 +8,7 @@ use App\Services\Validator;
 use AuditManager\Services\AuditService;
 use App\Services\NotificationService;
 use Psr\Log\LoggerInterface;
+use App\Middleware\AuthMiddleware;
 
 /**
  * Booking Controller
@@ -46,6 +47,7 @@ class BookingController
     public function viewBooking(int $id)
     {
         try {
+            AuthMiddleware::validateSession();
             $booking = $this->bookingService->getBookingById($id);
             $logs = $this->bookingService->getBookingLogs($id);
 
@@ -57,7 +59,7 @@ class BookingController
         } catch (\Exception $e) {
             $this->logger->error('Failed to fetch booking details', ['error' => $e->getMessage()]);
             http_response_code(404);
-            echo 'Booking not found.';
+            echo json_encode(['status' => 'error', 'message' => 'Booking not found.']);
         }
     }
 
@@ -66,6 +68,7 @@ class BookingController
      */
     public function rescheduleBooking(int $id, array $data): array
     {
+        AuthMiddleware::validateSession();
         $rules = [
             'pickup_date' => 'required|date|after_or_equal:today',
             'dropoff_date' => 'required|date|after:pickup_date',
@@ -103,6 +106,7 @@ class BookingController
      */
     public function cancelBooking(int $id): array
     {
+        AuthMiddleware::validateSession();
         try {
             $refundAmount = $this->bookingService->cancelBooking($id);
 
@@ -136,6 +140,7 @@ class BookingController
      */
     public function getBookingLogs(int $bookingId): array
     {
+        AuthMiddleware::validateSession();
         try {
             $logs = $this->bookingService->getBookingLogs($bookingId);
             return ['status' => 'success', 'logs' => $logs];
@@ -150,6 +155,7 @@ class BookingController
      */
     public function getUserBookings(int $userId): array
     {
+        AuthMiddleware::validateSession();
         try {
             $bookings = $this->bookingService->getUserBookings($userId);
             return ['status' => 'success', 'bookings' => $bookings];
@@ -164,6 +170,7 @@ class BookingController
      */
     public function createBooking(array $data): array
     {
+        AuthMiddleware::validateSession();
         $rules = [
             'user_id' => 'required|integer',
             'vehicle_id' => 'required|integer',
@@ -176,6 +183,10 @@ class BookingController
         }
 
         try {
+            if (!$this->bookingService->isVehicleAvailable($data['vehicle_id'], $data['pickup_date'], $data['dropoff_date'])) {
+                return ['status' => 'error', 'message' => 'Vehicle is not available for the selected dates'];
+            }
+
             $bookingId = $this->bookingService->createBooking($data);
 
             $this->auditService->log(

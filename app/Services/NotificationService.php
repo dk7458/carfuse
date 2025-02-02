@@ -50,13 +50,23 @@ class NotificationService
             ]);
 
             // Handle specific notification delivery methods
-            return match ($type) {
-                'email' => $this->sendEmail($options['email'] ?? '', $message, $options['subject'] ?? 'Notification'),
+            $result = match ($type) {
+                'email' => $this->sendEmail($options['email'] ?? '', $message, $options['subject'] ?? 'Notification', $options['booking_details'] ?? []),
                 'sms' => $this->sendSMS($options['phone'] ?? '', $message),
                 'webhook' => $this->sendWebhook($options['url'] ?? '', $message),
-                'push' => $this->sendPushNotification($options['device_token'] ?? '', $message),
+                'push' => $this->sendPushNotification($options['device_token'] ?? '', $message, $options['is_admin'] ?? false),
                 default => throw new \InvalidArgumentException("Unsupported notification type: $type"),
             };
+
+            if ($result) {
+                $this->logger->info('Notification sent successfully', [
+                    'user_id' => $userId,
+                    'type' => $type,
+                    'message' => $message,
+                ]);
+            }
+
+            return $result;
         } catch (\Exception $e) {
             $this->logger->error('Notification sending failed', [
                 'user_id' => $userId,
@@ -70,7 +80,7 @@ class NotificationService
     /**
      * Send an email using PHPMailer
      */
-    private function sendEmail(string $to, string $message, string $subject): bool
+    private function sendEmail(string $to, string $message, string $subject, array $bookingDetails): bool
     {
         if (empty($to)) {
             $this->logger->warning('Email not sent: No recipient specified');
@@ -93,8 +103,11 @@ class NotificationService
             $mail->setFrom($this->config['from_email'], $this->config['from_name']);
             $mail->addAddress($to);
             $mail->Subject = $subject;
-            $mail->Body = $message;
             $mail->isHTML(true);
+
+            // Format email with booking details
+            $formattedMessage = $this->formatEmailMessage($message, $bookingDetails);
+            $mail->Body = $formattedMessage;
 
             $mail->send();
 
@@ -104,6 +117,18 @@ class NotificationService
             $this->logger->error('Email sending failed', ['error' => $e->getMessage()]);
             return false;
         }
+    }
+
+    /**
+     * Format email message with booking details
+     */
+    private function formatEmailMessage(string $message, array $bookingDetails): string
+    {
+        $details = '';
+        foreach ($bookingDetails as $key => $value) {
+            $details .= "<p><strong>$key:</strong> $value</p>";
+        }
+        return "<p>$message</p>$details";
     }
 
     /**
@@ -160,7 +185,7 @@ class NotificationService
     /**
      * Send a push notification
      */
-    private function sendPushNotification(string $deviceToken, string $message): bool
+    private function sendPushNotification(string $deviceToken, string $message, bool $isAdmin): bool
     {
         if (empty($deviceToken)) {
             $this->logger->warning('Push notification not sent: No device token specified');
@@ -171,7 +196,7 @@ class NotificationService
             $payload = [
                 'to' => $deviceToken,
                 'notification' => [
-                    'title' => 'Notification',
+                    'title' => $isAdmin ? 'Admin Notification' : 'User Notification',
                     'body' => $message,
                 ],
             ];

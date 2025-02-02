@@ -13,4 +13,7 @@ $router->post('/payments/refund', [App\Controllers\PaymentController::class, 're
 $router->post('/payments/installments', [App\Controllers\PaymentController::class, 'setupInstallment']);
 $router->get('/payments/transactions', [App\Controllers\PaymentController::class, 'getUserTransactions']);
 
+// Signature API Routes
+$router->post('/signature/upload', [App\Controllers\SignatureController::class, 'uploadSignature']);
+
 return $router;

@@ -12,12 +12,16 @@ use DocumentManager\Services\DocumentService;
 use DocumentManager\Services\EncryptionService;
 use DocumentManager\Services\FileStorage;
 use AuditManager\Services\AuditService;
-use PDO;
+
 use Psr\Log\LoggerInterface;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
+use Dotenv\Dotenv;
+
+$dotenv = Dotenv::createImmutable(__DIR__ . '/../');
+$dotenv->load();
 
 return [
     /**
@@ -198,4 +202,11 @@ return [
             $container[NotificationService::class]
         );
     },
+
+    'db' => [
+        'host' => getenv('DB_HOST'),
+        'user' => getenv('DB_USER'),
+        'password' => getenv('DB_PASSWORD'),
+        'dbname' => getenv('DB_NAME'),
+    ],
 ];

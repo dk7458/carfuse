@@ -3,14 +3,17 @@
 namespace App\Services;
 
 use PDO;
+use Psr\Log\LoggerInterface;
 
 class BookingService
 {
     private PDO $db;
+    private LoggerInterface $logger;
 
-    public function __construct(PDO $db)
+    public function __construct(PDO $db, LoggerInterface $logger)
     {
         $this->db = $db;
+        $this->logger = $logger;
     }
 
     /**
@@ -153,5 +156,77 @@ class BookingService
         ");
         $stmt->execute(['booking_id' => $bookingId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Check booking availability
+     */
+    private function isBookingAvailable(int $vehicleId, string $pickupDate, string $dropoffDate): bool
+    {
+        $stmt = $this->db->prepare("
+            SELECT COUNT(*) 
+            FROM bookings 
+            WHERE vehicle_id = :vehicle_id 
+              AND status NOT IN ('canceled', 'completed')
+              AND (
+                  (pickup_date BETWEEN :pickup_date AND :dropoff_date) OR
+                  (dropoff_date BETWEEN :pickup_date AND :dropoff_date) OR
+                  (:pickup_date BETWEEN pickup_date AND dropoff_date) OR
+                  (:dropoff_date BETWEEN pickup_date AND dropoff_date)
+              )
+        ");
+        $stmt->execute([
+            'vehicle_id' => $vehicleId,
+            'pickup_date' => $pickupDate,
+            'dropoff_date' => $dropoffDate,
+        ]);
+        return (int)$stmt->fetchColumn() === 0;
+    }
+
+    /**
+     * Create a new booking
+     */
+    public function createBooking(int $userId, int $vehicleId, string $pickupDate, string $dropoffDate): array
+    {
+        if (!$this->isBookingAvailable($vehicleId, $pickupDate, $dropoffDate)) {
+            $this->logger->warning('Booking attempt failed: vehicle not available', [
+                'user_id' => $userId,
+                'vehicle_id' => $vehicleId,
+                'pickup_date' => $pickupDate,
+                'dropoff_date' => $dropoffDate,
+            ]);
+            return ['status' => 'error', 'message' => 'Vehicle not available for the selected dates'];
+        }
+
+        try {
+            $stmt = $this->db->prepare("
+                INSERT INTO bookings (user_id, vehicle_id, pickup_date, dropoff_date, status)
+                VALUES (:user_id, :vehicle_id, :pickup_date, :dropoff_date, 'booked')
+            ");
+            $stmt->execute([
+                'user_id' => $userId,
+                'vehicle_id' => $vehicleId,
+                'pickup_date' => $pickupDate,
+                'dropoff_date' => $dropoffDate,
+            ]);
+
+            $this->logger->info('Booking created successfully', [
+                'user_id' => $userId,
+                'vehicle_id' => $vehicleId,
+                'pickup_date' => $pickupDate,
+                'dropoff_date' => $dropoffDate,
+            ]);
+
+            return ['status' => 'success', 'message' => 'Booking created successfully'];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to create booking', [
+                'error' => $e->getMessage(),
+                'user_id' => $userId,
+                'vehicle_id' => $vehicleId,
+                'pickup_date' => $pickupDate,
+                'dropoff_date' => $dropoffDate,
+            ]);
+            return ['status' => 'error', 'message' => 'Failed to create booking'];
+        }
     }
 }

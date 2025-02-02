@@ -2,15 +2,43 @@
 
 namespace App\Models;
 
-use PDO;
+use Illuminate\Database\Eloquent\Model;
+use App\Services\EncryptionService;
 
 /**
  * TransactionLog Model
  *
  * Represents a financial transaction and handles interactions with the `transaction_logs` table.
  */
-class TransactionLog
+class TransactionLog extends BaseModel
 {
+    // Define relationships
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    // Define query scopes
+    public function scopeRecent($query)
+    {
+        return $query->orderBy('created_at', 'desc');
+    }
+
+    public function scopeByUser($query, $userId)
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    // Prevent modification of log entries after creation
+    public static function boot()
+    {
+        parent::boot();
+
+        static::updating(function ($model) {
+            return false;
+        });
+    }
+
     private PDO $db;
 
     public function __construct(PDO $db)
@@ -25,7 +53,14 @@ class TransactionLog
     {
         $stmt = $this->db->prepare("SELECT * FROM transaction_logs WHERE user_id = :user_id ORDER BY created_at DESC");
         $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        // Decrypt transaction details
+        foreach ($transactions as &$transaction) {
+            $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
+        }
+
+        return $transactions;
     }
 
     /**
@@ -35,7 +70,14 @@ class TransactionLog
     {
         $stmt = $this->db->prepare("SELECT * FROM transaction_logs WHERE id = :id");
         $stmt->execute([':id' => $id]);
-        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        $transaction = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+        if ($transaction) {
+            // Decrypt transaction details
+            $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
+        }
+
+        return $transaction;
     }
 
     /**
@@ -43,6 +85,9 @@ class TransactionLog
      */
     public function create(array $data): int
     {
+        // Encrypt transaction details
+        $data['amount'] = EncryptionService::encrypt($data['amount']);
+
         $stmt = $this->db->prepare("
             INSERT INTO transaction_logs (user_id, booking_id, amount, type, status, created_at)
             VALUES (:user_id, :booking_id, :amount, :type, :status, NOW())

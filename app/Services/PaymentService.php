@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Booking;
 use App\Models\TransactionLog;
+use App\Models\Payment;
 use PDO;
 use Psr\Log\LoggerInterface;
 
@@ -11,11 +12,17 @@ class PaymentService
 {
     private PDO $db;
     private LoggerInterface $logger;
+    private Payment $paymentModel;
+    private $payuApiKey;
+    private $payuApiSecret;
 
-    public function __construct(PDO $db, LoggerInterface $logger)
+    public function __construct(PDO $db, LoggerInterface $logger, Payment $paymentModel)
     {
         $this->db = $db;
         $this->logger = $logger;
+        $this->paymentModel = $paymentModel;
+        $this->payuApiKey = getenv('PAYU_API_KEY');
+        $this->payuApiSecret = getenv('PAYU_API_SECRET');
     }
 
     /**
@@ -25,15 +32,7 @@ class PaymentService
     {
         try {
             // Insert payment record
-            $stmt = $this->db->prepare("
-                INSERT INTO payments (booking_id, amount, method, status, created_at)
-                VALUES (:booking_id, :amount, :method, 'completed', NOW())
-            ");
-            $stmt->execute([
-                ':booking_id' => $bookingId,
-                ':amount' => $amount,
-                ':method' => $paymentMethod,
-            ]);
+            $this->paymentModel->createPayment($bookingId, $amount, $paymentMethod);
 
             // Update booking payment status
             $booking = new Booking($this->db);
@@ -57,14 +56,7 @@ class PaymentService
     {
         try {
             // Insert refund record
-            $stmt = $this->db->prepare("
-                INSERT INTO refunds (booking_id, amount, status, created_at)
-                VALUES (:booking_id, :amount, 'processed', NOW())
-            ");
-            $stmt->execute([
-                ':booking_id' => $bookingId,
-                ':amount' => $amount,
-            ]);
+            $this->paymentModel->createRefund($bookingId, $amount);
 
             // Update booking refund status
             $stmt = $this->db->prepare("UPDATE bookings SET refund_status = 'processed' WHERE id = :id");
@@ -94,17 +86,20 @@ class PaymentService
             'status' => 'completed',
         ]);
     }
-    public function getMonthlyRevenueTrends(): array
-{
-    $stmt = $this->db->prepare("
-        SELECT MONTH(created_at) AS month, SUM(amount) AS total
-        FROM transaction_logs
-        WHERE type = 'payment' AND YEAR(created_at) = YEAR(CURRENT_DATE)
-        GROUP BY MONTH(created_at)
-        ORDER BY MONTH(created_at)
-    ");
-    $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
 
+    /**
+     * Get monthly revenue trends.
+     */
+    public function getMonthlyRevenueTrends(): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT MONTH(created_at) AS month, SUM(amount) AS total
+            FROM transaction_logs
+            WHERE type = 'payment' AND YEAR(created_at) = YEAR(CURRENT_DATE)
+            GROUP BY MONTH(created_at)
+            ORDER BY MONTH(created_at)
+        ");
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }

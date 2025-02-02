@@ -7,7 +7,7 @@ $container = require __DIR__ . '/../bootstrap.php';
 
 $dispatcher = FastRoute\simpleDispatcher(function (RouteCollector $r) {
     $routes = require __DIR__ . '/../routes/web.php';
-    foreach ($routes as $route) {
+    foreach ($routes->getData() as $route) {
         [$method, $uri, $handler] = $route;
         $r->addRoute($method, $uri, $handler);
     }

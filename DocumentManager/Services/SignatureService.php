@@ -4,6 +4,10 @@ namespace DocumentManager\Services;
 
 use Exception;
 use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
+use App\Services\EncryptionService;
+use Illuminate\Http\UploadedFile;
 
 /**
  * Signature Service
@@ -110,5 +114,58 @@ class SignatureService
         } catch (Exception $e) {
             throw new Exception("Failed to download signed document: " . $e->getMessage());
         }
+    }
+
+    public function uploadSignature(UploadedFile $file, $userId) {
+        // Validate file type
+        $allowedExtensions = ['png', 'jpg', 'svg'];
+        if (!in_array($file->getClientOriginalExtension(), $allowedExtensions)) {
+            throw new \Exception('Invalid file type.');
+        }
+
+        // Encrypt and store the file
+        $encryptedContent = EncryptionService::encrypt(file_get_contents($file->getRealPath()));
+        $filePath = "signatures/{$userId}/" . uniqid() . '.' . $file->getClientOriginalExtension();
+        Storage::put($filePath, $encryptedContent);
+
+        // Log the upload
+        Log::info("Signature uploaded for user {$userId} at {$filePath}");
+
+        return $filePath;
+    }
+
+    public function verifySignature($signature, $userId) {
+        // Retrieve stored signature
+        $storedSignatures = Storage::files("signatures/{$userId}");
+        foreach ($storedSignatures as $storedSignaturePath) {
+            $storedSignature = EncryptionService::decrypt(Storage::get($storedSignaturePath));
+            if ($storedSignature === $signature) {
+                // Log the verification
+                Log::info("Signature verified for user {$userId}");
+                return true;
+            }
+        }
+
+        // Log the failed verification
+        Log::warning("Signature verification failed for user {$userId}");
+        throw new \Exception('Signature verification failed.');
+    }
+
+    public function getSignature($userId) {
+        // Retrieve stored signature
+        $storedSignatures = Storage::files("signatures/{$userId}");
+        if (empty($storedSignatures)) {
+            throw new Exception('Signature not found.');
+        }
+
+        $signatures = [];
+        foreach ($storedSignatures as $storedSignaturePath) {
+            $signatures[] = EncryptionService::decrypt(Storage::get($storedSignaturePath));
+        }
+
+        // Log the access
+        Log::info("Signatures retrieved for user: $userId");
+
+        return $signatures;
     }
 }

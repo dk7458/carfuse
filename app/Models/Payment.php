@@ -6,6 +6,7 @@ use App\Models\BaseModel;
 use App\Models\User;
 use App\Models\Booking;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo; // Ensure this is included
 
 /**
  * Payment Model
@@ -28,18 +29,11 @@ class Payment extends BaseModel
     use SoftDeletes;
 
     /**
-     * Table associated with the model.
-     *
-     * @var string
-     */
-    protected string $table = 'payments';
-
-    /**
      * Attributes that are mass assignable.
      *
      * @var array
      */
-    protected array $fillable = [
+    protected $fillable = [
         'user_id',
         'booking_id',
         'amount',
@@ -53,7 +47,7 @@ class Payment extends BaseModel
      *
      * @var array
      */
-    protected array $hidden = [
+    protected $hidden = [
         'deleted_at'
     ];
 
@@ -62,7 +56,7 @@ class Payment extends BaseModel
      *
      * @var array
      */
-    public static array $rules = [
+    public static $rules = [
         'user_id' => 'required|exists:users,id',
         'booking_id' => 'required|exists:bookings,id',
         'amount' => 'required|numeric|min:0',
@@ -78,9 +72,9 @@ class Payment extends BaseModel
     /**
      * Get the user who made the payment.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return BelongsTo
      */
-    public function user()
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
@@ -88,9 +82,9 @@ class Payment extends BaseModel
     /**
      * Get the booking associated with the payment.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return BelongsTo
      */
-    public function booking()
+    public function booking(): BelongsTo
     {
         return $this->belongsTo(Booking::class);
     }
@@ -109,6 +103,17 @@ class Payment extends BaseModel
     public function scopeByUser($query, int $userId)
     {
         return $query->where('user_id', $userId);
+    }
+
+    /**
+     * Scope a query to fetch completed payments.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeCompleted($query)
+    {
+        return $query->where('status', 'completed');
     }
 
     /**

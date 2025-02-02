@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Services\NotificationService;
 use App\Services\Validator;
 use Psr\Log\LoggerInterface;
+use App\Queue\NotificationQueue;
 
 /**
  * Notification Controller
@@ -18,15 +19,18 @@ class NotificationController
     private NotificationService $notificationService;
     private Validator $validator;
     private LoggerInterface $logger;
+    private NotificationQueue $notificationQueue;
 
     public function __construct(
         NotificationService $notificationService,
         Validator $validator,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        NotificationQueue $notificationQueue
     ) {
         $this->notificationService = $notificationService;
         $this->validator = $validator;
         $this->logger = $logger;
+        $this->notificationQueue = $notificationQueue;
     }
 
     /**
@@ -59,6 +63,20 @@ class NotificationController
     }
 
     /**
+     * Fetch all notifications for a user via AJAX.
+     */
+    public function fetchNotificationsAjax(int $userId): void
+    {
+        try {
+            $notifications = $this->notificationService->getUserNotifications($userId);
+            echo json_encode(['status' => 'success', 'notifications' => $notifications]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch user notifications via AJAX', ['error' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch user notifications']);
+        }
+    }
+
+    /**
      * Mark a notification as read.
      */
     public function markNotificationAsRead(int $notificationId): array
@@ -71,6 +89,28 @@ class NotificationController
         } catch (\Exception $e) {
             $this->logger->error('Failed to mark notification as read', ['error' => $e->getMessage()]);
             return ['status' => 'error', 'message' => 'Failed to mark notification as read'];
+        }
+    }
+
+    /**
+     * Mark a notification as read via POST request.
+     */
+    public function markNotificationAsReadPost(): void
+    {
+        $notificationId = $_POST['notification_id'] ?? null;
+
+        if (!$notificationId) {
+            echo json_encode(['status' => 'error', 'message' => 'Notification ID is required']);
+            return;
+        }
+
+        try {
+            $this->notificationService->markAsRead((int)$notificationId);
+            $this->logger->info("Notification marked as read", ['notification_id' => $notificationId]);
+            echo json_encode(['status' => 'success', 'message' => 'Notification marked as read']);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to mark notification as read', ['error' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to mark notification as read']);
         }
     }
 
@@ -117,6 +157,7 @@ class NotificationController
 
             if ($success) {
                 $this->logger->info('Notification sent successfully', ['data' => $data]);
+                $this->notificationQueue->queueNotification($data);
                 return ['status' => 'success', 'message' => 'Notification sent successfully'];
             }
 

@@ -117,6 +117,30 @@ class DocumentService
     }
 
     /**
+     * Retrieve and decrypt a document.
+     */
+    public function retrieveDocument(string $filePath): string
+    {
+        try {
+            $this->logger->info('Retrieving document', ['filePath' => $filePath]);
+
+            // Load the encrypted document
+            $encryptedContent = $this->fileStorage->loadFile($filePath);
+
+            // Decrypt the content
+            $decryptedContent = $this->encryptionService->decrypt($encryptedContent);
+
+            // Log the action
+            $this->auditService->log('document_retrieved', ['file_path' => $filePath]);
+
+            return $decryptedContent;
+        } catch (Exception $e) {
+            $this->logger->error('Failed to retrieve document', ['error' => $e->getMessage()]);
+            throw new Exception("Failed to retrieve document: " . $e->getMessage());
+        }
+    }
+
+    /**
      * Upload the Terms & Conditions document.
      */
     public function uploadTerms(string $content): string
