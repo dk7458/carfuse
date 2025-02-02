@@ -1,9 +1,9 @@
 <?php
 return [
-    'host' => '127.0.0.1',
-    'port' => '3306',
-    'database' => 'secure_database',
-    'username' => 'secure_user',
-    'password' => 'secure_password',
-    'charset' => 'utf8mb4',
+    'host' => 'carfuse.pl',
+        'port' => 3306,
+        'database' => 'u122931475_secure',
+        'username' => 'u122931475_admin',
+        'password' => 'Japierdole1876',
+        'charset' => 'utf8mb4',
 ];
