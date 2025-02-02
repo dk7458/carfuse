@@ -6,7 +6,7 @@
 
 return [
     'app_database' => [
-        'host' => '127.0.0.1',
+        'host' => 'carfuse.pl',
         'port' => 3306,
         'database' => 'u122931475_carfuse',
         'username' => 'u122931475_user',
@@ -14,7 +14,7 @@ return [
         'charset' => 'utf8mb4',
     ],
     'secure_database' => [
-        'host' => '127.0.0.1',
+        'host' => 'carfuse.pl',
         'port' => 3306,
         'database' => 'u122931475_secure',
         'username' => 'u122931475_admin',
