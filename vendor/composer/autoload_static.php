@@ -623,7 +623,6 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'DocumentManager\\Models\\Document' => __DIR__ . '/../..' . '/DocumentManager/Models/Document.php',
         'DocumentManager\\Models\\DocumentTemplate' => __DIR__ . '/../..' . '/DocumentManager/Models/DocumentTemplate.php',
         'DocumentManager\\Services\\DocumentService' => __DIR__ . '/../..' . '/DocumentManager/Services/DocumentService.php',
-        'DocumentManager\\Services\\EncryptionService' => __DIR__ . '/../..' . '/DocumentManager/Services/EncryptionService.php',
         'DocumentManager\\Services\\FileStorage' => __DIR__ . '/../..' . '/DocumentManager/Services/FileStorage.php',
         'DocumentManager\\Services\\SignatureService' => __DIR__ . '/../..' . '/DocumentManager/Services/SignatureService.php',
         'DocumentManager\\Services\\TemplateService' => __DIR__ . '/../..' . '/DocumentManager/Services/TemplateService.php',

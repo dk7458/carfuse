@@ -227,7 +227,6 @@ return array(
     'DocumentManager\\Models\\Document' => $baseDir . '/DocumentManager/Models/Document.php',
     'DocumentManager\\Models\\DocumentTemplate' => $baseDir . '/DocumentManager/Models/DocumentTemplate.php',
     'DocumentManager\\Services\\DocumentService' => $baseDir . '/DocumentManager/Services/DocumentService.php',
-    'DocumentManager\\Services\\EncryptionService' => $baseDir . '/DocumentManager/Services/EncryptionService.php',
     'DocumentManager\\Services\\FileStorage' => $baseDir . '/DocumentManager/Services/FileStorage.php',
     'DocumentManager\\Services\\SignatureService' => $baseDir . '/DocumentManager/Services/SignatureService.php',
     'DocumentManager\\Services\\TemplateService' => $baseDir . '/DocumentManager/Services/TemplateService.php',
