@@ -14,8 +14,6 @@ use Illuminate\Container\Container;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
-use Dotenv\Dotenv;
-use Dotenv\Exception\InvalidPathException;
 use Psr\Log\LoggerInterface;
 use AuditManager\Services\AuditService;
 use AuditManager\Middleware\AuditTrailMiddleware;
@@ -25,20 +23,7 @@ use DocumentManager\Services\EncryptionService;
 // Load Composer Autoload
 require_once __DIR__ . '/vendor/autoload.php';
 
-$dotenvPath = __DIR__ . '/.env';
 
-if (!file_exists($dotenvPath)) {
-    die("❌ Error: .env file is missing.");
-}
-
-$lines = file($dotenvPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-foreach ($lines as $line) {
-    if (strpos(trim($line), '#') === 0) continue; // Ignore comments
-    putenv($line);
-    list($name, $value) = explode('=', $line, 2);
-    $_ENV[$name] = trim($value);
-    $_SERVER[$name] = trim($value);
-}
 
 echo "✅ .env Loaded Manually!";
 // Load Configuration Files

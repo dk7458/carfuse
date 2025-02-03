@@ -1,28 +1,29 @@
 <?php
 /**
- * Securely configure database connections using environment variables.
+ * Securely configure database connections without .env
+ * This file is committed to Git and used directly.
  */
 
 return [
     'app_database' => [
         'driver'   => 'mysql',
-        'host'     => $_ENV['DB_HOST'] ?? getenv('DB_HOST') ?: '127.0.0.1',
-        'port'     => $_ENV['DB_PORT'] ?? getenv('DB_PORT') ?: 3306,
-        'database' => $_ENV['DB_DATABASE'] ?? getenv('DB_DATABASE') ?: 'default_db',
-        'username' => $_ENV['DB_USERNAME'] ?? getenv('DB_USERNAME') ?: 'default_user',
-        'password' => $_ENV['DB_PASSWORD'] ?? getenv('DB_PASSWORD') ?: '',
-        'charset'  => $_ENV['DB_CHARSET'] ?? getenv('DB_CHARSET') ?: 'utf8mb4',
+        'host'     => 'carfuse.pl',
+        'port'     => 3306,
+        'database' => 'u122931475_carfuse',
+        'username' => 'u122931475_user',
+        'password' => '59&:NJ9a@',
+        'charset'  => 'utf8mb4',
         'collation'=> 'utf8mb4_unicode_ci',
         'prefix'   => '',
     ],
     'secure_database' => [
         'driver'   => 'mysql',
-        'host'     => $_ENV['SECURE_DB_HOST'] ?? getenv('SECURE_DB_HOST') ?: '127.0.0.1',
-        'port'     => $_ENV['SECURE_DB_PORT'] ?? getenv('SECURE_DB_PORT') ?: 3306,
-        'database' => $_ENV['SECURE_DB_DATABASE'] ?? getenv('SECURE_DB_DATABASE') ?: 'default_secure_db',
-        'username' => $_ENV['SECURE_DB_USERNAME'] ?? getenv('SECURE_DB_USERNAME') ?: 'default_admin',
-        'password' => $_ENV['SECURE_DB_PASSWORD'] ?? getenv('SECURE_DB_PASSWORD') ?: '',
-        'charset'  => $_ENV['SECURE_DB_CHARSET'] ?? getenv('SECURE_DB_CHARSET') ?: 'utf8mb4',
+        'host'     => 'carfuse.pl',
+        'port'     => 3306,
+        'database' => 'u122931475_secure',
+        'username' => 'u122931475_admin',
+        'password' => '&hNAA*4a8Jx$',
+        'charset'  => 'utf8mb4',
         'collation'=> 'utf8mb4_unicode_ci',
         'prefix'   => '',
     ],
