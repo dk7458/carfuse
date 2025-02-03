@@ -38,10 +38,6 @@ $config = [
     'dependencies' => require __DIR__ . '/config/dependencies.php',
 ];
 
-if (!isset($config['app_database'])) {
-    die("❌ Database configuration is missing. Check config/database.php");
-}
-
 // Initialize Database (Eloquent ORM)
 $capsule = new Capsule;
 $capsule->addConnection($config['app_database']);
