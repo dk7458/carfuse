@@ -16,7 +16,7 @@ use Monolog\Formatter\LineFormatter;
 use Psr\Log\LoggerInterface;
 use AuditManager\Services\AuditService;
 use AuditManager\Middleware\AuditTrailMiddleware;
-use DocumentManager\Services\EncryptionService;
+use App\Services\EncryptionService;
 
 // Load Composer Autoload
 require_once __DIR__ . '/vendor/autoload.php';
