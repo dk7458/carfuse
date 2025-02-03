@@ -1,24 +1,24 @@
 <?php
 /**
  * File: config/database.php
- * Purpose: Configure database connections for the app and secure databases.
+ * Purpose: Securely configure database connections using environment variables.
  */
 
 return [
     'app_database' => [
-        'host' => 'carfuse.pl',
-        'port' => 3306,
-        'database' => 'u122931475_carfuse',
-        'username' => 'u122931475_user',
-        'password' => 'Japierdole1876',
-        'charset' => 'utf8mb4',
+        'host' => getenv('DB_HOST') ?: '127.0.0.1',
+        'port' => getenv('DB_PORT') ?: 3306,
+        'database' => getenv('DB_DATABASE') ?: 'default_db',
+        'username' => getenv('DB_USERNAME') ?: 'default_user',
+        'password' => getenv('DB_PASSWORD') ?: '',
+        'charset' => getenv('DB_CHARSET') ?: 'utf8mb4',
     ],
     'secure_database' => [
-        'host' => 'carfuse.pl',
-        'port' => 3306,
-        'database' => 'u122931475_secure',
-        'username' => 'u122931475_admin',
-        'password' => 'Japierdole1876',
-        'charset' => 'utf8mb4',
+        'host' => getenv('SECURE_DB_HOST') ?: '127.0.0.1',
+        'port' => getenv('SECURE_DB_PORT') ?: 3306,
+        'database' => getenv('SECURE_DB_DATABASE') ?: 'default_secure_db',
+        'username' => getenv('SECURE_DB_USERNAME') ?: 'default_admin',
+        'password' => getenv('SECURE_DB_PASSWORD') ?: '',
+        'charset' => getenv('SECURE_DB_CHARSET') ?: 'utf8mb4',
     ],
 ];
