@@ -40,6 +40,10 @@ $config = [
     'dependencies' => require __DIR__ . '/config/dependencies.php',
 ];
 
+if (!isset($config['app_database'])) {
+    die("❌ Database configuration is missing. Check config/database.php");
+}
+
 // Initialize Database (Eloquent ORM)
 $capsule = new Capsule;
 $capsule->addConnection($config['app_database']);
@@ -48,6 +52,8 @@ $capsule->addConnection($config['secure_database'], 'secure');
 $capsule->setEventDispatcher(new Dispatcher(new Container));
 $capsule->setAsGlobal();
 $capsule->bootEloquent();
+
+echo "✅ Eloquent ORM Initialized Successfully.\n";
 
 // Fallback PDO Connection for Manual Queries
 try {
