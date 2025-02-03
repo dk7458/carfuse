@@ -7,7 +7,7 @@
 return [
     'app_database' => [
         'driver'   => 'mysql',
-        'host'     => 'carfuse.pl',
+        'host'     => 'srv1803.hstgr.io',
         'port'     => 3306,
         'database' => 'u122931475_carfuse',
         'username' => 'u122931475_user',
@@ -18,7 +18,7 @@ return [
     ],
     'secure_database' => [
         'driver'   => 'mysql',
-        'host'     => 'carfuse.pl',
+        'host'     => 'srv1803.hstgr.io',
         'port'     => 3306,
         'database' => 'u122931475_secure',
         'username' => 'u122931475_admin',
