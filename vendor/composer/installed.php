@@ -3,7 +3,7 @@
         'name' => 'carfuse/project',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '9089fb47fad4140a5284c53f07b6ea933bdacde8',
+        'reference' => 'ee225b9bc52d55178f4bc4a93d83b9ac4afcc868',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -11,9 +11,9 @@
     ),
     'versions' => array(
         'brick/math' => array(
-            'pretty_version' => '0.12.1',
-            'version' => '0.12.1.0',
-            'reference' => 'f510c0a40911935b77b86859eb5223d58d660df1',
+            'pretty_version' => '0.11.0',
+            'version' => '0.11.0.0',
+            'reference' => '0ad82ce168c82ba30d1c01ec86116ab52f589478',
             'type' => 'library',
             'install_path' => __DIR__ . '/../brick/math',
             'aliases' => array(),
@@ -31,7 +31,7 @@
         'carfuse/project' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '9089fb47fad4140a5284c53f07b6ea933bdacde8',
+            'reference' => 'ee225b9bc52d55178f4bc4a93d83b9ac4afcc868',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
@@ -173,9 +173,9 @@
             'dev_requirement' => false,
         ),
         'illuminate/database' => array(
-            'pretty_version' => 'v1.1.1',
-            'version' => '1.1.1.0',
-            'reference' => '50eb3a77e2fac0acb3a9e0bd03ed1fe04191ebf6',
+            'pretty_version' => 'v10.38.1',
+            'version' => '10.38.1.0',
+            'reference' => '55b4633aff7c9fbf1e14bd579835344604fe4d31',
             'type' => 'library',
             'install_path' => __DIR__ . '/../illuminate/database',
             'aliases' => array(),
