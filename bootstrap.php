@@ -21,6 +21,10 @@ use AuditManager\Services\AuditService;
 use AuditManager\Middleware\AuditTrailMiddleware;
 use DocumentManager\Services\EncryptionService;
 
+if (!class_exists('Illuminate\Database\Capsule\Manager')) {
+    die("⚠️ Eloquent is not installed. Run 'composer install' and check dependencies.");
+}
+
 // Load Composer Autoload
 require_once __DIR__ . '/vendor/autoload.php';
 
