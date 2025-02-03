@@ -35,9 +35,9 @@ try {
 var_dump($_ENV);
 // Load Configuration Files
 $config = [
-    'database' => require __DIR__ . '/config/database.php',
-    'encryption' => require __DIR__ . '/config/encryption.php',
-    'dependencies' => require __DIR__ . '/config/dependencies.php',
+    'database' => require __DIR__ . 'config/database.php',
+    'encryption' => require __DIR__ . 'config/encryption.php',
+    'dependencies' => require __DIR__ . 'config/dependencies.php',
 ];
 
 if (!isset($config['app_database'])) {
