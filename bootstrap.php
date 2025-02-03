@@ -31,7 +31,7 @@ try {
 } catch (InvalidPathException $e) {
     die("⚠️ Environment file missing: " . $e->getMessage());
 }
-
+var_dump($_ENV);
 // Load Configuration Files
 $config = [
     'database' => require __DIR__ . '/config/database.php',
