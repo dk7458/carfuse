@@ -23,9 +23,6 @@ use DocumentManager\Services\EncryptionService;
 // Load Composer Autoload
 require_once __DIR__ . '/vendor/autoload.php';
 
-
-
-echo "✅ .env Loaded Manually!";
 // Load Configuration Files
 $config = [
     'database' => require __DIR__ . '/config/database.php',
