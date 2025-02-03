@@ -4,7 +4,7 @@
  * Centralized Bootstrap File
  * Path: /bootstrap.php
  *
- * This file initializes database connections, loads environment variables,
+ * Initializes database connections, loads environment variables,
  * sets up logging, and registers necessary services across the application.
  */
 
@@ -29,8 +29,7 @@ try {
     $dotenv = Dotenv::createImmutable(__DIR__);
     $dotenv->load();
 } catch (InvalidPathException $e) {
-    echo "Environment file missing: " . $e->getMessage();
-    exit(1);
+    die("⚠️ Environment file missing: " . $e->getMessage());
 }
 
 // Load Configuration Files
@@ -40,39 +39,34 @@ $config = [
     'dependencies' => require __DIR__ . '/config/dependencies.php',
 ];
 
-// Initialize Database (Eloquent ORM with PDO)
+// Initialize Database (Eloquent ORM)
 $capsule = new Capsule;
-$capsule->addConnection([
-    'driver'    => 'mysql',
-    'host'      => $config['database']['host'],
-    'database'  => $config['database']['database'],
-    'username'  => $config['database']['username'],
-    'password'  => $config['database']['password'],
-    'charset'   => 'utf8',
-    'collation' => 'utf8_unicode_ci',
-    'prefix'    => '',
-]);
+$capsule->addConnection($config['app_database']);
+$capsule->addConnection($config['secure_database'], 'secure');
 
 $capsule->setEventDispatcher(new Dispatcher(new Container));
 $capsule->setAsGlobal();
 $capsule->bootEloquent();
 
-// Fallback PDO Connection
+// Fallback PDO Connection for Manual Queries
 try {
-    $dsn = sprintf(
-        'mysql:host=%s;port=%s;dbname=%s;charset=%s',
-        $config['database']['host'],
-        $config['database']['port'],
-        $config['database']['database'],
-        $config['database']['charset']
+    $pdo = new PDO(
+        sprintf(
+            'mysql:host=%s;port=%s;dbname=%s;charset=%s',
+            $config['app_database']['host'],
+            $config['app_database']['port'],
+            $config['app_database']['database'],
+            $config['app_database']['charset']
+        ),
+        $config['app_database']['username'],
+        $config['app_database']['password'],
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]
     );
-
-    $pdo = new PDO($dsn, $config['database']['username'], $config['database']['password'], [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
 } catch (PDOException $e) {
-    die("Database connection failed: " . $e->getMessage());
+    die("❌ Database connection failed: " . $e->getMessage());
 }
 
 // Initialize Logger (Monolog)
@@ -93,7 +87,7 @@ $auditMiddleware = new AuditTrailMiddleware($auditService, $logger);
 $requiredServices = ['NotificationService', 'TokenService', 'Validator'];
 foreach ($requiredServices as $service) {
     if (!isset($config['dependencies'][$service])) {
-        $logger->error("Missing dependency: {$service}");
+        $logger->error("❌ Missing dependency: {$service}");
         exec('composer dump-autoload'); // Attempt to fix autoload issues
     }
 }
@@ -106,7 +100,7 @@ foreach ($config['dependencies'] as $dependency) {
 }
 
 // Output Confirmation
-echo "Bootstrap process completed successfully.\n";
+echo "✅ Bootstrap process completed successfully.\n";
 
 // Return Configurations for Application Use
 return [
