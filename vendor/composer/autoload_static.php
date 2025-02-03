@@ -117,6 +117,7 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'D' => 
         array (
             'Dotenv\\' => 7,
+            'DocumentManager\\' => 16,
             'Doctrine\\Inflector\\' => 19,
             'Doctrine\\Common\\Lexer\\' => 22,
             'DeepCopy\\' => 9,
@@ -132,6 +133,7 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         ),
         'A' => 
         array (
+            'AuditManager\\' => 13,
             'App\\' => 4,
         ),
     );
@@ -361,6 +363,10 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         array (
             0 => __DIR__ . '/..' . '/vlucas/phpdotenv/src',
         ),
+        'DocumentManager\\' => 
+        array (
+            0 => __DIR__ . '/../..' . '/DocumentManager',
+        ),
         'Doctrine\\Inflector\\' => 
         array (
             0 => __DIR__ . '/..' . '/doctrine/inflector/lib/Doctrine/Inflector',
@@ -385,14 +391,56 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         array (
             0 => __DIR__ . '/..' . '/brick/math/src',
         ),
+        'AuditManager\\' => 
+        array (
+            0 => __DIR__ . '/../..' . '/AuditManager',
+        ),
         'App\\' => 
         array (
-            0 => __DIR__ . '/../..' . '/app',
+            0 => __DIR__ . '/../..' . '/App',
         ),
     );
 
     public static $classMap = array (
+        'App\\Controllers\\AdminDashboardController' => __DIR__ . '/../..' . '/App/Controllers/AdminDashboardController.php',
+        'App\\Controllers\\AuthController' => __DIR__ . '/../..' . '/App/Controllers/AuthController.php',
+        'App\\Controllers\\BookingController' => __DIR__ . '/../..' . '/App/Controllers/BookingController.php',
+        'App\\Controllers\\DashboardController' => __DIR__ . '/../..' . '/App/Controllers/DashboardController.php',
+        'App\\Controllers\\NotificationController' => __DIR__ . '/../..' . '/App/Controllers/NotificationController.php',
+        'App\\Controllers\\PaymentController' => __DIR__ . '/../..' . '/App/Controllers/PaymentController.php',
+        'App\\Controllers\\ReportController' => __DIR__ . '/../..' . '/App/Controllers/ReportController.php',
+        'App\\Controllers\\UserController' => __DIR__ . '/../..' . '/App/Controllers/UserController.php',
+        'App\\Middleware\\AuthMiddleware' => __DIR__ . '/../..' . '/App/Middleware/AuthMiddleware.php',
+        'App\\Middleware\\EncryptionMiddleware' => __DIR__ . '/../..' . '/App/Middleware/EncryptionMiddleware.php',
+        'App\\Models\\BaseModel' => __DIR__ . '/../..' . '/App/Models/BaseModel.php',
+        'App\\Models\\Booking' => __DIR__ . '/../..' . '/App/Models/Booking.php',
+        'App\\Models\\Notification' => __DIR__ . '/../..' . '/App/Models/Notification.php',
+        'App\\Models\\Payment' => __DIR__ . '/../..' . '/App/Models/Payment.php',
+        'App\\Models\\PaymentMethod' => __DIR__ . '/../..' . '/App/Models/PaymentMethod.php',
+        'App\\Models\\RefundLog' => __DIR__ . '/../..' . '/App/Models/RefundLog.php',
+        'App\\Models\\Report' => __DIR__ . '/../..' . '/App/Models/Report.php',
+        'App\\Models\\TransactionLog' => __DIR__ . '/../..' . '/App/Models/TransactionLog.php',
+        'App\\Models\\User' => __DIR__ . '/../..' . '/App/Models/User.php',
+        'App\\Models\\Vehicle' => __DIR__ . '/../..' . '/App/Models/Vehicle.php',
+        'App\\Queues\\NotificationQueue' => __DIR__ . '/../..' . '/App/Queues/NotificationQueue.php',
+        'App\\Services\\Auth\\TokenService' => __DIR__ . '/../..' . '/App/Services/Auth/TokenService.php',
+        'App\\Services\\BookingService' => __DIR__ . '/../..' . '/App/Services/BookingService.php',
+        'App\\Services\\EncryptionService' => __DIR__ . '/../..' . '/App/Services/EncryptionService.php',
+        'App\\Services\\MetricsService' => __DIR__ . '/../..' . '/App/Services/MetricsService.php',
+        'App\\Services\\NotificationService' => __DIR__ . '/../..' . '/App/Services/NotificationService.php',
+        'App\\Services\\PayUService' => __DIR__ . '/../..' . '/App/Services/PayUService.php',
+        'App\\Services\\PaymentService' => __DIR__ . '/../..' . '/App/Services/PaymentService.php',
+        'App\\Services\\RateLimiter' => __DIR__ . '/../..' . '/App/Services/RateLimiter.php',
+        'App\\Services\\ReportService' => __DIR__ . '/../..' . '/App/Services/ReportService.php',
+        'App\\Services\\RevenueService' => __DIR__ . '/../..' . '/App/Services/RevenueService.php',
+        'App\\Services\\Security\\KeyManager' => __DIR__ . '/../..' . '/App/Services/Security/KeyManager.php',
+        'App\\Services\\TransactionService' => __DIR__ . '/../..' . '/App/Services/TransactionService.php',
+        'App\\Services\\UserService' => __DIR__ . '/../..' . '/App/Services/UserService.php',
+        'App\\Services\\Validator' => __DIR__ . '/../..' . '/App/Services/Validator.php',
         'Attribute' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/Attribute.php',
+        'AuditManager\\Controllers\\AuditController' => __DIR__ . '/../..' . '/AuditManager/Controllers/AuditController.php',
+        'AuditManager\\Middleware\\AuditTrailMiddleware' => __DIR__ . '/../..' . '/AuditManager/Middleware/AuditTrailMiddleware.php',
+        'AuditManager\\Services\\AuditService' => __DIR__ . '/../..' . '/AuditManager/Services/AuditService.php',
         'Brick\\Math\\BigDecimal' => __DIR__ . '/..' . '/brick/math/src/BigDecimal.php',
         'Brick\\Math\\BigInteger' => __DIR__ . '/..' . '/brick/math/src/BigInteger.php',
         'Brick\\Math\\BigNumber' => __DIR__ . '/..' . '/brick/math/src/BigNumber.php',
@@ -570,6 +618,15 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'Doctrine\\Inflector\\Rules\\Word' => __DIR__ . '/..' . '/doctrine/inflector/lib/Doctrine/Inflector/Rules/Word.php',
         'Doctrine\\Inflector\\RulesetInflector' => __DIR__ . '/..' . '/doctrine/inflector/lib/Doctrine/Inflector/RulesetInflector.php',
         'Doctrine\\Inflector\\WordInflector' => __DIR__ . '/..' . '/doctrine/inflector/lib/Doctrine/Inflector/WordInflector.php',
+        'DocumentManager\\Controllers\\DocumentController' => __DIR__ . '/../..' . '/DocumentManager/Controllers/DocumentController.php',
+        'DocumentManager\\Controllers\\SignatureController' => __DIR__ . '/../..' . '/DocumentManager/Controllers/SignatureController.php',
+        'DocumentManager\\Models\\Document' => __DIR__ . '/../..' . '/DocumentManager/Models/Document.php',
+        'DocumentManager\\Models\\DocumentTemplate' => __DIR__ . '/../..' . '/DocumentManager/Models/DocumentTemplate.php',
+        'DocumentManager\\Services\\DocumentService' => __DIR__ . '/../..' . '/DocumentManager/Services/DocumentService.php',
+        'DocumentManager\\Services\\EncryptionService' => __DIR__ . '/../..' . '/DocumentManager/Services/EncryptionService.php',
+        'DocumentManager\\Services\\FileStorage' => __DIR__ . '/../..' . '/DocumentManager/Services/FileStorage.php',
+        'DocumentManager\\Services\\SignatureService' => __DIR__ . '/../..' . '/DocumentManager/Services/SignatureService.php',
+        'DocumentManager\\Services\\TemplateService' => __DIR__ . '/../..' . '/DocumentManager/Services/TemplateService.php',
         'Dotenv\\Dotenv' => __DIR__ . '/..' . '/vlucas/phpdotenv/src/Dotenv.php',
         'Dotenv\\Exception\\ExceptionInterface' => __DIR__ . '/..' . '/vlucas/phpdotenv/src/Exception/ExceptionInterface.php',
         'Dotenv\\Exception\\InvalidEncodingException' => __DIR__ . '/..' . '/vlucas/phpdotenv/src/Exception/InvalidEncodingException.php',
@@ -1023,6 +1080,8 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'Illuminate\\Database\\DeadlockException' => __DIR__ . '/..' . '/illuminate/database/DeadlockException.php',
         'Illuminate\\Database\\DetectsConcurrencyErrors' => __DIR__ . '/..' . '/illuminate/database/DetectsConcurrencyErrors.php',
         'Illuminate\\Database\\DetectsLostConnections' => __DIR__ . '/..' . '/illuminate/database/DetectsLostConnections.php',
+        'Illuminate\\Database\\Eloquent\\Attributes\\ObservedBy' => __DIR__ . '/..' . '/illuminate/database/Eloquent/Attributes/ObservedBy.php',
+        'Illuminate\\Database\\Eloquent\\Attributes\\ScopedBy' => __DIR__ . '/..' . '/illuminate/database/Eloquent/Attributes/ScopedBy.php',
         'Illuminate\\Database\\Eloquent\\BroadcastableModelEventOccurred' => __DIR__ . '/..' . '/illuminate/database/Eloquent/BroadcastableModelEventOccurred.php',
         'Illuminate\\Database\\Eloquent\\BroadcastsEvents' => __DIR__ . '/..' . '/illuminate/database/Eloquent/BroadcastsEvents.php',
         'Illuminate\\Database\\Eloquent\\BroadcastsEventsAfterCommit' => __DIR__ . '/..' . '/illuminate/database/Eloquent/BroadcastsEventsAfterCommit.php',
@@ -1144,6 +1203,7 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'Illuminate\\Database\\Query\\Grammars\\SqlServerGrammar' => __DIR__ . '/..' . '/illuminate/database/Query/Grammars/SqlServerGrammar.php',
         'Illuminate\\Database\\Query\\IndexHint' => __DIR__ . '/..' . '/illuminate/database/Query/IndexHint.php',
         'Illuminate\\Database\\Query\\JoinClause' => __DIR__ . '/..' . '/illuminate/database/Query/JoinClause.php',
+        'Illuminate\\Database\\Query\\JoinLateralClause' => __DIR__ . '/..' . '/illuminate/database/Query/JoinLateralClause.php',
         'Illuminate\\Database\\Query\\Processors\\MySqlProcessor' => __DIR__ . '/..' . '/illuminate/database/Query/Processors/MySqlProcessor.php',
         'Illuminate\\Database\\Query\\Processors\\PostgresProcessor' => __DIR__ . '/..' . '/illuminate/database/Query/Processors/PostgresProcessor.php',
         'Illuminate\\Database\\Query\\Processors\\Processor' => __DIR__ . '/..' . '/illuminate/database/Query/Processors/Processor.php',
