@@ -25,19 +25,17 @@ use DocumentManager\Services\EncryptionService;
 // Load Composer Autoload
 require_once __DIR__ . '/vendor/autoload.php';
 
-// Load Environment Variables
-try {
-    $dotenv = Dotenv::createImmutable(__DIR__);
-    $dotenv->load();
-} catch (InvalidPathException $e) {
-    die("⚠️ Environment file missing: " . $e->getMessage());
-}
-var_dump($_ENV);
+// Force Load Environment Variables
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
+// Debug Check: Print Loaded Environment Variables
+
 // Load Configuration Files
 $config = [
-    'database' => require __DIR__ . 'config/database.php',
-    'encryption' => require __DIR__ . 'config/encryption.php',
-    'dependencies' => require __DIR__ . 'config/dependencies.php',
+    'database' => require __DIR__ . '/config/database.php',
+    'encryption' => require __DIR__ . '/config/encryption.php',
+    'dependencies' => require __DIR__ . '/config/dependencies.php',
 ];
 
 if (!isset($config['app_database'])) {
