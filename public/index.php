@@ -21,6 +21,8 @@ if ($uri === '' || $uri === '/' || $uri === '/index.php') {
 
 // Dispatch the request
 $routeInfo = $dispatcher->dispatch($httpMethod, $uri);
+var_dump($routeInfo);
+exit;
 
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::NOT_FOUND:
