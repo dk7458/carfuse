@@ -92,7 +92,7 @@ return [
     AuditService::class => new AuditService($securePdo),
     EncryptionService::class => new EncryptionService(),
     FileStorage::class => new FileStorage([
-        'base_directory' => '/../storage/documents'
+        'base_directory' => '../storage/documents'
     ], $logger),
     
     DocumentService::class => new DocumentService(
