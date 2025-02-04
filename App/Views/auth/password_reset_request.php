@@ -1,51 +1,38 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Password Reset - CarFuse</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
-    <div class="container mt-5">
-        <div class="row justify-content-center">
-            <div class="col-md-6">
-                <div class="card shadow">
-                    <div class="card-body">
-                        <h2 class="text-center mb-4">Request Password Reset</h2>
-                        
-                        <?php if (isset($validation)): ?>
-                            <div class="alert alert-danger">
-                                <?= $validation->listErrors() ?>
-                            </div>
-                        <?php endif; ?>
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
 
-                        <?php if (session()->has('success')): ?>
-                            <div class="alert alert-success">
-                                <?= esc(session('success')) ?>
-                            </div>
-                        <?php endif; ?>
+<h1 class="text-center">Reset Password</h1>
 
-                        <form action="<?= site_url('password/request') ?>" method="post" class="needs-validation" novalidate>
-                            <?= csrf_field() ?>
-                            
-                            <div class="mb-3">
-                                <label for="email" class="form-label">Email Address</label>
-                                <input type="email" class="form-control" id="email" name="email" required value="<?= esc(old('email')) ?>">
-                            </div>
+<div id="alert-container"></div>
 
-                            <button type="submit" class="btn btn-primary w-100">Send Reset Link</button>
-                        </form>
+<div class="auth-container">
+    <form id="passwordResetForm" class="auth-form">
+        <?= csrf_field() ?>
+        <input type="hidden" name="token" value="<?= esc($token) ?>">
 
-                        <div class="text-center mt-3">
-                            <a href="<?= site_url('login') ?>">Back to Login</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="Enter your email" required value="<?= esc($email ?? old('email')) ?>">
         </div>
-    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+        <div class="form-group">
+            <label for="password">New Password</label>
+            <input type="password" id="password" name="password" class="form-control" placeholder="Enter a new password" required minlength="8">
+            <small class="form-text">Password must be at least 8 characters long.</small>
+        </div>
+
+        <div class="form-group">
+            <label for="confirm_password">Confirm New Password</label>
+            <input type="password" id="confirm_password" name="confirm_password" class="form-control" placeholder="Re-enter your password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Reset Password</button>
+    </form>
+
+    <div class="text-center mt-3">
+        <a href="/auth/login">Back to Login</a>
+    </div>
+</div>
+
+<script src="/js/auth.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>

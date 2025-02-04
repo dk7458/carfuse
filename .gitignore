@@ -3,3 +3,4 @@
 .env.testing
 .env.production
 /config/database.php
+/node_modules
