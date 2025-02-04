@@ -116,19 +116,18 @@ return [
     AuditService::class => new AuditService($securePdo),
     EncryptionService::class => new EncryptionService(),
     FileStorage::class => new FileStorage($fileStorageConfig, $logger),
-
+    TemplateService::class => new TemplateService($templateDirectory),
     DocumentService::class => new DocumentService(
         $securePdo,
         new AuditService($securePdo),
         new FileStorage($fileStorageConfig, $logger),
         new EncryptionService(),
-        new TemplateService(),
+        new TemplateService($templateDirectory),
         $logger 
     ),
 
     TokenService::class => new TokenService($config['encryption']['encryption_key']),
     NotificationQueue::class => new NotificationQueue(new NotificationService($pdo, $logger), __DIR__ . '/../storage/notification_queue.json'),
-    TemplateService::class => new TemplateService($templateDirectory),
     NotificationService::class => new NotificationService($pdo, $logger),
     UserService::class => new UserService($securePdo, $logger),
     PaymentModel::class => new PaymentModel($pdo),
