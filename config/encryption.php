@@ -6,4 +6,6 @@ return [
     'payu_merchant_key' => 'your-merchant-key',
     'payu_merchant_salt' => 'your-merchant-salt',
     'payu_api_endpoint' => 'https://your-payment-gateway-endpoint.com',
+    'jwt_secret' => 'your-secure-jwt-secret',
+    'jwt_refresh_secret' => 'your-secure-refresh-jwt-secret',
 ];
