@@ -11,10 +11,13 @@ class AuthController
 
     public function __construct()
     {
-        // TokenService is instantiated manually because FastRoute does not use dependency injection
+        // Load the encryption configuration into a variable
+        $encryptionConfig = require __DIR__ . '/../../config/encryption.php';
+
+        // Instantiate TokenService with the configuration values
         $this->tokenService = new TokenService(
-            require __DIR__ . '/../../config/encryption.php'['jwt_secret'],
-            require __DIR__ . '/../../config/encryption.php'['jwt_refresh_secret']
+            $encryptionConfig['jwt_secret'],
+            $encryptionConfig['jwt_refresh_secret']
         );
     }
 
@@ -24,7 +27,6 @@ class AuthController
     public function loginView()
     {
         require __DIR__ . '/../Views/auth/login.php';
-        var_dump("Login Route Hit"); exit;
     }
 
     /**
