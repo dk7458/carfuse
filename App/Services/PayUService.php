@@ -5,7 +5,7 @@ namespace App\Services;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Psr\Log\LoggerInterface;
-
+require_once __DIR__ . '/../../config/payu.php';
 /**
  * PayUService
  * 
