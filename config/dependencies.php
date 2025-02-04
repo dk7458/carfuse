@@ -109,7 +109,9 @@ return [
         $securePdo,
         new AuditService($securePdo),
         new FileStorage($fileStorageConfig, $logger),
-        new EncryptionService()
+        new EncryptionService(),
+        new TemplateService(),
+        $logger 
     ),
 
     TokenService::class => new TokenService($config['encryption']['encryption_key']),
