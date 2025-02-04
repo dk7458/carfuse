@@ -88,7 +88,7 @@ return [
     'SecurePDO' => $securePdo,
     LoggerInterface::class => $logger,
     Validator::class => new Validator(),
-    RateLimiter::class => new RateLimiter(5, 900), // 5 attempts, 15 minutes
+    RateLimiter::class => new RateLimiter($pdo),
     AuditService::class => new AuditService($securePdo),
     EncryptionService::class => new EncryptionService(),
     FileStorage::class => new FileStorage(__DIR__ . '/../storage/documents'),
