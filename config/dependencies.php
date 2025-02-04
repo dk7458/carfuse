@@ -134,9 +134,11 @@ return [
     ),
     
     NotificationQueue::class => new NotificationQueue(
-        $notificationService, // ✅ Use the existing instance
-        __DIR__ . '/../storage/notification_queue.json'
+        $notificationService, // ✅ Reference existing NotificationService instance
+        __DIR__ . '/../storage/notification_queue.json',
+        $logger // ✅ Pass LoggerInterface instance
     ),
+    
     
     
     UserService::class => new UserService($securePdo, $logger),
