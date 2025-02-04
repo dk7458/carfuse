@@ -13,249 +13,110 @@ use DocumentManager\Services\EncryptionService;
 use DocumentManager\Services\FileStorage;
 use AuditManager\Services\AuditService;
 use App\Models\PaymentModel;
-
 use Psr\Log\LoggerInterface;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
-use Dotenv\Dotenv;
+use GuzzleHttp\Client;
 
-$dotenv = Dotenv::createImmutable(__DIR__ . '/../');
-$dotenv->load();
+// Load Configuration
+$configFiles = ['database', 'encryption'];
+$config = [];
 
-return [
-    /**
-     * Database Connection for App
-     */
-    PDO::class => function () {
-        try {
-            $dsn = sprintf(
-                'mysql:host=%s;dbname=%s;charset=utf8mb4',
-                $_ENV['DB_HOST'] ?? '127.0.0.1',
-                $_ENV['DB_NAME'] ?? 'carfuse'
-            );
-            $username = $_ENV['DB_USER'] ?? 'root';
-            $password = $_ENV['DB_PASSWORD'] ?? '';
+foreach ($configFiles as $file) {
+    $path = __DIR__ . "/{$file}.php";
+    if (!file_exists($path)) {
+        throw new RuntimeException("❌ Missing configuration file: {$file}.php");
+    }
+    $config[$file] = require $path;
+}
 
-            return new PDO($dsn, $username, $password, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false,
-            ]);
-        } catch (Exception $e) {
-            throw new RuntimeException('Failed to create PDO instance: ' . $e->getMessage());
-        }
-    },
+// Initialize Logger
+try {
+    $logger = new Logger('carfuse');
+    $logFile = __DIR__ . '/../logs/app.log';
 
-    /**
-     * Secure Database Connection
-     * Handles sensitive user data and audits.
-     */
-    'SecurePDO' => function () {
-        $dsn = sprintf(
+    if (!file_exists(dirname($logFile))) {
+        mkdir(dirname($logFile), 0775, true);
+    }
+
+    $streamHandler = new StreamHandler($logFile, Logger::DEBUG);
+    $formatter = new LineFormatter(null, null, true, true);
+    $streamHandler->setFormatter($formatter);
+    $logger->pushHandler($streamHandler);
+} catch (Exception $e) {
+    throw new RuntimeException("❌ Logger setup failed: " . $e->getMessage());
+}
+
+// Initialize Database Connections
+try {
+    $pdo = new PDO(
+        sprintf(
             'mysql:host=%s;dbname=%s;charset=utf8mb4',
-            $_ENV['SECURE_DB_HOST'] ?? '127.0.0.1',
-            $_ENV['SECURE_DB_NAME'] ?? 'carfuse_secure'
-        );
-        $username = $_ENV['SECURE_DB_USER'] ?? 'root';
-        $password = $_ENV['SECURE_DB_PASSWORD'] ?? '';
-
-        return new PDO($dsn, $username, $password, [
+            $config['database']['app_database']['host'],
+            $config['database']['app_database']['database']
+        ),
+        $config['database']['app_database']['username'],
+        $config['database']['app_database']['password'],
+        [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-        ]);
-    },
+        ]
+    );
 
-    /**
-     * Logger Configuration
-     */
-    LoggerInterface::class => function () {
-        try {
-            $logger = new Logger('carfuse');
-            $handler = new StreamHandler(__DIR__ . '/../logs/app.log', Logger::DEBUG);
-            $formatter = new LineFormatter(null, null, true, true);
-            $handler->setFormatter($formatter);
-            $logger->pushHandler($handler);
-            return $logger;
-        } catch (Exception $e) {
-            throw new RuntimeException('Failed to configure logger: ' . $e->getMessage());
-        }
-    },
+    $securePdo = new PDO(
+        sprintf(
+            'mysql:host=%s;dbname=%s;charset=utf8mb4',
+            $config['database']['secure_database']['host'],
+            $config['database']['secure_database']['database']
+        ),
+        $config['database']['secure_database']['username'],
+        $config['database']['secure_database']['password'],
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]
+    );
+} catch (PDOException $e) {
+    throw new RuntimeException("❌ Database connection failed: " . $e->getMessage());
+}
 
-    /**
-     * Validator Service
-     */
-    Validator::class => function () {
-        return new Validator();
-    },
-
-    /**
-     * Rate Limiter Service
-     */
-    RateLimiter::class => function () {
-        return new RateLimiter(5, 900); // 5 attempts, 15-minute window
-    },
-
-    /**
-     * Audit Service
-     * Logs critical system events for auditing purposes.
-     */
-    AuditService::class => function ($container) {
-        try {
-            return new AuditService($container['SecurePDO']);
-        } catch (Exception $e) {
-            throw new RuntimeException('Failed to create AuditService: ' . $e->getMessage());
-        }
-    },
-
-    /**
-     * Encryption Service
-     * Provides encryption and decryption functionality.
-     */
-    EncryptionService::class => function () {
-        return new EncryptionService($_ENV['ENCRYPTION_KEY'] ?? 'your-encryption-key');
-    },
-
-    /**
-     * Document File Storage Service
-     * Handles file operations for document storage.
-     */
-    FileStorage::class => function () {
-        return new FileStorage(__DIR__ . '/../storage/documents');
-    },
-
-    /**
-     * Document Service
-     */
-    DocumentService::class => function ($container) {
-        try {
-            return new DocumentService(
-                $container['SecurePDO'],
-                $container[AuditService::class],
-                $container[FileStorage::class],
-                $container[EncryptionService::class]
-            );
-        } catch (Exception $e) {
-            throw new RuntimeException('Failed to create DocumentService: ' . $e->getMessage());
-        }
-    },
-
-    /**
-     * Token Service
-     */
-    TokenService::class => function () {
-        $jwtSecret = $_ENV['JWT_SECRET'] ?? 'your-secret-key';
-        if (empty($jwtSecret)) {
-            throw new RuntimeException('JWT_SECRET is not set in the environment.');
-        }
-        return new TokenService($jwtSecret);
-    },
-
-    /**
-     * Notification Queue
-     */
-    NotificationQueue::class => function ($container) {
-        return new NotificationQueue(
-            $container[NotificationService::class],
-            __DIR__ . '/../storage/notification_queue.json'
-        );
-    },
-
-    /**
-     * Notification Service
-     */
-    NotificationService::class => function ($container) {
-        try {
-            return new NotificationService(
-                $container[PDO::class],
-                $container[LoggerInterface::class]
-            );
-        } catch (Exception $e) {
-            throw new RuntimeException('Failed to create NotificationService: ' . $e->getMessage());
-        }
-    },
-
-    /**
-     * User Service
-     */
-    UserService::class => function ($container) {
-        try {
-            return new UserService(
-                $container['SecurePDO'],
-                $container[LoggerInterface::class]
-            );
-        } catch (Exception $e) {
-            throw new RuntimeException('Failed to create UserService: ' . $e->getMessage());
-        }
-    },
-
-    /**
-     * Payment Model
-     */
-    PaymentModel::class => function ($container) {
-        return new PaymentModel($container[PDO::class]);
-    },
-
-    /**
-     * Payment Service
-     */
-    PaymentService::class => function ($container) {
-        try {
-            return new PaymentService(
-                $container[PDO::class],
-                $container[LoggerInterface::class],
-                $container[PaymentModel::class]
-            );
-        } catch (Exception $e) {
-            throw new RuntimeException('Failed to create PaymentService: ' . $e->getMessage());
-        }
-    },
-
-    /**
-     * PayU Service
-     */
-    PayUService::class => function ($container) {
-        try {
-            return new PayUService(
-                new GuzzleHttp\Client(),
-                $container[LoggerInterface::class],
-                [
-                    'merchant_key' => $_ENV['PAYU_MERCHANT_KEY'],
-                    'merchant_salt' => $_ENV['PAYU_MERCHANT_SALT'],
-                    'endpoint' => $_ENV['PAYU_API_ENDPOINT'],
-                ]
-            );
-        } catch (Exception $e) {
-            throw new RuntimeException('Failed to create PayUService: ' . $e->getMessage());
-        }
-    },
-
-    /**
-     * User Controller
-     */
-    UserController::class => function ($container) {
-        try {
-            return new UserController(
-                $container[PDO::class],
-                $container['SecurePDO'],
-                $container[LoggerInterface::class],
-                ['jwt_secret' => $_ENV['JWT_SECRET'] ?? 'your-secret-key'],
-                $container[Validator::class],
-                $container[RateLimiter::class],
-                $container[AuditService::class],
-                $container[NotificationService::class]
-            );
-        } catch (Exception $e) {
-            throw new RuntimeException('Failed to create UserController: ' . $e->getMessage());
-        }
-    },
-
-    'db' => [
-        'host' => getenv('DB_HOST'),
-        'user' => getenv('DB_USER'),
-        'password' => getenv('DB_PASSWORD'),
-        'dbname' => getenv('DB_NAME'),
-    ],
+// Initialize Services
+return [
+    PDO::class => $pdo,
+    'SecurePDO' => $securePdo,
+    LoggerInterface::class => $logger,
+    Validator::class => new Validator(),
+    RateLimiter::class => new RateLimiter(5, 900), // 5 attempts, 15 minutes
+    AuditService::class => new AuditService($securePdo),
+    EncryptionService::class => new EncryptionService(),
+    FileStorage::class => new FileStorage(__DIR__ . '/../storage/documents'),
+    DocumentService::class => new DocumentService(
+        $securePdo,
+        new AuditService($securePdo),
+        new FileStorage(__DIR__ . '/../storage/documents'),
+        new EncryptionService()
+    ),
+    TokenService::class => new TokenService($config['encryption']['encryption_key']),
+    NotificationQueue::class => new NotificationQueue(new NotificationService($pdo, $logger), __DIR__ . '/../storage/notification_queue.json'),
+    NotificationService::class => new NotificationService($pdo, $logger),
+    UserService::class => new UserService($securePdo, $logger),
+    PaymentModel::class => new PaymentModel($pdo),
+    PaymentService::class => new PaymentService($pdo, $logger, new PaymentModel($pdo)),
+    PayUService::class => new PayUService(new Client(), $logger, [
+        'merchant_key' => $config['encryption']['payu_merchant_key'],
+        'merchant_salt' => $config['encryption']['payu_merchant_salt'],
+        'endpoint' => $config['encryption']['payu_api_endpoint'],
+    ]),
+    UserController::class => new UserController(
+        $pdo,
+        $securePdo,
+        $logger,
+        ['jwt_secret' => $config['encryption']['encryption_key']],
+        new Validator(),
+        new RateLimiter(5, 900),
+        new AuditService($securePdo),
+        new NotificationService($pdo, $logger)
+    )
 ];
