@@ -12,6 +12,12 @@ $uri = $_SERVER['REQUEST_URI'];
 // Strip query string (?foo=bar) and decode URI
 $uri = strtok($uri, '?');
 
+// Check if root URL (/) should load the landing page
+if ($uri === '/' || $uri === '/index.php') {
+    require __DIR__ . '/../App/Views/landing.php';
+    exit;
+}
+
 // Dispatch the request
 $routeInfo = $dispatcher->dispatch($httpMethod, $uri);
 
