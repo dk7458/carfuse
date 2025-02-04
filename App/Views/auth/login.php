@@ -1,4 +1,6 @@
-<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+<?php require_once __DIR__ . '/../layouts/header.php';
+require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php'; 
+?>
 
 <h1 class="text-center">Login</h1>
 
