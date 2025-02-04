@@ -3,22 +3,47 @@
 namespace App\Controllers;
 
 use App\Services\Auth\TokenService;
-use App\Models\User;
+use PDO;
+use Exception;
 
 class AuthController
 {
     protected TokenService $tokenService;
+    protected PDO $pdo;
 
     public function __construct()
     {
-        // Load the encryption configuration into a variable
-        $encryptionConfig = require __DIR__ . '/../../config/encryption.php';
+        // Load the encryption configuration
+        $configPath = __DIR__ . '/../../config/encryption.php';
+        if (!file_exists($configPath)) {
+            throw new Exception("Encryption configuration missing.");
+        }
 
-        // Instantiate TokenService with the configuration values
+        $encryptionConfig = require $configPath;
+
+        // Ensure required keys exist
+        if (!isset($encryptionConfig['jwt_secret'], $encryptionConfig['jwt_refresh_secret'])) {
+            throw new Exception("JWT configuration missing in encryption.php.");
+        }
+
+        // Instantiate TokenService
         $this->tokenService = new TokenService(
             $encryptionConfig['jwt_secret'],
             $encryptionConfig['jwt_refresh_secret']
         );
+
+        // Load the database connection
+        $dbConfig = require __DIR__ . '/../../config/database.php';
+        try {
+            $this->pdo = new PDO(
+                "mysql:host={$dbConfig['app_database']['host']};dbname={$dbConfig['app_database']['database']};charset=utf8mb4",
+                $dbConfig['app_database']['username'],
+                $dbConfig['app_database']['password'],
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+        } catch (Exception $e) {
+            throw new Exception("Database connection failed: " . $e->getMessage());
+        }
     }
 
     /**
@@ -42,9 +67,11 @@ class AuthController
      */
     public function login()
     {
+        header('Content-Type: application/json');
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
-            echo "405 Method Not Allowed";
+            echo json_encode(['error' => 'Method Not Allowed']);
             return;
         }
 
@@ -58,10 +85,9 @@ class AuthController
         }
 
         // Fetch user from the database
-        $pdo = require __DIR__ . '/../../bootstrap.php';
-        $stmt = $pdo['pdo']->prepare("SELECT * FROM users WHERE email = :email LIMIT 1");
+        $stmt = $this->pdo->prepare("SELECT * FROM users WHERE email = :email LIMIT 1");
         $stmt->execute(['email' => $email]);
-        $user = $stmt->fetch();
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$user || !password_verify($password, $user['password'])) {
             http_response_code(401);
@@ -83,9 +109,11 @@ class AuthController
      */
     public function refresh()
     {
+        header('Content-Type: application/json');
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
-            echo "405 Method Not Allowed";
+            echo json_encode(['error' => 'Method Not Allowed']);
             return;
         }
 
@@ -112,9 +140,11 @@ class AuthController
      */
     public function logout()
     {
+        header('Content-Type: application/json');
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
-            echo "405 Method Not Allowed";
+            echo json_encode(['error' => 'Method Not Allowed']);
             return;
         }
 
@@ -124,7 +154,7 @@ class AuthController
             $this->tokenService->revokeToken($refreshToken);
         }
 
-        session_destroy(); // Clear session-based authentication (if used)
+        session_destroy();
         echo json_encode(['message' => 'Logged out successfully']);
     }
 }
