@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/main.css';
 
 // Load Route Dispatcher
 $dispatcher = require __DIR__ . '/../routes/web.php';
