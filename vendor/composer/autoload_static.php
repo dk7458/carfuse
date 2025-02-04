@@ -422,6 +422,7 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'App\\Models\\TransactionLog' => __DIR__ . '/../..' . '/App/Models/TransactionLog.php',
         'App\\Models\\User' => __DIR__ . '/../..' . '/App/Models/User.php',
         'App\\Models\\Vehicle' => __DIR__ . '/../..' . '/App/Models/Vehicle.php',
+        'App\\Queues\\DocumentQueue' => __DIR__ . '/../..' . '/App/Queues/DocumentQueue.php',
         'App\\Queues\\NotificationQueue' => __DIR__ . '/../..' . '/App/Queues/NotificationQueue.php',
         'App\\Services\\Auth\\TokenService' => __DIR__ . '/../..' . '/App/Services/Auth/TokenService.php',
         'App\\Services\\BookingService' => __DIR__ . '/../..' . '/App/Services/BookingService.php',

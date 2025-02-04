@@ -26,6 +26,7 @@ return array(
     'App\\Models\\TransactionLog' => $baseDir . '/App/Models/TransactionLog.php',
     'App\\Models\\User' => $baseDir . '/App/Models/User.php',
     'App\\Models\\Vehicle' => $baseDir . '/App/Models/Vehicle.php',
+    'App\\Queues\\DocumentQueue' => $baseDir . '/App/Queues/DocumentQueue.php',
     'App\\Queues\\NotificationQueue' => $baseDir . '/App/Queues/NotificationQueue.php',
     'App\\Services\\Auth\\TokenService' => $baseDir . '/App/Services/Auth/TokenService.php',
     'App\\Services\\BookingService' => $baseDir . '/App/Services/BookingService.php',
