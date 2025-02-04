@@ -9,8 +9,8 @@ use App\Services\PaymentService;
 use App\Controllers\UserController;
 use App\Queues\NotificationQueue;
 use DocumentManager\Services\DocumentService;
-use App\Services\EncryptionService;
 use DocumentManager\Services\FileStorage;
+use App\Services\EncryptionService;
 use AuditManager\Services\AuditService;
 use App\Models\PaymentModel;
 use Psr\Log\LoggerInterface;
@@ -20,7 +20,7 @@ use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
 
-// Load Configuration
+// Load Configuration Files
 $configFiles = ['database', 'encryption'];
 $config = [];
 
@@ -82,6 +82,18 @@ try {
     throw new RuntimeException("❌ Database connection failed: " . $e->getMessage());
 }
 
+// Ensure Encryption Key Exists
+if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
+    throw new RuntimeException("❌ Encryption key must be at least 32 characters long. Check config/encryption.php.");
+}
+
+// Ensure File Storage Path Exists
+$fileStorageConfig = ['base_directory' => __DIR__ . '/../storage/documents'];
+
+if (!is_dir($fileStorageConfig['base_directory'])) {
+    mkdir($fileStorageConfig['base_directory'], 0775, true);
+}
+
 // Initialize Services
 return [
     PDO::class => $pdo,
@@ -91,34 +103,35 @@ return [
     RateLimiter::class => new RateLimiter($pdo),
     AuditService::class => new AuditService($securePdo),
     EncryptionService::class => new EncryptionService(),
-    FileStorage::class => new FileStorage([
-        'base_directory' => '../storage/documents'
-    ], $logger),
-    
+    FileStorage::class => new FileStorage($fileStorageConfig, $logger),
+
     DocumentService::class => new DocumentService(
         $securePdo,
         new AuditService($securePdo),
-        new FileStorage(__DIR__ . '/../storage/documents'),
+        new FileStorage($fileStorageConfig, $logger),
         new EncryptionService()
     ),
+
     TokenService::class => new TokenService($config['encryption']['encryption_key']),
     NotificationQueue::class => new NotificationQueue(new NotificationService($pdo, $logger), __DIR__ . '/../storage/notification_queue.json'),
     NotificationService::class => new NotificationService($pdo, $logger),
     UserService::class => new UserService($securePdo, $logger),
     PaymentModel::class => new PaymentModel($pdo),
     PaymentService::class => new PaymentService($pdo, $logger, new PaymentModel($pdo)),
+
     PayUService::class => new PayUService(new Client(), $logger, [
         'merchant_key' => $config['encryption']['payu_merchant_key'],
         'merchant_salt' => $config['encryption']['payu_merchant_salt'],
         'endpoint' => $config['encryption']['payu_api_endpoint'],
     ]),
+
     UserController::class => new UserController(
         $pdo,
         $securePdo,
         $logger,
         ['jwt_secret' => $config['encryption']['encryption_key']],
         new Validator(),
-        new RateLimiter(5, 900),
+        new RateLimiter($pdo),
         new AuditService($securePdo),
         new NotificationService($pdo, $logger)
     )
