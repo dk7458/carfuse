@@ -3,7 +3,7 @@
 namespace DocumentManager\Controllers;
 
 use DocumentManager\Services\DocumentService;
-use DocumentManager\Services\EncryptionService;
+use App\Services\EncryptionService;
 use DocumentManager\Services\FileStorage;
 use App\Services\Validator;
 use AuditManager\Services\AuditService;

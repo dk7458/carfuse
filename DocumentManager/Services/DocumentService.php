@@ -7,7 +7,7 @@ use Exception;
 use AuditManager\Services\AuditService;
 use DocumentManager\Services\FileStorage;
 use DocumentManager\Services\TemplateService;
-use DocumentManager\Services\EncryptionService;
+use App\Services\EncryptionService;
 use Psr\Log\LoggerInterface;
 
 /**
