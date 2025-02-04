@@ -10,15 +10,15 @@ use Psr\Log\LoggerInterface;
 
 class PaymentService
 {
-    private PDO $db;
+    private PDO $pdo;
     private LoggerInterface $logger;
     private Payment $paymentModel;
     private string $payuApiKey;
     private string $payuApiSecret;
 
-    public function __construct(PDO $db, LoggerInterface $logger, Payment $paymentModel, string $payuApiKey, string $payuApiSecret)
+    public function __construct(PDO $pdo, LoggerInterface $logger, Payment $paymentModel, string $payuApiKey, string $payuApiSecret)
     {
-        $this->db = $db;
+        $this->db = $pdo;
         $this->logger = $logger;
         $this->paymentModel = $paymentModel;
         $this->payuApiKey = $payuApiKey;

@@ -150,12 +150,12 @@ return [
         $config['encryption']['jwt_secret']
     ),
 
-    Payment::class => new Payment($pdo),
+    Payment::class => new Payment(),
     
     PaymentService::class => new PaymentService(
         $pdo,
         $logger,
-        new PaymentModel($pdo),
+        new Payment(),
         $config['payu']['api_key'],
         $config['payu']['api_secret']
     ),
