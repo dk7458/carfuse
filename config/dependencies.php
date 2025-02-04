@@ -9,7 +9,7 @@ use App\Services\PaymentService;
 use App\Controllers\UserController;
 use App\Queues\NotificationQueue;
 use DocumentManager\Services\DocumentService;
-use DocumentManager\Services\EncryptionService;
+use App\Services\EncryptionService;
 use DocumentManager\Services\FileStorage;
 use AuditManager\Services\AuditService;
 use App\Models\PaymentModel;
