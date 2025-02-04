@@ -2,47 +2,126 @@
 
 namespace App\Controllers;
 
-use Illuminate\Http\Request;
 use App\Services\Auth\TokenService;
+use App\Models\User;
 
-class AuthController extends Controller
+class AuthController
 {
-    protected $tokenService;
+    protected TokenService $tokenService;
 
-    public function __construct(TokenService $tokenService)
+    public function __construct()
     {
-        $this->tokenService = $tokenService;
+        // TokenService is instantiated manually because FastRoute does not use dependency injection
+        $this->tokenService = new TokenService(
+            require __DIR__ . '/../../config/encryption.php'['jwt_secret'],
+            require __DIR__ . '/../../config/encryption.php'['jwt_refresh_secret']
+        );
     }
 
-    public function login(Request $request)
+    /**
+     * Show the login page (GET /login)
+     */
+    public function loginView()
     {
-        // ...existing code for validating user credentials...
-        $token = $this->tokenService->generateToken($user);
-        $refreshToken = $this->tokenService->generateRefreshToken($user);
+        require __DIR__ . '/../Views/auth/login.php';
+    }
 
-        return response()->json([
+    /**
+     * Show the register page (GET /register)
+     */
+    public function registerView()
+    {
+        require __DIR__ . '/../Views/auth/register.php';
+    }
+
+    /**
+     * Handle user login (POST /login)
+     */
+    public function login()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo "405 Method Not Allowed";
+            return;
+        }
+
+        $email = $_POST['email'] ?? null;
+        $password = $_POST['password'] ?? null;
+
+        if (!$email || !$password) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Email and password are required']);
+            return;
+        }
+
+        // Fetch user from the database
+        $pdo = require __DIR__ . '/../../bootstrap.php';
+        $stmt = $pdo['pdo']->prepare("SELECT * FROM users WHERE email = :email LIMIT 1");
+        $stmt->execute(['email' => $email]);
+        $user = $stmt->fetch();
+
+        if (!$user || !password_verify($password, $user['password'])) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Invalid credentials']);
+            return;
+        }
+
+        $token = $this->tokenService->generateToken((object) ['id' => $user['id']]);
+        $refreshToken = $this->tokenService->generateRefreshToken((object) ['id' => $user['id']]);
+
+        echo json_encode([
             'access_token' => $token,
             'refresh_token' => $refreshToken
         ]);
     }
 
-    public function refresh(Request $request)
+    /**
+     * Refresh access token (POST /refresh)
+     */
+    public function refresh()
     {
-        $refreshToken = $request->input('refresh_token');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo "405 Method Not Allowed";
+            return;
+        }
+
+        $refreshToken = $_POST['refresh_token'] ?? null;
+
+        if (!$refreshToken) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Refresh token is required']);
+            return;
+        }
+
         $newToken = $this->tokenService->refreshAccessToken($refreshToken);
 
         if ($newToken) {
-            return response()->json(['access_token' => $newToken]);
+            echo json_encode(['access_token' => $newToken]);
+        } else {
+            http_response_code(401);
+            echo json_encode(['error' => 'Invalid refresh token']);
         }
-
-        return response()->json(['error' => 'Invalid refresh token'], 401);
     }
 
-    public function logout(Request $request)
+    /**
+     * Handle user logout (POST /logout)
+     */
+    public function logout()
     {
-        $refreshToken = $request->input('refresh_token');
-        $this->tokenService->revokeToken($refreshToken);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo "405 Method Not Allowed";
+            return;
+        }
 
-        return response()->json(['message' => 'Logged out successfully']);
+        $refreshToken = $_POST['refresh_token'] ?? null;
+
+        if ($refreshToken) {
+            $this->tokenService->revokeToken($refreshToken);
+        }
+
+        session_destroy(); // Clear session-based authentication (if used)
+        echo json_encode(['message' => 'Logged out successfully']);
     }
 }
