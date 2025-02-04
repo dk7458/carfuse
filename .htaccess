@@ -1,3 +1,13 @@
 RewriteEngine On
-RewriteCond %{REQUEST_URI} !^/public/
-RewriteRule ^(.*)$ /public/$1 [L]
+
+# Allow direct access to files and directories in /public/
+RewriteCond %{REQUEST_URI} ^/public/ [NC]
+RewriteRule .* - [L]
+
+# Allow direct access to existing files and directories
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Redirect all other requests to index.php for FastRoute
+RewriteRule ^ index.php [QSA,L]
