@@ -1,6 +1,6 @@
 <?php
 
-namespace DocumentManager\Queues;
+namespace App\Queues;
 
 use DocumentManager\Services\FileStorage;
 use Psr\Log\LoggerInterface;
