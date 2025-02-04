@@ -74,6 +74,12 @@ try {
     die("❌ Database connection failed: " . $e->getMessage() . "\n");
 }
 
+// Ensure Log Directory Exists
+$logDir = __DIR__ . '/logs';
+if (!is_dir($logDir)) {
+    mkdir($logDir, 0775, true);
+}
+
 // Initialize Logger (Monolog)
 $logFilePath = __DIR__ . '/logs/application.log';
 $logger = new Logger('application');
@@ -90,7 +96,7 @@ try {
 // Initialize Services
 try {
     $auditService = new AuditService($pdo);
-    $encryptionService = new EncryptionService($config['encryption']);
+    $encryptionService = new EncryptionService(); // Uses automatic key loading
 } catch (Exception $e) {
     die("❌ Service initialization failed: " . $e->getMessage() . "\n");
 }
@@ -99,13 +105,20 @@ try {
 $auditMiddleware = new AuditTrailMiddleware($auditService, $logger);
 
 // Validate Required Dependencies
+$missingDependencies = [];
 $requiredServices = ['NotificationService', 'TokenService', 'Validator'];
 
 foreach ($requiredServices as $service) {
     if (!isset($config['dependencies'][$service])) {
         $logger->error("❌ Missing dependency: {$service}");
-        exec('composer dump-autoload'); // Attempt to fix autoload issues
+        $missingDependencies[] = $service;
     }
+}
+
+// Attempt to Fix Autoload Issues Only If Dependencies Are Missing
+if (!empty($missingDependencies)) {
+    exec('composer dump-autoload');
+    echo "⚠️ Missing dependencies detected. Composer autoload reloaded.\n";
 }
 
 // Ensure Dependencies Are Loaded

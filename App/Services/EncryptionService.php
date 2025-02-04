@@ -17,38 +17,40 @@ class EncryptionService
     private string $cipher = 'AES-256-CBC';
     private int $ivLength;
 
-    public function __construct(string $encryptionKey)
+    public function __construct()
     {
-        if (empty($encryptionKey) || strlen($encryptionKey) < 32) {
-            throw new \InvalidArgumentException('Encryption key must be at least 32 characters long.');
+        // Load encryption key from config
+        $configPath = __DIR__ . '/../../config/encryption.php';
+
+        if (!file_exists($configPath)) {
+            throw new RuntimeException('❌ Encryption configuration file is missing.');
         }
 
-        $this->encryptionKey = $encryptionKey;
-        $this->ivLength = openssl_cipher_iv_length($this->cipher);
+        $config = require $configPath;
+        $this->encryptionKey = $config['encryption_key'] ?? '';
 
+        if (empty($this->encryptionKey) || strlen($this->encryptionKey) < 32) {
+            throw new RuntimeException('❌ Encryption key is missing or too short. It must be at least 32 characters long.');
+        }
+
+        $this->ivLength = openssl_cipher_iv_length($this->cipher);
         if ($this->ivLength === false) {
-            throw new \RuntimeException('Unable to determine IV length for the cipher.');
+            throw new RuntimeException('❌ Unable to determine IV length for the cipher.');
         }
     }
 
-    /**
-     * Encrypt a string.
-     */
     public function encrypt(string $data): string
     {
         $iv = random_bytes($this->ivLength);
         $encrypted = openssl_encrypt($data, $this->cipher, $this->encryptionKey, 0, $iv);
 
         if ($encrypted === false) {
-            throw new \RuntimeException('Encryption failed.');
+            throw new RuntimeException('❌ Encryption failed.');
         }
 
         return base64_encode($iv . $encrypted);
     }
 
-    /**
-     * Decrypt a string.
-     */
     public function decrypt(string $encryptedData): ?string
     {
         $decoded = base64_decode($encryptedData, true);
@@ -61,7 +63,7 @@ class EncryptionService
         $cipherText = substr($decoded, $this->ivLength);
 
         if (strlen($iv) !== $this->ivLength) {
-            throw new \RuntimeException('Invalid IV length.');
+            throw new RuntimeException('❌ Invalid IV length.');
         }
 
         $decrypted = openssl_decrypt($cipherText, $this->cipher, $this->encryptionKey, 0, $iv);
