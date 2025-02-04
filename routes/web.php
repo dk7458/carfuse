@@ -20,8 +20,8 @@ return simpleDispatcher(function (RouteCollector $router) {
     });
 
     // Authentication Views
-    $router->get('login', [AuthController::class, 'loginView']);
-    $router->get('register', [AuthController::class, 'registerView']);
+    $router->get('/login', [AuthController::class, 'loginView']);
+    $router->get('/register', [AuthController::class, 'registerView']);
 
     // Password Reset Views
     $router->get('password/reset', [AuthController::class, 'passwordResetRequestView']);
