@@ -9,15 +9,15 @@ use PHPMailer\PHPMailer\Exception;
 
 class NotificationService
 {
-    private PDO $db;
+    private PDO $pdo;
     private LoggerInterface $logger;
     private array $config;
     private array $retryCount = [];
     private const MAX_RETRY_ATTEMPTS = 3;
 
-    public function __construct(PDO $db, LoggerInterface $logger, array $config)
+    public function __construct(PDO $pdo, LoggerInterface $logger, array $config)
     {
-        $this->db = $db;
+        $this->pdo = $pdo;
         $this->logger = $logger;
         $this->config = $config;
     }
@@ -33,7 +33,7 @@ class NotificationService
     ): bool {
         try {
             // Store notification in the database
-            $stmt = $this->db->prepare("
+            $stmt = $this->pdo->prepare("
                 INSERT INTO notifications (user_id, type, message, sent_at, is_read)
                 VALUES (:user_id, :type, :message, NOW(), 0)
             ");
