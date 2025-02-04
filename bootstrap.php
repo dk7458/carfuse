@@ -22,7 +22,7 @@ use App\Services\EncryptionService;
 require_once __DIR__ . '/vendor/autoload.php';
 
 // Load Configuration Files
-$configFiles = ['database', 'encryption', 'dependencies'];
+$configFiles = ['database', 'encryption', 'keymanager', 'dependencies'];
 $config = [];
 
 foreach ($configFiles as $file) {
@@ -93,10 +93,15 @@ try {
     die("❌ Logger initialization failed: " . $e->getMessage() . "\n");
 }
 
+// Ensure Encryption Configuration Exists
+if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
+    die("❌ Error: Encryption key missing or invalid in config/encryption.php\n");
+}
+
 // Initialize Services
 try {
     $auditService = new AuditService($pdo);
-    $encryptionService = new EncryptionService(); // Uses automatic key loading
+    $encryptionService = new EncryptionService($config['encryption']['encryption_key']);
 } catch (Exception $e) {
     die("❌ Service initialization failed: " . $e->getMessage() . "\n");
 }
@@ -115,10 +120,10 @@ foreach ($requiredServices as $service) {
     }
 }
 
-// Attempt to Fix Autoload Issues Only If Dependencies Are Missing
+// Output warnings for missing dependencies instead of running `exec()`
 if (!empty($missingDependencies)) {
-    exec('composer dump-autoload');
-    echo "⚠️ Missing dependencies detected. Composer autoload reloaded.\n";
+    echo "⚠️ Missing dependencies detected: " . implode(', ', $missingDependencies) . "\n";
+    echo "⚠️ Ensure dependencies are correctly registered in config/dependencies.php.\n";
 }
 
 // Ensure Dependencies Are Loaded
