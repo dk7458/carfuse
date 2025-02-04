@@ -182,7 +182,7 @@ return [
     TemplateService::class => new TemplateService($templateDirectory),
 
     KeyManager::class => new KeyManager(
-        $config['security']['keys'],
+        $config['keymanager']['keys'], // ✅ Pass the encryption keys array
         $logger
     ),
 ];
