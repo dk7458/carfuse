@@ -127,7 +127,7 @@ return [
     ),
 
     TokenService::class => new TokenService($config['encryption']['encryption_key']),
-    NotificationQueue::class => new NotificationQueue(new NotificationService($pdo, $logger), __DIR__ . '/../storage/notification_queue.json'),
+    NotificationQueue::class => new NotificationQueue(new NotificationService($pdo, $logger, $config['notifications']), __DIR__ . '/../storage/notification_queue.json'),
     NotificationService::class => new NotificationService(
         $pdo,
         $logger,
