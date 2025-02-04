@@ -20,7 +20,7 @@ use App\Services\EncryptionService;
 
 // Load Composer Autoload
 require_once __DIR__ . '/vendor/autoload.php';
-
+require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 // Load Configuration Files
 $configFiles = ['database', 'encryption', 'keymanager', 'dependencies'];
 $config = [];
