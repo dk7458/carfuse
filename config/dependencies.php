@@ -173,10 +173,9 @@ return [
 
     SignatureService::class => new SignatureService(
         new Client(),
-        $config['signature']['api_endpoint'],
-        $config['signature']['api_key'],
-        $fileStorage,
-        $encryptionService,
+        $config['signature'], // ✅ Pass the full array, not just a string
+        new FileStorage($fileStorageConfig, $logger, new EncryptionService($config['encryption']['encryption_key'])),
+        new EncryptionService($config['encryption']['encryption_key']),
         $logger
     ),
 
