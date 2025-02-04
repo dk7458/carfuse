@@ -20,16 +20,27 @@ use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
 
-// Load Configuration Files
-$configFiles = ['database', 'encryption'];
+// Load all configuration files from the config directory (excluding dependencies.php)
+$configDirectory = __DIR__;
 $config = [];
 
-foreach ($configFiles as $file) {
-    $path = __DIR__ . "/{$file}.php";
-    if (!file_exists($path)) {
-        throw new RuntimeException("❌ Missing configuration file: {$file}.php");
+foreach (glob("{$configDirectory}/*.php") as $filePath) {
+    $fileName = basename($filePath, '.php');
+
+    // Exclude dependencies.php to prevent recursive loading
+    if ($fileName === 'dependencies') {
+        continue;
     }
-    $config[$file] = require $path;
+
+    $config[$fileName] = require $filePath;
+}
+
+
+$templateDirectory = __DIR__ . '/../storage/templates';
+
+// Ensure the directory exists
+if (!is_dir($templateDirectory)) {
+    mkdir($templateDirectory, 0775, true);
 }
 
 // Initialize Logger
@@ -116,6 +127,7 @@ return [
 
     TokenService::class => new TokenService($config['encryption']['encryption_key']),
     NotificationQueue::class => new NotificationQueue(new NotificationService($pdo, $logger), __DIR__ . '/../storage/notification_queue.json'),
+    TemplateService::class => new TemplateService($templateDirectory),
     NotificationService::class => new NotificationService($pdo, $logger),
     UserService::class => new UserService($securePdo, $logger),
     PaymentModel::class => new PaymentModel($pdo),
