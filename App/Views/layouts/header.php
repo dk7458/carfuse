@@ -3,7 +3,7 @@
 ?>
 <header>
     <div class="logo">
-        <img src="/assets/images/logo.png" alt="Carfuse" style="height: 104px; width: auto;">
+        <img src="/../../assets/images/logo.png" alt="Carfuse" style="height: 104px; width: auto;">
     </div>
 </header>
 
