@@ -24,6 +24,7 @@ class AuthController
     public function loginView()
     {
         require __DIR__ . '/../Views/auth/login.php';
+        var_dump("Login Route Hit"); exit;
     }
 
     /**
