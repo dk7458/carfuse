@@ -4,6 +4,7 @@ namespace DocumentManager\Services;
 
 use Exception;
 use Psr\Log\LoggerInterface;
+use App\Services\EncryptionService;
 
 /**
  * FileStorage Service
@@ -16,17 +17,20 @@ class FileStorage
     private string $basePath;
     private array $config;
     private LoggerInterface $logger;
+    private EncryptionService $encryptionService;
 
     /**
      * Constructor
      *
      * @param array $config Configuration for the FileStorage service.
      * @param LoggerInterface $logger Logger instance for logging file operations.
+     * @param EncryptionService $encryptionService Service for encrypting file contents.
      */
-    public function __construct(array $config, LoggerInterface $logger)
+    public function __construct(array $config, LoggerInterface $logger, EncryptionService $encryptionService)
     {
         $this->config = $config;
         $this->logger = $logger;
+        $this->encryptionService = $encryptionService;
 
         $this->basePath = rtrim($config['base_directory'], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 
@@ -36,19 +40,17 @@ class FileStorage
     }
 
     /**
-     * Store a file securely.
-     *
-     * @param string $directory Directory where the file will be stored.
-     * @param string $fileName The name of the file to store.
-     * @param string $content The content of the file.
-     * @return string The path where the file was stored.
-     * @throws Exception If storing the file fails.
+     * Store a file securely with optional encryption.
      */
-    public function storeFile(string $directory, string $fileName, string $content): string
+    public function storeFile(string $directory, string $fileName, string $content, bool $encrypt = false): string
     {
         $safeDirectory = $this->getDirectoryPath($directory);
         $safeFileName = $this->sanitizeFileName($fileName);
         $filePath = $safeDirectory . $safeFileName;
+
+        if ($encrypt) {
+            $content = $this->encryptionService->encrypt($content);
+        }
 
         if (file_put_contents($filePath, $content) === false) {
             $this->logger->error("Failed to store file", ['file' => $fileName, 'path' => $filePath]);
@@ -62,13 +64,9 @@ class FileStorage
     }
 
     /**
-     * Retrieve a file's content.
-     *
-     * @param string $filePath The path of the file to retrieve.
-     * @return string The content of the file.
-     * @throws Exception If the file does not exist or cannot be read.
+     * Retrieve a file's content with optional decryption.
      */
-    public function retrieveFile(string $filePath): string
+    public function retrieveFile(string $filePath, bool $decrypt = false): string
     {
         if (!file_exists($filePath) || !is_readable($filePath)) {
             $this->logger->error("File not found or not readable", ['path' => $filePath]);
@@ -81,16 +79,19 @@ class FileStorage
             throw new Exception("Failed to retrieve file: $filePath");
         }
 
+        if ($decrypt) {
+            $content = $this->encryptionService->decrypt($content);
+            if ($content === null) {
+                throw new Exception("Failed to decrypt file: $filePath");
+            }
+        }
+
         $this->logger->info("File retrieved successfully", ['path' => $filePath]);
         return $content;
     }
 
     /**
      * Delete a file securely.
-     *
-     * @param string $filePath The path of the file to delete.
-     * @return void
-     * @throws Exception If the file does not exist or cannot be deleted.
      */
     public function deleteFile(string $filePath): void
     {
@@ -109,9 +110,6 @@ class FileStorage
 
     /**
      * Sanitize the file name to prevent directory traversal attacks.
-     *
-     * @param string $fileName The original file name.
-     * @return string The sanitized file name.
      */
     private function sanitizeFileName(string $fileName): string
     {
@@ -120,10 +118,6 @@ class FileStorage
 
     /**
      * Get the full directory path, creating it if it doesn't exist.
-     *
-     * @param string $directory The relative directory path.
-     * @return string The absolute directory path.
-     * @throws Exception If the directory cannot be created or is not writable.
      */
     private function getDirectoryPath(string $directory): string
     {

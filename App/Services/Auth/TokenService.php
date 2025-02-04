@@ -8,66 +8,70 @@ use Illuminate\Support\Facades\Cache;
 
 class TokenService
 {
-    private $secretKey;
-    private $refreshSecretKey;
+    private string $secretKey;
+    private string $refreshSecretKey;
 
-    public function __construct()
+    public function __construct(string $secretKey, string $refreshSecretKey)
     {
-        $this->secretKey = env('JWT_SECRET');
-        $this->refreshSecretKey = env('JWT_REFRESH_SECRET');
-    }
-
-    public function generateToken($user)
-    {
-        $payload = [
-            'iss' => "your-issuer", // Issuer
-            'sub' => $user->id, // Subject
-            'iat' => time(), // Issued at
-            'exp' => time() + 3600 // Expiration time
-        ];
-
-        return JWT::encode($payload, $this->secretKey, 'HS256');
-    }
-
-    public function verifyToken($token)
-    {
-        try {
-            $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
-            return (array) $decoded;
-        } catch (\Exception $e) {
-            return false;
+        if (empty($secretKey) || empty($refreshSecretKey)) {
+            throw new \RuntimeException('❌ JWT secrets are missing.');
         }
+
+        $this->secretKey = $secretKey;
+        $this->refreshSecretKey = $refreshSecretKey;
     }
 
-    public function generateRefreshToken($user)
+    public function generateToken($user): string
     {
         $payload = [
             'iss' => "your-issuer",
             'sub' => $user->id,
             'iat' => time(),
-            'exp' => time() + 604800 // 1 week
+            'exp' => time() + 3600
+        ];
+
+        return JWT::encode($payload, $this->secretKey, 'HS256');
+    }
+
+    public function verifyToken(string $token): ?array
+    {
+        try {
+            $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
+            return (array) $decoded;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    public function generateRefreshToken($user): string
+    {
+        $payload = [
+            'iss' => "your-issuer",
+            'sub' => $user->id,
+            'iat' => time(),
+            'exp' => time() + 604800
         ];
 
         return JWT::encode($payload, $this->refreshSecretKey, 'HS256');
     }
 
-    public function refreshAccessToken($refreshToken)
+    public function refreshAccessToken(string $refreshToken): ?string
     {
-        $decoded = $this->verifyToken($refreshToken, $this->refreshSecretKey);
+        $decoded = $this->verifyToken($refreshToken);
         if ($decoded) {
             $userId = $decoded['sub'];
-            // Check if the refresh token is revoked
+
             if (Cache::has("revoked_refresh_token_$refreshToken")) {
-                return false;
+                return null;
             }
-            // Generate new access token
+
             return $this->generateToken((object) ['id' => $userId]);
         }
-        return false;
+        return null;
     }
 
-    public function revokeToken($token)
+    public function revokeToken(string $token): void
     {
-        Cache::put("revoked_refresh_token_$token", true, 604800); // 1 week
+        Cache::put("revoked_refresh_token_$token", true, 604800);
     }
 }

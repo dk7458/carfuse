@@ -17,23 +17,15 @@ class EncryptionService
     private string $cipher = 'AES-256-CBC';
     private int $ivLength;
 
-    public function __construct()
+    public function __construct(string $encryptionKey)
     {
-        // Load encryption key from config
-        $configPath = __DIR__ . '/../../config/encryption.php';
-
-        if (!file_exists($configPath)) {
-            throw new RuntimeException('❌ Encryption configuration file is missing.');
-        }
-
-        $config = require $configPath;
-        $this->encryptionKey = $config['encryption_key'] ?? '';
-
-        if (empty($this->encryptionKey) || strlen($this->encryptionKey) < 32) {
+        if (empty($encryptionKey) || strlen($encryptionKey) < 32) {
             throw new RuntimeException('❌ Encryption key is missing or too short. It must be at least 32 characters long.');
         }
 
+        $this->encryptionKey = $encryptionKey;
         $this->ivLength = openssl_cipher_iv_length($this->cipher);
+
         if ($this->ivLength === false) {
             throw new RuntimeException('❌ Unable to determine IV length for the cipher.');
         }

@@ -3,43 +3,52 @@
 namespace App\Services\Security;
 
 use Exception;
-use Illuminate\Support\Facades\Log;
+use Psr\Log\LoggerInterface;
 
 class KeyManager
 {
-    public static function getKey(string $identifier): string
+    private array $keys;
+    private LoggerInterface $logger;
+
+    public function __construct(array $keys, LoggerInterface $logger)
     {
-        $key = env('ENCRYPTION_KEY_' . strtoupper($identifier));
-        if (!$key) {
-            throw new Exception("Encryption key for {$identifier} not found.");
-        }
-        return $key;
+        $this->keys = $keys;
+        $this->logger = $logger;
     }
 
-    public static function generateKey(): string
+    public function getKey(string $identifier): string
+    {
+        $keyName = 'encryption_key_' . strtolower($identifier);
+
+        if (!isset($this->keys[$keyName]) || empty($this->keys[$keyName])) {
+            $this->logger->error("Encryption key for {$identifier} not found.");
+            throw new Exception("Encryption key for {$identifier} not found.");
+        }
+
+        return $this->keys[$keyName];
+    }
+
+    public function generateKey(): string
     {
         return base64_encode(random_bytes(32)); // AES-256 key
     }
 
-    public static function storeKey(string $identifier, string $key): void
+    public function storeKey(string $identifier, string $key): void
     {
-        // Store the key securely, e.g., in a key vault or environment variable
-        // This is a placeholder implementation
-        Log::info("Storing key for {$identifier}");
-        // Actual implementation would depend on the secure storage solution used
+        $this->logger->info("Storing key for {$identifier}");
+        // Implementation for storing key securely (e.g., database, key vault)
     }
 
-    public static function rotateKey(string $identifier): void
+    public function rotateKey(string $identifier): void
     {
-        $newKey = self::generateKey();
-        self::storeKey($identifier, $newKey);
-        Log::info("Rotated key for {$identifier}");
+        $newKey = $this->generateKey();
+        $this->storeKey($identifier, $newKey);
+        $this->logger->info("Rotated key for {$identifier}");
     }
 
-    public static function revokeKey(string $identifier): void
+    public function revokeKey(string $identifier): void
     {
-        // Revoke the key securely
-        Log::info("Revoking key for {$identifier}");
-        // Actual implementation would depend on the secure storage solution used
+        $this->logger->info("Revoking key for {$identifier}");
+        // Implementation for revoking key securely
     }
 }

@@ -13,32 +13,26 @@ class PaymentService
     private PDO $db;
     private LoggerInterface $logger;
     private Payment $paymentModel;
-    private $payuApiKey;
-    private $payuApiSecret;
+    private string $payuApiKey;
+    private string $payuApiSecret;
 
-    public function __construct(PDO $db, LoggerInterface $logger, Payment $paymentModel)
+    public function __construct(PDO $db, LoggerInterface $logger, Payment $paymentModel, string $payuApiKey, string $payuApiSecret)
     {
         $this->db = $db;
         $this->logger = $logger;
         $this->paymentModel = $paymentModel;
-        $this->payuApiKey = getenv('PAYU_API_KEY');
-        $this->payuApiSecret = getenv('PAYU_API_SECRET');
+        $this->payuApiKey = $payuApiKey;
+        $this->payuApiSecret = $payuApiSecret;
     }
 
-    /**
-     * Process a payment for a booking.
-     */
     public function processPayment(int $bookingId, float $amount, string $paymentMethod): bool
     {
         try {
-            // Insert payment record
             $this->paymentModel->createPayment($bookingId, $amount, $paymentMethod);
 
-            // Update booking payment status
             $booking = new Booking($this->db);
             $booking->updateStatus($bookingId, 'paid');
 
-            // Log transaction
             $this->logTransaction($bookingId, $amount, 'payment');
 
             $this->logger->info("Payment processed for booking $bookingId");
@@ -49,20 +43,14 @@ class PaymentService
         }
     }
 
-    /**
-     * Process a refund for a booking.
-     */
     public function processRefund(int $bookingId, float $amount): bool
     {
         try {
-            // Insert refund record
             $this->paymentModel->createRefund($bookingId, $amount);
 
-            // Update booking refund status
             $stmt = $this->db->prepare("UPDATE bookings SET refund_status = 'processed' WHERE id = :id");
             $stmt->execute([':id' => $bookingId]);
 
-            // Log transaction
             $this->logTransaction($bookingId, $amount, 'refund');
 
             $this->logger->info("Refund processed for booking $bookingId");
@@ -73,9 +61,6 @@ class PaymentService
         }
     }
 
-    /**
-     * Log a transaction.
-     */
     private function logTransaction(int $bookingId, float $amount, string $type): void
     {
         $transactionLog = new TransactionLog($this->db);
@@ -87,9 +72,6 @@ class PaymentService
         ]);
     }
 
-    /**
-     * Get monthly revenue trends.
-     */
     public function getMonthlyRevenueTrends(): array
     {
         $stmt = $this->db->prepare("

@@ -44,24 +44,31 @@ class DocumentService
     /**
      * Upload a document template.
      */
-    public function uploadTemplate(string $name, string $content): int
+    public function uploadTemplate(string $name, string $content): void
+    {
+        $this->processTemplate($name, $content, 'template_uploaded');
+    }
+
+    /**
+     * Upload the Terms & Conditions document.
+     */
+    public function uploadTerms(string $content): void
+    {
+        $this->processTemplate('terms_and_conditions', $content, 'terms_uploaded');
+    }
+
+    /**
+     * Process template storage and logging.
+     */
+    private function processTemplate(string $name, string $content, string $logAction): void
     {
         try {
-            $this->logger->info('Uploading document template', ['name' => $name]);
-
-            // Encrypt the content
+            $this->logger->info("Uploading template: {$name}");
             $encryptedContent = $this->encryptionService->encrypt($content);
-
-            // Save the template
-            $this->templateService->saveTemplate($name . '.html', $encryptedContent);
-
-            // Log the action
-            $this->auditService->log('template_uploaded', ['name' => $name]);
-
-            return 1; // Placeholder for additional logic if needed
+            $this->templateService->saveTemplate("{$name}.html", $encryptedContent);
+            $this->auditService->log($logAction, ['name' => $name]);
         } catch (Exception $e) {
-            $this->logger->error('Failed to upload template', ['error' => $e->getMessage()]);
-            throw new Exception("Failed to upload template: " . $e->getMessage());
+            $this->handleException("Failed to upload template: {$name}", $e);
         }
     }
 
@@ -71,48 +78,25 @@ class DocumentService
     public function generateContract(int $bookingId, int $userId): string
     {
         try {
-            $this->logger->info('Generating contract', ['bookingId' => $bookingId, 'userId' => $userId]);
+            $this->logger->info("Generating contract", ['bookingId' => $bookingId, 'userId' => $userId]);
 
-            // Load the rental contract template
-            $templateName = 'rental_contract.html';
-            $templateContent = $this->templateService->loadTemplate($templateName);
+            $templateContent = $this->templateService->loadTemplate('rental_contract.html');
+            $data = array_merge($this->fetchUserData($userId), $this->fetchBookingData($bookingId));
+            $renderedContent = $this->templateService->renderTemplate('rental_contract.html', $data);
 
-            // Fetch user and booking data
-            $user = $this->fetchUserData($userId);
-            $booking = $this->fetchBookingData($bookingId);
-
-            // Render the template with dynamic data
-            $data = [
-                'user_name' => $user['name'],
-                'user_email' => $user['email'],
-                'vehicle' => $booking['vehicle_id'],
-                'pickup_date' => $booking['pickup_date'],
-                'dropoff_date' => $booking['dropoff_date'],
-                'total_price' => $booking['total_price'],
-            ];
-            $renderedContent = $this->templateService->renderTemplate($templateName, $data);
-
-            // Encrypt and store the contract
             $encryptedContract = $this->encryptionService->encrypt($renderedContent);
             $filePath = $this->fileStorage->storeFile("contracts", "contract_{$bookingId}.pdf", $encryptedContract);
 
-            // Store contract metadata in the database
-            $stmt = $this->db->prepare("
+            $this->db->prepare("
                 INSERT INTO contracts (booking_id, user_id, contract_pdf, created_at) 
                 VALUES (:booking_id, :user_id, :contract_pdf, NOW())
-            ");
-            $stmt->execute([
-                'booking_id' => $bookingId,
-                'user_id' => $userId,
-                'contract_pdf' => $filePath,
-            ]);
+            ")->execute(['booking_id' => $bookingId, 'user_id' => $userId, 'contract_pdf' => $filePath]);
 
             $this->auditService->log('contract_generated', ['booking_id' => $bookingId, 'user_id' => $userId]);
 
             return $filePath;
         } catch (Exception $e) {
-            $this->logger->error('Failed to generate contract', ['error' => $e->getMessage()]);
-            throw new Exception("Failed to generate contract: " . $e->getMessage());
+            $this->handleException("Failed to generate contract", $e);
         }
     }
 
@@ -122,43 +106,16 @@ class DocumentService
     public function retrieveDocument(string $filePath): string
     {
         try {
-            $this->logger->info('Retrieving document', ['filePath' => $filePath]);
+            $this->logger->info("Retrieving document", ['filePath' => $filePath]);
 
-            // Load the encrypted document
-            $encryptedContent = $this->fileStorage->loadFile($filePath);
-
-            // Decrypt the content
+            $encryptedContent = $this->fileStorage->retrieveFile($filePath);
             $decryptedContent = $this->encryptionService->decrypt($encryptedContent);
 
-            // Log the action
             $this->auditService->log('document_retrieved', ['file_path' => $filePath]);
 
             return $decryptedContent;
         } catch (Exception $e) {
-            $this->logger->error('Failed to retrieve document', ['error' => $e->getMessage()]);
-            throw new Exception("Failed to retrieve document: " . $e->getMessage());
-        }
-    }
-
-    /**
-     * Upload the Terms & Conditions document.
-     */
-    public function uploadTerms(string $content): string
-    {
-        try {
-            $this->logger->info('Uploading Terms & Conditions document');
-
-            // Encrypt and store the T&C content
-            $encryptedContent = $this->encryptionService->encrypt($content);
-            $filePath = $this->fileStorage->storeFile('templates', 'terms_and_conditions.html', $encryptedContent);
-
-            // Log the upload
-            $this->auditService->log('terms_uploaded', ['file_path' => $filePath]);
-
-            return $filePath;
-        } catch (Exception $e) {
-            $this->logger->error('Failed to upload Terms & Conditions', ['error' => $e->getMessage()]);
-            throw new Exception("Failed to upload Terms and Conditions: " . $e->getMessage());
+            $this->handleException("Failed to retrieve document", $e);
         }
     }
 
@@ -168,10 +125,9 @@ class DocumentService
     public function deleteDocument(int $documentId): void
     {
         try {
-            $this->logger->info('Deleting document', ['documentId' => $documentId]);
+            $this->logger->info("Deleting document", ['documentId' => $documentId]);
 
-            // Fetch the document metadata
-            $stmt = $this->db->prepare("SELECT * FROM documents WHERE id = :document_id");
+            $stmt = $this->db->prepare("SELECT file_path FROM documents WHERE id = :document_id");
             $stmt->execute(['document_id' => $documentId]);
             $document = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -179,15 +135,13 @@ class DocumentService
                 throw new Exception("Document not found.");
             }
 
-            // Delete the file and remove the database entry
             $this->fileStorage->deleteFile($document['file_path']);
-            $stmt = $this->db->prepare("DELETE FROM documents WHERE id = :document_id");
-            $stmt->execute(['document_id' => $documentId]);
+            $this->db->prepare("DELETE FROM documents WHERE id = :document_id")
+                ->execute(['document_id' => $documentId]);
 
             $this->auditService->log('document_deleted', ['document_id' => $documentId]);
         } catch (Exception $e) {
-            $this->logger->error('Failed to delete document', ['error' => $e->getMessage()]);
-            throw new Exception("Failed to delete document: " . $e->getMessage());
+            $this->handleException("Failed to delete document", $e);
         }
     }
 
@@ -196,15 +150,7 @@ class DocumentService
      */
     private function fetchUserData(int $userId): array
     {
-        $stmt = $this->db->prepare("SELECT * FROM users WHERE id = :user_id");
-        $stmt->execute(['user_id' => $userId]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$user) {
-            throw new Exception("User not found.");
-        }
-
-        return $user;
+        return $this->fetchRecord("SELECT * FROM users WHERE id = :id", ['id' => $userId], "User not found.");
     }
 
     /**
@@ -212,14 +158,31 @@ class DocumentService
      */
     private function fetchBookingData(int $bookingId): array
     {
-        $stmt = $this->db->prepare("SELECT * FROM bookings WHERE id = :booking_id");
-        $stmt->execute(['booking_id' => $bookingId]);
-        $booking = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $this->fetchRecord("SELECT * FROM bookings WHERE id = :id", ['id' => $bookingId], "Booking not found.");
+    }
 
-        if (!$booking) {
-            throw new Exception("Booking not found.");
+    /**
+     * Fetch a record from the database.
+     */
+    private function fetchRecord(string $query, array $params, string $errorMessage): array
+    {
+        $stmt = $this->db->prepare($query);
+        $stmt->execute($params);
+        $record = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$record) {
+            throw new Exception($errorMessage);
         }
 
-        return $booking;
+        return $record;
+    }
+
+    /**
+     * Handle exceptions and log errors.
+     */
+    private function handleException(string $message, Exception $e): void
+    {
+        $this->logger->error($message, ['error' => $e->getMessage()]);
+        throw new Exception($message . " " . $e->getMessage());
     }
 }
