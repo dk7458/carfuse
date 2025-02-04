@@ -28,6 +28,21 @@ use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
 
+try {
+    $pdo = new PDO(
+        sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
+            $config['database']['app_database']['host'],
+            $config['database']['app_database']['database']
+        ),
+        $config['database']['app_database']['username'],
+        $config['database']['app_database']['password'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+    );
+} catch (PDOException $e) {
+    throw new RuntimeException("❌ Database connection failed: " . $e->getMessage());
+}
+
+
 // ✅ Load all configuration files dynamically
 $configDirectory = __DIR__;
 $config = [];
@@ -104,10 +119,10 @@ return [
     FileStorage::class => $fileStorage,
 
     DocumentService::class => new DocumentService(
-        $config['document'],
-        $auditService,
-        $fileStorage,
-        $encryptionService,
+        $pdo, // ✅ Ensure this is a valid PDO instance
+        new AuditService($securePdo),
+        new FileStorage($fileStorageConfig, $logger, new EncryptionService($config['encryption']['encryption_key'])),
+        new EncryptionService($config['encryption']['encryption_key']),
         new TemplateService($templateDirectory),
         $logger
     ),
