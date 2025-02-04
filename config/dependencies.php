@@ -28,8 +28,7 @@ use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
 
-
-/// ✅ Ensure all config files are dynamically loaded before instantiating services
+// ✅ Load all configuration files dynamically
 $configDirectory = __DIR__;
 $config = [];
 
@@ -43,9 +42,9 @@ foreach (glob("{$configDirectory}/*.php") as $filePath) {
     $config[$fileName] = require $filePath;
 }
 
-// ✅ Define directories and ensure they exist
+// ✅ Ensure necessary directories exist
 $templateDirectory = __DIR__ . '/../storage/templates';
-$fileStorageConfig = ['base_directory' => __DIR__ . '/../storage/documents'];
+$fileStorageConfig = $config['storage'];
 
 foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $directory) {
     if (!is_dir($directory)) {
@@ -53,7 +52,7 @@ foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $director
     }
 }
 
-// ✅ Define PDO instances
+// ✅ Initialize PDO Instances
 $pdo = new PDO(
     sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', $config['database']['app_database']['host'], $config['database']['app_database']['database']),
     $config['database']['app_database']['username'],
@@ -68,7 +67,7 @@ $securePdo = new PDO(
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
 );
 
-// ✅ Define Logger
+// ✅ Initialize Logger
 $logger = new Logger('carfuse');
 $logFile = __DIR__ . '/../logs/app.log';
 
@@ -81,30 +80,34 @@ $formatter = new LineFormatter(null, null, true, true);
 $streamHandler->setFormatter($formatter);
 $logger->pushHandler($streamHandler);
 
-// ✅ Register services in the container
+// ✅ Centralized Services
+$encryptionService = new EncryptionService($config['encryption']['encryption_key']);
+$fileStorage = new FileStorage($fileStorageConfig, $logger, $encryptionService);
+$auditService = new AuditService($securePdo);
+
+// ✅ Register services
 return [
     PDO::class => $pdo,
     'SecurePDO' => $securePdo,
     LoggerInterface::class => $logger,
+    
     DocumentQueue::class => new DocumentQueue(
-        new FileStorage($fileStorageConfig, $logger),
+        $fileStorage,
         __DIR__ . '/../storage/document_queue.json',
         $logger
     ),    
+
     Validator::class => new Validator(),
     RateLimiter::class => new RateLimiter($pdo),
-    AuditService::class => new AuditService($securePdo),
-    EncryptionService::class => new EncryptionService($config['encryption']['encryption_key']),
-    FileStorage::class => new FileStorage(
-        $fileStorageConfig,
-        $logger,
-        new EncryptionService($config['encryption']['encryption_key']) // ✅ Ensure encryption is integrated
-    ),
+    AuditService::class => $auditService,
+    EncryptionService::class => $encryptionService,
+    FileStorage::class => $fileStorage,
+
     DocumentService::class => new DocumentService(
-        $securePdo,
-        new AuditService($securePdo),
-        new FileStorage($fileStorageConfig, $logger),
-        new EncryptionService($config['encryption']['encryption_key']),
+        $config['document'],
+        $auditService,
+        $fileStorage,
+        $encryptionService,
         new TemplateService($templateDirectory),
         $logger
     ),
@@ -133,6 +136,7 @@ return [
     ),
 
     PaymentModel::class => new PaymentModel($pdo),
+    
     PaymentService::class => new PaymentService(
         $pdo,
         $logger,
@@ -156,15 +160,15 @@ return [
         new Client(),
         $config['signature']['api_endpoint'],
         $config['signature']['api_key'],
-        new FileStorage($fileStorageConfig, $logger, new EncryptionService($config['encryption']['encryption_key'])),
-        new EncryptionService($config['encryption']['encryption_key']),
+        $fileStorage,
+        $encryptionService,
         $logger
     ),
 
     TemplateService::class => new TemplateService($templateDirectory),
 
     KeyManager::class => new KeyManager(
-        $config['security']['keys'], // ✅ Ensure keys are loaded from config
+        $config['security']['keys'],
         $logger
     ),
 ];
