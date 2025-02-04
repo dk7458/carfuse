@@ -1,4 +1,4 @@
-<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+<?php require_once __DIR__ . '/layouts/header.php'; ?>
 
 <section class="hero">
     <div class="container text-center">
@@ -31,4 +31,4 @@
     </div>
 </section>
 
-<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+<?php require_once __DIR__ . '/layouts/footer.php'; ?>
