@@ -6,13 +6,19 @@ use App\Services\Auth\TokenService;
 use App\Services\NotificationService;
 use App\Services\UserService;
 use App\Services\PaymentService;
+use App\Services\KeyManager;
+use App\Services\BookingService;
+use App\Services\MetricsService;
+use App\Services\ReportService;
+use App\Services\RevenueService;
+use App\Services\EncryptionService;
 use App\Controllers\UserController;
 use App\Queues\NotificationQueue;
 use App\Queues\DocumentQueue;
 use DocumentManager\Services\DocumentService;
 use DocumentManager\Services\FileStorage;
 use DocumentManager\Services\TemplateService;
-use App\Services\EncryptionService;
+use DocumentManager\Services\SignatureService;
 use AuditManager\Services\AuditService;
 use App\Models\PaymentModel;
 use Psr\Log\LoggerInterface;
@@ -21,6 +27,7 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
+
 
 /// ✅ Ensure all config files are dynamically loaded before instantiating services
 $configDirectory = __DIR__;
