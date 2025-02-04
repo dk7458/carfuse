@@ -91,7 +91,10 @@ return [
     RateLimiter::class => new RateLimiter($pdo),
     AuditService::class => new AuditService($securePdo),
     EncryptionService::class => new EncryptionService(),
-    FileStorage::class => new FileStorage(__DIR__ . '/../storage/documents'),
+    FileStorage::class => new FileStorage([
+        'base_directory' => __DIR__ . '/../storage/documents'
+    ], $logger),
+    
     DocumentService::class => new DocumentService(
         $securePdo,
         new AuditService($securePdo),
