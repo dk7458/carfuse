@@ -10,6 +10,7 @@ use App\Controllers\UserController;
 use App\Queues\NotificationQueue;
 use DocumentManager\Services\DocumentService;
 use DocumentManager\Services\FileStorage;
+use DocumentManager\Services\TemplateService;
 use App\Services\EncryptionService;
 use AuditManager\Services\AuditService;
 use App\Models\PaymentModel;
