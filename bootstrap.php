@@ -74,6 +74,10 @@ try {
     die("❌ Database connection failed: " . $e->getMessage() . "\n");
 }
 
+function csrf_field() {
+    return '<input type="hidden" name="csrf_token" value="' . $_SESSION['csrf_token'] . '">';
+}
+
 // Ensure Log Directory Exists
 $logDir = __DIR__ . '/logs';
 if (!is_dir($logDir)) {
