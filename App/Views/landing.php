@@ -3,11 +3,11 @@
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carfuse - Rent a Car Effortlessly</title>
+    <title>Carfuse - Wynajmij auto szybko i łatwo</title>
     <link rel="stylesheet" href="/assets/css/style.css">
     <style>
         /* Dark Minimal Theme */
@@ -20,11 +20,12 @@
         }
         header {
             background-color: #181818;
-            padding: 20px;
             text-align: center;
-            font-size: 24px;
-            font-weight: bold;
-            letter-spacing: 2px;
+            padding: 15px 0;
+        }
+        .logo img {
+            max-height: 104px;
+            margin: 15px 0;
         }
         nav {
             display: flex;
@@ -104,40 +105,29 @@
 </head>
 <body>
 
-<header>
-    Carfuse
-</header>
-
-<nav>
-    <a href="#home">Home</a>
-    <a href="#features">Why Choose Us</a>
-    <a href="login">Login</a>
-    <a href="register">Sign Up</a>
-</nav>
+<?php include __DIR__ . '/layouts/header.php'; ?>
 
 <section class="hero">
-    <h1>Find the Perfect Car for Your Journey</h1>
-    <p>Flexible rentals, best prices, and 24/7 support.</p>
+    <h1>Znajdź idealne auto na swoją podróż</h1>
+    <p>Elastyczny wynajem, najlepsze ceny i wsparcie 24/7.</p>
     <form class="search-form" action="/search" method="GET">
-        <input type="text" name="location" placeholder="Enter Pickup Location">
+        <input type="text" name="location" placeholder="Wpisz lokalizację odbioru">
         <input type="date" name="pickup_date">
         <input type="date" name="return_date">
-        <button type="submit">Search Cars</button>
+        <button type="submit">Szukaj aut</button>
     </form>
 </section>
 
 <section class="features">
-    <h2>Why Choose Carfuse?</h2>
+    <h2>Dlaczego warto wybrać Carfuse?</h2>
     <div class="feature-list">
-        <div class="feature">✔ Best Prices Guaranteed</div>
-        <div class="feature">✔ 24/7 Customer Support</div>
-        <div class="feature">✔ Flexible Rental Periods</div>
+        <div class="feature">✔ Gwarancja najlepszych cen</div>
+        <div class="feature">✔ Wsparcie klienta 24/7</div>
+        <div class="feature">✔ Elastyczne warunki wynajmu</div>
     </div>
 </section>
 
-<footer class="footer">
-    &copy; 2024 Carfuse. All Rights Reserved.
-</footer>
+<?php include __DIR__ . '/layouts/footer.php'; ?>
 
 </body>
 </html>
