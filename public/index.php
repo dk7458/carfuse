@@ -1,6 +1,4 @@
 <?php
-var_dump("Index.php Loaded");
-exit;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
