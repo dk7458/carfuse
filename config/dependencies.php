@@ -20,7 +20,7 @@ use DocumentManager\Services\FileStorage;
 use DocumentManager\Services\TemplateService;
 use DocumentManager\Services\SignatureService;
 use AuditManager\Services\AuditService;
-use App\Models\PaymentModel;
+use App\Models\Payment;
 use Psr\Log\LoggerInterface;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
@@ -150,7 +150,7 @@ return [
         $config['encryption']['jwt_secret']
     ),
 
-    PaymentModel::class => new PaymentModel($pdo),
+    Payment::class => new Payment($pdo),
     
     PaymentService::class => new PaymentService(
         $pdo,
