@@ -1,4 +1,4 @@
-<?php require_once __DIR__ . '/layouts/header.php'; ?>
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
 
 <h1 class="text-center">Mój profil</h1>
 
@@ -35,4 +35,4 @@
 
 <script src="/js/user_profile.js"></script>
 
-<?php require_once __DIR__ . '/layouts/footer.php'; ?>
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
