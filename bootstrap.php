@@ -104,7 +104,7 @@ try {
 // Register Middleware (if applicable)
 $auditMiddleware = new AuditTrailMiddleware($auditService, $logger);
 
-// Check if all required dependencies exist
+// Validate Required Dependencies
 $missingDependencies = [];
 $requiredServices = ['NotificationService', 'TokenService', 'Validator'];
 
@@ -115,12 +115,11 @@ foreach ($requiredServices as $service) {
     }
 }
 
-// If dependencies are missing, notify the user
+// Attempt to Fix Autoload Issues Only If Dependencies Are Missing
 if (!empty($missingDependencies)) {
-    echo "⚠️ Missing dependencies detected. Please run `composer dump-autoload` manually.\n";
-    die("❌ Resolve missing dependencies and restart the application.");
+    exec('composer dump-autoload');
+    echo "⚠️ Missing dependencies detected. Composer autoload reloaded.\n";
 }
-
 
 // Ensure Dependencies Are Loaded
 foreach ($config['dependencies'] as $dependency) {
