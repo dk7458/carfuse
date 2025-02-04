@@ -127,16 +127,17 @@ return [
     ),
 
     TokenService::class => new TokenService($config['encryption']['encryption_key']),
-    NotificationService::class => new NotificationService(
+    NotificationService::class => $notificationService = new NotificationService(
         $pdo,
         $logger,
         $config['notifications']
     ),
     
     NotificationQueue::class => new NotificationQueue(
-        $container->get(NotificationService::class),
+        $notificationService, // ✅ Use the existing instance
         __DIR__ . '/../storage/notification_queue.json'
     ),
+    
     
     UserService::class => new UserService($securePdo, $logger),
     PaymentModel::class => new PaymentModel($pdo),
