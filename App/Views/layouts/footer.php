@@ -6,6 +6,6 @@
     </div>
 </footer>
 
-<script src="/js/main.min.js"></script>
+<script type="module" src="/js/main.min.js"></script>
 </body>
 </html>
