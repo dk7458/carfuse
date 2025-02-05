@@ -1,104 +1,1144 @@
 === App/Views/auth/register.php ===
+<?php require_once __DIR__ . '/../layouts/header.php';
+require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php'; 
+?>
+
+<h1 class="text-center">Register</h1>
+
+<div id="alert-container"></div>
+
+<div class="auth-container">
+    <form id="registerForm" class="auth-form">
+        <?= csrf_field() ?>
+
+        <div class="form-group">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" name="name" class="form-control" placeholder="Enter your full name" required>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="Enter your email" required>
+        </div>
+
+        <div class="form-group">
+            <label for="phone">Phone Number</label>
+            <input type="tel" id="phone" name="phone" class="form-control" placeholder="Enter your phone number" required>
+        </div>
+
+        <div class="form-group">
+            <label for="address">Address</label>
+            <textarea id="address" name="address" class="form-control" placeholder="Enter your address" rows="2" required></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" class="form-control" placeholder="Enter a strong password" required minlength="6">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Register</button>
+    </form>
+
+    <div class="text-center mt-3">
+        <a href="/auth/login">Already have an account? Login here</a>
+    </div>
+</div>
+
+<script src="/js/auth.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
 === App/Views/auth/password_reset_request.php ===
+<?php require_once __DIR__ . '/../layouts/header.php';
+require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php'; 
+?>
+
+<h1 class="text-center">Reset Password</h1>
+
+<div id="alert-container"></div>
+
+<div class="auth-container">
+    <form id="passwordResetForm" class="auth-form">
+        <?= csrf_field() ?>
+        <input type="hidden" name="token" value="<?= esc($token) ?>">
+
+        <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="Enter your email" required value="<?= esc($email ?? old('email')) ?>">
+        </div>
+
+        <div class="form-group">
+            <label for="password">New Password</label>
+            <input type="password" id="password" name="password" class="form-control" placeholder="Enter a new password" required minlength="8">
+            <small class="form-text">Password must be at least 8 characters long.</small>
+        </div>
+
+        <div class="form-group">
+            <label for="confirm_password">Confirm New Password</label>
+            <input type="password" id="confirm_password" name="confirm_password" class="form-control" placeholder="Re-enter your password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Reset Password</button>
+    </form>
+
+    <div class="text-center mt-3">
+        <a href="/auth/login">Back to Login</a>
+    </div>
+</div>
+
+<script src="/js/auth.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
 === App/Views/auth/password_reset.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Request Password Reset</h1>
+
+<div id="alert-container"></div>
+
+<div class="auth-container">
+    <form id="passwordResetRequestForm" class="auth-form">
+        <?= csrf_field() ?>
+
+        <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="Enter your email" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Send Reset Link</button>
+    </form>
+
+    <div class="text-center mt-3">
+        <a href="/auth/login">Back to Login</a>
+    </div>
+</div>
+
+<script src="/js/auth.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
 === App/Views/auth/login.php ===
+<?php require_once __DIR__ . '/../layouts/header.php';
+require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php'; 
+?>
+
+<h1 class="text-center">Login</h1>
+
+<div id="alert-container"></div>
+
+<div class="auth-container">
+    <form id="loginForm" class="auth-form">
+        <?= csrf_field() ?>
+        
+        <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="Enter your email" required>
+        </div>
+
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" class="form-control" placeholder="Enter your password" required>
+        </div>
+
+        <div class="form-group form-check">
+            <input type="checkbox" id="remember" name="remember" class="form-check-input">
+            <label for="remember" class="form-check-label">Remember Me</label>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Login</button>
+    </form>
+
+    <div class="text-center mt-3">
+        <a href="/auth/password_reset_request">Forgot your password?</a>
+    </div>
+
+    <div class="text-center mt-3">
+        <a href="/auth/register">Don't have an account? Register here</a>
+    </div>
+</div>
+
+<script src="/js/auth.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
 === App/Views/admin/payments/dashboard.php ===
 === App/Views/admin/payments/transactions.php ===
 === App/Views/admin/payments/refunds.php ===
 === App/Views/admin/dashboard.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Admin Dashboard</h1>
+
+<div class="dashboard-container">
+    <!-- Overview Cards -->
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <h4>Total Users</h4>
+                    <p id="totalUsers" class="display-6">0</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <h4>Total Bookings</h4>
+                    <p id="totalBookings" class="display-6">0</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <h4>Total Revenue</h4>
+                    <p id="totalRevenue" class="display-6">$0.00</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graphs -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h5 class="text-center">Monthly Booking Trends</h5>
+                    <canvas id="bookingTrends"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h5 class="text-center">Monthly Revenue Trends</h5>
+                    <canvas id="revenueTrends"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/js/admin.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
 === App/Views/admin/users.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">User Management</h1>
+
+<div class="admin-container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Users</h3>
+        <button class="btn btn-primary" id="addUserBtn">Add User</button>
+    </div>
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>User ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="userList">
+            <!-- User data will be loaded here dynamically -->
+        </tbody>
+    </table>
+</div>
+
+<!-- User Management Modal -->
+<div id="userModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2 id="modalTitle">Add User</h2>
+        <form id="userForm">
+            <?= csrf_field() ?>
+            <input type="hidden" id="userId" name="userId">
+
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" name="name" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label for="role">Role</label>
+                <select id="role" name="role" class="form-control" required>
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="status">Status</label>
+                <select id="status" name="status" class="form-control" required>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-success">Save User</button>
+        </form>
+    </div>
+</div>
+
+<script src="/js/admin.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
 === App/Views/admin/audit_logs.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Audit Logs</h1>
+
+<div class="admin-container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>System Audit Logs</h3>
+    </div>
+
+    <!-- Filters -->
+    <form id="filterForm" class="row mb-4">
+        <?= csrf_field() ?>
+        <div class="col-md-3">
+            <input type="text" class="form-control" name="user_id" placeholder="User ID">
+        </div>
+        <div class="col-md-3">
+            <input type="text" class="form-control" name="booking_id" placeholder="Booking ID">
+        </div>
+        <div class="col-md-3">
+            <input type="date" class="form-control" name="start_date" placeholder="Start Date">
+        </div>
+        <div class="col-md-3">
+            <input type="date" class="form-control" name="end_date" placeholder="End Date">
+        </div>
+        <div class="col-md-12 mt-2 text-end">
+            <button type="submit" class="btn btn-primary">Filter</button>
+        </div>
+    </form>
+
+    <!-- Logs Table -->
+    <table class="table table-bordered table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Action</th>
+                <th>Details</th>
+                <th>User ID</th>
+                <th>Booking ID</th>
+                <th>IP Address</th>
+                <th>Created At</th>
+            </tr>
+        </thead>
+        <tbody id="auditLogs">
+            <!-- Audit log data will be loaded dynamically -->
+        </tbody>
+    </table>
+</div>
+
+<script src="/js/admin.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
 === App/Views/admin/logs.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Dzienniki systemowe</h1>
+
+<div class="admin-container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Dzienniki systemowe</h3>
+    </div>
+
+    <!-- Filtry logów -->
+    <form id="logFilterForm" class="row mb-4">
+        <?= csrf_field() ?>
+        <div class="col-md-3">
+            <select class="form-control" name="log_type">
+                <option value="">Wybierz typ logu</option>
+                <option value="error">Błąd</option>
+                <option value="info">Informacja</option>
+                <option value="warning">Ostrzeżenie</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <input type="date" class="form-control" name="start_date" placeholder="Data początkowa">
+        </div>
+        <div class="col-md-3">
+            <input type="date" class="form-control" name="end_date" placeholder="Data końcowa">
+        </div>
+        <div class="col-md-3 text-end">
+            <button type="submit" class="btn btn-primary">Filtruj</button>
+        </div>
+    </form>
+
+    <!-- Tabela logów -->
+    <table class="table table-bordered table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Data i czas</th>
+                <th>Typ logu</th>
+                <th>Wiadomość</th>
+                <th>Szczegóły</th>
+            </tr>
+        </thead>
+        <tbody id="systemLogs">
+            <!-- Dane logów będą ładowane dynamicznie -->
+        </tbody>
+    </table>
+</div>
+
+<script src="/js/admin.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
 === App/Views/admin/documents.php ===
 === App/Views/admin/reports.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Raporty administracyjne</h1>
+
+<div class="admin-container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Generowanie raportów</h3>
+    </div>
+
+    <!-- Formularz generowania raportów -->
+    <form id="adminReportForm" class="mt-4">
+        <?= csrf_field() ?>
+
+        <div class="mb-3">
+            <label for="reportType" class="form-label">Typ raportu</label>
+            <select class="form-select" id="reportType" name="reportType" required>
+                <option value="" disabled selected>Wybierz typ raportu</option>
+                <option value="bookings">Rezerwacje</option>
+                <option value="payments">Płatności</option>
+                <option value="users">Użytkownicy</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="startDate" class="form-label">Data początkowa</label>
+            <input type="date" class="form-control" id="startDate" name="startDate" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="endDate" class="form-label">Data końcowa</label>
+            <input type="date" class="form-control" id="endDate" name="endDate" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="format" class="form-label">Format raportu</label>
+            <select class="form-select" id="format" name="format" required>
+                <option value="csv">CSV</option>
+                <option value="pdf">PDF</option>
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">Generuj raport</button>
+    </form>
+
+    <div id="responseMessage" class="mt-3"></div>
+</div>
+
+<script src="/js/admin.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
 === App/Views/admin/settings.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Ustawienia systemowe</h1>
+
+<div class="admin-container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Konfiguracja systemu</h3>
+    </div>
+
+    <!-- Formularz ustawień systemowych -->
+    <form id="settingsForm" class="mt-4">
+        <?= csrf_field() ?>
+
+        <div class="mb-3">
+            <label for="site_name" class="form-label">Nazwa strony</label>
+            <input type="text" id="site_name" name="site_name" class="form-control" placeholder="Podaj nazwę strony" value="<?= esc($settings['site_name'] ?? '') ?>" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="admin_email" class="form-label">E-mail administratora</label>
+            <input type="email" id="admin_email" name="admin_email" class="form-control" placeholder="Podaj e-mail administratora" value="<?= esc($settings['admin_email'] ?? '') ?>" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="timezone" class="form-label">Strefa czasowa</label>
+            <select id="timezone" name="timezone" class="form-select">
+                <?php foreach (timezone_identifiers_list() as $tz): ?>
+                    <option value="<?= esc($tz) ?>" <?= ($settings['timezone'] ?? '') === $tz ? 'selected' : '' ?>><?= esc($tz) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="maintenance_mode" name="maintenance_mode" <?= isset($settings['maintenance_mode']) && $settings['maintenance_mode'] ? 'checked' : '' ?>>
+            <label class="form-check-label" for="maintenance_mode">Tryb konserwacji</label>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">Zapisz zmiany</button>
+    </form>
+
+    <div id="responseMessage" class="mt-3"></div>
+</div>
+
+<script src="/js/admin.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
 === App/Views/layouts/header.php ===
-=== App/Views/layouts/footer.php ===
-=== App/Views/layouts/sidebar.php ===
-=== App/Views/layouts/modals.php ===
-=== App/Views/layouts/alerts.php ===
-=== App/Views/layouts/navbar.php ===
-=== App/Views/payments/make_payment.php ===
-=== App/Views/payments/methods.php ===
-=== App/Views/payments/history.php ===
-=== App/Views/payments/refund.php ===
-=== App/Views/user/profile.php ===
-=== App/Views/user/dashboard.php ===
-=== App/Views/user/notifications.php ===
-=== App/Views/user/reports.php ===
-=== App/Views/bookings/view.php ===
-=== App/Views/bookings/create.php ===
-=== App/Views/documents/signing_page.php ===
-=== App/Views/documents/user_documents.php ===
-=== App/Views/landing.php ===
-=== DocumentManager/Views/signing_page.php ===
-=== DocumentManager/Views/user_documents.php ===
-=== DocumentManager/Views/admin_documents.php ===
-=== AuditManager/Views/admin/audit_logs.php ===
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Audit Logs</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>CarFuse</title>
+    <link rel="stylesheet" href="/main.css">
 </head>
 <body>
-    <div class="container mt-5">
-        <h1 class="text-center">Audit Logs</h1>
-        
-        <!-- Filters -->
-        <form id="filterForm" class="row mb-4">
-            <div class="col-md-3">
-                <input type="text" class="form-control" name="user_id" placeholder="User ID" value="<?= $_GET['user_id'] ?? '' ?>">
+    <header>
+        <nav class="navbar">
+            <div class="container">
+                <a href="/" class="logo">CarFuse</a>
+                <ul class="nav-links">
+                    <li><a href="/dashboard">Panel</a></li>
+                    <li><a href="/bookings/view">Rezerwacje</a></li>
+                    <li><a href="/user/profile">Profil</a></li>
+                    <li><a href="/logout">Wyloguj</a></li>
+                </ul>
             </div>
-            <div class="col-md-3">
-                <input type="text" class="form-control" name="booking_id" placeholder="Booking ID" value="<?= $_GET['booking_id'] ?? '' ?>">
+        </nav>
+    </header>
+
+    <div class="container">
+=== App/Views/layouts/footer.php ===
+</div> <!-- Koniec kontenera -->
+
+<footer class="footer">
+    <div class="container text-center">
+        <p>&copy; <?= date("Y"); ?> CarFuse. Wszelkie prawa zastrzeżone.</p>
+    </div>
+</footer>
+
+<script type="module" src="/js/main.min.js"></script>
+</body>
+</html>
+=== App/Views/layouts/sidebar.php ===
+<aside class="sidebar">
+    <nav class="sidebar-menu">
+        <ul>
+            <li><a href="/dashboard">📊 Panel</a></li>
+            <li><a href="/bookings/view">📅 Moje rezerwacje</a></li>
+            <li><a href="/payments/history">💳 Historia płatności</a></li>
+            <li><a href="/documents/user_documents">📄 Moje dokumenty</a></li>
+            <li><a href="/user/notifications">🔔 Powiadomienia</a></li>
+            <li><a href="/user/profile">👤 Profil</a></li>
+            <li><a href="/logout">🚪 Wyloguj</a></li>
+        </ul>
+    </nav>
+</aside>
+=== App/Views/layouts/modals.php ===
+<!-- Modal używany w wielu widokach -->
+<div id="globalModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2 id="modalTitle"></h2>
+        <div id="modalBody"></div>
+        <button class="btn btn-primary" id="modalConfirm">OK</button>
+    </div>
+</div>
+=== App/Views/layouts/alerts.php ===
+<!-- Kontener na globalne powiadomienia -->
+<div id="alert-container"></div>
+=== App/Views/layouts/navbar.php ===
+<nav class="navbar">
+    <div class="container">
+        <a href="/" class="logo">CarFuse</a>
+        <ul class="nav-links">
+            <li><a href="/dashboard">Panel</a></li>
+            <li><a href="/bookings/view">Rezerwacje</a></li>
+            <li><a href="/user/profile">Profil</a></li>
+            <li><a href="/logout">Wyloguj</a></li>
+        </ul>
+    </div>
+</nav>
+=== App/Views/payments/make_payment.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Realizacja płatności</h1>
+
+<div class="payment-container">
+    <div class="card shadow p-4">
+        <h3 class="text-center">Wprowadź dane płatności</h3>
+        <form id="paymentForm">
+            <?= csrf_field() ?>
+
+            <div class="mb-3">
+                <label for="user_id" class="form-label">ID użytkownika</label>
+                <input type="number" id="user_id" name="user_id" class="form-control" placeholder="Wprowadź ID użytkownika" required>
             </div>
-            <div class="col-md-3">
-                <input type="date" class="form-control" name="start_date" placeholder="Start Date" value="<?= $_GET['start_date'] ?? '' ?>">
+
+            <div class="mb-3">
+                <label for="amount" class="form-label">Kwota</label>
+                <input type="number" id="amount" name="amount" class="form-control" placeholder="Podaj kwotę" step="0.01" required>
             </div>
-            <div class="col-md-3">
-                <input type="date" class="form-control" name="end_date" placeholder="End Date" value="<?= $_GET['end_date'] ?? '' ?>">
+
+            <div class="mb-3">
+                <label for="payment_method_id" class="form-label">Metoda płatności</label>
+                <select id="payment_method_id" name="payment_method_id" class="form-select" required>
+                    <option value="" disabled selected>Wybierz metodę płatności...</option>
+                    <option value="1">Karta kredytowa</option>
+                    <option value="2">PayPal</option>
+                    <option value="3">Przelew bankowy</option>
+                </select>
             </div>
-            <div class="col-md-12 mt-2 text-end">
-                <button type="submit" class="btn btn-primary">Filter</button>
-            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Dokonaj płatności</button>
         </form>
 
-        <!-- Logs Table -->
-        <table class="table table-bordered table-striped">
+        <div id="responseMessage" class="mt-3"></div>
+    </div>
+</div>
+
+<script src="/js/payments.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/payments/methods.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Metody płatności</h1>
+
+<div class="payment-container">
+    <div class="card shadow p-4">
+        <h3 class="text-center">Dodaj nową metodę płatności</h3>
+        <form id="addMethodForm">
+            <?= csrf_field() ?>
+
+            <div class="mb-3">
+                <label for="method_name" class="form-label">Nazwa metody</label>
+                <input type="text" id="method_name" name="method_name" class="form-control" placeholder="Wprowadź nazwę metody" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="details" class="form-label">Szczegóły</label>
+                <textarea id="details" name="details" class="form-control" rows="2" placeholder="Podaj szczegóły metody" required></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Dodaj metodę płatności</button>
+        </form>
+
+        <h4 class="mt-5">Istniejące metody płatności</h4>
+        <table class="table table-bordered mt-3">
             <thead>
                 <tr>
                     <th>ID</th>
-                    <th>Action</th>
-                    <th>Details</th>
-                    <th>User ID</th>
-                    <th>Booking ID</th>
-                    <th>IP Address</th>
-                    <th>Created At</th>
+                    <th>Nazwa</th>
+                    <th>Szczegóły</th>
+                    <th>Akcje</th>
                 </tr>
             </thead>
-            <tbody>
-                <?php if (!empty($logs)): ?>
-                    <?php foreach ($logs as $log): ?>
-                        <tr>
-                            <td><?= $log['id'] ?></td>
-                            <td><?= $log['action'] ?></td>
-                            <td><?= $log['details'] ?></td>
-                            <td><?= $log['user_id'] ?? '-' ?></td>
-                            <td><?= $log['booking_id'] ?? '-' ?></td>
-                            <td><?= $log['ip_address'] ?? '-' ?></td>
-                            <td><?= $log['created_at'] ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <tr>
-                        <td colspan="7" class="text-center">No logs found.</td>
-                    </tr>
-                <?php endif; ?>
+            <tbody id="paymentMethods">
+                <!-- Lista metod płatności ładowana dynamicznie -->
             </tbody>
         </table>
     </div>
-</body>
-</html>
+</div>
+
+<script src="/js/payments.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/payments/history.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Historia transakcji</h1>
+
+<div class="payment-container">
+    <div class="card shadow p-4">
+        <h3 class="text-center">Lista transakcji</h3>
+        <table class="table table-bordered mt-3">
+            <thead>
+                <tr>
+                    <th>ID transakcji</th>
+                    <th>ID użytkownika</th>
+                    <th>ID rezerwacji</th>
+                    <th>Kwota</th>
+                    <th>Typ</th>
+                    <th>Status</th>
+                    <th>Data</th>
+                </tr>
+            </thead>
+            <tbody id="transactionHistory">
+                <!-- Dane transakcji ładowane dynamicznie -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/js/payments.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/payments/refund.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Zwroty płatności</h1>
+
+<div class="payment-container">
+    <div class="card shadow p-4">
+        <h3 class="text-center">Zleć zwrot płatności</h3>
+        <form id="refundForm">
+            <?= csrf_field() ?>
+
+            <div class="mb-3">
+                <label for="transaction_id" class="form-label">ID transakcji</label>
+                <input type="number" id="transaction_id" name="transaction_id" class="form-control" placeholder="Wprowadź ID transakcji" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="amount" class="form-label">Kwota zwrotu</label>
+                <input type="number" id="amount" name="amount" class="form-control" placeholder="Podaj kwotę" step="0.01" required>
+            </div>
+
+            <button type="submit" class="btn btn-danger w-100">Zatwierdź zwrot</button>
+        </form>
+
+        <div id="responseMessage" class="mt-3"></div>
+    </div>
+</div>
+
+<script src="/js/payments.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/user/profile.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Mój profil</h1>
+
+<div class="profile-container">
+    <div class="card shadow p-4">
+        <h3 class="text-center">Dane użytkownika</h3>
+        <form id="profileForm">
+            <?= csrf_field() ?>
+
+            <div class="mb-3">
+                <label for="name" class="form-label">Imię i nazwisko</label>
+                <input type="text" id="name" name="name" class="form-control" required value="<?= esc($user->name) ?>">
+            </div>
+
+            <div class="mb-3">
+                <label for="email" class="form-label">Adres e-mail</label>
+                <input type="email" id="email" name="email" class="form-control" required value="<?= esc($user->email) ?>">
+            </div>
+
+            <div class="mb-3">
+                <label for="phone" class="form-label">Numer telefonu</label>
+                <input type="tel" id="phone" name="phone" class="form-control" required value="<?= esc($user->phone) ?>" pattern="[0-9]{9,}">
+            </div>
+
+            <div class="mb-3">
+                <label for="address" class="form-label">Adres</label>
+                <textarea id="address" name="address" class="form-control" rows="2" required><?= esc($user->address) ?></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Zapisz zmiany</button>
+        </form>
+    </div>
+</div>
+
+<script src="/js/user_profile.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/user/dashboard.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Panel użytkownika</h1>
+
+<div class="dashboard-container">
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <h4>Moje rezerwacje</h4>
+                    <p class="fs-5" id="totalBookings">Ładowanie...</p>
+                    <a href="/bookings/view" class="btn btn-primary">Zobacz rezerwacje</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <h4>Historia płatności</h4>
+                    <p class="fs-5" id="totalPayments">Ładowanie...</p>
+                    <a href="/payments/history" class="btn btn-primary">Zobacz historię</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <h4>Powiadomienia</h4>
+                    <p class="fs-5" id="totalNotifications">Ładowanie...</p>
+                    <a href="/user/notifications" class="btn btn-primary">Zobacz powiadomienia</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <h4>Mój profil</h4>
+                    <a href="/user/profile" class="btn btn-primary">Edytuj profil</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/js/user_dashboard.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/user/notifications.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Powiadomienia</h1>
+
+<div class="notifications-container">
+    <div class="card shadow p-4">
+        <h3 class="text-center">Moje powiadomienia</h3>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Typ</th>
+                    <th>Wiadomość</th>
+                    <th>Data</th>
+                    <th>Status</th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody id="notificationTable">
+                <!-- Dane powiadomień ładowane dynamicznie -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card shadow mt-4">
+        <div class="card-body">
+            <h4 class="text-center">Ustawienia powiadomień</h4>
+            <form id="notificationSettingsForm">
+                <?= csrf_field() ?>
+
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="emailNotifications" name="emailNotifications">
+                    <label class="form-check-label" for="emailNotifications">Włącz powiadomienia e-mail</label>
+                </div>
+
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="smsNotifications" name="smsNotifications">
+                    <label class="form-check-label" for="smsNotifications">Włącz powiadomienia SMS</label>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">Zapisz ustawienia</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="/js/user_notifications.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/user/reports.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Moje raporty</h1>
+
+<div class="reports-container">
+    <div class="card shadow p-4">
+        <h3 class="text-center">Wygeneruj raport</h3>
+        <form id="userReportForm" class="mt-4">
+            <?= csrf_field() ?>
+
+            <div class="mb-3">
+                <label for="reportType" class="form-label">Typ raportu</label>
+                <select class="form-select" id="reportType" name="reportType" required>
+                    <option value="" disabled selected>Wybierz typ raportu</option>
+                    <option value="bookings">Moje rezerwacje</option>
+                    <option value="payments">Moje płatności</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="startDate" class="form-label">Data początkowa</label>
+                <input type="date" class="form-control" id="startDate" name="startDate" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="endDate" class="form-label">Data końcowa</label>
+                <input type="date" class="form-control" id="endDate" name="endDate" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="format" class="form-label">Format raportu</label>
+                <select class="form-select" id="format" name="format" required>
+                    <option value="csv">CSV</option>
+                    <option value="pdf">PDF</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Generuj raport</button>
+        </form>
+        <div id="responseMessage" class="mt-3"></div>
+    </div>
+</div>
+
+<script src="/js/user_reports.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/bookings/view.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Szczegóły rezerwacji</h1>
+
+<div class="booking-container">
+    <div class="card shadow p-4">
+        <h3 class="text-center">Informacje o rezerwacji</h3>
+        <table class="table table-bordered">
+            <tr>
+                <th>ID Rezerwacji</th>
+                <td id="bookingId">Ładowanie...</td>
+            </tr>
+            <tr>
+                <th>Pojazd</th>
+                <td id="vehicleName">Ładowanie...</td>
+            </tr>
+            <tr>
+                <th>Data odbioru</th>
+                <td id="pickupDate">Ładowanie...</td>
+            </tr>
+            <tr>
+                <th>Data zwrotu</th>
+                <td id="returnDate">Ładowanie...</td>
+            </tr>
+            <tr>
+                <th>Status</th>
+                <td id="bookingStatus">Ładowanie...</td>
+            </tr>
+            <tr>
+                <th>Płatność</th>
+                <td id="paymentStatus">Ładowanie...</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="text-center mt-4">
+        <button id="cancelBookingBtn" class="btn btn-danger">Anuluj rezerwację</button>
+        <button id="rescheduleBookingBtn" class="btn btn-warning">Zmień termin</button>
+    </div>
+</div>
+
+<script src="/js/bookings.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/bookings/create.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Nowa rezerwacja</h1>
+
+<div class="booking-container">
+    <div class="card shadow p-4">
+        <h3 class="text-center">Wybierz szczegóły rezerwacji</h3>
+        <form id="bookingForm">
+            <?= csrf_field() ?>
+
+            <div class="mb-3">
+                <label for="vehicle" class="form-label">Wybierz pojazd</label>
+                <select id="vehicle" name="vehicle" class="form-select" required>
+                    <option value="" disabled selected>Wybierz pojazd...</option>
+                    <!-- Lista pojazdów ładowana dynamicznie -->
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="pickup_date" class="form-label">Data odbioru</label>
+                <input type="date" id="pickup_date" name="pickup_date" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="return_date" class="form-label">Data zwrotu</label>
+                <input type="date" id="return_date" name="return_date" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="payment_method" class="form-label">Metoda płatności</label>
+                <select id="payment_method" name="payment_method" class="form-select" required>
+                    <option value="" disabled selected>Wybierz metodę płatności...</option>
+                    <option value="card">Karta kredytowa</option>
+                    <option value="paypal">PayPal</option>
+                    <option value="transfer">Przelew bankowy</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Zarezerwuj</button>
+        </form>
+    </div>
+</div>
+
+<script src="/js/bookings.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/documents/signing_page.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Podpisywanie dokumentów</h1>
+
+<div class="documents-container">
+    <div class="card shadow p-4">
+        <h3 class="text-center">Szczegóły dokumentu</h3>
+
+        <table class="table table-bordered">
+            <tr>
+                <th>ID dokumentu</th>
+                <td id="documentId">Ładowanie...</td>
+            </tr>
+            <tr>
+                <th>Nazwa</th>
+                <td id="documentName">Ładowanie...</td>
+            </tr>
+            <tr>
+                <th>Data przesłania</th>
+                <td id="uploadDate">Ładowanie...</td>
+            </tr>
+            <tr>
+                <th>Status</th>
+                <td id="documentStatus">Ładowanie...</td>
+            </tr>
+        </table>
+
+        <div class="text-center mt-4">
+            <button id="signDocumentBtn" class="btn btn-success">Podpisz dokument</button>
+            <button id="downloadDocumentBtn" class="btn btn-primary">Pobierz</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal podpisywania dokumentu -->
+<div id="signDocumentModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Podpisz dokument</h2>
+        <form id="signDocumentForm">
+            <?= csrf_field() ?>
+
+            <div class="mb-3">
+                <label for="signature" class="form-label">Podpis</label>
+                <textarea id="signature" name="signature" class="form-control" placeholder="Wpisz swój podpis" required></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-success">Zatwierdź podpis</button>
+        </form>
+    </div>
+</div>
+
+<script src="/js/documents.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/documents/user_documents.php ===
+<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+
+<h1 class="text-center">Moje dokumenty</h1>
+
+<div class="documents-container">
+    <div class="card shadow p-4">
+        <h3 class="text-center">Lista dokumentów</h3>
+
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nazwa</th>
+                    <th>Data dodania</th>
+                    <th>Status</th>
+                    <th>Opcje</th>
+                </tr>
+            </thead>
+            <tbody id="documentsList">
+                <!-- Dokumenty będą ładowane dynamicznie -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="text-center mt-4">
+        <button id="uploadDocumentBtn" class="btn btn-primary">Dodaj dokument</button>
+    </div>
+</div>
+
+<!-- Modal dodawania dokumentu -->
+<div id="uploadDocumentModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Dodaj nowy dokument</h2>
+        <form id="uploadDocumentForm" enctype="multipart/form-data">
+            <?= csrf_field() ?>
+
+            <div class="mb-3">
+                <label for="documentName" class="form-label">Nazwa dokumentu</label>
+                <input type="text" id="documentName" name="documentName" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="documentFile" class="form-label">Plik dokumentu</label>
+                <input type="file" id="documentFile" name="documentFile" class="form-control" required>
+            </div>
+
+            <button type="submit" class="btn btn-success">Prześlij</button>
+        </form>
+    </div>
+</div>
+
+<script src="/js/documents.js"></script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/landing.php ===
+<?php require_once __DIR__ . '/layouts/header.php'; ?>
+
+<section class="hero">
+    <div class="container text-center">
+        <h1>Znajdź idealne auto na swoją podróż</h1>
+        <p>Elastyczny wynajem, najlepsze ceny i wsparcie 24/7.</p>
+        <form class="search-form" action="/search" method="GET">
+            <input type="text" name="location" placeholder="Wpisz lokalizację odbioru" required>
+            <input type="date" name="pickup_date" required>
+            <input type="date" name="return_date" required>
+            <button type="submit" class="btn btn-primary">Szukaj aut</button>
+        </form>
+    </div>
+</section>
+
+<section class="features text-center">
+    <h2>Dlaczego warto wybrać CarFuse?</h2>
+    <div class="row justify-content-center">
+        <div class="col-md-3 feature-box">
+            <h4>🚗 Duży wybór pojazdów</h4>
+            <p>Wybierz spośród szerokiej gamy samochodów.</p>
+        </div>
+        <div class="col-md-3 feature-box">
+            <h4>💰 Najlepsze ceny</h4>
+            <p>Zawsze konkurencyjne ceny i atrakcyjne promocje.</p>
+        </div>
+        <div class="col-md-3 feature-box">
+            <h4>📞 Wsparcie 24/7</h4>
+            <p>Nasz zespół jest dostępny przez całą dobę.</p>
+        </div>
+    </div>
+</section>
+
+<?php require_once __DIR__ . '/layouts/footer.php'; ?>
