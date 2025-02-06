@@ -21,6 +21,9 @@ return simpleDispatcher(function (RouteCollector $router) {
         echo 'Welcome to Carfuse!';
     });
 
+    $router->get('/api/statistics', [App\Controllers\DashboardController::class, 'fetchStatistics']);
+    $router->get('/api/notifications', [App\Controllers\NotificationController::class, 'getNotifications']);
+
     // Authentication Views
     $router->get('/login', [AuthController::class, 'loginView']);
     $router->get('/register', [AuthController::class, 'registerView']);
