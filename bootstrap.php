@@ -17,19 +17,23 @@ use Psr\Log\LoggerInterface;
 use AuditManager\Services\AuditService;
 use AuditManager\Middleware\AuditTrailMiddleware;
 use App\Services\EncryptionService;
+
+// ✅ Load Dependencies
+require_once __DIR__ . '/vendor/autoload.php';
 $container = require __DIR__ . '/config/dependencies.php';
 
+// ✅ Retrieve Services from Container
 $pdo = $container->get(PDO::class);
-$logger = $container->get(Psr\Log\LoggerInterface::class);
+$logger = $container->get(LoggerInterface::class);
 $notificationService = $container->get(App\Services\NotificationService::class);
 $tokenService = $container->get(App\Services\Auth\TokenService::class);
 $validator = $container->get(App\Services\Validator::class);
 
-// Load Composer Autoload
-require_once __DIR__ . '/vendor/autoload.php';
+// ✅ Load Security Helper
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
-// Load Configuration Files
-$configFiles = ['database', 'encryption', 'keymanager', 'dependencies'];
+
+// ✅ Load Configuration Files
+$configFiles = ['database', 'encryption', 'keymanager'];
 $config = [];
 
 foreach ($configFiles as $file) {
@@ -40,12 +44,12 @@ foreach ($configFiles as $file) {
     $config[$file] = require $path;
 }
 
-// Ensure Database Configuration Exists
+// ✅ Ensure Database Configuration Exists
 if (!isset($config['database']['app_database'], $config['database']['secure_database'])) {
     die("❌ Error: Database configuration is missing or incorrect in config/database.php\n");
 }
 
-// Initialize Database (Eloquent ORM)
+// ✅ Initialize Database (Eloquent ORM)
 try {
     $capsule = new Capsule;
     $capsule->addConnection($config['database']['app_database']);
@@ -60,34 +64,13 @@ try {
     die("❌ Eloquent initialization failed: " . $e->getMessage() . "\n");
 }
 
-// Fallback PDO Connection for Manual Queries
-try {
-    $pdo = new PDO(
-        sprintf(
-            'mysql:host=%s;port=%s;dbname=%s;charset=%s',
-            $config['database']['app_database']['host'],
-            $config['database']['app_database']['port'],
-            $config['database']['app_database']['database'],
-            $config['database']['app_database']['charset']
-        ),
-        $config['database']['app_database']['username'],
-        $config['database']['app_database']['password'],
-        [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]
-    );
-} catch (PDOException $e) {
-    die("❌ Database connection failed: " . $e->getMessage() . "\n");
-}
-
-// Ensure Log Directory Exists
+// ✅ Ensure Log Directory Exists
 $logDir = __DIR__ . '/logs';
 if (!is_dir($logDir)) {
     mkdir($logDir, 0775, true);
 }
 
-// Initialize Logger (Monolog)
+// ✅ Initialize Logger (Monolog)
 $logFilePath = __DIR__ . '/logs/application.log';
 $logger = new Logger('application');
 
@@ -100,50 +83,43 @@ try {
     die("❌ Logger initialization failed: " . $e->getMessage() . "\n");
 }
 
-// Ensure Encryption Configuration Exists
+// ✅ Ensure Encryption Configuration Exists
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
     die("❌ Error: Encryption key missing or invalid in config/encryption.php\n");
 }
 
-// Initialize Services
-try {
-    $auditService = new AuditService($pdo);
-    $encryptionService = new EncryptionService($config['encryption']['encryption_key']);
-} catch (Exception $e) {
-    die("❌ Service initialization failed: " . $e->getMessage() . "\n");
-}
+// ✅ Retrieve Additional Services from Container
+$auditService = $container->get(AuditService::class);
+$encryptionService = $container->get(EncryptionService::class);
 
-// Register Middleware (if applicable)
+// ✅ Register Middleware (if applicable)
 $auditMiddleware = new AuditTrailMiddleware($auditService, $logger);
 
-// Validate Required Dependencies
+// ✅ Validate Required Dependencies
 $missingDependencies = [];
-$requiredServices = ['NotificationService', 'TokenService', 'Validator'];
+$requiredServices = [
+    App\Services\NotificationService::class,
+    App\Services\Auth\TokenService::class,
+    App\Services\Validator::class
+];
 
 foreach ($requiredServices as $service) {
-    if (!isset($config['dependencies'][$service])) {
+    if (!$container->has($service)) {
         $logger->error("❌ Missing dependency: {$service}");
         $missingDependencies[] = $service;
     }
 }
 
-// Output warnings for missing dependencies instead of running `exec()`
+// ✅ Output warnings for missing dependencies
 if (!empty($missingDependencies)) {
     echo "⚠️ Missing dependencies detected: " . implode(', ', $missingDependencies) . "\n";
     echo "⚠️ Ensure dependencies are correctly registered in config/dependencies.php.\n";
 }
 
-// Ensure Dependencies Are Loaded
-foreach ($config['dependencies'] as $dependency) {
-    if (is_callable($dependency)) {
-        $dependency();
-    }
-}
-
-// Output Confirmation
+// ✅ Output Confirmation
 echo "✅ Bootstrap process completed successfully.\n";
 
-// Return Configurations for Application Use
+// ✅ Return Configurations for Application Use
 return [
     'pdo' => $pdo,
     'logger' => $logger,
