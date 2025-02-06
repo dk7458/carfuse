@@ -15,7 +15,7 @@ use DocumentManager\Controllers\DocumentController;
 use App\Controllers\UserController;
 use App\Controllers\SignatureController;
 
-return FastRoute/simpleDispatcher(function (RouteCollector $router) {
+return simpleDispatcher(function (RouteCollector $router) {
     // Welcome Page
     $router->get('/', function () {
         echo 'Welcome to Carfuse!';
