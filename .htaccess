@@ -1,24 +1,16 @@
 RewriteEngine On
 
-# Allow direct access to files and directories
-RewriteCond %{REQUEST_FILENAME} -f [OR]
-RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^ - [L]
+# Allow landing.php to be accessible
+<Files landing.php>
+    Require all granted
+</Files>
 
-# Redirect all non-existing requests to landing.php
+# Prevent access to sensitive files
+<FilesMatch "(^\.|config\.php|database\.php|encryption\.php|logs|\.env)">
+    Require all denied
+</FilesMatch>
+
+# Redirect all requests to landing.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ landing.php [QSA,L]
-
-# Enable Gzip Compression
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/plain text/html text/css application/javascript
-</IfModule>
-
-# Leverage Browser Caching
-<IfModule mod_expires.c>
-    ExpiresActive On
-    ExpiresByType text/css "access plus 1 month"
-    ExpiresByType application/javascript "access plus 1 month"
-    ExpiresByType image/jpeg "access plus 6 months"
-    ExpiresByType image/png "access plus 6 months"
-    ExpiresByType image/webp "access plus 6 months"
-</IfModule>
