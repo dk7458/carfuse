@@ -1,0 +1,3157 @@
+=== public/.htaccess ===
+RewriteEngine On
+
+# Allow direct access to static files
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Redirect all requests to index.php
+RewriteRule ^ index.php [QSA,L]
+=== public/css/auth.css ===
+/* Authentication Page Styling */
+.auth-container {
+    max-width: 400px;
+    width: 100%;
+    padding: 20px;
+}
+
+body {
+    background-color: #f8f9fa;
+}
+=== public/css/main.min.css ===
+:root {
+    --bg-color: #121212;
+    --text-color: #f5f5f5;
+    --primary-color: #0066ff;
+    --hover-color: #0044cc;
+    --surface-color: #181818;
+    --border-color: #444;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: Arial, sans-serif;
+}
+
+/* Przycisk */
+.btn {
+    background-color: var(--primary-color);
+    border-radius: 5px;
+    padding: 10px 15px;
+    color: #fff;
+    border: none;
+    transition: background .3s;
+}
+.btn:hover {
+    background-color: var(--hover-color);
+}
+
+/* Formularze */
+input, select, textarea {
+    background: #333;
+    border: 1px solid var(--border-color);
+    color: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+    border-color: var(--primary-color);
+    outline: 0;
+}
+
+/* Nawigacja */
+nav {
+    background: var(--surface-color);
+    padding: 10px;
+    text-align: center;
+}
+nav a {
+    color: var(--text-color);
+    margin: 0 15px;
+    text-decoration: none;
+}
+nav a:hover {
+    color: gold;
+}
+
+/* Powiadomienia */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+.toast {
+    background: #333;
+    color: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 5px;
+    animation: fadeOut 3s forwards;
+}
+@keyframes fadeOut {
+    0% { opacity: 1 }
+    100% { opacity: 0; display: none }
+}
+=== public/main.css ===
+/*
+|--------------------------------------------------------------------------
+| Main CSS - Unified Styling for CarFuse
+|--------------------------------------------------------------------------
+|
+| This stylesheet ensures a consistent UI across all views, improving
+| accessibility, responsiveness, and usability.
+|
+*/
+
+/* Consistent theme and UI styling */
+body {
+    /* Ensure consistent theme colors and fonts */
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    color: #333;
+    margin: 0;
+    padding: 0;
+}
+
+/* Button and form designs for accessibility */
+button, input[type="submit"] {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+button:hover, input[type="submit"]:hover {
+    background-color: #0056b3;
+}
+button:focus, input[type="submit"]:focus {
+    outline: 2px solid #ffcc00;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    body {
+        font-size: 14px;
+    }
+    .widget {
+        margin: 10px 0;
+    }
+}
+
+/* Toast styles */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+.toast {
+    display: inline-block;
+    padding: 10px 20px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    color: #fff;
+    font-size: 14px;
+    opacity: 0.9;
+}
+.toast-success {
+    background-color: #28a745;
+}
+.toast-warning {
+    background-color: #ffc107;
+}
+.toast-error {
+    background-color: #dc3545;
+}
+
+/* Widget styles */
+.widget {
+    padding: 20px;
+    margin: 10px;
+    border-radius: 5px;
+    background-color: #f8f9fa;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+.widget h3 {
+    margin: 0;
+    font-size: 24px;
+    color: #343a40;
+}
+.widget p {
+    margin: 5px 0 0;
+    font-size: 18px;
+    color: #6c757d;
+}
+
+/* General styles for admin dashboard */
+.admin-dashboard {
+    padding: 20px;
+}
+.admin-dashboard h1, .admin-dashboard h2, .admin-dashboard h3 {
+    color: #333;
+}
+
+/* Styles for logs and reports */
+.logs, .reports {
+    margin-top: 20px;
+}
+.logs table, .reports table, .transaction-logs table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+.logs table th, .reports table th, .logs table td, .reports table td,
+.transaction-logs table th, .transaction-logs table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+.logs table th, .reports table th, .transaction-logs table th {
+    background-color: #4CAF50;
+    color: white;
+}
+.logs table tr:nth-child(even), .reports table tr:nth-child(even),
+.transaction-logs table tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+.logs table tr:hover, .reports table tr:hover, .transaction-logs table tr:hover {
+    background-color: #ddd;
+}
+
+/* Ensure mobile responsiveness */
+@media screen and (max-width: 768px) {
+    .admin-dashboard {
+        padding: 10px;
+    }
+    .logs table, .reports table, .transaction-logs table {
+        display: block;
+        overflow-x: auto;
+    }
+    .logs table th, .reports table th, .logs table td, .reports table td,
+    .transaction-logs table th, .transaction-logs table td {
+        white-space: nowrap;
+    }
+}
+=== public/logout.php ===
+<?php
+
+
+
+setcookie("PHPSESSID", "", time() - 3600, "/");
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+session_unset();
+session_destroy();
+header("Location: /");
+exit;
+
+http_response_code(200);
+echo json_encode(["message" => "Logged out successfully."]);
+=== public/js/booking.js ===
+import ajax from './ajax';
+
+document.addEventListener('DOMContentLoaded', function () {
+    const pickupDateInput = document.getElementById('pickup-date');
+    const bookingForm = document.getElementById('booking-form');
+    const errorContainer = document.getElementById('error-container');
+    const loadingIndicator = document.getElementById('loading-indicator');
+
+    if (pickupDateInput) pickupDateInput.addEventListener('change', fetchAvailableVehicles);
+    if (bookingForm) bookingForm.addEventListener('submit', submitBookingRequest);
+
+    /**
+     * Pobiera dostępne pojazdy po wybraniu daty odbioru.
+     */
+    async function fetchAvailableVehicles() {
+        const pickupDate = pickupDateInput.value.trim();
+        if (!pickupDate) return;
+
+        showLoadingIndicator();
+
+        try {
+            const response = await fetch(`/vehicles/available?pickup_date=${pickupDate}`);
+            const data = await response.json();
+            hideLoadingIndicator();
+
+            if (data.vehicles && data.vehicles.length > 0) {
+                displayAvailableVehicles(data.vehicles);
+            } else {
+                showError('Brak dostępnych pojazdów na wybrany termin.');
+            }
+        } catch (error) {
+            hideLoadingIndicator();
+            console.error('Błąd pobierania dostępnych pojazdów:', error);
+            showError('Nie udało się pobrać dostępnych pojazdów.');
+        }
+    }
+
+    /**
+     * Wyświetla dostępne pojazdy w interfejsie użytkownika.
+     */
+    function displayAvailableVehicles(vehicles) {
+        const vehiclesContainer = document.getElementById('vehicles-container');
+        vehiclesContainer.innerHTML = '';
+
+        vehicles.forEach(vehicle => {
+            const vehicleElement = document.createElement('div');
+            vehicleElement.className = 'vehicle';
+            vehicleElement.innerHTML = `
+                <p>${vehicle.name}</p>
+                <p>${vehicle.type}</p>
+            `;
+            vehiclesContainer.appendChild(vehicleElement);
+        });
+    }
+
+    /**
+     * Sprawdza poprawność lokalizacji odbioru i zwrotu.
+     */
+    function validateLocations() {
+        const pickupLocation = document.getElementById('pickup-location').value.trim();
+        const dropoffLocation = document.getElementById('dropoff-location').value.trim();
+
+        if (!pickupLocation || !dropoffLocation) {
+            showError('Miejsce odbioru i zwrotu są wymagane.');
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Waliduje formularz przed wysłaniem.
+     */
+    function validateBookingForm() {
+        let isValid = true;
+        const requiredFields = ['pickup-date', 'return-date', 'pickup-location', 'dropoff-location'];
+
+        requiredFields.forEach(field => {
+            const input = document.getElementById(field);
+            if (!input || !input.value.trim()) {
+                showError(`Pole ${field.replace('-', ' ')} jest wymagane.`);
+                isValid = false;
+            }
+        });
+
+        return isValid;
+    }
+
+    /**
+     * Obsługuje przesyłanie formularza rezerwacji.
+     */
+    async function submitBookingRequest(event) {
+        event.preventDefault();
+        clearErrors();
+
+        if (!validateLocations() || !validateBookingForm()) return;
+
+        const formData = new FormData(bookingForm);
+
+        showLoadingIndicator();
+
+        try {
+            const response = await fetch('/booking/create', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            hideLoadingIndicator();
+
+            if (data.success) {
+                alert('Rezerwacja zakończona sukcesem!');
+                window.location.href = "/bookings/view";
+            } else {
+                showError(data.error || 'Wystąpił problem podczas tworzenia rezerwacji.');
+            }
+        } catch (error) {
+            hideLoadingIndicator();
+            console.error('Błąd tworzenia rezerwacji:', error);
+            showError('Nie udało się utworzyć rezerwacji.');
+        }
+    }
+
+    /**
+     * Pokazuje wskaźnik ładowania.
+     */
+    function showLoadingIndicator() {
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'block';
+        }
+    }
+
+    /**
+     * Ukrywa wskaźnik ładowania.
+     */
+    function hideLoadingIndicator() {
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
+    }
+
+    /**
+     * Wyświetla komunikat o błędzie.
+     */
+    function showError(message) {
+        if (errorContainer) {
+            errorContainer.innerText = message;
+            errorContainer.style.display = 'block';
+        }
+    }
+
+    /**
+     * Czyści komunikaty o błędach.
+     */
+    function clearErrors() {
+        if (errorContainer) {
+            errorContainer.innerText = '';
+            errorContainer.style.display = 'none';
+        }
+    }
+});
+=== public/js/main.js ===
+/**************************************
+ * Global Utility Functions & Classes *
+ **************************************/
+
+class Ajax {
+    constructor() {
+      this.baseUrl = '/api';
+      this.token = localStorage.getItem('auth_token') || null;
+    }
+  
+    setToken(token) {
+      this.token = token;
+      localStorage.setItem('auth_token', token);
+    }
+  
+    async request(endpoint, method = 'GET', data = null) {
+      const url = `${this.baseUrl}${endpoint}`;
+      const options = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': this.token ? `Bearer ${this.token}` : ''
+        }
+      };
+  
+      if (data) {
+        options.body = JSON.stringify(data);
+      }
+  
+      try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+      }
+    }
+  
+    get(endpoint) {
+      return this.request(endpoint, 'GET');
+    }
+  
+    post(endpoint, data) {
+      return this.request(endpoint, 'POST', data);
+    }
+  
+    put(endpoint, data) {
+      return this.request(endpoint, 'PUT', data);
+    }
+  
+    delete(endpoint) {
+      return this.request(endpoint, 'DELETE');
+    }
+  }
+  
+  const ajax = new Ajax();
+  
+  function getAuthToken() {
+    return localStorage.getItem('auth_token') || '';
+  }
+  
+  function displayGlobalError(message) {
+    const errorContainer = document.getElementById('error-container');
+    if (errorContainer) {
+      errorContainer.innerText = message;
+      errorContainer.style.display = 'block';
+    }
+  }
+  
+  function clearGlobalError() {
+    const errorContainer = document.getElementById('error-container');
+    if (errorContainer) {
+      errorContainer.innerText = '';
+      errorContainer.style.display = 'none';
+    }
+  }
+  
+  /* Toast Functions */
+  function ensureToastContainer() {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      document.body.appendChild(container);
+    }
+  }
+  
+  function createToast(type, message, autoDismiss = true, dismissTime = 3000) {
+    const container = document.getElementById('toast-container');
+    if (!container) {
+      console.error('Toast container not found');
+      return;
+    }
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerText = message;
+    container.appendChild(toast);
+    if (autoDismiss) {
+      setTimeout(() => toast.remove(), dismissTime);
+    }
+  }
+  
+  function showSuccessToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('success', message, autoDismiss, dismissTime);
+  }
+  
+  function showWarningToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('warning', message, autoDismiss, dismissTime);
+  }
+  
+  function showErrorToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('error', message, autoDismiss, dismissTime);
+  }
+  
+  /* Field-level Validation (for individual inputs) */
+  function showFieldError(input, message) {
+    let error = input.nextElementSibling;
+    if (!error || !error.classList.contains('error-message')) {
+      error = document.createElement('div');
+      error.classList.add('error-message');
+      input.parentNode.insertBefore(error, input.nextSibling);
+    }
+    error.textContent = message;
+    input.classList.add('error');
+  }
+  
+  function clearFieldError(input) {
+    let error = input.nextElementSibling;
+    if (error && error.classList.contains('error-message')) {
+      error.remove();
+    }
+    input.classList.remove('error');
+  }
+  
+  /* Generic Form Validation */
+  function genericValidateInput(input) {
+    const value = input.value.trim();
+    const type = input.type;
+    if (!value) {
+      showFieldError(input, 'This field is required.');
+      return false;
+    }
+    if (type === 'email' && !isValidEmail(value)) {
+      showFieldError(input, 'Please enter a valid email address.');
+      return false;
+    }
+    if (type === 'password' && value.length < 6) {
+      showFieldError(input, 'Password must be at least 6 characters.');
+      return false;
+    }
+    if (input.dataset.minLength && value.length < input.dataset.minLength) {
+      showFieldError(input, `This field must be at least ${input.dataset.minLength} characters.`);
+      return false;
+    }
+    clearFieldError(input);
+    return true;
+  }
+  
+  function attachGenericValidation(form) {
+    const inputs = form.querySelectorAll('input[required], textarea[required], select[required]');
+    inputs.forEach(input => {
+      input.addEventListener('input', () => {
+        genericValidateInput(input);
+      });
+    });
+  }
+  
+  function genericValidateForm(form) {
+    let isValid = true;
+    const inputs = form.querySelectorAll('input[required], textarea[required], select[required]');
+    inputs.forEach(input => {
+      if (!genericValidateInput(input)) {
+        isValid = false;
+      }
+    });
+    return isValid;
+  }
+  
+  function isValidEmail(email) {
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailPattern.test(email);
+  }
+  
+  /* Dashboard & Session Functions */
+  const API_BASE_URL = "https://carfuse.pl/api"; // Ensure correct API base URL
+
+async function fetchStatistics() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/statistics`);
+        if (!response.ok) throw new Error("API response error");
+
+        const data = await response.json();
+        console.log("Statistics:", data);
+        updateDashboard(data);
+    } catch (error) {
+        console.error("Statistics fetch error:", error);
+    }
+}
+  
+  function updateWidgets(data) {
+    updateWidget('total-users', data.totalUsers);
+    updateWidget('active-sessions', data.activeSessions);
+    updateWidget('new-bookings', data.newBookings);
+    updateWidget('total-revenue', formatCurrency(data.totalRevenue));
+  }
+  
+  function updateWidget(widgetId, value) {
+    const widget = document.getElementById(widgetId);
+    if (widget) {
+      widget.innerText = value ?? 'No data';
+    }
+  }
+  
+  function handleResponsiveUpdates() {
+    console.log('Updating UI for screen resize.');
+    // Additional responsive UI logic can be added here.
+  }
+  
+  function formatCurrency(amount) {
+    return new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(amount);
+  }
+  
+  function checkUserActivity() {
+    if (document.visibilityState === 'visible') {
+      fetchStatistics();
+    }
+  }
+  
+  function logout() {
+    localStorage.removeItem('auth_token');
+    window.location.href = '/login';
+  }
+  
+  function refreshSession() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const expiration = payload.exp * 1000;
+      if (Date.now() >= expiration) {
+        logout();
+      }
+    } catch (error) {
+      console.error('Token validation error:', error);
+      logout();
+    }
+  }
+  
+  /**************************************
+   * Main Initialization (DOMContentLoaded)
+   **************************************/
+  document.addEventListener('DOMContentLoaded', function () {
+    ensureToastContainer();
+    // Session & dashboard updates
+    setInterval(refreshSession, 60000);
+    setInterval(checkUserActivity, 60000);
+    window.addEventListener('resize', handleResponsiveUpdates);
+  
+    initAuthModule();
+    initBookingModule();
+    initDashboardModule();
+    initDocumentModule();
+    initGenericValidationModule();
+    initNotificationsModule();
+    initPaymentModule();
+    initProfileModule();
+    initRegistrationModule();
+  });
+  
+  /**************************************
+   * Auth Module
+   **************************************/
+  function initAuthModule() {
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    if (registerForm) registerForm.addEventListener('submit', handleRegister);
+  }
+  
+  async function handleLogin(event) {
+    event.preventDefault();
+    clearGlobalError();
+    const formData = new FormData(event.target);
+    const username = formData.get('username').trim();
+    const password = formData.get('password').trim();
+    if (!validateCredentials(username, password)) return;
+    try {
+      const response = await ajax.post('/login', { username, password });
+      if (response.success) {
+        ajax.setToken(response.token);
+        redirectToDashboard();
+      } else {
+        displayGlobalError(response.error || 'Login error occurred.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      displayGlobalError('An error occurred during login. Please try again.');
+    }
+  }
+  
+  async function handleRegister(event) {
+    event.preventDefault();
+    clearGlobalError();
+    const formData = new FormData(event.target);
+    const username = formData.get('username').trim();
+    const password = formData.get('password').trim();
+    const confirmPassword = formData.get('confirm_password').trim();
+    if (!validateCredentials(username, password, confirmPassword)) return;
+    try {
+      const response = await ajax.post('/register', { username, password });
+      if (response.success) {
+        ajax.setToken(response.token);
+        redirectToDashboard();
+      } else {
+        displayGlobalError(response.error || 'Registration error occurred.');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      displayGlobalError('An error occurred during registration. Please try again.');
+    }
+  }
+  
+  function redirectToDashboard() {
+    window.location.href = '/dashboard';
+  }
+  
+  function validateCredentials(username, password, confirmPassword = null) {
+    if (!username || username.length < 3) {
+      displayGlobalError('Username must be at least 3 characters long.');
+      return false;
+    }
+    if (!password || password.length < 6) {
+      displayGlobalError('Password must be at least 6 characters long.');
+      return false;
+    }
+    if (confirmPassword !== null && password !== confirmPassword) {
+      displayGlobalError('Passwords do not match.');
+      return false;
+    }
+    return true;
+  }
+  
+  /**************************************
+   * Booking Module
+   **************************************/
+  function initBookingModule() {
+    const pickupDateInput = document.getElementById('pickup-date');
+    const bookingForm = document.getElementById('booking-form');
+    if (pickupDateInput) pickupDateInput.addEventListener('change', bookingFetchAvailableVehicles);
+    if (bookingForm) bookingForm.addEventListener('submit', bookingSubmitRequest);
+  }
+  
+  async function bookingFetchAvailableVehicles() {
+    const pickupDateInput = document.getElementById('pickup-date');
+    const pickupDate = pickupDateInput ? pickupDateInput.value.trim() : '';
+    if (!pickupDate) return;
+    bookingShowLoadingIndicator();
+    try {
+      const response = await fetch(`/vehicles/available?pickup_date=${pickupDate}`);
+      const data = await response.json();
+      bookingHideLoadingIndicator();
+      if (data.vehicles && data.vehicles.length > 0) {
+        bookingDisplayAvailableVehicles(data.vehicles);
+      } else {
+        displayGlobalError('No vehicles available for the selected date.');
+      }
+    } catch (error) {
+      bookingHideLoadingIndicator();
+      console.error('Error fetching vehicles:', error);
+      displayGlobalError('Failed to fetch available vehicles.');
+    }
+  }
+  
+  function bookingDisplayAvailableVehicles(vehicles) {
+    const vehiclesContainer = document.getElementById('vehicles-container');
+    if (!vehiclesContainer) return;
+    vehiclesContainer.innerHTML = '';
+    vehicles.forEach(vehicle => {
+      const vehicleElement = document.createElement('div');
+      vehicleElement.className = 'vehicle';
+      vehicleElement.innerHTML = `<p>${vehicle.name}</p><p>${vehicle.type}</p>`;
+      vehiclesContainer.appendChild(vehicleElement);
+    });
+  }
+  
+  function bookingValidateLocations() {
+    const pickupLocation = document.getElementById('pickup-location')?.value.trim();
+    const dropoffLocation = document.getElementById('dropoff-location')?.value.trim();
+    if (!pickupLocation || !dropoffLocation) {
+      displayGlobalError('Both pickup and dropoff locations are required.');
+      return false;
+    }
+    return true;
+  }
+  
+  function bookingValidateForm() {
+    let isValid = true;
+    const requiredFields = ['pickup-date', 'return-date', 'pickup-location', 'dropoff-location'];
+    requiredFields.forEach(field => {
+      const input = document.getElementById(field);
+      if (!input || !input.value.trim()) {
+        displayGlobalError(`The field ${field.replace('-', ' ')} is required.`);
+        isValid = false;
+      }
+    });
+    return isValid;
+  }
+  
+  async function bookingSubmitRequest(event) {
+    event.preventDefault();
+    clearGlobalError();
+    if (!bookingValidateLocations() || !bookingValidateForm()) return;
+    const bookingForm = document.getElementById('booking-form');
+    const formData = new FormData(bookingForm);
+    bookingShowLoadingIndicator();
+    try {
+      const response = await fetch('/booking/create', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await response.json();
+      bookingHideLoadingIndicator();
+      if (data.success) {
+        alert('Booking completed successfully!');
+        window.location.href = "/bookings/view";
+      } else {
+        displayGlobalError(data.error || 'There was a problem creating the booking.');
+      }
+    } catch (error) {
+      bookingHideLoadingIndicator();
+      console.error('Booking submission error:', error);
+      displayGlobalError('Failed to create the booking.');
+    }
+  }
+  
+  function bookingShowLoadingIndicator() {
+    const loadingIndicator = document.getElementById('loading-indicator');
+    if (loadingIndicator) loadingIndicator.style.display = 'block';
+  }
+  
+  function bookingHideLoadingIndicator() {
+    const loadingIndicator = document.getElementById('loading-indicator');
+    if (loadingIndicator) loadingIndicator.style.display = 'none';
+  }
+  
+  /**************************************
+   * Dashboard Module
+   **************************************/
+  function initDashboardModule() {
+    // Initial fetch of statistics
+    fetchStatistics();
+  }
+  
+  /**************************************
+   * Document Module
+   **************************************/
+  function initDocumentModule() {
+    const uploadForm = document.getElementById('document-upload-form');
+    const signButton = document.getElementById('sign-button');
+    const uploadInput = document.getElementById('uploadButton');
+    if (uploadForm) uploadForm.addEventListener('submit', uploadDocument);
+    if (signButton) signButton.addEventListener('click', handleSignButtonClick);
+    if (uploadInput) uploadInput.addEventListener('change', handleFileSelection);
+  }
+  
+  async function uploadDocument(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    try {
+      const response = await fetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData,
+        headers: { 'Authorization': 'Bearer ' + getAuthToken() }
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert('Document uploaded successfully.');
+        previewDocument(data.documentUrl);
+      } else {
+        displayGlobalError('Document upload error: ' + data.message);
+      }
+    } catch (error) {
+      console.error('Document upload error:', error);
+      displayGlobalError('An error occurred while uploading the document.');
+    }
+  }
+  
+  function handleFileSelection(event) {
+    const file = event.target.files[0];
+    if (file) previewContract(file);
+  }
+  
+  function previewDocument(documentUrl) {
+    const previewFrame = document.getElementById('document-preview');
+    if (previewFrame) {
+      previewFrame.src = documentUrl;
+      previewFrame.style.display = 'block';
+    }
+  }
+  
+  function handleSignButtonClick() {
+    const documentId = document.getElementById('document-id')?.value.trim();
+    if (!documentId) {
+      displayGlobalError('No document selected for signing.');
+      return;
+    }
+    signDocument(documentId);
+  }
+  
+  async function signDocument(documentId) {
+    try {
+      const response = await fetch('/api/documents/sign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + getAuthToken()
+        },
+        body: JSON.stringify({ documentId })
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert('Document signed successfully.');
+      } else {
+        displayGlobalError('Document signing error: ' + data.message);
+      }
+    } catch (error) {
+      console.error('Document signing error:', error);
+      displayGlobalError('An error occurred while signing the document.');
+    }
+  }
+  
+  function previewContract(file) {
+    const reader = new FileReader();
+    reader.onload = function (event) {
+      const previewFrame = document.getElementById('contractPreview');
+      if (previewFrame) {
+        previewFrame.src = event.target.result;
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+  
+  /**************************************
+   * Generic Form Validation Module
+   **************************************/
+  function initGenericValidationModule() {
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+      form.addEventListener('submit', function (event) {
+        if (!genericValidateForm(form)) {
+          event.preventDefault();
+        }
+      });
+      attachGenericValidation(form);
+    });
+  }
+  
+  /**************************************
+   * Notifications Module
+   **************************************/
+  function initNotificationsModule() {
+    fetchNotifications();
+  }
+  
+  async function fetchNotifications() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/notifications`);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const notifications = await response.json();
+        displayNotifications(notifications);
+    } catch (error) {
+        console.error("Notifications fetch error:", error);
+    }
+}
+  
+  function displayNotifications(notifications) {
+    const container = document.getElementById('notifications-container');
+    if (!container) return;
+    container.innerHTML = '';
+    notifications.forEach(notification => {
+      const el = document.createElement('div');
+      el.className = `notification ${notification.read ? 'read' : 'unread'}`;
+      el.innerHTML = `
+        <p>${notification.message}</p>
+        <button class="mark-as-read" data-id="${notification.id}">Mark as read</button>
+      `;
+      container.appendChild(el);
+    });
+    attachMarkAsReadListeners();
+  }
+  
+  function attachMarkAsReadListeners() {
+    document.querySelectorAll('.mark-as-read').forEach(button => {
+      button.addEventListener('click', function () {
+        markAsRead(this.dataset.id);
+      });
+    });
+  }
+  
+  async function markAsRead(notificationId) {
+    try {
+      const response = await fetch(`/notifications/${notificationId}/read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + getAuthToken()
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        updateNotificationStatus(notificationId);
+      } else {
+        console.error('Error marking notification as read:', data.error);
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  }
+  
+  function updateNotificationStatus(notificationId) {
+    const btn = document.querySelector(`.mark-as-read[data-id="${notificationId}"]`);
+    if (btn) {
+      btn.closest('.notification').classList.add('read');
+      btn.remove();
+    }
+  }
+  
+  function displayNoNotificationsMessage() {
+    const container = document.getElementById('notifications-container');
+    if (container) {
+      container.innerHTML = `<p class="text-muted">No new notifications.</p>`;
+    }
+  }
+  
+  /**************************************
+   * Payment Module
+   **************************************/
+  function initPaymentModule() {
+    const paymentForm = document.getElementById('paymentForm');
+    if (paymentForm) {
+      paymentForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (paymentValidateForm()) {
+          const paymentDetails = new FormData(paymentForm);
+          processPayment(paymentDetails);
+        }
+      });
+    }
+  }
+  
+  function paymentValidateForm() {
+    let isValid = true;
+    const cardNumber = document.getElementById('cardNumber')?.value;
+    const expiryDate = document.getElementById('expiryDate')?.value;
+    const cvv = document.getElementById('cvv')?.value;
+    const errorMessage = document.getElementById('errorMessage');
+    if (errorMessage) errorMessage.innerHTML = '';
+    if (!cardNumber.match(/^\d{16}$/)) {
+      errorMessage.innerHTML += '<p>Invalid card number. Must be 16 digits.</p>';
+      isValid = false;
+    }
+    if (!expiryDate.match(/^\d{2}\/\d{2}$/)) {
+      errorMessage.innerHTML += '<p>Invalid expiry date. Must be in MM/YY format.</p>';
+      isValid = false;
+    }
+    if (!cvv.match(/^\d{3}$/)) {
+      errorMessage.innerHTML += '<p>Invalid CVV. Must be 3 digits.</p>';
+      isValid = false;
+    }
+    return isValid;
+  }
+  
+  async function processPayment(paymentDetails) {
+    try {
+      const response = await ajax.post('/payments', Object.fromEntries(paymentDetails.entries()));
+      if (response.success) {
+        window.location.href = '/booking/confirmation';
+      } else {
+        displayPaymentErrors(response.errors);
+      }
+    } catch (error) {
+      displayPaymentErrors(['An error occurred while processing the payment. Please try again.']);
+    }
+  }
+  
+  function displayPaymentErrors(errors) {
+    const errorMessage = document.getElementById('errorMessage');
+    if (errorMessage) {
+      errorMessage.innerHTML = '';
+      errors.forEach(error => {
+        errorMessage.innerHTML += `<p>${error}</p>`;
+      });
+    }
+  }
+  
+  /**************************************
+   * Profile Module
+   **************************************/
+  function initProfileModule() {
+    const profileForm = document.getElementById('profile-form');
+    const avatarUpload = document.getElementById('avatar-upload');
+    if (profileForm) profileForm.addEventListener('submit', updateProfile);
+    if (avatarUpload) avatarUpload.addEventListener('change', handleAvatarUpload);
+  }
+  
+  async function updateProfile(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    if (!validateProfileForm(formData)) return;
+    try {
+      const response = await fetch('/api/profile/update', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert('Profile updated successfully');
+      } else {
+        alert('Error updating profile: ' + data.message);
+      }
+    } catch (error) {
+      console.error('Profile update error:', error);
+    }
+  }
+  
+  function handleAvatarUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const preview = document.getElementById('avatar-preview');
+        if (preview) preview.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+  
+  function validateProfileForm(formData) {
+    const name = formData.get('name');
+    const email = formData.get('email');
+    const password = formData.get('password');
+    if (!name || !email || (password && password.length < 6)) {
+      alert('Please fill out all required fields and ensure password is at least 6 characters long.');
+      return false;
+    }
+    return true;
+  }
+  
+  /**************************************
+   * Registration Module (alternate form)
+   **************************************/
+  function initRegistrationModule() {
+    const regForm = document.getElementById('registerForm');
+    if (regForm) {
+      regForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const data = Object.fromEntries(formData.entries());
+        try {
+          const response = await fetch('/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          const result = await response.json();
+          if (response.ok) {
+            showSuccessToast('Registration successful! Welcome to Carfuse.');
+            this.reset();
+          } else {
+            showErrorToast(result.message || 'Registration failed.');
+          }
+        } catch (error) {
+          console.error('Registration error:', error);
+          showErrorToast('An unexpected error occurred.');
+        }
+      });
+    }
+  }
+  === public/js/ajax.js ===
+class Ajax {
+    constructor() {
+        this.baseUrl = '/api';
+        this.token = localStorage.getItem('auth_token') || null;
+    }
+
+    setToken(token) {
+        this.token = token;
+        localStorage.setItem('auth_token', token);
+    }
+
+    async request(endpoint, method = 'GET', data = null) {
+        const url = `${this.baseUrl}${endpoint}`;
+        const options = {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': this.token ? `Bearer ${this.token}` : ''
+            }
+        };
+
+        if (data) {
+            options.body = JSON.stringify(data);
+        }
+
+        try {
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Błąd API:', error);
+            throw error;
+        }
+    }
+
+    get(endpoint) {
+        return this.request(endpoint, 'GET');
+    }
+
+    post(endpoint, data) {
+        return this.request(endpoint, 'POST', data);
+    }
+
+    put(endpoint, data) {
+        return this.request(endpoint, 'PUT', data);
+    }
+
+    delete(endpoint) {
+        return this.request(endpoint, 'DELETE');
+    }
+}
+
+// Zapewnia globalną dostępność
+window.ajax = new Ajax();
+=== public/js/dashboard.js ===
+document.addEventListener('DOMContentLoaded', function () {
+    fetchStatistics();
+    setInterval(checkUserActivity, 60000); // Aktualizuj statystyki tylko przy aktywności użytkownika
+
+    window.addEventListener('resize', handleResponsiveUpdates);
+});
+
+/**
+ * Pobiera w czasie rzeczywistym statystyki dashboardu.
+ */
+async function fetchStatistics() {
+    try {
+        const response = await fetch('/api/statistics');
+        if (!response.ok) throw new Error('Błąd odpowiedzi API');
+
+        const data = await response.json();
+        updateWidgets(data);
+    } catch (error) {
+        showErrorToast('Nie udało się pobrać statystyk.');
+        console.error('Błąd pobierania statystyk:', error);
+    }
+}
+
+/**
+ * Aktualizuje widżety dashboardu na podstawie danych API.
+ */
+function updateWidgets(data) {
+    updateWidget('total-users', data.totalUsers);
+    updateWidget('active-sessions', data.activeSessions);
+    updateWidget('new-bookings', data.newBookings);
+    updateWidget('total-revenue', formatCurrency(data.totalRevenue));
+}
+
+/**
+ * Aktualizuje pojedynczy widget, jeśli istnieje.
+ */
+function updateWidget(widgetId, value) {
+    const widget = document.getElementById(widgetId);
+    if (widget) {
+        widget.innerText = value ?? 'Brak danych';
+    }
+}
+
+/**
+ * Obsługuje dynamiczną responsywność UI.
+ */
+function handleResponsiveUpdates() {
+    console.log('Aktualizacja UI na podstawie zmiany rozmiaru ekranu.');
+    // Tutaj można dodać konkretne akcje dla responsywności dashboardu
+}
+
+/**
+ * Formatuje kwoty na czytelny format walutowy.
+ */
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(amount);
+}
+
+/**
+ * Sprawdza aktywność użytkownika i aktualizuje statystyki tylko przy aktywności.
+ */
+function checkUserActivity() {
+    if (document.visibilityState === 'visible') {
+        fetchStatistics();
+    }
+}
+
+/**
+ * Wyświetla komunikat błędu w UI.
+ */
+function showErrorToast(message) {
+    const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-error';
+    toast.innerText = message;
+
+    toastContainer.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+}
+=== public/js/notifications.js ===
+import ajax from './ajax';
+
+document.addEventListener('DOMContentLoaded', function () {
+    fetchNotifications();
+});
+
+/**
+ * Pobiera powiadomienia z serwera.
+ */
+async function fetchNotifications() {
+    try {
+        const notifications = await ajax.get('/notifications');
+        if (notifications.length > 0) {
+            displayNotifications(notifications);
+        } else {
+            displayNoNotificationsMessage();
+        }
+    } catch (error) {
+        console.error('Błąd pobierania powiadomień:', error);
+    }
+}
+
+/**
+ * Wyświetla powiadomienia w interfejsie użytkownika.
+ */
+function displayNotifications(notifications) {
+    const notificationsContainer = document.getElementById('notifications-container');
+    if (!notificationsContainer) return;
+
+    notificationsContainer.innerHTML = '';
+
+    notifications.forEach(notification => {
+        const notificationElement = document.createElement('div');
+        notificationElement.className = `notification ${notification.read ? 'read' : 'unread'}`;
+        notificationElement.innerHTML = `
+            <p>${notification.message}</p>
+            <button class="mark-as-read" data-id="${notification.id}">Oznacz jako przeczytane</button>
+        `;
+        notificationsContainer.appendChild(notificationElement);
+    });
+
+    attachMarkAsReadListeners();
+}
+
+/**
+ * Dodaje obsługę kliknięcia przycisku "Oznacz jako przeczytane".
+ */
+function attachMarkAsReadListeners() {
+    document.querySelectorAll('.mark-as-read').forEach(button => {
+        button.addEventListener('click', function () {
+            markAsRead(this.dataset.id);
+        });
+    });
+}
+
+/**
+ * Oznacza powiadomienie jako przeczytane.
+ */
+async function markAsRead(notificationId) {
+    try {
+        const response = await fetch(`/notifications/${notificationId}/read`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + getAuthToken()
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            updateNotificationStatus(notificationId);
+        } else {
+            console.error('Błąd oznaczania powiadomienia jako przeczytanego:', data.error);
+        }
+    } catch (error) {
+        console.error('Błąd oznaczania powiadomienia jako przeczytanego:', error);
+    }
+}
+
+/**
+ * Aktualizuje status powiadomienia bez ponownego ładowania wszystkich powiadomień.
+ */
+function updateNotificationStatus(notificationId) {
+    const notificationElement = document.querySelector(`.mark-as-read[data-id="${notificationId}"]`);
+    if (notificationElement) {
+        notificationElement.closest('.notification').classList.add('read');
+        notificationElement.remove();
+    }
+}
+
+/**
+ * Wyświetla informację, gdy brak powiadomień.
+ */
+function displayNoNotificationsMessage() {
+    const notificationsContainer = document.getElementById('notifications-container');
+    if (!notificationsContainer) return;
+
+    notificationsContainer.innerHTML = `<p class="text-muted">Brak nowych powiadomień.</p>`;
+}
+
+/**
+ * Pobiera token autoryzacyjny użytkownika.
+ */
+function getAuthToken() {
+    return localStorage.getItem('auth_token') || '';
+}
+=== public/js/forms.js ===
+document.addEventListener('DOMContentLoaded', function () {
+    const forms = document.querySelectorAll('form');
+
+    forms.forEach(form => {
+        form.addEventListener('submit', function (event) {
+            if (!validateForm(form)) {
+                event.preventDefault();
+            }
+        });
+
+        attachRealTimeValidation(form);
+    });
+});
+
+/**
+ * Waliduje formularz przed wysłaniem.
+ */
+function validateForm(form) {
+    let isValid = true;
+    const inputs = form.querySelectorAll('input[required], textarea[required], select[required]');
+
+    inputs.forEach(input => {
+        if (!validateInput(input)) {
+            isValid = false;
+        }
+    });
+
+    return isValid;
+}
+
+/**
+ * Dołącza walidację w czasie rzeczywistym dla pól formularza.
+ */
+function attachRealTimeValidation(form) {
+    const inputs = form.querySelectorAll('input[required], textarea[required], select[required]');
+
+    inputs.forEach(input => {
+        input.addEventListener('input', function () {
+            validateInput(input);
+        });
+    });
+}
+
+/**
+ * Waliduje pojedyncze pole formularza.
+ */
+function validateInput(input) {
+    const value = input.value.trim();
+    const type = input.type;
+
+    if (!value) {
+        showError(input, 'To pole jest wymagane.');
+        return false;
+    }
+
+    if (type === 'email' && !isValidEmail(value)) {
+        showError(input, 'Wprowadź poprawny adres e-mail.');
+        return false;
+    }
+
+    if (type === 'password' && value.length < 6) {
+        showError(input, 'Hasło musi zawierać co najmniej 6 znaków.');
+        return false;
+    }
+
+    if (input.dataset.minLength && value.length < input.dataset.minLength) {
+        showError(input, `To pole musi mieć co najmniej ${input.dataset.minLength} znaków.`);
+        return false;
+    }
+
+    clearError(input);
+    return true;
+}
+
+/**
+ * Wyświetla komunikat o błędzie obok pola formularza.
+ */
+function showError(input, message) {
+    let error = input.nextElementSibling;
+    if (!error || !error.classList.contains('error-message')) {
+        error = document.createElement('div');
+        error.classList.add('error-message');
+        input.parentNode.insertBefore(error, input.nextSibling);
+    }
+    error.textContent = message;
+    input.classList.add('error');
+}
+
+/**
+ * Usuwa komunikat o błędzie.
+ */
+function clearError(input) {
+    let error = input.nextElementSibling;
+    if (error && error.classList.contains('error-message')) {
+        error.remove();
+    }
+    input.classList.remove('error');
+}
+
+/**
+ * Sprawdza poprawność adresu e-mail.
+ */
+function isValidEmail(email) {
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailPattern.test(email);
+}
+=== public/js/profile.js ===
+// Function to handle profile updates
+async function updateProfile(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    
+    if (!validateProfileForm(formData)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/profile/update', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        if (data.success) {
+            alert('Profile updated successfully');
+        } else {
+            alert('Error updating profile: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Error updating profile:', error);
+    }
+}
+
+// Function to allow avatar image uploads
+function handleAvatarUpload(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('avatar-preview').src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// Function to validate form inputs before saving
+function validateProfileForm(formData) {
+    const name = formData.get('name');
+    const email = formData.get('email');
+    const password = formData.get('password');
+
+    if (!name || !email || (password && password.length < 6)) {
+        alert('Please fill out all required fields and ensure password is at least 6 characters long.');
+        return false;
+    }
+    return true;
+}
+
+// Initialize profile form
+function initProfileForm() {
+    document.getElementById('profile-form').addEventListener('submit', updateProfile);
+    document.getElementById('avatar-upload').addEventListener('change', handleAvatarUpload);
+}
+
+// Call initProfileForm when the DOM is fully loaded
+document.addEventListener('DOMContentLoaded', initProfileForm);
+=== public/js/auth.js ===
+import ajax from './ajax';
+
+document.addEventListener('DOMContentLoaded', function() {
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const errorContainer = document.getElementById('error-container');
+
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    if (registerForm) registerForm.addEventListener('submit', handleRegister);
+
+    /**
+     * Obsługuje logowanie użytkownika.
+     */
+    async function handleLogin(event) {
+        event.preventDefault();
+        clearErrors();
+
+        const formData = new FormData(loginForm);
+        const username = formData.get('username').trim();
+        const password = formData.get('password').trim();
+
+        if (!validateCredentials(username, password)) return;
+
+        try {
+            const response = await ajax.post('/login', { username, password });
+            if (response.success) {
+                ajax.setToken(response.token);
+                redirectToDashboard();
+            } else {
+                showError(response.error || 'Błąd podczas logowania.');
+            }
+        } catch (error) {
+            console.error('Błąd logowania:', error);
+            showError('Wystąpił problem podczas logowania. Spróbuj ponownie.');
+        }
+    }
+
+    /**
+     * Obsługuje rejestrację użytkownika.
+     */
+    async function handleRegister(event) {
+        event.preventDefault();
+        clearErrors();
+
+        const formData = new FormData(registerForm);
+        const username = formData.get('username').trim();
+        const password = formData.get('password').trim();
+        const confirmPassword = formData.get('confirm_password').trim();
+
+        if (!validateCredentials(username, password, confirmPassword)) return;
+
+        try {
+            const response = await ajax.post('/register', { username, password });
+            if (response.success) {
+                ajax.setToken(response.token);
+                redirectToDashboard();
+            } else {
+                showError(response.error || 'Błąd podczas rejestracji.');
+            }
+        } catch (error) {
+            console.error('Błąd rejestracji:', error);
+            showError('Wystąpił problem podczas rejestracji. Spróbuj ponownie.');
+        }
+    }
+
+    /**
+     * Przekierowuje użytkownika do dashboardu.
+     */
+    function redirectToDashboard() {
+        window.location.href = '/dashboard';
+    }
+
+    /**
+     * Wyświetla komunikat błędu.
+     */
+    function showError(message) {
+        if (errorContainer) {
+            errorContainer.innerText = message;
+            errorContainer.style.display = 'block';
+        }
+    }
+
+    /**
+     * Czyści komunikaty błędów.
+     */
+    function clearErrors() {
+        if (errorContainer) {
+            errorContainer.innerText = '';
+            errorContainer.style.display = 'none';
+        }
+    }
+
+    /**
+     * Sprawdza poprawność danych logowania i rejestracji.
+     */
+    function validateCredentials(username, password, confirmPassword = null) {
+        if (!username || username.length < 3) {
+            showError('Nazwa użytkownika musi mieć co najmniej 3 znaki.');
+            return false;
+        }
+
+        if (!password || password.length < 6) {
+            showError('Hasło musi mieć co najmniej 6 znaków.');
+            return false;
+        }
+
+        if (confirmPassword !== null && password !== confirmPassword) {
+            showError('Hasła nie są identyczne.');
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Wylogowuje użytkownika i czyści tokeny autoryzacji.
+     */
+    function logout() {
+        localStorage.removeItem('auth_token');
+        window.location.href = '/login';
+    }
+
+    /**
+     * Sprawdza, czy token sesji wygasł i wylogowuje użytkownika w razie potrzeby.
+     */
+    function refreshSession() {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const expiration = payload.exp * 1000;
+            const now = Date.now();
+
+            if (now >= expiration) {
+                logout();
+            }
+        } catch (error) {
+            console.error('Błąd walidacji tokena:', error);
+            logout();
+        }
+    }
+
+    // Sprawdzanie sesji co minutę
+    setInterval(refreshSession, 60000);
+});
+=== public/js/toasts.js ===
+// Function to create a toast
+function createToast(type, message, autoDismiss = true, dismissTime = 3000) {
+    const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        console.error('Toast container not found');
+        return;
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerText = message;
+
+    toastContainer.appendChild(toast);
+
+    if (autoDismiss) {
+        setTimeout(() => {
+            toast.remove();
+        }, dismissTime);
+    }
+}
+
+// Function to show success toast
+function showSuccessToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('success', message, autoDismiss, dismissTime);
+}
+
+// Function to show warning toast
+function showWarningToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('warning', message, autoDismiss, dismissTime);
+}
+
+// Function to show error toast
+function showErrorToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('error', message, autoDismiss, dismissTime);
+}
+
+// Ensure toast container exists
+document.addEventListener('DOMContentLoaded', () => {
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }
+});
+=== public/js/documents.js ===
+document.addEventListener('DOMContentLoaded', function () {
+    initDocumentForm();
+});
+
+/**
+ * Inicjalizuje obsługę formularzy dokumentów.
+ */
+function initDocumentForm() {
+    const uploadForm = document.getElementById('document-upload-form');
+    const signButton = document.getElementById('sign-button');
+    const uploadInput = document.getElementById('uploadButton');
+
+    if (uploadForm) uploadForm.addEventListener('submit', uploadDocument);
+    if (signButton) signButton.addEventListener('click', handleSignButtonClick);
+    if (uploadInput) uploadInput.addEventListener('change', handleFileSelection);
+}
+
+/**
+ * Obsługuje przesyłanie dokumentów.
+ */
+async function uploadDocument(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+
+    try {
+        const response = await fetch('/api/documents/upload', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Authorization': 'Bearer ' + getAuthToken()
+            }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Dokument przesłany pomyślnie.');
+            previewDocument(data.documentUrl);
+        } else {
+            showError('Błąd przesyłania dokumentu: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Błąd przesyłania dokumentu:', error);
+        showError('Wystąpił problem podczas przesyłania dokumentu.');
+    }
+}
+
+/**
+ * Obsługuje wybór pliku i jego podgląd.
+ */
+function handleFileSelection(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    previewContract(file);
+}
+
+/**
+ * Wyświetla podgląd dokumentu przed podpisaniem.
+ */
+function previewDocument(documentUrl) {
+    const previewFrame = document.getElementById('document-preview');
+    if (previewFrame) {
+        previewFrame.src = documentUrl;
+        previewFrame.style.display = 'block';
+    }
+}
+
+/**
+ * Obsługuje kliknięcie przycisku podpisywania.
+ */
+function handleSignButtonClick() {
+    const documentId = document.getElementById('document-id').value.trim();
+    if (!documentId) {
+        showError('Brak wybranego dokumentu do podpisania.');
+        return;
+    }
+
+    signDocument(documentId);
+}
+
+/**
+ * Wysyła żądanie podpisania dokumentu do API.
+ */
+async function signDocument(documentId) {
+    try {
+        const response = await fetch('/api/documents/sign', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + getAuthToken()
+            },
+            body: JSON.stringify({ documentId })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Dokument został pomyślnie podpisany.');
+        } else {
+            showError('Błąd podpisywania dokumentu: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Błąd podpisywania dokumentu:', error);
+        showError('Wystąpił problem podczas podpisywania dokumentu.');
+    }
+}
+
+/**
+ * Wyświetla podgląd dokumentu przed podpisaniem.
+ */
+function previewContract(file) {
+    const reader = new FileReader();
+    reader.onload = function (event) {
+        const previewFrame = document.getElementById('contractPreview');
+        if (previewFrame) {
+            previewFrame.src = event.target.result;
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+/**
+ * Wyświetla komunikat o błędzie.
+ */
+function showError(message) {
+    const errorContainer = document.getElementById('error-container');
+    if (errorContainer) {
+        errorContainer.innerText = message;
+        errorContainer.style.display = 'block';
+    }
+}
+
+/**
+ * Pobiera token autoryzacyjny użytkownika.
+ */
+function getAuthToken() {
+    return localStorage.getItem('auth_token') || '';
+}
+=== public/js/js.txt ===
+=== ./booking.js ===
+import ajax from './ajax';
+
+document.addEventListener('DOMContentLoaded', function () {
+    const pickupDateInput = document.getElementById('pickup-date');
+    const bookingForm = document.getElementById('booking-form');
+    const errorContainer = document.getElementById('error-container');
+    const loadingIndicator = document.getElementById('loading-indicator');
+
+    if (pickupDateInput) pickupDateInput.addEventListener('change', fetchAvailableVehicles);
+    if (bookingForm) bookingForm.addEventListener('submit', submitBookingRequest);
+
+    /**
+     * Pobiera dostępne pojazdy po wybraniu daty odbioru.
+     */
+    async function fetchAvailableVehicles() {
+        const pickupDate = pickupDateInput.value.trim();
+        if (!pickupDate) return;
+
+        showLoadingIndicator();
+
+        try {
+            const response = await fetch(`/vehicles/available?pickup_date=${pickupDate}`);
+            const data = await response.json();
+            hideLoadingIndicator();
+
+            if (data.vehicles && data.vehicles.length > 0) {
+                displayAvailableVehicles(data.vehicles);
+            } else {
+                showError('Brak dostępnych pojazdów na wybrany termin.');
+            }
+        } catch (error) {
+            hideLoadingIndicator();
+            console.error('Błąd pobierania dostępnych pojazdów:', error);
+            showError('Nie udało się pobrać dostępnych pojazdów.');
+        }
+    }
+
+    /**
+     * Wyświetla dostępne pojazdy w interfejsie użytkownika.
+     */
+    function displayAvailableVehicles(vehicles) {
+        const vehiclesContainer = document.getElementById('vehicles-container');
+        vehiclesContainer.innerHTML = '';
+
+        vehicles.forEach(vehicle => {
+            const vehicleElement = document.createElement('div');
+            vehicleElement.className = 'vehicle';
+            vehicleElement.innerHTML = `
+                <p>${vehicle.name}</p>
+                <p>${vehicle.type}</p>
+            `;
+            vehiclesContainer.appendChild(vehicleElement);
+        });
+    }
+
+    /**
+     * Sprawdza poprawność lokalizacji odbioru i zwrotu.
+     */
+    function validateLocations() {
+        const pickupLocation = document.getElementById('pickup-location').value.trim();
+        const dropoffLocation = document.getElementById('dropoff-location').value.trim();
+
+        if (!pickupLocation || !dropoffLocation) {
+            showError('Miejsce odbioru i zwrotu są wymagane.');
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Waliduje formularz przed wysłaniem.
+     */
+    function validateBookingForm() {
+        let isValid = true;
+        const requiredFields = ['pickup-date', 'return-date', 'pickup-location', 'dropoff-location'];
+
+        requiredFields.forEach(field => {
+            const input = document.getElementById(field);
+            if (!input || !input.value.trim()) {
+                showError(`Pole ${field.replace('-', ' ')} jest wymagane.`);
+                isValid = false;
+            }
+        });
+
+        return isValid;
+    }
+
+    /**
+     * Obsługuje przesyłanie formularza rezerwacji.
+     */
+    async function submitBookingRequest(event) {
+        event.preventDefault();
+        clearErrors();
+
+        if (!validateLocations() || !validateBookingForm()) return;
+
+        const formData = new FormData(bookingForm);
+
+        showLoadingIndicator();
+
+        try {
+            const response = await fetch('/booking/create', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            hideLoadingIndicator();
+
+            if (data.success) {
+                alert('Rezerwacja zakończona sukcesem!');
+                window.location.href = "/bookings/view";
+            } else {
+                showError(data.error || 'Wystąpił problem podczas tworzenia rezerwacji.');
+            }
+        } catch (error) {
+            hideLoadingIndicator();
+            console.error('Błąd tworzenia rezerwacji:', error);
+            showError('Nie udało się utworzyć rezerwacji.');
+        }
+    }
+
+    /**
+     * Pokazuje wskaźnik ładowania.
+     */
+    function showLoadingIndicator() {
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'block';
+        }
+    }
+
+    /**
+     * Ukrywa wskaźnik ładowania.
+     */
+    function hideLoadingIndicator() {
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
+    }
+
+    /**
+     * Wyświetla komunikat o błędzie.
+     */
+    function showError(message) {
+        if (errorContainer) {
+            errorContainer.innerText = message;
+            errorContainer.style.display = 'block';
+        }
+    }
+
+    /**
+     * Czyści komunikaty o błędach.
+     */
+    function clearErrors() {
+        if (errorContainer) {
+            errorContainer.innerText = '';
+            errorContainer.style.display = 'none';
+        }
+    }
+});
+=== ./ajax.js ===
+class Ajax {
+    constructor() {
+        this.baseUrl = '/api';
+        this.token = localStorage.getItem('auth_token') || null;
+    }
+
+    setToken(token) {
+        this.token = token;
+        localStorage.setItem('auth_token', token);
+    }
+
+    async request(endpoint, method = 'GET', data = null) {
+        const url = `${this.baseUrl}${endpoint}`;
+        const options = {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': this.token ? `Bearer ${this.token}` : ''
+            }
+        };
+
+        if (data) {
+            options.body = JSON.stringify(data);
+        }
+
+        try {
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Błąd API:', error);
+            throw error;
+        }
+    }
+
+    get(endpoint) {
+        return this.request(endpoint, 'GET');
+    }
+
+    post(endpoint, data) {
+        return this.request(endpoint, 'POST', data);
+    }
+
+    put(endpoint, data) {
+        return this.request(endpoint, 'PUT', data);
+    }
+
+    delete(endpoint) {
+        return this.request(endpoint, 'DELETE');
+    }
+}
+
+const ajax = new Ajax();
+export default ajax;
+=== ./dashboard.js ===
+document.addEventListener('DOMContentLoaded', function () {
+    fetchStatistics();
+    setInterval(checkUserActivity, 60000); // Aktualizuj statystyki tylko przy aktywności użytkownika
+
+    window.addEventListener('resize', handleResponsiveUpdates);
+});
+
+/**
+ * Pobiera w czasie rzeczywistym statystyki dashboardu.
+ */
+async function fetchStatistics() {
+    try {
+        const response = await fetch('/api/statistics');
+        if (!response.ok) throw new Error('Błąd odpowiedzi API');
+
+        const data = await response.json();
+        updateWidgets(data);
+    } catch (error) {
+        showErrorToast('Nie udało się pobrać statystyk.');
+        console.error('Błąd pobierania statystyk:', error);
+    }
+}
+
+/**
+ * Aktualizuje widżety dashboardu na podstawie danych API.
+ */
+function updateWidgets(data) {
+    updateWidget('total-users', data.totalUsers);
+    updateWidget('active-sessions', data.activeSessions);
+    updateWidget('new-bookings', data.newBookings);
+    updateWidget('total-revenue', formatCurrency(data.totalRevenue));
+}
+
+/**
+ * Aktualizuje pojedynczy widget, jeśli istnieje.
+ */
+function updateWidget(widgetId, value) {
+    const widget = document.getElementById(widgetId);
+    if (widget) {
+        widget.innerText = value ?? 'Brak danych';
+    }
+}
+
+/**
+ * Obsługuje dynamiczną responsywność UI.
+ */
+function handleResponsiveUpdates() {
+    console.log('Aktualizacja UI na podstawie zmiany rozmiaru ekranu.');
+    // Tutaj można dodać konkretne akcje dla responsywności dashboardu
+}
+
+/**
+ * Formatuje kwoty na czytelny format walutowy.
+ */
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(amount);
+}
+
+/**
+ * Sprawdza aktywność użytkownika i aktualizuje statystyki tylko przy aktywności.
+ */
+function checkUserActivity() {
+    if (document.visibilityState === 'visible') {
+        fetchStatistics();
+    }
+}
+
+/**
+ * Wyświetla komunikat błędu w UI.
+ */
+function showErrorToast(message) {
+    const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-error';
+    toast.innerText = message;
+
+    toastContainer.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+}
+=== ./notifications.js ===
+import ajax from './ajax';
+
+document.addEventListener('DOMContentLoaded', function () {
+    fetchNotifications();
+});
+
+/**
+ * Pobiera powiadomienia z serwera.
+ */
+async function fetchNotifications() {
+    try {
+        const notifications = await ajax.get('/notifications');
+        if (notifications.length > 0) {
+            displayNotifications(notifications);
+        } else {
+            displayNoNotificationsMessage();
+        }
+    } catch (error) {
+        console.error('Błąd pobierania powiadomień:', error);
+    }
+}
+
+/**
+ * Wyświetla powiadomienia w interfejsie użytkownika.
+ */
+function displayNotifications(notifications) {
+    const notificationsContainer = document.getElementById('notifications-container');
+    if (!notificationsContainer) return;
+
+    notificationsContainer.innerHTML = '';
+
+    notifications.forEach(notification => {
+        const notificationElement = document.createElement('div');
+        notificationElement.className = `notification ${notification.read ? 'read' : 'unread'}`;
+        notificationElement.innerHTML = `
+            <p>${notification.message}</p>
+            <button class="mark-as-read" data-id="${notification.id}">Oznacz jako przeczytane</button>
+        `;
+        notificationsContainer.appendChild(notificationElement);
+    });
+
+    attachMarkAsReadListeners();
+}
+
+/**
+ * Dodaje obsługę kliknięcia przycisku "Oznacz jako przeczytane".
+ */
+function attachMarkAsReadListeners() {
+    document.querySelectorAll('.mark-as-read').forEach(button => {
+        button.addEventListener('click', function () {
+            markAsRead(this.dataset.id);
+        });
+    });
+}
+
+/**
+ * Oznacza powiadomienie jako przeczytane.
+ */
+async function markAsRead(notificationId) {
+    try {
+        const response = await fetch(`/notifications/${notificationId}/read`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + getAuthToken()
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            updateNotificationStatus(notificationId);
+        } else {
+            console.error('Błąd oznaczania powiadomienia jako przeczytanego:', data.error);
+        }
+    } catch (error) {
+        console.error('Błąd oznaczania powiadomienia jako przeczytanego:', error);
+    }
+}
+
+/**
+ * Aktualizuje status powiadomienia bez ponownego ładowania wszystkich powiadomień.
+ */
+function updateNotificationStatus(notificationId) {
+    const notificationElement = document.querySelector(`.mark-as-read[data-id="${notificationId}"]`);
+    if (notificationElement) {
+        notificationElement.closest('.notification').classList.add('read');
+        notificationElement.remove();
+    }
+}
+
+/**
+ * Wyświetla informację, gdy brak powiadomień.
+ */
+function displayNoNotificationsMessage() {
+    const notificationsContainer = document.getElementById('notifications-container');
+    if (!notificationsContainer) return;
+
+    notificationsContainer.innerHTML = `<p class="text-muted">Brak nowych powiadomień.</p>`;
+}
+
+/**
+ * Pobiera token autoryzacyjny użytkownika.
+ */
+function getAuthToken() {
+    return localStorage.getItem('auth_token') || '';
+}
+=== ./forms.js ===
+document.addEventListener('DOMContentLoaded', function () {
+    const forms = document.querySelectorAll('form');
+
+    forms.forEach(form => {
+        form.addEventListener('submit', function (event) {
+            if (!validateForm(form)) {
+                event.preventDefault();
+            }
+        });
+
+        attachRealTimeValidation(form);
+    });
+});
+
+/**
+ * Waliduje formularz przed wysłaniem.
+ */
+function validateForm(form) {
+    let isValid = true;
+    const inputs = form.querySelectorAll('input[required], textarea[required], select[required]');
+
+    inputs.forEach(input => {
+        if (!validateInput(input)) {
+            isValid = false;
+        }
+    });
+
+    return isValid;
+}
+
+/**
+ * Dołącza walidację w czasie rzeczywistym dla pól formularza.
+ */
+function attachRealTimeValidation(form) {
+    const inputs = form.querySelectorAll('input[required], textarea[required], select[required]');
+
+    inputs.forEach(input => {
+        input.addEventListener('input', function () {
+            validateInput(input);
+        });
+    });
+}
+
+/**
+ * Waliduje pojedyncze pole formularza.
+ */
+function validateInput(input) {
+    const value = input.value.trim();
+    const type = input.type;
+
+    if (!value) {
+        showError(input, 'To pole jest wymagane.');
+        return false;
+    }
+
+    if (type === 'email' && !isValidEmail(value)) {
+        showError(input, 'Wprowadź poprawny adres e-mail.');
+        return false;
+    }
+
+    if (type === 'password' && value.length < 6) {
+        showError(input, 'Hasło musi zawierać co najmniej 6 znaków.');
+        return false;
+    }
+
+    if (input.dataset.minLength && value.length < input.dataset.minLength) {
+        showError(input, `To pole musi mieć co najmniej ${input.dataset.minLength} znaków.`);
+        return false;
+    }
+
+    clearError(input);
+    return true;
+}
+
+/**
+ * Wyświetla komunikat o błędzie obok pola formularza.
+ */
+function showError(input, message) {
+    let error = input.nextElementSibling;
+    if (!error || !error.classList.contains('error-message')) {
+        error = document.createElement('div');
+        error.classList.add('error-message');
+        input.parentNode.insertBefore(error, input.nextSibling);
+    }
+    error.textContent = message;
+    input.classList.add('error');
+}
+
+/**
+ * Usuwa komunikat o błędzie.
+ */
+function clearError(input) {
+    let error = input.nextElementSibling;
+    if (error && error.classList.contains('error-message')) {
+        error.remove();
+    }
+    input.classList.remove('error');
+}
+
+/**
+ * Sprawdza poprawność adresu e-mail.
+ */
+function isValidEmail(email) {
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailPattern.test(email);
+}
+=== ./profile.js ===
+// Function to handle profile updates
+async function updateProfile(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    
+    if (!validateProfileForm(formData)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/profile/update', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        if (data.success) {
+            alert('Profile updated successfully');
+        } else {
+            alert('Error updating profile: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Error updating profile:', error);
+    }
+}
+
+// Function to allow avatar image uploads
+function handleAvatarUpload(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('avatar-preview').src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// Function to validate form inputs before saving
+function validateProfileForm(formData) {
+    const name = formData.get('name');
+    const email = formData.get('email');
+    const password = formData.get('password');
+
+    if (!name || !email || (password && password.length < 6)) {
+        alert('Please fill out all required fields and ensure password is at least 6 characters long.');
+        return false;
+    }
+    return true;
+}
+
+// Initialize profile form
+function initProfileForm() {
+    document.getElementById('profile-form').addEventListener('submit', updateProfile);
+    document.getElementById('avatar-upload').addEventListener('change', handleAvatarUpload);
+}
+
+// Call initProfileForm when the DOM is fully loaded
+document.addEventListener('DOMContentLoaded', initProfileForm);
+=== ./auth.js ===
+import ajax from './ajax';
+
+document.addEventListener('DOMContentLoaded', function() {
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const errorContainer = document.getElementById('error-container');
+
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    if (registerForm) registerForm.addEventListener('submit', handleRegister);
+
+    /**
+     * Obsługuje logowanie użytkownika.
+     */
+    async function handleLogin(event) {
+        event.preventDefault();
+        clearErrors();
+
+        const formData = new FormData(loginForm);
+        const username = formData.get('username').trim();
+        const password = formData.get('password').trim();
+
+        if (!validateCredentials(username, password)) return;
+
+        try {
+            const response = await ajax.post('/login', { username, password });
+            if (response.success) {
+                ajax.setToken(response.token);
+                redirectToDashboard();
+            } else {
+                showError(response.error || 'Błąd podczas logowania.');
+            }
+        } catch (error) {
+            console.error('Błąd logowania:', error);
+            showError('Wystąpił problem podczas logowania. Spróbuj ponownie.');
+        }
+    }
+
+    /**
+     * Obsługuje rejestrację użytkownika.
+     */
+    async function handleRegister(event) {
+        event.preventDefault();
+        clearErrors();
+
+        const formData = new FormData(registerForm);
+        const username = formData.get('username').trim();
+        const password = formData.get('password').trim();
+        const confirmPassword = formData.get('confirm_password').trim();
+
+        if (!validateCredentials(username, password, confirmPassword)) return;
+
+        try {
+            const response = await ajax.post('/register', { username, password });
+            if (response.success) {
+                ajax.setToken(response.token);
+                redirectToDashboard();
+            } else {
+                showError(response.error || 'Błąd podczas rejestracji.');
+            }
+        } catch (error) {
+            console.error('Błąd rejestracji:', error);
+            showError('Wystąpił problem podczas rejestracji. Spróbuj ponownie.');
+        }
+    }
+
+    /**
+     * Przekierowuje użytkownika do dashboardu.
+     */
+    function redirectToDashboard() {
+        window.location.href = '/dashboard';
+    }
+
+    /**
+     * Wyświetla komunikat błędu.
+     */
+    function showError(message) {
+        if (errorContainer) {
+            errorContainer.innerText = message;
+            errorContainer.style.display = 'block';
+        }
+    }
+
+    /**
+     * Czyści komunikaty błędów.
+     */
+    function clearErrors() {
+        if (errorContainer) {
+            errorContainer.innerText = '';
+            errorContainer.style.display = 'none';
+        }
+    }
+
+    /**
+     * Sprawdza poprawność danych logowania i rejestracji.
+     */
+    function validateCredentials(username, password, confirmPassword = null) {
+        if (!username || username.length < 3) {
+            showError('Nazwa użytkownika musi mieć co najmniej 3 znaki.');
+            return false;
+        }
+
+        if (!password || password.length < 6) {
+            showError('Hasło musi mieć co najmniej 6 znaków.');
+            return false;
+        }
+
+        if (confirmPassword !== null && password !== confirmPassword) {
+            showError('Hasła nie są identyczne.');
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Wylogowuje użytkownika i czyści tokeny autoryzacji.
+     */
+    function logout() {
+        localStorage.removeItem('auth_token');
+        window.location.href = '/login';
+    }
+
+    /**
+     * Sprawdza, czy token sesji wygasł i wylogowuje użytkownika w razie potrzeby.
+     */
+    function refreshSession() {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const expiration = payload.exp * 1000;
+            const now = Date.now();
+
+            if (now >= expiration) {
+                logout();
+            }
+        } catch (error) {
+            console.error('Błąd walidacji tokena:', error);
+            logout();
+        }
+    }
+
+    // Sprawdzanie sesji co minutę
+    setInterval(refreshSession, 60000);
+});
+=== ./toasts.js ===
+// Function to create a toast
+function createToast(type, message, autoDismiss = true, dismissTime = 3000) {
+    const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        console.error('Toast container not found');
+        return;
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerText = message;
+
+    toastContainer.appendChild(toast);
+
+    if (autoDismiss) {
+        setTimeout(() => {
+            toast.remove();
+        }, dismissTime);
+    }
+}
+
+// Function to show success toast
+function showSuccessToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('success', message, autoDismiss, dismissTime);
+}
+
+// Function to show warning toast
+function showWarningToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('warning', message, autoDismiss, dismissTime);
+}
+
+// Function to show error toast
+function showErrorToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('error', message, autoDismiss, dismissTime);
+}
+
+// Ensure toast container exists
+document.addEventListener('DOMContentLoaded', () => {
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }
+});
+=== ./documents.js ===
+document.addEventListener('DOMContentLoaded', function () {
+    initDocumentForm();
+});
+
+/**
+ * Inicjalizuje obsługę formularzy dokumentów.
+ */
+function initDocumentForm() {
+    const uploadForm = document.getElementById('document-upload-form');
+    const signButton = document.getElementById('sign-button');
+    const uploadInput = document.getElementById('uploadButton');
+
+    if (uploadForm) uploadForm.addEventListener('submit', uploadDocument);
+    if (signButton) signButton.addEventListener('click', handleSignButtonClick);
+    if (uploadInput) uploadInput.addEventListener('change', handleFileSelection);
+}
+
+/**
+ * Obsługuje przesyłanie dokumentów.
+ */
+async function uploadDocument(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+
+    try {
+        const response = await fetch('/api/documents/upload', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Authorization': 'Bearer ' + getAuthToken()
+            }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Dokument przesłany pomyślnie.');
+            previewDocument(data.documentUrl);
+        } else {
+            showError('Błąd przesyłania dokumentu: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Błąd przesyłania dokumentu:', error);
+        showError('Wystąpił problem podczas przesyłania dokumentu.');
+    }
+}
+
+/**
+ * Obsługuje wybór pliku i jego podgląd.
+ */
+function handleFileSelection(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    previewContract(file);
+}
+
+/**
+ * Wyświetla podgląd dokumentu przed podpisaniem.
+ */
+function previewDocument(documentUrl) {
+    const previewFrame = document.getElementById('document-preview');
+    if (previewFrame) {
+        previewFrame.src = documentUrl;
+        previewFrame.style.display = 'block';
+    }
+}
+
+/**
+ * Obsługuje kliknięcie przycisku podpisywania.
+ */
+function handleSignButtonClick() {
+    const documentId = document.getElementById('document-id').value.trim();
+    if (!documentId) {
+        showError('Brak wybranego dokumentu do podpisania.');
+        return;
+    }
+
+    signDocument(documentId);
+}
+
+/**
+ * Wysyła żądanie podpisania dokumentu do API.
+ */
+async function signDocument(documentId) {
+    try {
+        const response = await fetch('/api/documents/sign', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + getAuthToken()
+            },
+            body: JSON.stringify({ documentId })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Dokument został pomyślnie podpisany.');
+        } else {
+            showError('Błąd podpisywania dokumentu: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Błąd podpisywania dokumentu:', error);
+        showError('Wystąpił problem podczas podpisywania dokumentu.');
+    }
+}
+
+/**
+ * Wyświetla podgląd dokumentu przed podpisaniem.
+ */
+function previewContract(file) {
+    const reader = new FileReader();
+    reader.onload = function (event) {
+        const previewFrame = document.getElementById('contractPreview');
+        if (previewFrame) {
+            previewFrame.src = event.target.result;
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+/**
+ * Wyświetla komunikat o błędzie.
+ */
+function showError(message) {
+    const errorContainer = document.getElementById('error-container');
+    if (errorContainer) {
+        errorContainer.innerText = message;
+        errorContainer.style.display = 'block';
+    }
+}
+
+/**
+ * Pobiera token autoryzacyjny użytkownika.
+ */
+function getAuthToken() {
+    return localStorage.getItem('auth_token') || '';
+}
+=== ./js.txt ===
+=== ./payments.js ===
+import ajax from './ajax';
+
+document.addEventListener('DOMContentLoaded', function() {
+    const paymentForm = document.getElementById('paymentForm');
+
+    paymentForm.addEventListener('submit', function(event) {
+        event.preventDefault();
+        if (validateForm()) {
+            const paymentDetails = new FormData(paymentForm);
+            processPayment(paymentDetails);
+        }
+    });
+
+    function validateForm() {
+        let isValid = true;
+        const cardNumber = document.getElementById('cardNumber').value;
+        const expiryDate = document.getElementById('expiryDate').value;
+        const cvv = document.getElementById('cvv').value;
+        const errorMessage = document.getElementById('errorMessage');
+
+        errorMessage.innerHTML = '';
+
+        if (!cardNumber.match(/^\d{16}$/)) {
+            errorMessage.innerHTML += '<p>Invalid card number. Must be 16 digits.</p>';
+            isValid = false;
+        }
+        if (!expiryDate.match(/^\d{2}\/\d{2}$/)) {
+            errorMessage.innerHTML += '<p>Invalid expiry date. Must be in MM/YY format.</p>';
+            isValid = false;
+        }
+        if (!cvv.match(/^\d{3}$/)) {
+            errorMessage.innerHTML += '<p>Invalid CVV. Must be 3 digits.</p>';
+            isValid = false;
+        }
+
+        return isValid;
+    }
+
+    async function processPayment(paymentDetails) {
+        try {
+            const response = await ajax.post('/payments', paymentDetails);
+            if (response.success) {
+                window.location.href = '/booking/confirmation';
+            } else {
+                displayErrors(response.errors);
+            }
+        } catch (error) {
+            displayErrors(['An error occurred while processing the payment. Please try again.']);
+        }
+    }
+
+    function displayErrors(errors) {
+        const errorMessage = document.getElementById('errorMessage');
+        errorMessage.innerHTML = '';
+        errors.forEach(function(error) {
+            errorMessage.innerHTML += `<p>${error}</p>`;
+        });
+    }
+});
+=== ./register.js ===
+document.getElementById('registerForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = Object.fromEntries(formData.entries());
+
+    try {
+        const response = await fetch('/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showToast('success', 'Registration successful! Welcome to Carfuse.');
+            this.reset();
+        } else {
+            showToast('error', result.message || 'Registration failed.');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('error', 'An unexpected error occurred.');
+    }
+});
+
+function showToast(type, message) {
+    const toastContainer = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-bg-${type} border-0 show`;
+    toast.role = 'alert';
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>`;
+    toastContainer.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
+=== public/js/payments.js ===
+import ajax from './ajax';
+
+document.addEventListener('DOMContentLoaded', function() {
+    const paymentForm = document.getElementById('paymentForm');
+
+    paymentForm.addEventListener('submit', function(event) {
+        event.preventDefault();
+        if (validateForm()) {
+            const paymentDetails = new FormData(paymentForm);
+            processPayment(paymentDetails);
+        }
+    });
+
+    function validateForm() {
+        let isValid = true;
+        const cardNumber = document.getElementById('cardNumber').value;
+        const expiryDate = document.getElementById('expiryDate').value;
+        const cvv = document.getElementById('cvv').value;
+        const errorMessage = document.getElementById('errorMessage');
+
+        errorMessage.innerHTML = '';
+
+        if (!cardNumber.match(/^\d{16}$/)) {
+            errorMessage.innerHTML += '<p>Invalid card number. Must be 16 digits.</p>';
+            isValid = false;
+        }
+        if (!expiryDate.match(/^\d{2}\/\d{2}$/)) {
+            errorMessage.innerHTML += '<p>Invalid expiry date. Must be in MM/YY format.</p>';
+            isValid = false;
+        }
+        if (!cvv.match(/^\d{3}$/)) {
+            errorMessage.innerHTML += '<p>Invalid CVV. Must be 3 digits.</p>';
+            isValid = false;
+        }
+
+        return isValid;
+    }
+
+    async function processPayment(paymentDetails) {
+        try {
+            const response = await ajax.post('/payments', paymentDetails);
+            if (response.success) {
+                window.location.href = '/booking/confirmation';
+            } else {
+                displayErrors(response.errors);
+            }
+        } catch (error) {
+            displayErrors(['An error occurred while processing the payment. Please try again.']);
+        }
+    }
+
+    function displayErrors(errors) {
+        const errorMessage = document.getElementById('errorMessage');
+        errorMessage.innerHTML = '';
+        errors.forEach(function(error) {
+            errorMessage.innerHTML += `<p>${error}</p>`;
+        });
+    }
+});
+=== public/js/register.js ===
+document.getElementById('registerForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = Object.fromEntries(formData.entries());
+
+    try {
+        const response = await fetch('/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showToast('success', 'Registration successful! Welcome to Carfuse.');
+            this.reset();
+        } else {
+            showToast('error', result.message || 'Registration failed.');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('error', 'An unexpected error occurred.');
+    }
+});
+
+function showToast(type, message) {
+    const toastContainer = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-bg-${type} border-0 show`;
+    toast.role = 'alert';
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>`;
+    toastContainer.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
+=== public/landing.php ===
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+// Set response headers
+header('Content-Type: application/json');
+
+// Load the router
+$dispatcher = require __DIR__ . '/../config/routes.php';
+
+// Normalize request URI
+$httpMethod = $_SERVER['REQUEST_METHOD'];
+$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$uri = rtrim($uri, '/');
+
+// Redirect root URL to landing page
+if ($uri === '' || $uri === '/' || $uri === '/index.php') {
+    require __DIR__ . '/../App/Views/landing.php';
+    exit;
+}
+
+// Dispatch the request
+$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
+
+switch ($routeInfo[0]) {
+    case FastRoute\Dispatcher::NOT_FOUND:
+        http_response_code(404);
+        echo json_encode(["error" => "404 Not Found"]);
+        break;
+
+    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+        http_response_code(405);
+        echo json_encode(["error" => "405 Method Not Allowed"]);
+        break;
+
+    case FastRoute\Dispatcher::FOUND:
+        [$controller, $method] = $routeInfo[1];
+        $params = $routeInfo[2];
+
+        // Check if the controller class exists
+        if (!class_exists($controller)) {
+            http_response_code(500);
+            echo json_encode(["error" => "500 Internal Server Error", "message" => "Controller not found: $controller"]);
+            exit;
+        }
+
+        $instance = new $controller();
+
+        // Check if the method exists in the controller
+        if (!method_exists($instance, $method)) {
+            http_response_code(500);
+            echo json_encode(["error" => "500 Internal Server Error", "message" => "Method not found: $method"]);
+            exit;
+        }
+
+        // Execute the controller method with parameters
+        call_user_func_array([$instance, $method], $params);
+        break;
+}
+=== public/api.php ===
+<?php
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+
+
+// Load encryption keys
+$config = require __DIR__ . '/../config/encryption.php';
+$jwtSecret = $config['jwt_secret'] ?? '';
+
+function validateToken()
+{
+    global $jwtSecret;
+
+    $headers = getallheaders();
+    $authHeader = $headers['Authorization'] ?? '';
+
+    if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+        http_response_code(401);
+        echo json_encode(["error" => "Unauthorized: Missing or invalid token"]);
+        exit;
+    }
+
+    $token = substr($authHeader, 7);
+    try {
+        return (array) JWT::decode($token, new Key($jwtSecret, 'HS256'));
+    } catch (Exception $e) {
+        http_response_code(401);
+        echo json_encode(["error" => "Unauthorized: Invalid token"]);
+        exit;
+    }
+}
