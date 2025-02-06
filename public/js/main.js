@@ -185,17 +185,20 @@ class Ajax {
   }
   
   /* Dashboard & Session Functions */
-  async function fetchStatistics() {
+  const API_BASE_URL = "https://carfuse.pl/api"; // Ensure correct API base URL
+
+async function fetchStatistics() {
     try {
-      const response = await fetch('/api/statistics');
-      if (!response.ok) throw new Error('API response error');
-      const data = await response.json();
-      updateWidgets(data);
+        const response = await fetch(`${API_BASE_URL}/statistics`);
+        if (!response.ok) throw new Error("API response error");
+
+        const data = await response.json();
+        console.log("Statistics:", data);
+        updateDashboard(data);
     } catch (error) {
-      showErrorToast('Failed to fetch statistics.');
-      console.error('Statistics fetch error:', error);
+        console.error("Statistics fetch error:", error);
     }
-  }
+}
   
   function updateWidgets(data) {
     updateWidget('total-users', data.totalUsers);
@@ -564,16 +567,15 @@ class Ajax {
   
   async function fetchNotifications() {
     try {
-      const notifications = await ajax.get('/notifications');
-      if (notifications.length > 0) {
+        const response = await fetch(`${API_BASE_URL}/notifications`);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const notifications = await response.json();
         displayNotifications(notifications);
-      } else {
-        displayNoNotificationsMessage();
-      }
     } catch (error) {
-      console.error('Notifications fetch error:', error);
+        console.error("Notifications fetch error:", error);
     }
-  }
+}
   
   function displayNotifications(notifications) {
     const container = document.getElementById('notifications-container');
