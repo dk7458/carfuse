@@ -1,12 +1,9 @@
 RewriteEngine On
 
-# Block access to sensitive files
-
-
-# Allow direct access to existing files and directories
+# Allow direct access to static files
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Redirect all requests to landing.php instead of index.php
-RewriteRule ^ landing.php [QSA,L]
+# Redirect all other requests to landing.php
+RewriteRule ^ ../landing.php [QSA,L]
