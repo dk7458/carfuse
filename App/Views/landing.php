@@ -1,5 +1,6 @@
 <?php
 // Path: App/Views/landing.php
+include __DIR__ . '/../layouts/header.php';
 ?>
 
 <!DOCTYPE html>

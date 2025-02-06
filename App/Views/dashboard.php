@@ -1,3 +1,4 @@
+<?php
 /*
 |--------------------------------------------------------------------------
 | Dashboard - Centralny Panel dla Użytkownika i Administratora

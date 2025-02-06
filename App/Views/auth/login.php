@@ -21,6 +21,7 @@
 header("Content-Type: text/html; charset=UTF-8");
 
 require_once BASE_PATH . '/App/Helpers/SecurityHelper.php'; // Ensure CSRF functions are loaded
+include __DIR__ . '/../layouts/header.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -115,3 +116,4 @@ document.addEventListener("DOMContentLoaded", function() {
 
 </body>
 </html>
+<?php include __DIR__ . '/../layouts/footer.php'; ?>

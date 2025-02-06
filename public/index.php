@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../bootstrap.php'; // Bootstrap application
 require_once __DIR__ . '/../vendor/autoload.php'; // Load dependencies
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php'; // Load security functions globally
 
 header("Content-Type: text/html; charset=UTF-8");
 ?>
