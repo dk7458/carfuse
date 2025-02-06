@@ -3,82 +3,144 @@ import ajax from './ajax';
 document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
+    const errorContainer = document.getElementById('error-container');
 
-    if (loginForm) {
-        loginForm.addEventListener('submit', handleLogin);
-    }
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    if (registerForm) registerForm.addEventListener('submit', handleRegister);
 
-    if (registerForm) {
-        registerForm.addEventListener('submit', handleRegister);
-    }
-
-    // Handle login form submission
+    /**
+     * Obsługuje logowanie użytkownika.
+     */
     async function handleLogin(event) {
         event.preventDefault();
+        clearErrors();
 
         const formData = new FormData(loginForm);
-        const username = formData.get('username');
-        const password = formData.get('password');
+        const username = formData.get('username').trim();
+        const password = formData.get('password').trim();
+
+        if (!validateCredentials(username, password)) return;
 
         try {
             const response = await ajax.post('/login', { username, password });
-            ajax.setToken(response.token);
-            redirectToDashboard();
+            if (response.success) {
+                ajax.setToken(response.token);
+                redirectToDashboard();
+            } else {
+                showError(response.error || 'Błąd podczas logowania.');
+            }
         } catch (error) {
-            console.error('Error during login:', error);
-            showError('Error during login.');
+            console.error('Błąd logowania:', error);
+            showError('Wystąpił problem podczas logowania. Spróbuj ponownie.');
         }
     }
 
-    // Handle registration form submission
+    /**
+     * Obsługuje rejestrację użytkownika.
+     */
     async function handleRegister(event) {
         event.preventDefault();
+        clearErrors();
 
         const formData = new FormData(registerForm);
-        const username = formData.get('username');
-        const password = formData.get('password');
+        const username = formData.get('username').trim();
+        const password = formData.get('password').trim();
+        const confirmPassword = formData.get('confirm_password').trim();
+
+        if (!validateCredentials(username, password, confirmPassword)) return;
 
         try {
             const response = await ajax.post('/register', { username, password });
-            ajax.setToken(response.token);
-            redirectToDashboard();
+            if (response.success) {
+                ajax.setToken(response.token);
+                redirectToDashboard();
+            } else {
+                showError(response.error || 'Błąd podczas rejestracji.');
+            }
         } catch (error) {
-            console.error('Error during registration:', error);
-            showError('Error during registration.');
+            console.error('Błąd rejestracji:', error);
+            showError('Wystąpił problem podczas rejestracji. Spróbuj ponownie.');
         }
     }
 
-    // Redirect to dashboard
+    /**
+     * Przekierowuje użytkownika do dashboardu.
+     */
     function redirectToDashboard() {
         window.location.href = '/dashboard';
     }
 
-    // Show error messages
+    /**
+     * Wyświetla komunikat błędu.
+     */
     function showError(message) {
-        const errorContainer = document.getElementById('error-container');
-        errorContainer.innerText = message;
-        errorContainer.style.display = 'block';
+        if (errorContainer) {
+            errorContainer.innerText = message;
+            errorContainer.style.display = 'block';
+        }
     }
 
-    // Logout functionality
+    /**
+     * Czyści komunikaty błędów.
+     */
+    function clearErrors() {
+        if (errorContainer) {
+            errorContainer.innerText = '';
+            errorContainer.style.display = 'none';
+        }
+    }
+
+    /**
+     * Sprawdza poprawność danych logowania i rejestracji.
+     */
+    function validateCredentials(username, password, confirmPassword = null) {
+        if (!username || username.length < 3) {
+            showError('Nazwa użytkownika musi mieć co najmniej 3 znaki.');
+            return false;
+        }
+
+        if (!password || password.length < 6) {
+            showError('Hasło musi mieć co najmniej 6 znaków.');
+            return false;
+        }
+
+        if (confirmPassword !== null && password !== confirmPassword) {
+            showError('Hasła nie są identyczne.');
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Wylogowuje użytkownika i czyści tokeny autoryzacji.
+     */
     function logout() {
-        localStorage.removeItem('token');
+        localStorage.removeItem('auth_token');
         window.location.href = '/login';
     }
 
-    // Automatically refresh expired sessions
+    /**
+     * Sprawdza, czy token sesji wygasł i wylogowuje użytkownika w razie potrzeby.
+     */
     function refreshSession() {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('auth_token');
         if (!token) return;
 
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const expiration = payload.exp * 1000;
-        const now = Date.now();
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const expiration = payload.exp * 1000;
+            const now = Date.now();
 
-        if (now >= expiration) {
+            if (now >= expiration) {
+                logout();
+            }
+        } catch (error) {
+            console.error('Błąd walidacji tokena:', error);
             logout();
         }
     }
 
-    setInterval(refreshSession, 60000); // Check session every minute
+    // Sprawdzanie sesji co minutę
+    setInterval(refreshSession, 60000);
 });

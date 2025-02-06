@@ -6,112 +6,106 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Redirect all other requests to index.php for FastRoute
-RewriteRule ^ index.php [QSA,L]=== public/css/style.css ===
-/* ...existing code... */
+# Block access to sensitive files
+<FilesMatch "(^\.|config\.php|database\.php|encryption\.php|logs|\.env)">
+    Require all denied
+</FilesMatch>
+
+# Redirect all other requests to index.php
+RewriteRule ^ index.php [QSA,L]
+=== public/css/main.min.css ===
+:root{--bg-color:#121212;--text-color:#f5f5f5;--primary-color:#0066ff;--hover-color:#0044cc;--surface-color:#181818;--border-color:#444}body{background-color:var(--bg-color);color:var(--text-color);font-family:Arial,sans-serif}.btn,button{background-color:var(--primary-color);border-radius:5px;padding:10px 15px;color:#fff;border:none;transition:background .3s}.btn:hover,button:hover{background-color:var(--hover-color)}input,select,textarea{background:#333;border:1px solid var(--border-color);color:#fff;padding:10px;border-radius:5px;width:100%}input:focus,select:focus,textarea:focus{border-color:var(--primary-color);outline:0}table{width:100%;border-collapse:collapse;background:var(--surface-color)}td,th{padding:10px;border:1px solid var(--border-color)}th{background:#222}tr:hover{background-color:#222}nav{background:var(--surface-color);padding:10px;text-align:center}nav a{color:var(--text-color);margin:0 15px;text-decoration:none}nav a:hover{color:gold}#toast-container{position:fixed;top:20px;right:20px;z-index:1000}.toast{background:#333;color:#fff;padding:10px;border-radius:5px;margin-bottom:5px;animation:fadeOut 3s forwards}@keyframes fadeOut{0%{opacity:1}100%{opacity:0;display:none}}=== public/index.php ===
+<?php
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+// Load Route Dispatcher
+$dispatcher = require __DIR__ . '/../routes/web.php';
+
+$httpMethod = $_SERVER['REQUEST_METHOD'];
+$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$uri = rtrim($uri, '/'); // Normalize URI
+
+// Load Landing Page for Root URL
+if ($uri === '' || $uri === '/' || $uri === '/index.php') {
+    require __DIR__ . '/../App/Views/landing.php';
+    exit;
+}
+
+// Dispatch Route
+$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
+
+switch ($routeInfo[0]) {
+    case FastRoute\Dispatcher::NOT_FOUND:
+        http_response_code(404);
+        echo json_encode(["error" => "404 Not Found - `$uri` does not exist."]);
+        break;
+
+    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+        http_response_code(405);
+        echo json_encode(["error" => "405 Method Not Allowed."]);
+        break;
+
+    case FastRoute\Dispatcher::FOUND:
+        [$controller, $method] = $routeInfo[1];
+
+        if (class_exists($controller) && method_exists($controller, $method)) {
+            $instance = new $controller();
+            call_user_func_array([$instance, $method], $routeInfo[2]);
+        } else {
+            http_response_code(500);
+            echo json_encode(["error" => "500 Internal Server Error: Controller or Method Not Found."]);
+        }
+        break;
+}
+=== public/main.css ===
+/*
+|--------------------------------------------------------------------------
+| Main CSS - Unified Styling for CarFuse
+|--------------------------------------------------------------------------
+|
+| This stylesheet ensures a consistent UI across all views, improving
+| accessibility, responsiveness, and usability.
+|
+*/
 
 /* Consistent theme and UI styling */
 body {
-    /* ...existing code... */
     /* Ensure consistent theme colors and fonts */
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    color: #333;
+    margin: 0;
+    padding: 0;
 }
-
-/* ...existing code... */
 
 /* Button and form designs for accessibility */
 button, input[type="submit"] {
-    /* ...existing code... */
-    /* Ensure buttons are accessible */
-    /* Example: High contrast colors, focus styles */
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
 }
-
-/* ...existing code... */
+button:hover, input[type="submit"]:hover {
+    background-color: #0056b3;
+}
+button:focus, input[type="submit"]:focus {
+    outline: 2px solid #ffcc00;
+}
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {
-    /* ...existing code... */
-    /* Ensure layout adjusts for smaller screens */
-    /* Example: Flexbox or grid adjustments */
-}
-
-/* ...existing code... */
-=== public/css/admin.css ===
-/* General styles for admin dashboard */
-.admin-dashboard {
-    font-family: Arial, sans-serif;
-    padding: 20px;
-    background-color: #f4f4f4;
-}
-
-.admin-dashboard h1, .admin-dashboard h2, .admin-dashboard h3 {
-    color: #333;
-}
-
-/* Styles for logs and reports */
-.logs, .reports {
-    margin-top: 20px;
-}
-
-.logs table, .reports table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.logs table th, .reports table th, .logs table td, .reports table td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-}
-
-.logs table th, .reports table th {
-    background-color: #f2f2f2;
-    color: #333;
-}
-
-/* Improve table designs for transaction logs */
-.transaction-logs table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-
-.transaction-logs table th, .transaction-logs table td {
-    border: 1px solid #ddd;
-    padding: 10px;
-    text-align: left;
-}
-
-.transaction-logs table th {
-    background-color: #4CAF50;
-    color: white;
-}
-
-.transaction-logs table tr:nth-child(even) {
-    background-color: #f2f2f2;
-}
-
-.transaction-logs table tr:hover {
-    background-color: #ddd;
-}
-
-/* Ensure mobile responsiveness */
-@media screen and (max-width: 768px) {
-    .admin-dashboard {
-        padding: 10px;
+    body {
+        font-size: 14px;
     }
-
-    .logs table, .reports table, .transaction-logs table {
-        width: 100%;
-        display: block;
-        overflow-x: auto;
-    }
-
-    .logs table th, .reports table th, .logs table td, .reports table td, 
-    .transaction-logs table th, .transaction-logs table td {
-        white-space: nowrap;
+    .widget {
+        margin: 10px 0;
     }
 }
-=== public/css/styles.css ===
+
 /* Toast styles */
 #toast-container {
     position: fixed;
@@ -119,7 +113,6 @@ button, input[type="submit"] {
     right: 20px;
     z-index: 1000;
 }
-
 .toast {
     display: inline-block;
     padding: 10px 20px;
@@ -129,15 +122,12 @@ button, input[type="submit"] {
     font-size: 14px;
     opacity: 0.9;
 }
-
 .toast-success {
     background-color: #28a745;
 }
-
 .toast-warning {
     background-color: #ffc107;
 }
-
 .toast-error {
     background-color: #dc3545;
 }
@@ -151,106 +141,75 @@ button, input[type="submit"] {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     text-align: center;
 }
-
 .widget h3 {
     margin: 0;
     font-size: 24px;
     color: #343a40;
 }
-
 .widget p {
     margin: 5px 0 0;
     font-size: 18px;
     color: #6c757d;
 }
 
-/* Responsive styles */
-@media (max-width: 768px) {
-    .widget {
-        margin: 10px 0;
+/* General styles for admin dashboard */
+.admin-dashboard {
+    padding: 20px;
+}
+.admin-dashboard h1, .admin-dashboard h2, .admin-dashboard h3 {
+    color: #333;
+}
+
+/* Styles for logs and reports */
+.logs, .reports {
+    margin-top: 20px;
+}
+.logs table, .reports table, .transaction-logs table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+.logs table th, .reports table th, .logs table td, .reports table td,
+.transaction-logs table th, .transaction-logs table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+.logs table th, .reports table th, .transaction-logs table th {
+    background-color: #4CAF50;
+    color: white;
+}
+.logs table tr:nth-child(even), .reports table tr:nth-child(even),
+.transaction-logs table tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+.logs table tr:hover, .reports table tr:hover, .transaction-logs table tr:hover {
+    background-color: #ddd;
+}
+
+/* Ensure mobile responsiveness */
+@media screen and (max-width: 768px) {
+    .admin-dashboard {
+        padding: 10px;
+    }
+    .logs table, .reports table, .transaction-logs table {
+        display: block;
+        overflow-x: auto;
+    }
+    .logs table th, .reports table th, .logs table td, .reports table td,
+    .transaction-logs table th, .transaction-logs table td {
+        white-space: nowrap;
     }
 }
-=== public/index.php ===
+=== public/logout.php ===
 <?php
 
-require_once __DIR__ . '/../vendor/autoload.php';
+session_start();
+session_destroy();
+setcookie("PHPSESSID", "", time() - 3600, "/");
 
-// Load Route Dispatcher
-$dispatcher = require __DIR__ . '/../routes/web.php';
-
-// Fetch method and URI
-$httpMethod = $_SERVER['REQUEST_METHOD'];
-$uri = $_SERVER['REQUEST_URI'];
-
-// Strip query string (?foo=bar) and decode URI
-$uri = parse_url($uri, PHP_URL_PATH);
-$uri = rtrim($uri, '/'); // Normalize URI to prevent trailing slash issues
-
-// If root URL (/) load the landing page
-if ($uri === '' || $uri === '/' || $uri === '/index.php') {
-    require __DIR__ . '/../App/Views/landing.php';
-    exit;
-}
-
-// Dispatch the request
-$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
-var_dump($routeInfo);
-
-switch ($routeInfo[0]) {
-    case FastRoute\Dispatcher::NOT_FOUND:
-        http_response_code(404);
-        echo "404 Not Found - `$uri` does not exist.";
-        break;
-
-    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-        http_response_code(405);
-        echo "405 Method Not Allowed.";
-        break;
-
-    case FastRoute\Dispatcher::FOUND:
-        $handler = $routeInfo[1];
-        $vars = $routeInfo[2];
-
-        if (is_callable($handler)) {
-            call_user_func_array($handler, $vars);
-        } elseif (is_array($handler) && count($handler) === 2) {
-            [$controller, $method] = $handler;
-            if (class_exists($controller) && method_exists($controller, $method)) {
-                $instance = new $controller();
-                call_user_func_array([$instance, $method], $vars);
-            } else {
-                http_response_code(500);
-                echo "500 Internal Server Error: Controller or Method Not Found.";
-            }
-        } else {
-            http_response_code(500);
-            echo "500 Internal Server Error: Invalid Route Handler.";
-        }
-        break;
-}
-=== public/error_log.php ===
-<?php
-echo "<pre>";
-echo "Checking last 20 Apache/Nginx error logs...\n\n";
-
-// Read logs (Modify path based on your server setup)
-$logPaths = [
-    "/var/log/apache2/error.log",
-    "/var/log/httpd/error_log",
-    "/var/log/nginx/error.log",
-];
-
-foreach ($logPaths as $logPath) {
-    if (file_exists($logPath)) {
-        echo "Reading log file: $logPath\n";
-        echo shell_exec("tail -n 20 " . escapeshellarg($logPath));
-    } else {
-        echo "Log file not found: $logPath\n";
-    }
-}
-
-echo "</pre>";
-?>
+http_response_code(200);
+echo json_encode(["message" => "Logged out successfully."]);
 === public/js/booking.js ===
 import ajax from './ajax';
 
@@ -1025,4 +984,40 @@ function showToast(type, message) {
         </div>`;
     toastContainer.appendChild(toast);
     setTimeout(() => toast.remove(), 5000);
+}
+=== public/api.php ===
+<?php
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+session_start();
+
+// Load encryption keys
+$config = require __DIR__ . '/../config/encryption.php';
+$jwtSecret = $config['jwt_secret'] ?? '';
+
+function validateToken()
+{
+    global $jwtSecret;
+
+    $headers = getallheaders();
+    $authHeader = $headers['Authorization'] ?? '';
+
+    if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+        http_response_code(401);
+        echo json_encode(["error" => "Unauthorized: Missing or invalid token"]);
+        exit;
+    }
+
+    $token = substr($authHeader, 7);
+    try {
+        return (array) JWT::decode($token, new Key($jwtSecret, 'HS256'));
+    } catch (Exception $e) {
+        http_response_code(401);
+        echo json_encode(["error" => "Unauthorized: Invalid token"]);
+        exit;
+    }
 }

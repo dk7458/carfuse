@@ -1,11 +1,12 @@
 class Ajax {
     constructor() {
-        this.baseUrl = '/api'; // Base URL for API requests
-        this.token = null; // Authentication token
+        this.baseUrl = '/api';
+        this.token = localStorage.getItem('auth_token') || null;
     }
 
     setToken(token) {
         this.token = token;
+        localStorage.setItem('auth_token', token);
     }
 
     async request(endpoint, method = 'GET', data = null) {
@@ -29,7 +30,7 @@ class Ajax {
             }
             return await response.json();
         } catch (error) {
-            console.error('API call failed:', error);
+            console.error('Błąd API:', error);
             throw error;
         }
     }

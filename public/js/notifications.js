@@ -1,57 +1,107 @@
 import ajax from './ajax';
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     fetchNotifications();
+});
 
-    // Fetch notifications from the server
-    async function fetchNotifications() {
-        try {
-            const notifications = await ajax.get('/notifications');
+/**
+ * Pobiera powiadomienia z serwera.
+ */
+async function fetchNotifications() {
+    try {
+        const notifications = await ajax.get('/notifications');
+        if (notifications.length > 0) {
             displayNotifications(notifications);
-        } catch (error) {
-            console.error('Error fetching notifications:', error);
+        } else {
+            displayNoNotificationsMessage();
         }
+    } catch (error) {
+        console.error('Błąd pobierania powiadomień:', error);
     }
+}
 
-    // Display notifications on the UI
-    function displayNotifications(notifications) {
-        const notificationsContainer = document.getElementById('notifications-container');
-        notificationsContainer.innerHTML = '';
+/**
+ * Wyświetla powiadomienia w interfejsie użytkownika.
+ */
+function displayNotifications(notifications) {
+    const notificationsContainer = document.getElementById('notifications-container');
+    if (!notificationsContainer) return;
 
-        notifications.forEach(notification => {
-            const notificationElement = document.createElement('div');
-            notificationElement.className = 'notification';
-            notificationElement.innerHTML = `
-                <p>${notification.message}</p>
-                <button class="mark-as-read" data-id="${notification.id}">Mark as read</button>
-            `;
-            notificationsContainer.appendChild(notificationElement);
+    notificationsContainer.innerHTML = '';
+
+    notifications.forEach(notification => {
+        const notificationElement = document.createElement('div');
+        notificationElement.className = `notification ${notification.read ? 'read' : 'unread'}`;
+        notificationElement.innerHTML = `
+            <p>${notification.message}</p>
+            <button class="mark-as-read" data-id="${notification.id}">Oznacz jako przeczytane</button>
+        `;
+        notificationsContainer.appendChild(notificationElement);
+    });
+
+    attachMarkAsReadListeners();
+}
+
+/**
+ * Dodaje obsługę kliknięcia przycisku "Oznacz jako przeczytane".
+ */
+function attachMarkAsReadListeners() {
+    document.querySelectorAll('.mark-as-read').forEach(button => {
+        button.addEventListener('click', function () {
+            markAsRead(this.dataset.id);
         });
+    });
+}
 
-        // Add event listeners to mark-as-read buttons
-        document.querySelectorAll('.mark-as-read').forEach(button => {
-            button.addEventListener('click', function() {
-                markAsRead(this.dataset.id);
-            });
-        });
-    }
-
-    // Mark a notification as read
-    function markAsRead(notificationId) {
-        fetch(`/notifications/${notificationId}/read`, {
+/**
+ * Oznacza powiadomienie jako przeczytane.
+ */
+async function markAsRead(notificationId) {
+    try {
+        const response = await fetch(`/notifications/${notificationId}/read`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + getAuthToken()
             }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                fetchNotifications();
-            } else {
-                console.error('Error marking notification as read:', data.error);
-            }
-        })
-        .catch(error => console.error('Error marking notification as read:', error));
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            updateNotificationStatus(notificationId);
+        } else {
+            console.error('Błąd oznaczania powiadomienia jako przeczytanego:', data.error);
+        }
+    } catch (error) {
+        console.error('Błąd oznaczania powiadomienia jako przeczytanego:', error);
     }
-});
+}
+
+/**
+ * Aktualizuje status powiadomienia bez ponownego ładowania wszystkich powiadomień.
+ */
+function updateNotificationStatus(notificationId) {
+    const notificationElement = document.querySelector(`.mark-as-read[data-id="${notificationId}"]`);
+    if (notificationElement) {
+        notificationElement.closest('.notification').classList.add('read');
+        notificationElement.remove();
+    }
+}
+
+/**
+ * Wyświetla informację, gdy brak powiadomień.
+ */
+function displayNoNotificationsMessage() {
+    const notificationsContainer = document.getElementById('notifications-container');
+    if (!notificationsContainer) return;
+
+    notificationsContainer.innerHTML = `<p class="text-muted">Brak nowych powiadomień.</p>`;
+}
+
+/**
+ * Pobiera token autoryzacyjny użytkownika.
+ */
+function getAuthToken() {
+    return localStorage.getItem('auth_token') || '';
+}

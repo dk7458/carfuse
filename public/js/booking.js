@@ -1,37 +1,43 @@
 import ajax from './ajax';
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const pickupDateInput = document.getElementById('pickup-date');
     const bookingForm = document.getElementById('booking-form');
+    const errorContainer = document.getElementById('error-container');
+    const loadingIndicator = document.getElementById('loading-indicator');
 
-    pickupDateInput.addEventListener('change', fetchAvailableVehicles);
-    bookingForm.addEventListener('submit', submitBookingRequest);
+    if (pickupDateInput) pickupDateInput.addEventListener('change', fetchAvailableVehicles);
+    if (bookingForm) bookingForm.addEventListener('submit', submitBookingRequest);
 
-    // Fetch available vehicles when users select a pickup date
-    function fetchAvailableVehicles() {
-        const pickupDate = pickupDateInput.value;
+    /**
+     * Pobiera dostępne pojazdy po wybraniu daty odbioru.
+     */
+    async function fetchAvailableVehicles() {
+        const pickupDate = pickupDateInput.value.trim();
         if (!pickupDate) return;
 
         showLoadingIndicator();
 
-        fetch(`/vehicles/available?pickup_date=${pickupDate}`)
-            .then(response => response.json())
-            .then(data => {
-                hideLoadingIndicator();
-                if (data.vehicles && data.vehicles.length > 0) {
-                    displayAvailableVehicles(data.vehicles);
-                } else {
-                    showError('No vehicles available for the selected date.');
-                }
-            })
-            .catch(error => {
-                hideLoadingIndicator();
-                console.error('Error fetching available vehicles:', error);
-                showError('Error fetching available vehicles.');
-            });
+        try {
+            const response = await fetch(`/vehicles/available?pickup_date=${pickupDate}`);
+            const data = await response.json();
+            hideLoadingIndicator();
+
+            if (data.vehicles && data.vehicles.length > 0) {
+                displayAvailableVehicles(data.vehicles);
+            } else {
+                showError('Brak dostępnych pojazdów na wybrany termin.');
+            }
+        } catch (error) {
+            hideLoadingIndicator();
+            console.error('Błąd pobierania dostępnych pojazdów:', error);
+            showError('Nie udało się pobrać dostępnych pojazdów.');
+        }
     }
 
-    // Display available vehicles on the UI
+    /**
+     * Wyświetla dostępne pojazdy w interfejsie użytkownika.
+     */
     function displayAvailableVehicles(vehicles) {
         const vehiclesContainer = document.getElementById('vehicles-container');
         vehiclesContainer.innerHTML = '';
@@ -47,96 +53,109 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Function to handle real-time vehicle availability updates
-    function updateVehicleAvailability() {
-        // Ensure real-time updates are handled properly
-        // Example: Fetch availability from server and update UI
-    }
-
-    // Validate pickup & drop-off locations before submission
+    /**
+     * Sprawdza poprawność lokalizacji odbioru i zwrotu.
+     */
     function validateLocations() {
-        const pickupLocation = document.getElementById('pickup-location').value;
-        const dropoffLocation = document.getElementById('dropoff-location').value;
+        const pickupLocation = document.getElementById('pickup-location').value.trim();
+        const dropoffLocation = document.getElementById('dropoff-location').value.trim();
 
         if (!pickupLocation || !dropoffLocation) {
-            showError('Pickup and drop-off locations are required.');
+            showError('Miejsce odbioru i zwrotu są wymagane.');
             return false;
         }
 
         return true;
     }
 
-    // Form validation before submission
+    /**
+     * Waliduje formularz przed wysłaniem.
+     */
     function validateBookingForm() {
         let isValid = true;
-        // Ensure all required fields are validated
-        // Example: Check if all required fields are filled
+        const requiredFields = ['pickup-date', 'return-date', 'pickup-location', 'dropoff-location'];
+
+        requiredFields.forEach(field => {
+            const input = document.getElementById(field);
+            if (!input || !input.value.trim()) {
+                showError(`Pole ${field.replace('-', ' ')} jest wymagane.`);
+                isValid = false;
+            }
+        });
+
         return isValid;
     }
 
-    // Submit booking requests via AJAX to /booking/create API
-    function submitBookingRequest(event) {
+    /**
+     * Obsługuje przesyłanie formularza rezerwacji.
+     */
+    async function submitBookingRequest(event) {
         event.preventDefault();
+        clearErrors();
 
-        if (!validateLocations()) return;
+        if (!validateLocations() || !validateBookingForm()) return;
 
         const formData = new FormData(bookingForm);
 
         showLoadingIndicator();
 
-        fetch('/booking/create', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            hideLoadingIndicator();
-            if (data.success) {
-                // Handle successful booking
-                alert('Booking successful!');
-            } else {
-                showError(data.error || 'Error creating booking.');
-            }
-        })
-        .catch(error => {
-            hideLoadingIndicator();
-            console.error('Error creating booking:', error);
-            showError('Error creating booking.');
-        });
-    }
-
-    // Example usage in booking.js
-    async function createBooking(bookingDetails) {
         try {
-            const response = await ajax.post('/bookings', bookingDetails);
-            // ...handle successful booking...
+            const response = await fetch('/booking/create', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            hideLoadingIndicator();
+
+            if (data.success) {
+                alert('Rezerwacja zakończona sukcesem!');
+                window.location.href = "/bookings/view";
+            } else {
+                showError(data.error || 'Wystąpił problem podczas tworzenia rezerwacji.');
+            }
         } catch (error) {
-            // ...handle booking error...
+            hideLoadingIndicator();
+            console.error('Błąd tworzenia rezerwacji:', error);
+            showError('Nie udało się utworzyć rezerwacji.');
         }
     }
 
-    // Show loading indicator
+    /**
+     * Pokazuje wskaźnik ładowania.
+     */
     function showLoadingIndicator() {
-        const loadingIndicator = document.getElementById('loading-indicator');
-        loadingIndicator.style.display = 'block';
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'block';
+        }
     }
 
-    // Hide loading indicator
+    /**
+     * Ukrywa wskaźnik ładowania.
+     */
     function hideLoadingIndicator() {
-        const loadingIndicator = document.getElementById('loading-indicator');
-        loadingIndicator.style.display = 'none';
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
     }
 
-    // Show error messages
+    /**
+     * Wyświetla komunikat o błędzie.
+     */
     function showError(message) {
-        const errorContainer = document.getElementById('error-container');
-        errorContainer.innerText = message;
-        errorContainer.style.display = 'block';
+        if (errorContainer) {
+            errorContainer.innerText = message;
+            errorContainer.style.display = 'block';
+        }
     }
 
-    // Display error messages correctly
-    function displayErrorMessage(message) {
-        // Ensure error messages are shown to the user
-        // Example: Update error message element with the provided message
+    /**
+     * Czyści komunikaty o błędach.
+     */
+    function clearErrors() {
+        if (errorContainer) {
+            errorContainer.innerText = '';
+            errorContainer.style.display = 'none';
+        }
     }
 });
