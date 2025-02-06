@@ -19,8 +19,10 @@ use AuditManager\Middleware\AuditTrailMiddleware;
 use App\Services\EncryptionService;
 
 // ✅ Load Dependencies
+
 require_once __DIR__ . '/vendor/autoload.php';
 $container = require __DIR__ . '/config/dependencies.php';
+define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html'); // Set absolute path
 
 // ✅ Retrieve Services from Container
 $pdo = $container->get(PDO::class);
