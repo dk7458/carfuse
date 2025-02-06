@@ -61,7 +61,7 @@ try {
     $capsule->setAsGlobal();
     $capsule->bootEloquent();
 
-    echo "✅ Eloquent ORM Initialized Successfully.\n";
+    //echo "✅ Eloquent ORM Initialized Successfully.\n";
 } catch (Exception $e) {
     die("❌ Eloquent initialization failed: " . $e->getMessage() . "\n");
 }
@@ -80,7 +80,7 @@ try {
     $streamHandler = new StreamHandler($logFilePath, Logger::DEBUG);
     $streamHandler->setFormatter(new LineFormatter(null, null, true, true));
     $logger->pushHandler($streamHandler);
-    echo "✅ Logger Initialized Successfully.\n";
+    //echo "✅ Logger Initialized Successfully.\n";
 } catch (Exception $e) {
     die("❌ Logger initialization failed: " . $e->getMessage() . "\n");
 }
@@ -119,7 +119,7 @@ if (!empty($missingDependencies)) {
 }
 
 // ✅ Output Confirmation
-echo "✅ Bootstrap process completed successfully.\n";
+//echo "✅ Bootstrap process completed successfully.\n";
 
 // ✅ Return Configurations for Application Use
 return [
