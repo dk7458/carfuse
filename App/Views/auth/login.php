@@ -42,7 +42,7 @@ if (isset($_SESSION['user_id'])) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 
     <!-- ✅ Custom Authentication CSS -->
-    <link rel="stylesheet" href="/public/css/auth.css">
+    <link rel="stylesheet" href="/css/auth.css">
 </head>
 <body class="d-flex justify-content-center align-items-center vh-100 bg-light">
 

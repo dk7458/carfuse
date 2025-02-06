@@ -1,3 +1,4 @@
+<?php
 /*
 |--------------------------------------------------------------------------
 | Modale - Okna Modalne
@@ -6,6 +7,7 @@
 |
 | Ścieżka: App/Views/layouts/modals.php
 */
+?>
 
 <div id="globalModal" class="modal">
     <div class="modal-content">

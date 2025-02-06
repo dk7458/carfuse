@@ -1,3 +1,4 @@
+<?php
 /*
 |--------------------------------------------------------------------------
 | Alerts - Globalne Powiadomienia
@@ -6,5 +7,6 @@
 |
 | Ścieżka: App/Views/layouts/alerts.php
 */
+?>
 
 <div id="alert-container"></div>

@@ -1,3 +1,11 @@
+<?php
+session_start();
+if (!isset($_SESSION['admin_id'])) {
+    header('Location: login.php');
+    exit();
+}
+?>
+
 /*
 |--------------------------------------------------------------------------
 | Panel Zarządzania Użytkownikami
@@ -165,3 +173,19 @@ document.addEventListener("DOMContentLoaded", function() {
     fetchUsers();
 });
 </script>
+
+<?php
+// Improved AJAX for fetching users
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'fetch_users') {
+    // Fetch users from the database
+    // ...existing code...
+    $users = []; // Assume this array is populated with user data from the database
+
+    foreach ($users as &$user) {
+        $user['role'] = $user['is_admin'] ? 'admin' : 'user';
+    }
+
+    echo json_encode($users);
+    exit();
+}
+?>

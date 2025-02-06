@@ -1,3 +1,11 @@
+<?php
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: /login.php");
+    exit();
+}
+?>
+
 /*
 |--------------------------------------------------------------------------
 | Panel Użytkownika
@@ -59,6 +67,7 @@
     <ul id="notificationList" class="list-group">
         <!-- Powiadomienia ładowane dynamicznie -->
     </ul>
+    <div id="noNotificationsMessage" class="alert alert-warning mt-3" style="display:none;">Brak nowych powiadomień.</div>
 </div>
 
 <script>
@@ -72,13 +81,15 @@ document.addEventListener("DOMContentLoaded", function() {
                 document.getElementById("totalDocuments").textContent = data.totalDocuments || 0;
 
                 const notificationList = document.getElementById("notificationList");
+                const noNotificationsMessage = document.getElementById("noNotificationsMessage");
                 notificationList.innerHTML = "";
                 if (data.notifications.length > 0) {
                     data.notifications.forEach(notification => {
                         notificationList.innerHTML += `<li class="list-group-item">${notification.message}</li>`;
                     });
+                    noNotificationsMessage.style.display = "none";
                 } else {
-                    notificationList.innerHTML = `<li class="list-group-item text-muted">Brak nowych powiadomień</li>`;
+                    noNotificationsMessage.style.display = "block";
                 }
             })
             .catch(error => console.error("Błąd ładowania danych użytkownika:", error));

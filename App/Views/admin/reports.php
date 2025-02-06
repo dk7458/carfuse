@@ -1,3 +1,11 @@
+<?php
+session_start();
+if (!isset($_SESSION['admin_id'])) {
+    header('Location: login.php');
+    exit();
+}
+?>
+
 /*
 |--------------------------------------------------------------------------
 | Raporty Administratora
@@ -138,3 +146,19 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<?php
+// Date range validation
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['start_date'], $_POST['end_date'])) {
+    $start_date = $_POST['start_date'];
+    $end_date = $_POST['end_date'];
+
+    if (strtotime($start_date) > strtotime($end_date)) {
+        echo 'Invalid date range';
+        exit();
+    }
+
+    // Export reports logic (PDF, CSV)
+    // ...existing code...
+}
+?>

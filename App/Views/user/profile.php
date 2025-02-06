@@ -1,3 +1,11 @@
+<?php
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: /login.php");
+    exit();
+}
+?>
+
 /*
 |--------------------------------------------------------------------------
 | Edycja Profilu Użytkownika
@@ -41,6 +49,7 @@
                         </div>
                         <button type="submit" class="btn btn-primary w-100">Zapisz zmiany</button>
                     </form>
+                    <div id="profileResponseMessage" class="alert mt-3" style="display:none;"></div>
                 </div>
             </div>
         </div>
@@ -66,6 +75,7 @@
                         </div>
                         <button type="submit" class="btn btn-danger w-100">Zmień hasło</button>
                     </form>
+                    <div id="passwordResponseMessage" class="alert mt-3" style="display:none;"></div>
                 </div>
             </div>
         </div>
@@ -84,6 +94,7 @@
                         <button type="submit" class="btn btn-success">Prześlij nowe zdjęcie</button>
                         <button type="button" class="btn btn-danger" onclick="deleteAvatar()">Usuń zdjęcie</button>
                     </form>
+                    <div id="avatarResponseMessage" class="alert mt-3" style="display:none;"></div>
                 </div>
             </div>
         </div>
@@ -95,6 +106,9 @@ document.addEventListener("DOMContentLoaded", function() {
     const profileForm = document.getElementById("profileForm");
     const passwordForm = document.getElementById("passwordForm");
     const avatarForm = document.getElementById("avatarForm");
+    const profileResponseMessage = document.getElementById("profileResponseMessage");
+    const passwordResponseMessage = document.getElementById("passwordResponseMessage");
+    const avatarResponseMessage = document.getElementById("avatarResponseMessage");
 
     profileForm.addEventListener("submit", function(e) {
         e.preventDefault();
@@ -118,9 +132,21 @@ document.addEventListener("DOMContentLoaded", function() {
         })
         .then(response => response.json())
         .then(data => {
-            alert(data.success ? "Dane zaktualizowane!" : "Błąd: " + data.error);
+            profileResponseMessage.style.display = "block";
+            if (data.success) {
+                profileResponseMessage.className = "alert alert-success";
+                profileResponseMessage.textContent = "Dane zaktualizowane!";
+            } else {
+                profileResponseMessage.className = "alert alert-danger";
+                profileResponseMessage.textContent = "Błąd: " + data.error;
+            }
         })
-        .catch(error => console.error("Błąd aktualizacji profilu:", error));
+        .catch(error => {
+            profileResponseMessage.style.display = "block";
+            profileResponseMessage.className = "alert alert-danger";
+            profileResponseMessage.textContent = "Błąd połączenia z serwerem.";
+            console.error("Błąd aktualizacji profilu:", error);
+        });
     }
 
     function updatePassword(formData) {
@@ -130,9 +156,21 @@ document.addEventListener("DOMContentLoaded", function() {
         })
         .then(response => response.json())
         .then(data => {
-            alert(data.success ? "Hasło zmienione!" : "Błąd: " + data.error);
+            passwordResponseMessage.style.display = "block";
+            if (data.success) {
+                passwordResponseMessage.className = "alert alert-success";
+                passwordResponseMessage.textContent = "Hasło zmienione!";
+            } else {
+                passwordResponseMessage.className = "alert alert-danger";
+                passwordResponseMessage.textContent = "Błąd: " + data.error;
+            }
         })
-        .catch(error => console.error("Błąd zmiany hasła:", error));
+        .catch(error => {
+            passwordResponseMessage.style.display = "block";
+            passwordResponseMessage.className = "alert alert-danger";
+            passwordResponseMessage.textContent = "Błąd połączenia z serwerem.";
+            console.error("Błąd zmiany hasła:", error);
+        });
     }
 
     function updateAvatar(formData) {
@@ -142,14 +180,22 @@ document.addEventListener("DOMContentLoaded", function() {
         })
         .then(response => response.json())
         .then(data => {
+            avatarResponseMessage.style.display = "block";
             if (data.success) {
-                alert("Zdjęcie profilowe zaktualizowane!");
+                avatarResponseMessage.className = "alert alert-success";
+                avatarResponseMessage.textContent = "Zdjęcie profilowe zaktualizowane!";
                 location.reload();
             } else {
-                alert("Błąd: " + data.error);
+                avatarResponseMessage.className = "alert alert-danger";
+                avatarResponseMessage.textContent = "Błąd: " + data.error;
             }
         })
-        .catch(error => console.error("Błąd aktualizacji awatara:", error));
+        .catch(error => {
+            avatarResponseMessage.style.display = "block";
+            avatarResponseMessage.className = "alert alert-danger";
+            avatarResponseMessage.textContent = "Błąd połączenia z serwerem.";
+            console.error("Błąd aktualizacji awatara:", error);
+        });
     }
 
     function deleteAvatar() {

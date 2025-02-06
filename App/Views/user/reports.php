@@ -1,3 +1,11 @@
+<?php
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: /login.php");
+    exit();
+}
+?>
+
 /*
 |--------------------------------------------------------------------------
 | Raporty Użytkownika
@@ -67,6 +75,7 @@
                     </form>
 
                     <div id="responseMessage" class="alert mt-3" style="display:none;"></div>
+                    <div id="noResultsMessage" class="alert alert-warning mt-3" style="display:none;">Brak wyników dla wybranych kryteriów.</div>
                 </div>
             </div>
         </div>
@@ -82,6 +91,7 @@
 document.addEventListener("DOMContentLoaded", function() {
     const reportForm = document.getElementById("reportForm");
     const responseMessage = document.getElementById("responseMessage");
+    const noResultsMessage = document.getElementById("noResultsMessage");
 
     reportForm.addEventListener("submit", function(e) {
         e.preventDefault();
@@ -102,9 +112,14 @@ document.addEventListener("DOMContentLoaded", function() {
                 responseMessage.className = "alert alert-success";
                 responseMessage.textContent = "Raport wygenerowany pomyślnie! Pobierz go tutaj: " + data.download_link;
                 renderChart(data.chartData);
+                noResultsMessage.style.display = "none";
+            } else if (data.noResults) {
+                noResultsMessage.style.display = "block";
+                responseMessage.style.display = "none";
             } else {
                 responseMessage.className = "alert alert-danger";
                 responseMessage.textContent = "Błąd: " + data.error;
+                noResultsMessage.style.display = "none";
             }
         })
         .catch(error => {
@@ -112,6 +127,7 @@ document.addEventListener("DOMContentLoaded", function() {
             responseMessage.className = "alert alert-danger";
             responseMessage.textContent = "Błąd połączenia z serwerem.";
             console.error("Błąd generowania raportu:", error);
+            noResultsMessage.style.display = "none";
         });
     }
 

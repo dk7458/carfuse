@@ -1,3 +1,4 @@
+<?php
 /*
 |--------------------------------------------------------------------------
 | Navbar - Górna Nawigacja Dashboardu
@@ -7,13 +8,14 @@
 |
 | Ścieżka: App/Views/layouts/navbar.php
 */
+?>
 
 <nav class="navbar">
     <div class="container">
         <a href="/dashboard" class="logo">🚗 CarFuse</a>
         <ul class="nav-links">
-            <li><a href="#user/profile" class="dashboard-link">👤 Mój Profil</a></li>
-            <li><a href="#user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
+            <li><a href="/user/profile" class="dashboard-link">👤 Mój Profil</a></li>
+            <li><a href="/user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
             <li><a href="/logout">🚪 Wyloguj</a></li>
         </ul>
     </div>
@@ -24,8 +26,8 @@
         document.querySelectorAll(".dashboard-link").forEach(link => {
             link.addEventListener("click", function(e) {
                 e.preventDefault();
-                let targetView = this.getAttribute("href").substring(1);
-                fetch(`/App/Views/${targetView}.php`).then(response => response.text()).then(data => {
+                let targetView = this.getAttribute("href");
+                fetch(targetView).then(response => response.text()).then(data => {
                     document.getElementById("dashboard-view").innerHTML = data;
                 });
             });

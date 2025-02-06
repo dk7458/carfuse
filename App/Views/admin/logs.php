@@ -1,3 +1,10 @@
+<?php
+session_start();
+if (!isset($_SESSION['admin_id'])) {
+    header('Location: login.php');
+    exit();
+}
+
 /*
 |--------------------------------------------------------------------------
 | Logi Systemowe Administratora
@@ -110,7 +117,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                 <td>${log.id}</td>
                                 <td>${log.type}</td>
                                 <td>${log.message}</td>
-                                <td>${log.date}</td>
+                                <td>${log.formatted_date}</td>
                             </tr>
                         `;
                     });
@@ -123,3 +130,12 @@ document.addEventListener("DOMContentLoaded", function() {
     fetchLogs();
 });
 </script>
+
+<?php
+// Fetch and display logs
+$logs = []; // Assume this array is populated with log data from the database
+
+foreach ($logs as &$log) {
+    $log['formatted_date'] = date('Y-m-d H:i:s', strtotime($log['date']));
+}
+?>
