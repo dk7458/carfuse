@@ -1,6 +1,6 @@
 RewriteEngine On
 
-# Ensure PHP files are processed correctly
+# Ensure PHP files are executed
 AddHandler application/x-httpd-php .php
 
 # Allow direct access to static files (CSS, JS, images)

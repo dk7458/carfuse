@@ -14,6 +14,7 @@
 | - JavaScript (dynamiczna walidacja formularza)
 */
 
+header("Content-Type: text/html; charset=UTF-8");
 
 require_once BASE_PATH . '/bootstrap.php'; // Ensure the bootstrap file is included
 require_once BASE_PATH . '/config/routes.php'; // Load FastRoute routes
