@@ -7,7 +7,6 @@ require_once __DIR__ . '/../vendor/autoload.php';
 header("Content-Type: text/html; charset=UTF-8");
 
 // Set response headers
-header('Content-Type: application/json');
 
 // Load the router
 $dispatcher = require __DIR__ . '/../config/routes.php';
