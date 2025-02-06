@@ -52,9 +52,6 @@ class Ajax {
     }
 }
 
-// Zapewnia globalną dostępność
-window.ajax = new Ajax();
-
 document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
