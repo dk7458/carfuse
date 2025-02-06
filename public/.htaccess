@@ -1,14 +1,14 @@
 RewriteEngine On
 
-# Blokowanie dostępu do plików konfiguracyjnych i logów
+# Block access to sensitive files
 <FilesMatch "(^\.|config\.php|database\.php|encryption\.php|logs|\.env)">
     Require all denied
 </FilesMatch>
 
-# Zezwolenie na bezpośredni dostęp do istniejących plików i katalogów
+# Allow direct access to existing files and directories
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Przekierowanie wszystkich innych zapytań do index.php
-RewriteRule ^ index.php [QSA,L]
+# Redirect all requests to landing.php instead of index.php
+RewriteRule ^ landing.php [QSA,L]

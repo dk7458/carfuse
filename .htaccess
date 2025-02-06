@@ -1,8 +1,12 @@
 RewriteEngine On
 
-# Redirect all requests to /public unless they're already there
-RewriteCond %{REQUEST_URI} !^/public/
-RewriteRule ^(.*)$ /public/$1 [L]
+# Allow direct access to files and directories
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Redirect all non-existing requests to landing.php
+RewriteRule ^ landing.php [QSA,L]
 
 # Enable Gzip Compression
 <IfModule mod_deflate.c>
