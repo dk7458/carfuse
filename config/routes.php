@@ -21,8 +21,14 @@ return simpleDispatcher(function (RouteCollector $router) {
         echo 'Welcome to Carfuse!';
     });
 
-    $router->get('/api/statistics', [App\Controllers\DashboardController::class, 'fetchStatistics']);
-    $router->get('/api/notifications', [App\Controllers\NotificationController::class, 'getNotifications']);
+return simpleDispatcher(function (RouteCollector $router) {
+    $router->get('/api/statistics', [DashboardController::class, 'fetchStatistics']);
+    $router->get('/api/notifications', [NotificationController::class, 'getNotifications']);
+    $router->get('/api/bookings', [DashboardController::class, 'getUserBookings']);
+    $router->get('/api/bookings/{id}', [BookingController::class, 'viewBooking']);
+});
+
+
 
     // Authentication Views
     $router->get('/login', [AuthController::class, 'loginView']);
