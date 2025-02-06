@@ -20,6 +20,36 @@
 | - HTML, CSS (interfejs)
 */
 
+<?php
+session_start();
+if (!isset($_SESSION['admin_id'])) {
+    header('Location: login.php');
+    exit();
+}
+
+// Improved form validation
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $errors = [];
+
+    if (empty($_POST['setting_name'])) {
+        $errors[] = 'Setting name is required';
+    }
+
+    if (empty($_POST['setting_value'])) {
+        $errors[] = 'Setting value is required';
+    }
+
+    if (empty($errors)) {
+        // Save settings logic
+        // ...existing code...
+    } else {
+        foreach ($errors as $error) {
+            echo "<p>$error</p>";
+        }
+    }
+}
+?>
+
 <h1 class="text-center">Ustawienia Systemowe</h1>
 
 <div class="admin-container">

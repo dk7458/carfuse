@@ -12,7 +12,6 @@ use App\Services\ReportService;
 use App\Services\RevenueService;
 use App\Services\EncryptionService;
 use App\Services\Security\KeyManager;
-use App\Controllers\UserController;
 use App\Queues\NotificationQueue;
 use App\Queues\DocumentQueue;
 use DocumentManager\Services\DocumentService;
@@ -28,33 +27,15 @@ use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
 
-try {
-    $pdo = new PDO(
-        sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
-            $config['database']['app_database']['host'],
-            $config['database']['app_database']['database']
-        ),
-        $config['database']['app_database']['username'],
-        $config['database']['app_database']['password'],
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
-    );
-} catch (PDOException $e) {
-    throw new RuntimeException("❌ Database connection failed: " . $e->getMessage());
-}
-
-
-// ✅ Load all configuration files dynamically
+// ✅ Load configuration dynamically
 $configDirectory = __DIR__;
 $config = [];
 
 foreach (glob("{$configDirectory}/*.php") as $filePath) {
     $fileName = basename($filePath, '.php');
-
-    if ($fileName === 'dependencies') {
-        continue;
+    if ($fileName !== 'dependencies') {
+        $config[$fileName] = require $filePath;
     }
-
-    $config[$fileName] = require $filePath;
 }
 
 // ✅ Ensure necessary directories exist
@@ -68,19 +49,29 @@ foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $director
 }
 
 // ✅ Initialize PDO Instances
-$pdo = new PDO(
-    sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', $config['database']['app_database']['host'], $config['database']['app_database']['database']),
-    $config['database']['app_database']['username'],
-    $config['database']['app_database']['password'],
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
-);
+try {
+    $pdo = new PDO(
+        sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
+            $config['database']['app_database']['host'],
+            $config['database']['app_database']['database']
+        ),
+        $config['database']['app_database']['username'],
+        $config['database']['app_database']['password'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+    );
 
-$securePdo = new PDO(
-    sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', $config['database']['secure_database']['host'], $config['database']['secure_database']['database']),
-    $config['database']['secure_database']['username'],
-    $config['database']['secure_database']['password'],
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
-);
+    $securePdo = new PDO(
+        sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
+            $config['database']['secure_database']['host'],
+            $config['database']['secure_database']['database']
+        ),
+        $config['database']['secure_database']['username'],
+        $config['database']['secure_database']['password'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+    );
+} catch (PDOException $e) {
+    throw new RuntimeException("❌ Database connection failed: " . $e->getMessage());
+}
 
 // ✅ Initialize Logger
 $logger = new Logger('carfuse');
@@ -119,10 +110,10 @@ return [
     FileStorage::class => $fileStorage,
 
     DocumentService::class => new DocumentService(
-        $pdo, // ✅ Ensure this is a valid PDO instance
-        new AuditService($securePdo),
-        new FileStorage($fileStorageConfig, $logger, new EncryptionService($config['encryption']['encryption_key'])),
-        new EncryptionService($config['encryption']['encryption_key']),
+        $pdo,
+        $auditService,
+        $fileStorage,
+        $encryptionService,
         new TemplateService($templateDirectory),
         $logger
     ),
@@ -173,16 +164,16 @@ return [
 
     SignatureService::class => new SignatureService(
         new Client(),
-        $config['signature'], // ✅ Pass the full array, not just a string
-        new FileStorage($fileStorageConfig, $logger, new EncryptionService($config['encryption']['encryption_key'])),
-        new EncryptionService($config['encryption']['encryption_key']),
+        $config['signature'],
+        $fileStorage,
+        $encryptionService,
         $logger
     ),
 
     TemplateService::class => new TemplateService($templateDirectory),
 
     KeyManager::class => new KeyManager(
-        $config['keymanager']['keys'], // ✅ Pass the encryption keys array
+        $config['keymanager']['keys'],
         $logger
     ),
 ];
