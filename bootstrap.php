@@ -17,6 +17,7 @@ use Psr\Log\LoggerInterface;
 use AuditManager\Services\AuditService;
 use AuditManager\Middleware\AuditTrailMiddleware;
 use App\Services\EncryptionService;
+<<<<<<< HEAD
 
 // ✅ Load Dependencies
 
@@ -24,6 +25,13 @@ require_once __DIR__ . '/vendor/autoload.php';
 $container = require __DIR__ . '/config/dependencies.php';
 define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html'); // Set absolute path
 
+=======
+
+// ✅ Load Dependencies
+require_once __DIR__ . '/vendor/autoload.php';
+$container = require __DIR__ . '/config/dependencies.php';
+
+>>>>>>> 61b8fb6 (j)
 // ✅ Retrieve Services from Container
 $pdo = $container->get(PDO::class);
 $logger = $container->get(LoggerInterface::class);
@@ -119,7 +127,11 @@ if (!empty($missingDependencies)) {
 }
 
 // ✅ Output Confirmation
+<<<<<<< HEAD
 //echo "✅ Bootstrap process completed successfully.\n";
+=======
+echo "✅ Bootstrap process completed successfully.\n";
+>>>>>>> 61b8fb6 (j)
 
 // ✅ Return Configurations for Application Use
 return [
