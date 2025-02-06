@@ -24,7 +24,6 @@ require_once BASE_PATH . '/bootstrap.php'; // Ensure the bootstrap file is inclu
 require_once BASE_PATH . '/config/routes.php'; // Load FastRoute routes
 require_once BASE_PATH . '/App/Helpers/SecurityHelper.php'; // Load security helpers
 require_once BASE_PATH . '/App/Services/NotificationService.php'; // Load notification services
-require_once BASE_PATH . '/App/Services/TokenService.php'; // Load token services
 require_once BASE_PATH . '/App/Services/Validator.php'; // Load validation services
 
 $httpMethod = $_SERVER['REQUEST_METHOD'];
