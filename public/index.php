@@ -3,13 +3,13 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap.php'; // Ensure the bootstrap file is included
 
-require_once BASE_PATH . '/vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 // Set response headers
 header('Content-Type: application/json');
 
 // Load the router
-$dispatcher = require BASE_PATH . '/config/routes.php';
+$dispatcher = require __DIR__ . '/../config/routes.php';
 
 // Normalize request URI
 $httpMethod = $_SERVER['REQUEST_METHOD'];
@@ -18,7 +18,7 @@ $uri = rtrim($uri, '/');
 
 // Redirect root URL to landing page
 if ($uri === '' || $uri === '/' || $uri === '/index.php') {
-    require BASE_PATH . '/App/Views/landing.php';
+    require __DIR__ . '/../App/Views/landing.php';
     exit;
 }
 
