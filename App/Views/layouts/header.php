@@ -60,7 +60,7 @@ $greetings = [
 $greeting = $isLoggedIn ? $greetings[array_rand($greetings)] : "Witaj w CarFuse! Wynajmij auto i ruszaj w drogę!";
 ?>
 <script type="module" src="/js/main.js"></script>
-<link rel="stylesheet" href="main.css">
+<link rel="stylesheet" href="/main.css"> <!-- Ensure correct CSS path -->
 
 
 <header>

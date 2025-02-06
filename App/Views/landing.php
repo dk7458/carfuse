@@ -21,8 +21,11 @@
 define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html'); // Set absolute path
 
 require_once BASE_PATH . '/bootstrap.php'; // Ensure the bootstrap file is included
-
-$dispatcher = require BASE_PATH . '/config/routes.php'; // Load FastRoute routes
+require_once BASE_PATH . '/config/routes.php'; // Load FastRoute routes
+require_once BASE_PATH . '/App/Helpers/SecurityHelper.php'; // Load security helpers
+require_once BASE_PATH . '/App/Services/NotificationService.php'; // Load notification services
+require_once BASE_PATH . '/App/Services/TokenService.php'; // Load token services
+require_once BASE_PATH . '/App/Services/Validator.php'; // Load validation services
 
 $httpMethod = $_SERVER['REQUEST_METHOD'];
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -34,12 +37,12 @@ switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::NOT_FOUND:
         http_response_code(404);
         echo json_encode(["error" => "404 Not Found"]);
-        break;
+        exit;
 
     case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
         http_response_code(405);
         echo json_encode(["error" => "405 Method Not Allowed"]);
-        break;
+        exit;
 
     case FastRoute\Dispatcher::FOUND:
         [$controller, $method] = $routeInfo[1];
@@ -48,16 +51,19 @@ switch ($routeInfo[0]) {
         if (!class_exists($controller) || !method_exists($controller, $method)) {
             http_response_code(500);
             echo json_encode(["error" => "Invalid route handler"]);
-            break;
+            exit;
         }
 
         $controllerInstance = new $controller();
         call_user_func_array([$controllerInstance, $method], $vars);
-        break;
+        exit;
 }
 
 require_once __DIR__ . '/layouts/header.php';
 ?>
+
+<link rel="stylesheet" href="/css/landing.css">
+<script src="/js/landing.js" defer></script>
 
 <section class="hero">
     <div class="container text-center">
