@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html'); // Set absolute path
-
 require_once BASE_PATH . '/vendor/autoload.php';
 
 // Set response headers
