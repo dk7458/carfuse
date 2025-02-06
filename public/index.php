@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 require_once __DIR__ . '/../bootstrap.php'; // Bootstrap application
@@ -7,61 +6,58 @@ require_once __DIR__ . '/../vendor/autoload.php'; // Load dependencies
 
 header("Content-Type: text/html; charset=UTF-8");
 
-// Initialize router
-$dispatcher = require __DIR__ . '/../config/routes.php';
+?>
 
-// Normalize request URI
-$httpMethod = $_SERVER['REQUEST_METHOD'];
-$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$uri = rtrim($uri, '/');
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarFuse</title>
+    <link rel="stylesheet" href="/public/css/landing.css">
+    <script src="/public/js/landing.js" defer></script>
+</head>
+<body>
 
-// Redirect root URL to landing page
-if ($uri === '' || $uri === '/' || $uri === '/index.php') {
-    require __DIR__ . '/views/landing.php';
-    exit;
-}
+<section class="hero">
+    <div class="container text-center">
+        <h1>🚗 Znajdź idealne auto na swoją podróż</h1>
+        <p>Elastyczny wynajem, najlepsze ceny i wsparcie 24/7.</p>
 
-// Dispatch the request
-$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
+        <form class="search-form" action="/search" method="GET" onsubmit="return validateDates();">
+            <input type="text" name="location" placeholder="Wpisz lokalizację odbioru" required>
+            <input type="date" id="pickup_date" name="pickup_date" required>
+            <input type="date" id="return_date" name="return_date" required>
+            <button type="submit" class="btn btn-primary">Szukaj aut</button>
+        </form>
 
-switch ($routeInfo[0]) {
-    case FastRoute\Dispatcher::NOT_FOUND:
-        http_response_code(404);
-        echo json_encode(["error" => "404 Not Found", "message" => "The requested page does not exist."]);
-        break;
+        <p id="dateError" class="text-danger mt-2" style="display:none;">Data zwrotu nie może być wcześniejsza niż odbioru.</p>
+    </div>
+</section>
 
-    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-        http_response_code(405);
-        echo json_encode(["error" => "405 Method Not Allowed", "message" => "Invalid request method."]);
-        break;
+<section class="features text-center">
+    <h2>Dlaczego warto wybrać CarFuse?</h2>
+    <div class="row justify-content-center">
+        <div class="col-md-3 feature-box">
+            <h4>🚗 Szeroki wybór pojazdów</h4>
+            <p>Wybierz spośród różnych kategorii aut – od ekonomicznych po luksusowe.</p>
+        </div>
+        <div class="col-md-3 feature-box">
+            <h4>💰 Najlepsze ceny</h4>
+            <p>Zawsze konkurencyjne ceny i wyjątkowe promocje dla stałych klientów.</p>
+        </div>
+        <div class="col-md-3 feature-box">
+            <h4>📞 Wsparcie 24/7</h4>
+            <p>Nasz zespół jest dostępny całą dobę, aby pomóc Ci w każdej sytuacji.</p>
+        </div>
+    </div>
+</section>
 
-    case FastRoute\Dispatcher::FOUND:
-        [$controller, $method] = $routeInfo[1];
-        $params = $routeInfo[2];
+<section class="cta text-center">
+    <h2>Zarezerwuj swoje auto już dziś!</h2>
+    <p>Najlepsze oferty dostępne w kilku kliknięciach.</p>
+    <a href="/search" class="btn btn-success btn-lg">Sprawdź dostępność</a>
+</section>
 
-        // Ensure the controller class exists
-        if (!class_exists($controller)) {
-            http_response_code(500);
-            echo json_encode(["error" => "500 Internal Server Error", "message" => "Controller not found: $controller"]);
-            exit;
-        }
-
-        // Instantiate the controller
-        $instance = new $controller();
-
-        // Ensure the method exists in the controller
-        if (!method_exists($instance, $method)) {
-            http_response_code(500);
-            echo json_encode(["error" => "500 Internal Server Error", "message" => "Method not found: $method"]);
-            exit;
-        }
-
-        // Execute the controller method with parameters
-        try {
-            call_user_func_array([$instance, $method], $params);
-        } catch (Throwable $e) {
-            http_response_code(500);
-            echo json_encode(["error" => "500 Internal Server Error", "message" => $e->getMessage()]);
-        }
-        break;
-}
+</body>
+</html>
