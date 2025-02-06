@@ -52,5 +52,5 @@ class Ajax {
     }
 }
 
-const ajax = new Ajax();
-export default ajax;
+// Zapewnia globalną dostępność
+window.ajax = new Ajax();
