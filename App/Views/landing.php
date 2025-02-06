@@ -18,10 +18,12 @@
 | - JavaScript (dynamiczna walidacja formularza)
 */
 
-require_once __DIR__ . '/../config/bootstrap.php';
-require_once __DIR__ . '/../config/routes.php';
-$dispatcher = require __DIR__ . '/../config/bootstrap.php';
-$dispatcher = require __DIR__ . '/../config/routes.php';
+define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html'); // Set absolute path
+
+require_once BASE_PATH . '/config/bootstrap.php'; // Ensure the bootstrap file is included
+
+$dispatcher = require BASE_PATH . '/config/routes.php'; // Load FastRoute routes
+
 $httpMethod = $_SERVER['REQUEST_METHOD'];
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $uri = rtrim($uri, '/');
@@ -53,6 +55,7 @@ switch ($routeInfo[0]) {
         call_user_func_array([$controllerInstance, $method], $vars);
         break;
 }
+
 require_once __DIR__ . '/layouts/header.php';
 ?>
 
