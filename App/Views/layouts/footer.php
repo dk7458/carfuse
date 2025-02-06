@@ -16,7 +16,5 @@
             <p>&copy; <?= date("Y"); ?> CarFuse. Wszelkie prawa zastrzeżone.</p>
         </div>
     </footer>
-
-    <script type="module" src="/public/js/main.min.js"></script>
 </body>
 </html>
