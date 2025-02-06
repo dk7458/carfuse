@@ -26,16 +26,26 @@ require_once BASE_PATH . '/App/Helpers/SecurityHelper.php'; // Load security hel
 require_once BASE_PATH . '/App/Services/NotificationService.php'; // Load notification services
 require_once BASE_PATH . '/App/Services/Validator.php'; // Load validation services
 
+// Debugging output for FastRoute
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+$dispatcher = require BASE_PATH . '/config/routes.php';
+
 $httpMethod = $_SERVER['REQUEST_METHOD'];
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $uri = rtrim($uri, '/');
 
 $routeInfo = $dispatcher->dispatch($httpMethod, $uri);
 
+echo "<pre>Route Debugging:\n";
+print_r($routeInfo);
+echo "\n</pre>";
+
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::NOT_FOUND:
         http_response_code(404);
-        echo json_encode(["error" => "404 Not Found"]);
+        echo json_encode(["error" => "404 Not Found - Route Not Found"]);
         exit;
 
     case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
@@ -49,7 +59,7 @@ switch ($routeInfo[0]) {
 
         if (!class_exists($controller) || !method_exists($controller, $method)) {
             http_response_code(500);
-            echo json_encode(["error" => "Invalid route handler"]);
+            echo json_encode(["error" => "500 Internal Server Error - Invalid Route Handler"]);
             exit;
         }
 
@@ -57,6 +67,7 @@ switch ($routeInfo[0]) {
         call_user_func_array([$controllerInstance, $method], $vars);
         exit;
 }
+
 
 require_once __DIR__ . '/layouts/header.php';
 ?>
