@@ -17,6 +17,13 @@ use Psr\Log\LoggerInterface;
 use AuditManager\Services\AuditService;
 use AuditManager\Middleware\AuditTrailMiddleware;
 use App\Services\EncryptionService;
+$container = require __DIR__ . '/config/dependencies.php';
+
+$pdo = $container->get(PDO::class);
+$logger = $container->get(Psr\Log\LoggerInterface::class);
+$notificationService = $container->get(App\Services\NotificationService::class);
+$tokenService = $container->get(App\Services\Auth\TokenService::class);
+$validator = $container->get(App\Services\Validator::class);
 
 // Load Composer Autoload
 require_once __DIR__ . '/vendor/autoload.php';

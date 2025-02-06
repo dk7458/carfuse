@@ -1,5 +1,6 @@
 <?php
 
+use DI\Container;
 use App\Services\Validator;
 use App\Services\RateLimiter;
 use App\Services\Auth\TokenService;
@@ -26,161 +27,126 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
-use DI\Container;
 
-return function (Container $container) {
-    // ✅ Load configuration dynamically
-    $configDirectory = __DIR__;
-    $config = [];
+// ✅ Initialize Dependency Container
+$container = new Container();
 
-    foreach (glob("{$configDirectory}/*.php") as $filePath) {
-        $fileName = basename($filePath, '.php');
-        if ($fileName !== 'dependencies') {
-            $config[$fileName] = require $filePath;
-        }
+// ✅ Load configuration
+$configDirectory = __DIR__;
+$config = [];
+
+foreach (glob("{$configDirectory}/*.php") as $filePath) {
+    $fileName = basename($filePath, '.php');
+    if ($fileName !== 'dependencies') {
+        $config[$fileName] = require $filePath;
     }
+}
 
-    // ✅ Ensure necessary directories exist
-    $templateDirectory = __DIR__ . '/../storage/templates';
-    $fileStorageConfig = $config['storage'];
+// ✅ Ensure necessary directories exist
+$templateDirectory = __DIR__ . '/../storage/templates';
+$fileStorageConfig = $config['storage'];
 
-    foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $directory) {
-        if (!is_dir($directory)) {
-            mkdir($directory, 0775, true);
-        }
+foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $directory) {
+    if (!is_dir($directory)) {
+        mkdir($directory, 0775, true);
     }
+}
 
-    // ✅ Initialize PDO Instances
-    try {
-        $pdo = new PDO(
-            sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
-                $config['database']['app_database']['host'],
-                $config['database']['app_database']['database']
-            ),
-            $config['database']['app_database']['username'],
-            $config['database']['app_database']['password'],
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
-        );
+// ✅ Initialize PDO Instances
+try {
+    $pdo = new PDO(
+        sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
+            $config['database']['app_database']['host'],
+            $config['database']['app_database']['database']
+        ),
+        $config['database']['app_database']['username'],
+        $config['database']['app_database']['password'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+    );
 
-        $securePdo = new PDO(
-            sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
-                $config['database']['secure_database']['host'],
-                $config['database']['secure_database']['database']
-            ),
-            $config['database']['secure_database']['username'],
-            $config['database']['secure_database']['password'],
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
-        );
-    } catch (PDOException $e) {
-        throw new RuntimeException("❌ Database connection failed: " . $e->getMessage());
-    }
+    $securePdo = new PDO(
+        sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
+            $config['database']['secure_database']['host'],
+            $config['database']['secure_database']['database']
+        ),
+        $config['database']['secure_database']['username'],
+        $config['database']['secure_database']['password'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+    );
+} catch (PDOException $e) {
+    throw new RuntimeException("❌ Database connection failed: " . $e->getMessage());
+}
 
-    // ✅ Initialize Logger
-    $logger = new Logger('carfuse');
-    $logFile = __DIR__ . '/../logs/app.log';
+// ✅ Initialize Logger
+$logger = new Logger('carfuse');
+$logFile = __DIR__ . '/../logs/app.log';
 
-    if (!file_exists(dirname($logFile))) {
-        mkdir(dirname($logFile), 0775, true);
-    }
+if (!file_exists(dirname($logFile))) {
+    mkdir(dirname($logFile), 0775, true);
+}
 
-    $streamHandler = new StreamHandler($logFile, Logger::DEBUG);
-    $formatter = new LineFormatter(null, null, true, true);
-    $streamHandler->setFormatter($formatter);
-    $logger->pushHandler($streamHandler);
+$streamHandler = new StreamHandler($logFile, Logger::DEBUG);
+$formatter = new LineFormatter(null, null, true, true);
+$streamHandler->setFormatter($formatter);
+$logger->pushHandler($streamHandler);
 
-    // ✅ Centralized Services
-    $encryptionService = new EncryptionService($config['encryption']['encryption_key']);
-    $fileStorage = new FileStorage($fileStorageConfig, $logger, $encryptionService);
-    $auditService = new AuditService($securePdo);
+// ✅ Register dependencies in the container
+$container->set(PDO::class, $pdo);
+$container->set('SecurePDO', $securePdo);
+$container->set(LoggerInterface::class, $logger);
 
-    // ✅ Register services
-    $container->set(PDO::class, $pdo);
-    $container->set('SecurePDO', $securePdo);
-    $container->set(LoggerInterface::class, $logger);
+$container->set(DocumentQueue::class, function () use ($fileStorage, $logger) {
+    return new DocumentQueue($fileStorage, __DIR__ . '/../storage/document_queue.json', $logger);
+});
 
-    $container->set(DocumentQueue::class, function () use ($fileStorage, $logger) {
-        return new DocumentQueue($fileStorage, __DIR__ . '/../storage/document_queue.json', $logger);
-    });
+$container->set(Validator::class, fn() => new Validator());
+$container->set(RateLimiter::class, fn() => new RateLimiter($pdo));
+$container->set(AuditService::class, fn() => new AuditService($securePdo));
+$container->set(EncryptionService::class, fn() => new EncryptionService($config['encryption']['encryption_key']));
+$container->set(FileStorage::class, fn() => new FileStorage($fileStorageConfig, $logger, $container->get(EncryptionService::class)));
 
-    $container->set(Validator::class, function () {
-        return new Validator();
-    });
+$container->set(DocumentService::class, function () use ($pdo, $logger, $config, $container) {
+    return new DocumentService(
+        $pdo,
+        $container->get(AuditService::class),
+        $container->get(FileStorage::class),
+        $container->get(EncryptionService::class),
+        new TemplateService(__DIR__ . '/../storage/templates'),
+        $logger
+    );
+});
 
-    $container->set(RateLimiter::class, function () use ($pdo) {
-        return new RateLimiter($pdo);
-    });
+$container->set(TokenService::class, fn() => new TokenService($config['encryption']['jwt_secret'], $config['encryption']['jwt_refresh_secret']));
+$container->set(NotificationService::class, fn() => new NotificationService($pdo, $logger, $config['notifications']));
+$container->set(NotificationQueue::class, fn() => new NotificationQueue($container->get(NotificationService::class), __DIR__ . '/../storage/notification_queue.json', $logger));
+$container->set(UserService::class, fn() => new UserService($securePdo, $logger, $config['encryption']['jwt_secret']));
+$container->set(Payment::class, fn() => new Payment());
 
-    $container->set(AuditService::class, function () use ($auditService) {
-        return $auditService;
-    });
+$container->set(PaymentService::class, function () use ($pdo, $logger, $config) {
+    return new PaymentService($pdo, $logger, new Payment(), $config['payu']['api_key'], $config['payu']['api_secret']);
+});
 
-    $container->set(EncryptionService::class, function () use ($encryptionService) {
-        return $encryptionService;
-    });
+$container->set(PayUService::class, fn() => new PayUService(new Client(), $logger, $config['payu']));
+$container->set(BookingService::class, fn() => new BookingService($pdo, $logger));
+$container->set(MetricsService::class, fn() => new MetricsService($pdo));
+$container->set(ReportService::class, fn() => new ReportService($pdo));
+$container->set(RevenueService::class, fn() => new RevenueService($pdo));
 
-    $container->set(FileStorage::class, function () use ($fileStorage) {
-        return $fileStorage;
-    });
+$container->set(SignatureService::class, function () use ($config, $container) {
+    return new SignatureService(
+        new Client(),
+        $config['signature'],
+        $container->get(FileStorage::class),
+        $container->get(EncryptionService::class),
+        $container->get(LoggerInterface::class)
+    );
+});
 
-    $container->set(DocumentService::class, function () use ($pdo, $auditService, $fileStorage, $encryptionService, $logger, $templateDirectory) {
-        return new DocumentService($pdo, $auditService, $fileStorage, $encryptionService, new TemplateService($templateDirectory), $logger);
-    });
+$container->set(TemplateService::class, fn() => new TemplateService(__DIR__ . '/../storage/templates'));
 
-    $container->set(TokenService::class, function () use ($config) {
-        return new TokenService($config['encryption']['jwt_secret'], $config['encryption']['jwt_refresh_secret']);
-    });
+$container->set(KeyManager::class, function () use ($config, $logger) {
+    return new KeyManager($config['keymanager']['keys'], $logger);
+});
 
-    $container->set(NotificationService::class, function () use ($pdo, $logger, $config) {
-        return new NotificationService($pdo, $logger, $config['notifications']);
-    });
-
-    $container->set(NotificationQueue::class, function () use ($pdo, $logger, $config) {
-        return new NotificationQueue(new NotificationService($pdo, $logger, $config['notifications']), __DIR__ . '/../storage/notification_queue.json', $logger);
-    });
-
-    $container->set(UserService::class, function () use ($securePdo, $logger, $config) {
-        return new UserService($securePdo, $logger, $config['encryption']['jwt_secret']);
-    });
-
-    $container->set(Payment::class, function () {
-        return new Payment();
-    });
-
-    $container->set(PaymentService::class, function () use ($pdo, $logger, $config) {
-        return new PaymentService($pdo, $logger, new Payment(), $config['payu']['api_key'], $config['payu']['api_secret']);
-    });
-
-    $container->set(PayUService::class, function () use ($logger, $config) {
-        return new PayUService(new Client(), $logger, $config['payu']);
-    });
-
-    $container->set(BookingService::class, function () use ($pdo, $logger) {
-        return new BookingService($pdo, $logger);
-    });
-
-    $container->set(MetricsService::class, function () use ($pdo) {
-        return new MetricsService($pdo);
-    });
-
-    $container->set(ReportService::class, function () use ($pdo) {
-        return new ReportService($pdo);
-    });
-
-    $container->set(RevenueService::class, function () use ($pdo) {
-        return new RevenueService($pdo);
-    });
-
-    $container->set(SignatureService::class, function () use ($config, $fileStorage, $encryptionService, $logger) {
-        return new SignatureService(new Client(), $config['signature'], $fileStorage, $encryptionService, $logger);
-    });
-
-    $container->set(TemplateService::class, function () use ($templateDirectory) {
-        return new TemplateService($templateDirectory);
-    });
-
-    $container->set(KeyManager::class, function () use ($config, $logger) {
-        return new KeyManager($config['keymanager']['keys'], $logger);
-    });
-
-    return $container;
-};
+// ✅ Return the DI container
+return $container;
