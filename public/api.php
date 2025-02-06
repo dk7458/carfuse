@@ -5,7 +5,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
-session_start();
+
 
 // Load encryption keys
 $config = require __DIR__ . '/../config/encryption.php';

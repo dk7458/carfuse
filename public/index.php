@@ -3,7 +3,7 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 
 // Ładowanie konfiguracji i autoryzacja
-session_start();
+
 
 // Routing (FastRoute)
 $dispatcher = require __DIR__ . '/../routes/web.php';

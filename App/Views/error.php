@@ -9,7 +9,7 @@
 */
 
 <?php
-session_start();
+
 
 // Pobranie kodu błędu, jeśli nie przekazano, ustaw na 404
 $errorCode = isset($_GET['code']) ? intval($_GET['code']) : 404;

@@ -9,7 +9,7 @@
 | Ścieżka: App/Views/layouts/header.php
 */
 
-session_start();
+
 
 $isLoggedIn = isset($_SESSION['user_id']);
 $isAdmin = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
