@@ -59,7 +59,7 @@ $greetings = [
 // Losowe powitanie przy każdym załadowaniu
 $greeting = $isLoggedIn ? $greetings[array_rand($greetings)] : "Witaj w CarFuse! Wynajmij auto i ruszaj w drogę!";
 ?>
-<script src="/js/main.js"></script>
+<script type="module" src="/js/main.js"></script>
 
 <header>
     <nav class="navbar">
