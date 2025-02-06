@@ -4,7 +4,9 @@
 
 setcookie("PHPSESSID", "", time() - 3600, "/");
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 session_unset();
 session_destroy();
 header("Location: /");

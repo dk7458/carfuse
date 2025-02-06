@@ -19,6 +19,11 @@
 | - HTML, CSS (interfejs)
 */
 
+require_once BASE_PATH . '/App/Helpers/SecurityHelper.php'; // Ensure CSRF functions are loaded
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 if (isset($_SESSION['user_id'])) {
     header("Location: /dashboard");
@@ -30,7 +35,7 @@ if (isset($_SESSION['user_id'])) {
 
 <div class="auth-container">
     <form id="loginForm">
-        <?= csrf_field() ?>
+        <?= csrf_field(); ?>
         <div class="mb-3">
             <label for="email" class="form-label">Adres e-mail</label>
             <input type="email" class="form-control" id="email" name="email" required>
@@ -51,7 +56,11 @@ document.addEventListener("DOMContentLoaded", function() {
 
     loginForm.addEventListener("submit", function(e) {
         e.preventDefault();
-        loginUser(new FormData(loginForm));
+        
+        const formData = new FormData(loginForm);
+        formData.append("csrf_token", document.querySelector('input[name="csrf_token"]').value); // Ensure CSRF token is included
+        
+        loginUser(formData);
     });
 
     function loginUser(formData) {
