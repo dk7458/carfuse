@@ -14,4 +14,7 @@ document.addEventListener("DOMContentLoaded", function() {
         dateError.style.display = "none";
         return true;
     }
+
+    pickupDate.addEventListener("change", validateDates);
+    returnDate.addEventListener("change", validateDates);
 });
