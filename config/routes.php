@@ -15,12 +15,17 @@ use DocumentManager\Controllers\DocumentController;
 use App\Controllers\UserController;
 use App\Controllers\SignatureController;
 
+echo "Routes file loaded successfully!<br>"; // Debugging
+
 return simpleDispatcher(function (RouteCollector $router) {
     // Welcome Page
     $router->get('/', function () {
         echo 'Welcome to Carfuse!';
     });
-
+    $router->get('/test-route', function() {
+        echo json_encode(["message" => "FastRoute is working!"]);
+    });
+    
 return simpleDispatcher(function (RouteCollector $router) {
     $router->get('/api/statistics', [DashboardController::class, 'fetchStatistics']);
     $router->get('/api/notifications', [NotificationController::class, 'getNotifications']);
