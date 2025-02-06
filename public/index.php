@@ -8,7 +8,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 header('Content-Type: application/json');
 
 // Load the router
-$dispatcher = require __DIR__ . '/../routes/web.php';
+$dispatcher = require __DIR__ . '/../config/routes.php';
 
 // Normalize request URI
 $httpMethod = $_SERVER['REQUEST_METHOD'];
