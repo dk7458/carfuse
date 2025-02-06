@@ -20,7 +20,7 @@
 
 define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html'); // Set absolute path
 
-require_once BASE_PATH . '/config/bootstrap.php'; // Ensure the bootstrap file is included
+require_once BASE_PATH . '/bootstrap.php'; // Ensure the bootstrap file is included
 
 $dispatcher = require BASE_PATH . '/config/routes.php'; // Load FastRoute routes
 
