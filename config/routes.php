@@ -12,8 +12,8 @@ use App\Controllers\AdminDashboardController;
 use App\Controllers\ReportController;
 use AuditManager\Controllers\AuditController;
 use DocumentManager\Controllers\DocumentController;
+use DocumentManager\Controllers\SignatureController;
 use App\Controllers\UserController;
-use App\Controllers\SignatureController;
 
 return simpleDispatcher(function (RouteCollector $router) {
     // Welcome Page
@@ -21,13 +21,14 @@ return simpleDispatcher(function (RouteCollector $router) {
         echo 'Welcome to Carfuse!';
     });
 
+    // Test Route
     $router->get('/test-route', function () {
         echo json_encode(["message" => "FastRoute is working!"]);
     });
 
     // API Routes
     $router->get('/api/statistics', [DashboardController::class, 'fetchStatistics']);
-    $router->get('/api/notifications', [NotificationController::class, 'getNotifications']);
+    $router->get('/api/notifications', [NotificationController::class, 'fetchNotifications']);
     $router->get('/api/bookings', [DashboardController::class, 'getUserBookings']);
     $router->get('/api/bookings/{id}', [BookingController::class, 'viewBooking']);
 
@@ -59,6 +60,8 @@ return simpleDispatcher(function (RouteCollector $router) {
 
     // Signature API Routes
     $router->post('/signature/upload', [SignatureController::class, 'uploadSignature']);
+    $router->get('/signature/verify/{userId}/{documentHash}', [SignatureController::class, 'verifySignature']);
+    $router->get('/signature/{userId}', [SignatureController::class, 'getSignature']);
 
     // Dashboard
     $router->get('/dashboard', [DashboardController::class, 'userDashboard']);
@@ -70,8 +73,8 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->post('/bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
 
     // Notifications API Routes
-    $router->get('/notifications', [NotificationController::class, 'getNotifications']);
-    $router->post('/notifications/mark-as-read', [NotificationController::class, 'markAsRead']);
+    $router->get('/notifications', [NotificationController::class, 'getUserNotifications']);
+    $router->post('/notifications/mark-as-read', [NotificationController::class, 'markNotificationAsRead']);
     $router->post('/notifications/delete', [NotificationController::class, 'deleteNotification']);
     $router->post('/notifications/send', [NotificationController::class, 'sendNotification']);
 
@@ -83,17 +86,16 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->get('/admin/dashboard/data', [AdminDashboardController::class, 'getDashboardData']);
 
     // Admin Report Routes
-    $router->get('/admin/reports', [ReportController::class, 'viewAdminReports']);
-    $router->post('/admin/reports/generate', [ReportController::class, 'generateAdminReport']);
+    $router->get('/admin/reports', [ReportController::class, 'index']);
+    $router->post('/admin/reports/generate', [ReportController::class, 'generateReport']);
 
     // User Report Routes
-    $router->get('/user/reports', [ReportController::class, 'viewUserReports']);
+    $router->get('/user/reports', [ReportController::class, 'userReports']);
     $router->post('/user/reports/generate', [ReportController::class, 'generateUserReport']);
 
     // Audit Log Routes
     $router->get('/admin/audit-logs', [AuditController::class, 'index']);
     $router->post('/admin/audit-logs/fetch', [AuditController::class, 'fetchLogs']);
-    $router->post('/admin/audit-logs/log', [AuditController::class, 'logAction']);
 
     // Document Manager Routes
     $router->post('/documents/upload-template', [DocumentController::class, 'uploadTemplate']);

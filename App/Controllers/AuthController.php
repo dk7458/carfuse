@@ -6,6 +6,9 @@ use App\Services\Auth\TokenService;
 use PDO;
 use Exception;
 
+view('auth/login');
+view('auth/register');
+
 class AuthController
 {
     protected TokenService $tokenService;
@@ -14,7 +17,7 @@ class AuthController
     public function __construct()
     {
         // Load the encryption configuration
-        $configPath = __DIR__ . '/../../config/encryption.php';
+        $configPath = BASE_PATH . '/config/encryption.php';
         if (!file_exists($configPath)) {
             throw new Exception("Encryption configuration missing.");
         }
@@ -33,7 +36,7 @@ class AuthController
         );
 
         // Load the database connection
-        $dbConfig = require __DIR__ . '/../../config/database.php';
+        $dbConfig = require BASE_PATH . '/config/database.php';
         try {
             $this->pdo = new PDO(
                 "mysql:host={$dbConfig['app_database']['host']};dbname={$dbConfig['app_database']['database']};charset=utf8mb4",
@@ -47,23 +50,23 @@ class AuthController
     }
 
     /**
-     * Show the login page (GET /login)
+     * Show the login page (GET /auth/login)
      */
     public function loginView()
     {
-        require __DIR__ . '/../Views/auth/login.php';
+        view('auth/login');
     }
 
     /**
-     * Show the register page (GET /register)
+     * Show the register page (GET /auth/register)
      */
     public function registerView()
     {
-        require __DIR__ . '/../Views/auth/register.php';
+        view('auth/register');
     }
 
     /**
-     * Handle user login (POST /login)
+     * Handle user login (POST /auth/login)
      */
     public function login()
     {
@@ -105,7 +108,7 @@ class AuthController
     }
 
     /**
-     * Refresh access token (POST /refresh)
+     * Refresh access token (POST /auth/refresh)
      */
     public function refresh()
     {
@@ -136,7 +139,7 @@ class AuthController
     }
 
     /**
-     * Handle user logout (POST /logout)
+     * Handle user logout (POST /auth/logout)
      */
     public function logout()
     {

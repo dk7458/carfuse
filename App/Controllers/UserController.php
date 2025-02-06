@@ -10,6 +10,8 @@ use PDO;
 use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
 
+view('App/Helpers/ViewHelper.php');
+
 /**
  * User Management Controller
  *
@@ -228,5 +230,34 @@ class UserController
         ];
 
         return JWT::encode($payload, $this->config['jwt_secret'], 'HS256');
+    }
+
+    public function viewProfile(int $userId)
+    {
+        try {
+            $user = $this->getUserById($userId);
+            view('user/profile', ['user' => $user]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load user profile', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo 'Failed to load user profile.';
+        }
+    }
+
+    public function editProfileView(int $userId)
+    {
+        try {
+            $user = $this->getUserById($userId);
+            view('user/edit_profile', ['user' => $user]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load edit profile view', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo 'Failed to load edit profile view.';
+        }
+    }
+
+    public function userDashboard()
+    {
+        view('dashboard/user_dashboard');
     }
 }

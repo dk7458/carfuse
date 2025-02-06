@@ -9,6 +9,8 @@ use App\Services\Validator;
 use AuditManager\Services\AuditService;
 use Psr\Log\LoggerInterface;
 
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
 class DocumentController
 {
     private DocumentService $documentService;

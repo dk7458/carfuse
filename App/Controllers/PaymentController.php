@@ -9,6 +9,8 @@ use AuditManager\Services\AuditService;
 use PDO;
 use Psr\Log\LoggerInterface;
 
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
 /**
  * Payment Controller
  *

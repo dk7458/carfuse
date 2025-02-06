@@ -7,6 +7,8 @@ use App\Services\Validator;
 use App\Services\NotificationService;
 use Psr\Log\LoggerInterface;
 
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
 class ReportController
 {
     private ReportService $reportService;
@@ -33,7 +35,7 @@ class ReportController
     {
         try {
             // Render admin report dashboard
-            require_once __DIR__ . '/../views/admin/reports.php';
+            view('admin/reports');
         } catch (\Exception $e) {
             $this->logger->error('Failed to load admin report dashboard', ['error' => $e->getMessage()]);
             http_response_code(500);
@@ -81,7 +83,7 @@ class ReportController
     {
         try {
             // Render user report dashboard
-            require_once __DIR__ . '/../views/user/reports.php';
+            view('user/reports');
         } catch (\Exception $e) {
             $this->logger->error('Failed to load user report dashboard', ['error' => $e->getMessage()]);
             http_response_code(500);

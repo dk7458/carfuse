@@ -7,6 +7,8 @@ use App\Services\PaymentService;
 use App\Services\UserService;
 use Psr\Log\LoggerInterface;
 
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
 class AdminDashboardController
 {
     private BookingService $bookingService;
@@ -49,7 +51,7 @@ class AdminDashboardController
                 'revenue_trends' => $this->paymentService->getMonthlyRevenueTrends(),
             ];
 
-            require_once __DIR__ . '/../views/admin/dashboard.php';
+            view('admin/dashboard', ['metrics' => $metrics, 'graphData' => $graphData]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to load admin dashboard', ['error' => $e->getMessage()]);
             http_response_code(500);

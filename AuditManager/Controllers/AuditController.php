@@ -5,6 +5,8 @@ namespace AuditManager\Controllers;
 use AuditManager\Services\AuditService;
 use Psr\Log\LoggerInterface;
 
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
 class AuditController
 {
     private AuditService $auditService;
@@ -26,7 +28,7 @@ class AuditController
             $filters = $_GET ?? [];
             $logs = $this->auditService->getLogs($filters);
 
-            require_once __DIR__ . '/../views/admin/audit_logs.php';
+            view('admin/audit_logs', ['logs' => $logs]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to load audit logs', ['error' => $e->getMessage()]);
             http_response_code(500);

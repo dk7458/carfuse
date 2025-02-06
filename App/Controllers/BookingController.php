@@ -10,6 +10,8 @@ use App\Services\NotificationService;
 use Psr\Log\LoggerInterface;
 use App\Middleware\AuthMiddleware;
 
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
 /**
  * Booking Controller
  *
@@ -55,7 +57,7 @@ class BookingController
                 throw new \Exception("Booking not found.");
             }
 
-            require_once __DIR__ . '/../views/bookings/view.php';
+            view('bookings/view', ['booking' => $booking, 'logs' => $logs]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to fetch booking details', ['error' => $e->getMessage()]);
             http_response_code(404);

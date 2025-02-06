@@ -7,6 +7,8 @@ use App\Services\Validator;
 use Psr\Log\LoggerInterface;
 use App\Queue\NotificationQueue;
 
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
 /**
  * Notification Controller
  *
@@ -40,7 +42,7 @@ class NotificationController
     {
         try {
             $notifications = $this->notificationService->getUserNotifications($userId);
-            require_once __DIR__ . '/../views/user/notifications.php';
+            view('user/notifications', ['notifications' => $notifications]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to load notifications view', ['error' => $e->getMessage()]);
             http_response_code(500);

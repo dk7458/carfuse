@@ -7,6 +7,8 @@ use App\Services\StatisticsService;
 use App\Services\NotificationService;
 use App\Services\UserService;
 
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
 class DashboardController
 {
     private BookingService $bookingService;
@@ -31,7 +33,7 @@ class DashboardController
      */
     public function userDashboard()
     {
-        require_once __DIR__ . '/../views/dashboard/user_dashboard.php';
+        view('dashboard/user_dashboard');
     }
 
     /**

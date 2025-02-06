@@ -6,6 +6,8 @@ use DocumentManager\Services\SignatureService;
 use App\Services\Validator;
 use Psr\Log\LoggerInterface;
 
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
 /**
  * Signature Controller
  *
