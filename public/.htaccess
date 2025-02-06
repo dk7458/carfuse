@@ -1,9 +1,7 @@
 RewriteEngine On
 
 # Block access to sensitive files
-<FilesMatch "(^\.|config\.php|database\.php|encryption\.php|logs|\.env)">
-    Require all denied
-</FilesMatch>
+
 
 # Allow direct access to existing files and directories
 RewriteCond %{REQUEST_FILENAME} -f [OR]
