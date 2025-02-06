@@ -1,5 +1,6 @@
 <?php
-require_once __DIR__ . '/../vendor/autoload.php';
+
+require_once __DIR__ . '/../vendor/autoload.php'; // Ensure autoload is included
 
 use DI\Container;
 use App\Services\Validator;
@@ -43,6 +44,39 @@ foreach (glob("{$configDirectory}/*.php") as $filePath) {
     }
 }
 
+// ✅ Ensure necessary directories exist
+$templateDirectory = __DIR__ . '/../storage/templates';
+$fileStorageConfig = $config['storage'];
+
+foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $directory) {
+    if (!is_dir($directory)) {
+        mkdir($directory, 0775, true);
+    }
+}
+
+// ✅ Initialize Logger First
+$logger = new Logger('carfuse');
+$logFile = __DIR__ . '/../logs/app.log';
+
+if (!file_exists(dirname($logFile))) {
+    mkdir(dirname($logFile), 0775, true);
+}
+
+$streamHandler = new StreamHandler($logFile, Logger::DEBUG);
+$formatter = new LineFormatter(null, null, true, true);
+$streamHandler->setFormatter($formatter);
+$logger->pushHandler($streamHandler);
+
+$container->set(LoggerInterface::class, $logger);
+
+// ✅ Initialize Encryption Service
+$encryptionService = new EncryptionService($config['encryption']['encryption_key']);
+$container->set(EncryptionService::class, fn() => $encryptionService);
+
+// ✅ Initialize File Storage Before Using It Anywhere
+$fileStorage = new FileStorage($fileStorageConfig, $logger, $encryptionService);
+$container->set(FileStorage::class, fn() => $fileStorage);
+
 // ✅ Initialize PDO Instances
 try {
     $pdo = new PDO(
@@ -68,42 +102,19 @@ try {
     throw new RuntimeException("❌ Database connection failed: " . $e->getMessage());
 }
 
-// ✅ Initialize Logger
-$logger = new Logger('carfuse');
-$logFile = __DIR__ . '/../logs/app.log';
-
-if (!file_exists(dirname($logFile))) {
-    mkdir(dirname($logFile), 0775, true);
-}
-
-$streamHandler = new StreamHandler($logFile, Logger::DEBUG);
-$formatter = new LineFormatter(null, null, true, true);
-$streamHandler->setFormatter($formatter);
-$logger->pushHandler($streamHandler);
-
-// ✅ Register dependencies in the container
+// ✅ Register services in the container
 $container->set(PDO::class, $pdo);
 $container->set('SecurePDO', $securePdo);
-$container->set(LoggerInterface::class, $logger);
 
 $container->set(DocumentQueue::class, function () use ($fileStorage, $logger) {
     return new DocumentQueue($fileStorage, __DIR__ . '/../storage/document_queue.json', $logger);
 });
-$templateDirectory = __DIR__ . '/../storage/templates';
-$fileStorageConfig = $config['storage'];
 
-foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $directory) {
-    if (!is_dir($directory)) {
-        mkdir($directory, 0775, true);
-    }
-}
 $container->set(Validator::class, fn() => new Validator());
 $container->set(RateLimiter::class, fn() => new RateLimiter($pdo));
 $container->set(AuditService::class, fn() => new AuditService($securePdo));
-$container->set(EncryptionService::class, fn() => new EncryptionService($config['encryption']['encryption_key']));
-$container->set(FileStorage::class, fn() => new FileStorage($fileStorageConfig, $logger, $container->get(EncryptionService::class)));
 
-$container->set(DocumentService::class, function () use ($pdo, $logger, $config, $container) {
+$container->set(DocumentService::class, function () use ($pdo, $logger, $container) {
     return new DocumentService(
         $pdo,
         $container->get(AuditService::class),
