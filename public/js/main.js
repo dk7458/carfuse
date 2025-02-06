@@ -54,7 +54,6 @@ class Ajax {
 
 // Zapewnia globalną dostępność
 window.ajax = new Ajax();
-import ajax from './ajax';
 
 document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('login-form');
@@ -200,7 +199,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Sprawdzanie sesji co minutę
     setInterval(refreshSession, 60000);
 });
-import ajax from './ajax';
 
 document.addEventListener('DOMContentLoaded', function () {
     const pickupDateInput = document.getElementById('pickup-date');
@@ -685,7 +683,6 @@ function isValidEmail(email) {
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailPattern.test(email);
 }
-import ajax from './ajax';
 
 document.addEventListener('DOMContentLoaded', function () {
     fetchNotifications();
@@ -792,7 +789,6 @@ function displayNoNotificationsMessage() {
 function getAuthToken() {
     return localStorage.getItem('auth_token') || '';
 }
-import ajax from './ajax';
 
 document.addEventListener('DOMContentLoaded', function() {
     const paymentForm = document.getElementById('paymentForm');
