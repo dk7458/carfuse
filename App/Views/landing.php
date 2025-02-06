@@ -8,10 +8,6 @@
 |
 | Ścieżka: App/Views/landing.php
 |
-| Zależy od:
-| - JavaScript: /js/landing.js (obsługa dynamicznej walidacji formularza)
-| - CSS: /css/landing.css (stylizacja strony głównej)
-|
 | Technologie:
 | - PHP 8+ (backend)
 | - HTML, CSS (interfejs)
@@ -37,10 +33,6 @@ $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $uri = rtrim($uri, '/');
 
 $routeInfo = $dispatcher->dispatch($httpMethod, $uri);
-
-echo "<pre>Route Debugging:\n";
-print_r($routeInfo);
-echo "\n</pre>";
 
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::NOT_FOUND:
@@ -68,11 +60,57 @@ switch ($routeInfo[0]) {
         exit;
 }
 
-
 require_once __DIR__ . '/layouts/header.php';
 ?>
 
-<link rel="stylesheet" href="/css/landing.css">
+<style>
+    /* Main CSS integrated directly */
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        color: #333;
+        margin: 0;
+        padding: 0;
+    }
+    button, input[type="submit"] {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+    button:hover, input[type="submit"]:hover {
+        background-color: #0056b3;
+    }
+    button:focus, input[type="submit"]:focus {
+        outline: 2px solid #ffcc00;
+    }
+    .hero, .features, .cta {
+        text-align: center;
+        padding: 20px;
+    }
+    .feature-box {
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        margin: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .cta {
+        background-color: #28a745;
+        color: white;
+        padding: 20px;
+        border-radius: 5px;
+    }
+    @media (max-width: 768px) {
+        body {
+            font-size: 14px;
+        }
+    }
+</style>
+
 <script src="/js/landing.js" defer></script>
 
 <section class="hero">
@@ -116,19 +154,3 @@ require_once __DIR__ . '/layouts/header.php';
 </section>
 
 <?php require_once __DIR__ . '/layouts/footer.php'; ?>
-
-<script>
-function validateDates() {
-    const pickupDate = document.getElementById("pickup_date").value;
-    const returnDate = document.getElementById("return_date").value;
-    const dateError = document.getElementById("dateError");
-
-    if (new Date(returnDate) < new Date(pickupDate)) {
-        dateError.style.display = "block";
-        return false;
-    } else {
-        dateError.style.display = "none";
-        return true;
-    }
-}
-</script>
