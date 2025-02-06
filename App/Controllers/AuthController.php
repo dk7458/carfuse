@@ -6,8 +6,7 @@ use App\Services\Auth\TokenService;
 use PDO;
 use Exception;
 
-view('auth/login');
-view('auth/register');
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
 class AuthController
 {

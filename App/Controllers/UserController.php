@@ -10,7 +10,7 @@ use PDO;
 use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
 
-view('App/Helpers/ViewHelper.php');
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
 /**
  * User Management Controller
