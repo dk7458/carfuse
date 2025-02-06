@@ -18,6 +18,7 @@
 | - JavaScript (AJAX do dynamicznego logowania)
 | - HTML, CSS (interfejs)
 */
+header("Content-Type: text/html; charset=UTF-8");
 
 require_once BASE_PATH . '/App/Helpers/SecurityHelper.php'; // Ensure CSRF functions are loaded
 

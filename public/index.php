@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap.php'; // Ensure the bootstrap file is included
 
 require_once __DIR__ . '/../vendor/autoload.php';
+header("Content-Type: text/html; charset=UTF-8");
 
 // Set response headers
 header('Content-Type: application/json');
