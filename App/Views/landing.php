@@ -17,7 +17,7 @@
 define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html'); // Set absolute path
 
 require_once BASE_PATH . '/bootstrap.php'; // Ensure the bootstrap file is included
-require_once BASE_PATH . '/routes/web.php'; // Load FastRoute routes
+require_once BASE_PATH . '/config/routes.php'; // Load FastRoute routes
 require_once BASE_PATH . '/App/Helpers/SecurityHelper.php'; // Load security helpers
 require_once BASE_PATH . '/App/Services/NotificationService.php'; // Load notification services
 require_once BASE_PATH . '/App/Services/Validator.php'; // Load validation services
