@@ -1,3 +1,4 @@
+<?php
 /*
 |--------------------------------------------------------------------------
 | Footer - Stopka dla Stron Publicznych
@@ -6,6 +7,7 @@
 |
 | Ścieżka: App/Views/layouts/footer.php
 */
+?>
 
     </div> <!-- Koniec kontenera -->
 
@@ -15,6 +17,6 @@
         </div>
     </footer>
 
-    <script type="module" src="/js/main.min.js"></script>
+    <script type="module" src="/public/js/main.min.js"></script>
 </body>
 </html>

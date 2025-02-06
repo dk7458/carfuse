@@ -20,6 +20,7 @@
 
 require_once __DIR__ . '/layouts/header.php';
 ?>
+<script src="/js/main.min.js" defer></script>
 
 <section class="hero">
     <div class="container text-center">
