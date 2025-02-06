@@ -1,156 +1,133 @@
 <?php
-/*
-|--------------------------------------------------------------------------
-| Strona Główna CarFuse
-|--------------------------------------------------------------------------
-| Ten plik zawiera główną stronę serwisu CarFuse. 
-| Zawiera sekcję wyszukiwania pojazdów i kluczowe cechy platformy.
-|
-| Ścieżka: App/Views/landing.php
-|
-| Technologie:
-| - PHP 8+ (backend)
-| - HTML, CSS (interfejs)
-| - JavaScript (dynamiczna walidacja formularza)
-*/
-
-header("Content-Type: text/html; charset=UTF-8");
-
-require_once BASE_PATH . '/bootstrap.php'; // Ensure the bootstrap file is included
-require_once BASE_PATH . '/config/routes.php'; // Load FastRoute routes
-require_once BASE_PATH . '/App/Helpers/SecurityHelper.php'; // Load security helpers
-require_once BASE_PATH . '/App/Services/NotificationService.php'; // Load notification services
-require_once BASE_PATH . '/App/Services/Validator.php'; // Load validation services
-
-// Debugging output for FastRoute
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-$dispatcher = require BASE_PATH . '/config/routes.php';
-
-$httpMethod = $_SERVER['REQUEST_METHOD'];
-$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$uri = rtrim($uri, '/');
-
-$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
-
-switch ($routeInfo[0]) {
-    case FastRoute\Dispatcher::NOT_FOUND:
-        http_response_code(404);
-        echo json_encode(["error" => "404 Not Found - Route Not Found"]);
-        exit;
-
-    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-        http_response_code(405);
-        echo json_encode(["error" => "405 Method Not Allowed"]);
-        exit;
-
-    case FastRoute\Dispatcher::FOUND:
-        [$controller, $method] = $routeInfo[1];
-        $vars = $routeInfo[2];
-
-        if (!class_exists($controller) || !method_exists($controller, $method)) {
-            http_response_code(500);
-            echo json_encode(["error" => "500 Internal Server Error - Invalid Route Handler"]);
-            exit;
-        }
-
-        $controllerInstance = new $controller();
-        call_user_func_array([$controllerInstance, $method], $vars);
-        exit;
-}
-
-require_once BASE_PATH . 'App/Views/layouts/header.php';
+// Path: App/Views/landing.php
 ?>
 
-<style>
-    /* Main CSS integrated directly */
-    body {
-        font-family: Arial, sans-serif;
-        background-color: #f4f4f4;
-        color: #333;
-        margin: 0;
-        padding: 0;
-    }
-    button, input[type="submit"] {
-        background-color: #007bff;
-        color: white;
-        border: none;
-        padding: 10px 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        transition: background 0.3s;
-    }
-    button:hover, input[type="submit"]:hover {
-        background-color: #0056b3;
-    }
-    button:focus, input[type="submit"]:focus {
-        outline: 2px solid #ffcc00;
-    }
-    .hero, .features, .cta {
-        text-align: center;
-        padding: 20px;
-    }
-    .feature-box {
-        padding: 20px;
-        background-color: #f8f9fa;
-        border-radius: 5px;
-        margin: 10px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    .cta {
-        background-color: #28a745;
-        color: white;
-        padding: 20px;
-        border-radius: 5px;
-    }
-    @media (max-width: 768px) {
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carfuse - Wynajmij auto szybko i łatwo</title>
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <style>
+        /* Dark Minimal Theme */
         body {
-            font-size: 14px;
+            background-color: #121212;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
         }
-    }
-</style>
+        header {
+            background-color: #181818;
+            text-align: center;
+            padding: 15px 0;
+        }
+        .logo img {
+            max-height: 104px;
+            margin: 15px 0;
+        }
+        nav {
+            display: flex;
+            justify-content: center;
+            padding: 15px 0;
+        }
+        nav a {
+            color: #fff;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 18px;
+        }
+        nav a:hover {
+            color: #FFD700;
+        }
+        .hero {
+            text-align: center;
+            padding: 100px 20px;
+            background: url('/assets/images/hero-bg.jpg') no-repeat center center/cover;
+        }
+        .hero h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+        }
+        .hero p {
+            font-size: 20px;
+            opacity: 0.8;
+            margin-bottom: 30px;
+        }
+        .search-form {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        .search-form input, .search-form button {
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+        }
+        .search-form button {
+            background: #FFD700;
+            color: #121212;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .search-form button:hover {
+            background: #FFC107;
+        }
+        .features {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        .features h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        .feature-list {
+            display: flex;
+            justify-content: center;
+            gap: 50px;
+        }
+        .feature {
+            font-size: 18px;
+            background: #181818;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            background: #181818;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
 
-<script src="/js/landing.js" defer></script>
+<?php include __DIR__ . '/layouts/header.php'; ?>
 
 <section class="hero">
-    <div class="container text-center">
-        <h1>🚗 Znajdź idealne auto na swoją podróż</h1>
-        <p>Elastyczny wynajem, najlepsze ceny i wsparcie 24/7.</p>
-        
-        <form class="search-form" action="/search" method="GET" onsubmit="return validateDates();">
-            <input type="text" name="location" placeholder="Wpisz lokalizację odbioru" required>
-            <input type="date" id="pickup_date" name="pickup_date" required>
-            <input type="date" id="return_date" name="return_date" required>
-            <button type="submit" class="btn btn-primary">Szukaj aut</button>
-        </form>
+    <h1>Znajdź idealne auto na swoją podróż</h1>
+    <p>Elastyczny wynajem, najlepsze ceny i wsparcie 24/7.</p>
+    <form class="search-form" action="/search" method="GET">
+        <input type="text" name="location" placeholder="Wpisz lokalizację odbioru">
+        <input type="date" name="pickup_date">
+        <input type="date" name="return_date">
+        <button type="submit">Szukaj aut</button>
+    </form>
+</section>
 
-        <p id="dateError" class="text-danger mt-2" style="display:none;">Data zwrotu nie może być wcześniejsza niż odbioru.</p>
+<section class="features">
+    <h2>Dlaczego warto wybrać Carfuse?</h2>
+    <div class="feature-list">
+        <div class="feature">✔ Gwarancja najlepszych cen</div>
+        <div class="feature">✔ Wsparcie klienta 24/7</div>
+        <div class="feature">✔ Elastyczne warunki wynajmu</div>
     </div>
 </section>
 
-<section class="features text-center">
-    <h2>Dlaczego warto wybrać CarFuse?</h2>
-    <div class="row justify-content-center">
-        <div class="col-md-3 feature-box">
-            <h4>🚗 Szeroki wybór pojazdów</h4>
-            <p>Wybierz spośród różnych kategorii aut – od ekonomicznych po luksusowe.</p>
-        </div>
-        <div class="col-md-3 feature-box">
-            <h4>💰 Najlepsze ceny</h4>
-            <p>Zawsze konkurencyjne ceny i wyjątkowe promocje dla stałych klientów.</p>
-        </div>
-        <div class="col-md-3 feature-box">
-            <h4>📞 Wsparcie 24/7</h4>
-            <p>Nasz zespół jest dostępny całą dobę, aby pomóc Ci w każdej sytuacji.</p>
-        </div>
-    </div>
-</section>
+<?php include __DIR__ . '/layouts/footer.php'; ?>
 
-<section class="cta text-center">
-    <h2>Zarezerwuj swoje auto już dziś!</h2>
-    <p>Najlepsze oferty dostępne w kilku kliknięciach.</p>
-    <a href="/search" class="btn btn-success btn-lg">Sprawdź dostępność</a>
-</section>
-
-<?php require_once __DIR__ . '/layouts/footer.php'; ?>
+</body>
+</html>
