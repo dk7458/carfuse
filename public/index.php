@@ -1,7 +1,7 @@
 <?php
 
 declare(strict_types=1);
-require_once __DIR__ . '/bootstrap.php'; // Ensure the bootstrap file is included
+require_once __DIR__ . '/../bootstrap.php'; // Ensure the bootstrap file is included
 
 require_once BASE_PATH . '/vendor/autoload.php';
 
