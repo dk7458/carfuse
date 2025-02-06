@@ -18,7 +18,7 @@ use App\Controllers\UserController;
 return simpleDispatcher(function (RouteCollector $router) {
     // Welcome Page
     $router->get('/', function () {
-        echo 'Welcome to Carfuse!';
+        require BASE_PATH . '/public/index.php';
     });
 
     // Test Route
