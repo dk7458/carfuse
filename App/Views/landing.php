@@ -18,15 +18,12 @@
 | - JavaScript (dynamiczna walidacja formularza)
 */
 
-require_once __DIR__ . '/../vendor/autoload.php';
-
-$dispatcher = require __DIR__ . '/../config/routes.php'; // Adjust path if necessary
-
+require_once __DIR__ . '/../config/bootstrap.php';
+require_once __DIR__ . '/../config/routes.php';
+$dispatcher = require __DIR__ . '/../config/bootstrap.php';
+$dispatcher = require __DIR__ . '/../config/routes.php';
 $httpMethod = $_SERVER['REQUEST_METHOD'];
-$uri = $_SERVER['REQUEST_URI'];
-
-// Normalize URI (remove query strings, ensure leading slash)
-$uri = parse_url($uri, PHP_URL_PATH);
+$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $uri = rtrim($uri, '/');
 
 $routeInfo = $dispatcher->dispatch($httpMethod, $uri);
@@ -56,7 +53,6 @@ switch ($routeInfo[0]) {
         call_user_func_array([$controllerInstance, $method], $vars);
         break;
 }
-
 require_once __DIR__ . '/layouts/header.php';
 ?>
 
