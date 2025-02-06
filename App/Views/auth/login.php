@@ -31,9 +31,24 @@ if (isset($_SESSION['user_id'])) {
 }
 ?>
 
-<h1 class="text-center">Zaloguj się</h1>
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zaloguj się</title>
 
-<div class="auth-container">
+    <!-- ✅ Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
+    <!-- ✅ Custom Authentication CSS -->
+    <link rel="stylesheet" href="/css/auth.css">
+</head>
+<body class="d-flex justify-content-center align-items-center vh-100 bg-light">
+
+<div class="auth-container bg-white p-4 rounded shadow-lg">
+    <h1 class="text-center mb-4">Zaloguj się</h1>
+
     <form id="loginForm">
         <?= csrf_field(); ?>
         <div class="mb-3">
@@ -46,9 +61,16 @@ if (isset($_SESSION['user_id'])) {
         </div>
         <button type="submit" class="btn btn-primary w-100">Zaloguj się</button>
     </form>
-    <div id="responseMessage" class="alert mt-3" style="display:none;"></div>
-    <p class="text-center mt-2"><a href="/auth/password_reset.php">Nie pamiętasz hasła?</a></p>
+    
+    <div id="responseMessage" class="alert mt-3 d-none"></div>
+    <p class="text-center mt-3"><a href="/auth/password_reset.php">Nie pamiętasz hasła?</a></p>
 </div>
+
+<!-- ✅ Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- ✅ Custom Authentication Script -->
+<script src="/js/auth.js"></script>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
@@ -59,7 +81,7 @@ document.addEventListener("DOMContentLoaded", function() {
         
         const formData = new FormData(loginForm);
         formData.append("csrf_token", document.querySelector('input[name="csrf_token"]').value); // Ensure CSRF token is included
-        
+
         loginUser(formData);
     });
 
@@ -71,6 +93,7 @@ document.addEventListener("DOMContentLoaded", function() {
         .then(response => response.json())
         .then(data => {
             const responseMessage = document.getElementById("responseMessage");
+            responseMessage.classList.remove("d-none");
             responseMessage.style.display = "block";
 
             if (data.success) {
@@ -88,3 +111,6 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 </script>
+
+</body>
+</html>

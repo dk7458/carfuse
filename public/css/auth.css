@@ -1,0 +1,10 @@
+/* Authentication Page Styling */
+.auth-container {
+    max-width: 400px;
+    width: 100%;
+    padding: 20px;
+}
+
+body {
+    background-color: #f8f9fa;
+}
