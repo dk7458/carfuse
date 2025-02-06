@@ -1,11 +1,20 @@
-</div> <!-- Koniec kontenera -->
+/*
+|--------------------------------------------------------------------------
+| Footer - Stopka dla Stron Publicznych
+|--------------------------------------------------------------------------
+| Plik zawiera stopkę strony oraz ładuje globalne zasoby JavaScript.
+|
+| Ścieżka: App/Views/layouts/footer.php
+*/
 
-<footer class="footer">
-    <div class="container text-center">
-        <p>&copy; <?= date("Y"); ?> CarFuse. Wszelkie prawa zastrzeżone.</p>
-    </div>
-</footer>
+    </div> <!-- Koniec kontenera -->
 
-<script type="module" src="/js/main.min.js"></script>
+    <footer class="footer">
+        <div class="container text-center">
+            <p>&copy; <?= date("Y"); ?> CarFuse. Wszelkie prawa zastrzeżone.</p>
+        </div>
+    </footer>
+
+    <script type="module" src="/js/main.min.js"></script>
 </body>
 </html>

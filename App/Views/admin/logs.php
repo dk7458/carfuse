@@ -1,10 +1,31 @@
-<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+/*
+|--------------------------------------------------------------------------
+| Logi Systemowe Administratora
+|--------------------------------------------------------------------------
+| Ten plik odpowiada za wyświetlanie logów systemowych, które pomagają
+| administratorowi diagnozować problemy techniczne.
+|
+| Ścieżka: App/Views/admin/logs.php
+|
+| Zależy od:
+| - JavaScript: /js/admin.js (obsługa logów, AJAX)
+| - CSS: /css/admin.css (stylizacja tabeli)
+| - PHP: csrf_field() (zabezpieczenie formularzy)
+| - MySQL (dane pobierane z bazy)
+|
+| Technologie:
+| - PHP 8+ (backend)
+| - MySQL (baza danych)
+| - JavaScript (AJAX, dynamiczne ładowanie danych)
+| - HTML, CSS (interfejs)
+*/
 
-<h1 class="text-center">Dzienniki systemowe</h1>
+<h1 class="text-center">Logi Systemowe</h1>
 
 <div class="admin-container">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3>Dzienniki systemowe</h3>
+        <h3>Przegląd Logów Systemowych</h3>
+        <button class="btn btn-secondary" id="clearFilters">Wyczyść Filtry</button>
     </div>
 
     <!-- Filtry logów -->
@@ -19,12 +40,15 @@
             </select>
         </div>
         <div class="col-md-3">
+            <input type="text" class="form-control" name="log_message" placeholder="Wyszukaj w treści logu">
+        </div>
+        <div class="col-md-2">
             <input type="date" class="form-control" name="start_date" placeholder="Data początkowa">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <input type="date" class="form-control" name="end_date" placeholder="Data końcowa">
         </div>
-        <div class="col-md-3 text-end">
+        <div class="col-md-2 text-end">
             <button type="submit" class="btn btn-primary">Filtruj</button>
         </div>
     </form>
@@ -34,18 +58,68 @@
         <thead>
             <tr>
                 <th>ID</th>
-                <th>Data i czas</th>
-                <th>Typ logu</th>
+                <th>Typ Logu</th>
                 <th>Wiadomość</th>
-                <th>Szczegóły</th>
+                <th>Data</th>
             </tr>
         </thead>
         <tbody id="systemLogs">
-            <!-- Dane logów będą ładowane dynamicznie -->
+            <!-- Dane będą ładowane dynamicznie -->
         </tbody>
     </table>
+    <p id="noLogsMessage" class="text-center text-muted" style="display:none;">Brak logów spełniających kryteria.</p>
 </div>
 
-<script src="/js/admin.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const filterForm = document.getElementById("logFilterForm");
+    const clearFilters = document.getElementById("clearFilters");
 
-<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+    // Obsługa filtrów
+    filterForm.addEventListener("submit", function(e) {
+        e.preventDefault();
+        fetchLogs(new FormData(filterForm));
+    });
+
+    clearFilters.addEventListener("click", function() {
+        filterForm.reset();
+        fetchLogs();
+    });
+
+    // Pobieranie logów systemowych przez AJAX
+    function fetchLogs(formData = null) {
+        let url = "/api/admin/logs.php";
+        if (formData) {
+            url += "?" + new URLSearchParams(formData).toString();
+        }
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                const logsTable = document.getElementById("systemLogs");
+                logsTable.innerHTML = "";
+                const noLogsMessage = document.getElementById("noLogsMessage");
+
+                if (data.length === 0) {
+                    noLogsMessage.style.display = "block";
+                } else {
+                    noLogsMessage.style.display = "none";
+                    data.forEach(log => {
+                        logsTable.innerHTML += `
+                            <tr>
+                                <td>${log.id}</td>
+                                <td>${log.type}</td>
+                                <td>${log.message}</td>
+                                <td>${log.date}</td>
+                            </tr>
+                        `;
+                    });
+                }
+            })
+            .catch(error => console.error("Błąd pobierania logów systemowych:", error));
+    }
+
+    // Automatyczne załadowanie logów po otwarciu strony
+    fetchLogs();
+});
+</script>

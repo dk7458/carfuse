@@ -1,29 +1,117 @@
-<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+/*
+|--------------------------------------------------------------------------
+| Historia Płatności
+|--------------------------------------------------------------------------
+| Ten plik umożliwia użytkownikowi przeglądanie historii płatności i ich statusów.
+| Obsługuje filtrowanie oraz podgląd szczegółów transakcji.
+|
+| Ścieżka: App/Views/payments/history.php
+|
+| Zależy od:
+| - JavaScript: /js/dashboard.js (obsługa AJAX, dynamiczne pobieranie płatności)
+| - CSS: /css/dashboard.css (stylizacja interfejsu użytkownika)
+| - PHP: csrf_field() (zabezpieczenie formularzy)
+| - MySQL (dane płatności)
+|
+| Technologie:
+| - PHP 8+ (backend)
+| - MySQL (baza danych)
+| - JavaScript (AJAX do dynamicznego pobierania płatności)
+| - HTML, CSS (interfejs)
+*/
 
-<h1 class="text-center">Historia transakcji</h1>
+<h1 class="text-center">Historia Płatności</h1>
 
-<div class="payment-container">
-    <div class="card shadow p-4">
-        <h3 class="text-center">Lista transakcji</h3>
-        <table class="table table-bordered mt-3">
-            <thead>
-                <tr>
-                    <th>ID transakcji</th>
-                    <th>ID użytkownika</th>
-                    <th>ID rezerwacji</th>
-                    <th>Kwota</th>
-                    <th>Typ</th>
-                    <th>Status</th>
-                    <th>Data</th>
-                </tr>
-            </thead>
-            <tbody id="transactionHistory">
-                <!-- Dane transakcji ładowane dynamicznie -->
-            </tbody>
-        </table>
-    </div>
+<div class="payments-history-container">
+    <!-- Filtry płatności -->
+    <form id="paymentFilterForm" class="row mt-4">
+        <?= csrf_field() ?>
+        <div class="col-md-4">
+            <select class="form-control" name="status">
+                <option value="">Wybierz status</option>
+                <option value="completed">Zakończona</option>
+                <option value="pending">Oczekująca</option>
+                <option value="failed">Nieudana</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <input type="date" class="form-control" name="start_date" placeholder="Data początkowa">
+        </div>
+        <div class="col-md-4 text-end">
+            <button type="submit" class="btn btn-primary">Filtruj</button>
+        </div>
+    </form>
+
+    <!-- Tabela płatności -->
+    <table class="table table-bordered table-striped mt-3">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Kwota</th>
+                <th>Metoda</th>
+                <th>Status</th>
+                <th>Data</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody id="paymentList">
+            <!-- Dane będą ładowane dynamicznie -->
+        </tbody>
+    </table>
 </div>
 
-<script src="/js/payments.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const filterForm = document.getElementById("paymentFilterForm");
 
-<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+    filterForm.addEventListener("submit", function(e) {
+        e.preventDefault();
+        fetchPayments(new FormData(filterForm));
+    });
+
+    function fetchPayments(formData = null) {
+        let url = "/api/user/payments.php";
+        if (formData) {
+            url += "?" + new URLSearchParams(formData).toString();
+        }
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                const paymentTable = document.getElementById("paymentList");
+                paymentTable.innerHTML = "";
+
+                if (data.length === 0) {
+                    paymentTable.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Brak płatności spełniających kryteria.</td></tr>`;
+                } else {
+                    data.forEach(payment => {
+                        paymentTable.innerHTML += `
+                            <tr>
+                                <td>${payment.id}</td>
+                                <td>${payment.amount} PLN</td>
+                                <td>${payment.method}</td>
+                                <td>${payment.status}</td>
+                                <td>${payment.date}</td>
+                                <td>
+                                    <button class="btn btn-info btn-sm" onclick="viewPayment(${payment.id})">Podgląd</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            })
+            .catch(error => console.error("Błąd pobierania płatności:", error));
+    }
+
+    function viewPayment(paymentId) {
+        fetch(`/api/user/payment_details.php?id=${paymentId}`)
+            .then(response => response.json())
+            .then(data => {
+                alert(`Szczegóły płatności:\n\nKwota: ${data.amount} PLN\nMetoda: ${data.method}\nStatus: ${data.status}\nData: ${data.date}`);
+            })
+            .catch(error => console.error("Błąd pobierania szczegółów płatności:", error));
+    }
+
+    fetchPayments();
+});
+</script>

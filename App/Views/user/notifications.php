@@ -1,48 +1,89 @@
-<?php require_once __DIR__ . '/../layouts/header.php'; ?>
+/*
+|--------------------------------------------------------------------------
+| Powiadomienia Użytkownika
+|--------------------------------------------------------------------------
+| Ten plik umożliwia użytkownikowi przeglądanie powiadomień, oznaczanie ich
+| jako przeczytane oraz usuwanie.
+|
+| Ścieżka: App/Views/user/notifications.php
+|
+| Zależy od:
+| - JavaScript: /js/dashboard.js (obsługa AJAX)
+| - CSS: /css/dashboard.css (stylizacja interfejsu użytkownika)
+| - PHP: csrf_field() (zabezpieczenie formularzy)
+| - MySQL (dane powiadomień)
+|
+| Technologie:
+| - PHP 8+ (backend)
+| - MySQL (baza danych)
+| - JavaScript (AJAX do dynamicznego ładowania i aktualizacji powiadomień)
+| - HTML, CSS (interfejs)
+*/
 
 <h1 class="text-center">Powiadomienia</h1>
 
-<div class="notifications-container">
-    <div class="card shadow p-4">
-        <h3 class="text-center">Moje powiadomienia</h3>
-        <table class="table table-bordered">
-            <thead>
-                <tr>
-                    <th>Typ</th>
-                    <th>Wiadomość</th>
-                    <th>Data</th>
-                    <th>Status</th>
-                    <th>Akcje</th>
-                </tr>
-            </thead>
-            <tbody id="notificationTable">
-                <!-- Dane powiadomień ładowane dynamicznie -->
-            </tbody>
-        </table>
-    </div>
-
-    <div class="card shadow mt-4">
-        <div class="card-body">
-            <h4 class="text-center">Ustawienia powiadomień</h4>
-            <form id="notificationSettingsForm">
-                <?= csrf_field() ?>
-
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" id="emailNotifications" name="emailNotifications">
-                    <label class="form-check-label" for="emailNotifications">Włącz powiadomienia e-mail</label>
-                </div>
-
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" id="smsNotifications" name="smsNotifications">
-                    <label class="form-check-label" for="smsNotifications">Włącz powiadomienia SMS</label>
-                </div>
-
-                <button type="submit" class="btn btn-primary w-100">Zapisz ustawienia</button>
-            </form>
-        </div>
-    </div>
+<div class="user-notifications-container">
+    <ul id="notificationList" class="list-group">
+        <!-- Powiadomienia ładowane dynamicznie -->
+    </ul>
 </div>
 
-<script src="/js/user_notifications.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    function loadNotifications() {
+        fetch("/api/user/get_notifications.php")
+            .then(response => response.json())
+            .then(data => {
+                const notificationList = document.getElementById("notificationList");
+                notificationList.innerHTML = "";
+                
+                if (data.length > 0) {
+                    data.forEach(notification => {
+                        notificationList.innerHTML += `
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>${notification.message}</span>
+                                <div>
+                                    ${notification.is_read ? "" : `<button class="btn btn-sm btn-success" onclick="markAsRead(${notification.id})">Oznacz jako przeczytane</button>`}
+                                    <button class="btn btn-sm btn-danger" onclick="deleteNotification(${notification.id})">Usuń</button>
+                                </div>
+                            </li>
+                        `;
+                    });
+                } else {
+                    notificationList.innerHTML = `<li class="list-group-item text-muted">Brak nowych powiadomień</li>`;
+                }
+            })
+            .catch(error => console.error("Błąd ładowania powiadomień:", error));
+    }
 
-<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+    function markAsRead(notificationId) {
+        fetch(`/api/user/mark_notification_read.php?id=${notificationId}`, { method: "POST" })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadNotifications();
+                } else {
+                    alert("Błąd: " + data.error);
+                }
+            })
+            .catch(error => console.error("Błąd oznaczania powiadomienia:", error));
+    }
+
+    function deleteNotification(notificationId) {
+        if (!confirm("Czy na pewno chcesz usunąć to powiadomienie?")) return;
+
+        fetch(`/api/user/delete_notification.php?id=${notificationId}`, { method: "POST" })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadNotifications();
+                } else {
+                    alert("Błąd: " + data.error);
+                }
+            })
+            .catch(error => console.error("Błąd usuwania powiadomienia:", error));
+    }
+
+    loadNotifications();
+});
+</script>

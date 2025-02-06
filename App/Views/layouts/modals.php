@@ -1,4 +1,12 @@
-<!-- Modal używany w wielu widokach -->
+/*
+|--------------------------------------------------------------------------
+| Modale - Okna Modalne
+|--------------------------------------------------------------------------
+| Plik zawiera globalne okna modalne wykorzystywane w aplikacji.
+|
+| Ścieżka: App/Views/layouts/modals.php
+*/
+
 <div id="globalModal" class="modal">
     <div class="modal-content">
         <span class="close">&times;</span>

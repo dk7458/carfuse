@@ -1,0 +1,512 @@
+=== AuditManager/Controllers/AuditController.php ===
+<?php
+
+namespace AuditManager\Controllers;
+
+use AuditManager\Services\AuditService;
+use Psr\Log\LoggerInterface;
+
+class AuditController
+{
+    private AuditService $auditService;
+    private LoggerInterface $logger;
+
+    public function __construct(AuditService $auditService, LoggerInterface $logger)
+    {
+        $this->auditService = $auditService;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Render the audit log view for the admin.
+     */
+    public function index()
+    {
+        try {
+            // Default view parameters
+            $filters = $_GET ?? [];
+            $logs = $this->auditService->getLogs($filters);
+
+            require_once __DIR__ . '/../views/admin/audit_logs.php';
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load audit logs', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo 'Failed to load audit logs.';
+        }
+    }
+
+    /**
+     * API Endpoint: Fetch logs based on filters.
+     * 
+     * @param array $filters - Filters passed via GET or POST request.
+     */
+    public function fetchLogs(array $filters = []): void
+    {
+        try {
+            $logs = $this->auditService->getLogs($filters);
+
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'success', 'logs' => $logs]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch logs', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch logs.']);
+        }
+    }
+}
+=== AuditManager/Views/admin/audit_logs.php ===
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Audit Logs</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">Audit Logs</h1>
+        
+        <!-- Filters -->
+        <form id="filterForm" class="row mb-4">
+            <div class="col-md-3">
+                <input type="text" class="form-control" name="user_id" placeholder="User ID" value="<?= $_GET['user_id'] ?? '' ?>">
+            </div>
+            <div class="col-md-3">
+                <input type="text" class="form-control" name="booking_id" placeholder="Booking ID" value="<?= $_GET['booking_id'] ?? '' ?>">
+            </div>
+            <div class="col-md-3">
+                <input type="date" class="form-control" name="start_date" placeholder="Start Date" value="<?= $_GET['start_date'] ?? '' ?>">
+            </div>
+            <div class="col-md-3">
+                <input type="date" class="form-control" name="end_date" placeholder="End Date" value="<?= $_GET['end_date'] ?? '' ?>">
+            </div>
+            <div class="col-md-12 mt-2 text-end">
+                <button type="submit" class="btn btn-primary">Filter</button>
+            </div>
+        </form>
+
+        <!-- Logs Table -->
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Action</th>
+                    <th>Details</th>
+                    <th>User ID</th>
+                    <th>Booking ID</th>
+                    <th>IP Address</th>
+                    <th>Created At</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($logs)): ?>
+                    <?php foreach ($logs as $log): ?>
+                        <tr>
+                            <td><?= $log['id'] ?></td>
+                            <td><?= $log['action'] ?></td>
+                            <td><?= $log['details'] ?></td>
+                            <td><?= $log['user_id'] ?? '-' ?></td>
+                            <td><?= $log['booking_id'] ?? '-' ?></td>
+                            <td><?= $log['ip_address'] ?? '-' ?></td>
+                            <td><?= $log['created_at'] ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="7" class="text-center">No logs found.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
+=== AuditManager/config/database.php ===
+<?php
+return [
+    'host' => 'carfuse.pl',
+        'port' => 3306,
+        'database' => 'u122931475_secure',
+        'username' => 'u122931475_admin',
+        'password' => 'Japierdole1876',
+        'charset' => 'utf8mb4',
+];
+=== AuditManager/config/audit.php ===
+<?php
+/**
+ * File: audit.php
+ * Purpose: Configuration file for the Audit Manager module.
+ * Path: audit_manager/config/audit.php
+ * 
+ * Changelog:
+ * - [2025-01-25] Initial creation of the file.
+ * - [2025-01-27] Added logging level configuration and encryption details.
+ * - [2025-01-28] Updated access control and notification settings.
+ */
+
+return [
+    // General settings
+    'enabled' => true, // Enable or disable the audit manager
+
+    // Log file storage settings
+    'storage' => [
+        'directory' => __DIR__ . '/../logs', // Directory where logs will be stored
+        'file_prefix' => 'audit_', // Prefix for log files
+        'rotation' => [
+            'enabled' => true, // Enable log rotation
+            'frequency' => 'daily', // Rotate logs daily
+            'max_files' => 30, // Keep logs for the last 30 days
+        ],
+    ],
+
+    // Logging levels
+    'log_levels' => [
+        'info' => true, // Log informational messages
+        'warning' => true, // Log warnings
+        'error' => true, // Log errors
+        'critical' => true, // Log critical system events
+    ],
+
+    // Encryption settings
+    'encryption' => [
+        'enabled' => true, // Enable AES encryption for sensitive log entries
+        'key' => $_ENV['ENCRYPTION_KEY'] ?? 'your-encryption-key-here', // AES encryption key (store securely)
+        'cipher' => 'AES-256-CBC', // Cipher method
+    ],
+
+    // Filters for accessing logs
+    'filters' => [
+        'by_user' => true, // Enable filtering logs by user ID
+        'by_booking' => true, // Enable filtering logs by booking ID
+        'by_date' => true, // Enable filtering logs by date range
+    ],
+
+    // Access control
+    'access' => [
+        'allowed_roles' => ['admin', 'audit_manager'], // Roles allowed to access the logs
+    ],
+
+    // Notification settings
+    'notifications' => [
+        'enabled' => true, // Enable email notifications for critical events
+        'email_recipients' => explode(',', $_ENV['AUDIT_NOTIFICATION_EMAILS'] ?? 'admin@example.com'), // Recipients for critical event notifications
+    ],
+];
+=== AuditManager/README.md ===
+# Audit Manager Module
+
+## Overview
+The Audit Manager module is responsible for providing a robust, centralized logging and audit trail system for the CarFuse platform. It ensures compliance with regulations by maintaining an immutable record of critical operations across the system.
+
+---
+
+## Features
+- **Centralized Logging**: Logs all critical events with metadata such as user ID, booking ID, and timestamps.
+- **AES Encryption**: Sensitive data in logs is encrypted using AES-256-CBC.
+- **Log Filtering**: Admins can filter logs by user, booking, and date.
+- **Access Control**: Logs are accessible only to authorized roles (e.g., admin, audit manager).
+- **Log Rotation**: Automatic rotation and retention of logs for efficient storage management.
+- **Notifications**: Email alerts for critical events.
+
+---
+
+
+---
+
+## Configuration
+The configuration file (`config/audit.php`) allows you to customize the following settings:
+- **Log Storage**: Define the directory, file naming convention, and log rotation settings.
+- **Encryption**: Enable AES encryption and set the encryption key.
+- **Filters**: Configure log filtering options (by user, booking, and date).
+- **Access Control**: Restrict access to logs based on user roles.
+- **Notifications**: Configure email notifications for critical events.
+
+---
+
+## Installation
+1. Place the `audit_manager/` directory in the root of the project.
+2. Configure the settings in `config/audit.php` as per your requirements.
+3. Ensure the logs directory (`audit_manager/logs`) is writable by the application.
+
+---
+
+## Usage
+### **1. Logging Events**
+Use the `AuditService` class to log events. Example:
+```php
+use AuditManager\AuditService;
+
+$auditService = new AuditService($db, $config);
+$auditService->log('User login', ['user_id' => 123, 'ip_address' => '192.168.0.1']);
+=== AuditManager/Services/AuditService.php ===
+<?php
+
+namespace AuditManager\Services;
+
+use PDO;
+use Exception;
+
+/**
+ * Audit Service
+ *
+ * Provides functionality for logging actions in the audit trail and retrieving logs
+ * based on filters. Designed to ensure a robust and secure audit trail for the application.
+ */
+class AuditService
+{
+    private PDO $db;
+
+    public function __construct(PDO $db)
+    {
+        $this->db = $db;
+    }
+
+    /**
+     * Log an action in the audit trail.
+     *
+     * @param string $action - The action performed (e.g., 'document_created', 'payment_processed').
+     * @param array $details - An array of additional details about the action (e.g., 'document_id' => 123).
+     * @param int|null $userId - The ID of the user performing the action (if applicable).
+     * @param int|null $bookingId - The ID of the related booking (if applicable).
+     * @param string|null $ipAddress - The IP address of the user (if available).
+     * @throws Exception
+     */
+    public function log(
+        string $action,
+        array $details = [],
+        ?int $userId = null,
+        ?int $bookingId = null,
+        ?string $ipAddress = null
+    ): void {
+        try {
+            $stmt = $this->db->prepare("
+                INSERT INTO audit_trails (action, details, user_id, booking_id, ip_address, created_at)
+                VALUES (:action, :details, :user_id, :booking_id, :ip_address, NOW())
+            ");
+
+            $stmt->execute([
+                ':action' => $action,
+                ':details' => json_encode($details, JSON_UNESCAPED_UNICODE),
+                ':user_id' => $userId,
+                ':booking_id' => $bookingId,
+                ':ip_address' => $ipAddress,
+            ]);
+        } catch (Exception $e) {
+            throw new Exception('Failed to log action: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Retrieve logs based on filters.
+     *
+     * @param array $filters - Array of filters for querying logs.
+     *                          Supported keys: user_id, booking_id, action, start_date, end_date.
+     * @return array - Array of logs matching the filters.
+     * @throws Exception
+     */
+    public function getLogs(array $filters): array
+    {
+        try {
+            $query = "SELECT * FROM audit_trails WHERE 1=1";
+            $params = [];
+
+            if (!empty($filters['user_id'])) {
+                $query .= " AND user_id = :user_id";
+                $params[':user_id'] = $filters['user_id'];
+            }
+
+            if (!empty($filters['booking_id'])) {
+                $query .= " AND booking_id = :booking_id";
+                $params[':booking_id'] = $filters['booking_id'];
+            }
+
+            if (!empty($filters['action'])) {
+                $query .= " AND action = :action";
+                $params[':action'] = $filters['action'];
+            }
+
+            if (!empty($filters['start_date'])) {
+                $query .= " AND created_at >= :start_date";
+                $params[':start_date'] = $filters['start_date'];
+            }
+
+            if (!empty($filters['end_date'])) {
+                $query .= " AND created_at <= :end_date";
+                $params[':end_date'] = $filters['end_date'];
+            }
+
+            $query .= " ORDER BY created_at DESC";
+
+            $stmt = $this->db->prepare($query);
+            $stmt->execute($params);
+
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            throw new Exception('Failed to retrieve logs: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Retrieve a single log entry by ID.
+     *
+     * @param int $logId - The ID of the log entry to retrieve.
+     * @return array - The log entry data.
+     * @throws Exception
+     */
+    public function getLogById(int $logId): array
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM audit_trails WHERE id = :log_id");
+            $stmt->execute([':log_id' => $logId]);
+
+            $log = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$log) {
+                throw new Exception('Log entry not found.');
+            }
+
+            return $log;
+        } catch (Exception $e) {
+            throw new Exception('Failed to retrieve log entry: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Delete logs based on specific filters.
+     *
+     * @param array $filters - Array of filters for deleting logs.
+     *                         Supported keys: user_id, booking_id, action, start_date, end_date.
+     * @return int - Number of rows deleted.
+     * @throws Exception
+     */
+    public function deleteLogs(array $filters): int
+    {
+        try {
+            $query = "DELETE FROM audit_trails WHERE 1=1";
+            $params = [];
+
+            if (!empty($filters['user_id'])) {
+                $query .= " AND user_id = :user_id";
+                $params[':user_id'] = $filters['user_id'];
+            }
+
+            if (!empty($filters['booking_id'])) {
+                $query .= " AND booking_id = :booking_id";
+                $params[':booking_id'] = $filters['booking_id'];
+            }
+
+            if (!empty($filters['action'])) {
+                $query .= " AND action = :action";
+                $params[':action'] = $filters['action'];
+            }
+
+            if (!empty($filters['start_date'])) {
+                $query .= " AND created_at >= :start_date";
+                $params[':start_date'] = $filters['start_date'];
+            }
+
+            if (!empty($filters['end_date'])) {
+                $query .= " AND created_at <= :end_date";
+                $params[':end_date'] = $filters['end_date'];
+            }
+
+            $stmt = $this->db->prepare($query);
+            $stmt->execute($params);
+
+            return $stmt->rowCount();
+        } catch (Exception $e) {
+            throw new Exception('Failed to delete logs: ' . $e->getMessage());
+        }
+    }
+}
+=== AuditManager/Middleware/AuditTrailMiddleware.php ===
+<?php
+
+namespace AuditManager\Middleware;
+
+use AuditManager\Services\AuditService;
+use Psr\Log\LoggerInterface;
+
+class AuditTrailMiddleware
+{
+    private AuditService $auditService;
+    private LoggerInterface $logger;
+
+    public function __construct(AuditService $auditService, LoggerInterface $logger)
+    {
+        $this->auditService = $auditService;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Handle an incoming request.
+     * Logs relevant details to the audit trail.
+     */
+    public function handle(array $request, callable $next)
+    {
+        try {
+            // Extract relevant data from the request
+            $action = $this->determineAction($request);
+            $details = json_encode($request); // Sanitize or limit this as necessary
+            $userId = $request['user_id'] ?? null;
+            $bookingId = $request['booking_id'] ?? null;
+            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+
+            // Log the action
+            $this->auditService->log($action, $details, $userId, $bookingId, $ipAddress);
+
+            // Continue to the next middleware/controller
+            return $next($request);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to log action in audit trail', ['error' => $e->getMessage()]);
+            // Allow the request to proceed even if logging fails
+            return $next($request);
+        }
+    }
+
+    /**
+     * Determine the action based on the request.
+     */
+    private function determineAction(array $request): string
+    {
+        // Determine action based on the request (e.g., URL, HTTP method, etc.)
+        $action = $_SERVER['REQUEST_METHOD'] . ' ' . ($_SERVER['REQUEST_URI'] ?? 'unknown');
+        return $action;
+    }
+}
+=== AuditManager/Migrations/crete_audit_trail_table.php ===
+<?php
+/**
+ * File: create_audit_trail_table.php
+ * Purpose: Creates the `audit_trails` table for recording audit trail logs.
+ */
+
+require_once __DIR__ . '/../../bootstrap.php'; // Ensure this points to the correct path for database initialization.
+
+try {
+    $pdo = new PDO(DB_DSN, DB_USER, DB_PASS, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    ]);
+
+    echo "Connected to the database successfully.\n";
+
+    $query = "
+        CREATE TABLE IF NOT EXISTS audit_trails (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            action VARCHAR(255) NOT NULL,
+            details TEXT NOT NULL,
+            user_id INT NULL,
+            booking_id INT NULL,
+            ip_address VARCHAR(45),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    ";
+
+    $pdo->exec($query);
+    echo "Table `audit_trails` created successfully.\n";
+
+} catch (PDOException $e) {
+    echo "Database error: " . $e->getMessage() . "\n";
+    exit(1);
+}

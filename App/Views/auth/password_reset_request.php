@@ -1,40 +1,76 @@
-<?php require_once __DIR__ . '/../layouts/header.php';
-require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php'; 
+<?php
+/*
+|--------------------------------------------------------------------------
+| Żądanie Resetu Hasła
+|--------------------------------------------------------------------------
+| Ten plik umożliwia użytkownikowi wysłanie prośby o resetowanie hasła.
+| Na podany adres e-mail zostanie wysłany link do resetu.
+|
+| Ścieżka: App/Views/auth/reset_request.php
+|
+| Zależy od:
+| - JavaScript: /js/auth.js (obsługa AJAX, dynamiczne wysyłanie resetu)
+| - CSS: /css/auth.css (stylizacja interfejsu użytkownika)
+| - PHP: csrf_field() (zabezpieczenie formularzy)
+|
+| Technologie:
+| - PHP 8+ (backend)
+| - MySQL (baza danych)
+| - JavaScript (AJAX do dynamicznego wysyłania zapytania)
+| - HTML, CSS (interfejs)
+*/
+
+session_start();
+if (isset($_SESSION['user_id'])) {
+    header("Location: /dashboard");
+    exit;
+}
 ?>
 
-<h1 class="text-center">Reset Password</h1>
-
-<div id="alert-container"></div>
+<h1 class="text-center">Resetowanie Hasła</h1>
 
 <div class="auth-container">
-    <form id="passwordResetForm" class="auth-form">
+    <form id="resetRequestForm">
         <?= csrf_field() ?>
-        <input type="hidden" name="token" value="<?= esc($token) ?>">
-
-        <div class="form-group">
-            <label for="email">Email Address</label>
-            <input type="email" id="email" name="email" class="form-control" placeholder="Enter your email" required value="<?= esc($email ?? old('email')) ?>">
+        <div class="mb-3">
+            <label for="email" class="form-label">Adres e-mail</label>
+            <input type="email" class="form-control" id="email" name="email" required>
         </div>
-
-        <div class="form-group">
-            <label for="password">New Password</label>
-            <input type="password" id="password" name="password" class="form-control" placeholder="Enter a new password" required minlength="8">
-            <small class="form-text">Password must be at least 8 characters long.</small>
-        </div>
-
-        <div class="form-group">
-            <label for="confirm_password">Confirm New Password</label>
-            <input type="password" id="confirm_password" name="confirm_password" class="form-control" placeholder="Re-enter your password" required>
-        </div>
-
-        <button type="submit" class="btn btn-primary btn-block">Reset Password</button>
+        <button type="submit" class="btn btn-primary w-100">Wyślij link resetujący</button>
     </form>
-
-    <div class="text-center mt-3">
-        <a href="/auth/login">Back to Login</a>
-    </div>
+    <div id="responseMessage" class="alert mt-3" style="display:none;"></div>
 </div>
 
-<script src="/js/auth.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const resetRequestForm = document.getElementById("resetRequestForm");
 
-<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+    resetRequestForm.addEventListener("submit", function(e) {
+        e.preventDefault();
+        requestPasswordReset(new FormData(resetRequestForm));
+    });
+
+    function requestPasswordReset(formData) {
+        fetch("/api/auth/reset_request.php", {
+            method: "POST",
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            const responseMessage = document.getElementById("responseMessage");
+            responseMessage.style.display = "block";
+
+            if (data.success) {
+                responseMessage.className = "alert alert-success";
+                responseMessage.textContent = "Link do resetowania hasła został wysłany na podany e-mail.";
+            } else {
+                responseMessage.className = "alert alert-danger";
+                responseMessage.textContent = "Błąd: " + data.error;
+            }
+        })
+        .catch(error => {
+            console.error("Błąd wysyłania resetu:", error);
+        });
+    }
+});
+</script>

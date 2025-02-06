@@ -1,42 +1,81 @@
-<?php require_once __DIR__ . '/../layouts/header.php';
-require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php'; 
+<?php
+/*
+|--------------------------------------------------------------------------
+| Logowanie Użytkownika
+|--------------------------------------------------------------------------
+| Ten plik umożliwia użytkownikowi zalogowanie się do systemu.
+|
+| Ścieżka: App/Views/auth/login.php
+|
+| Zależy od:
+| - JavaScript: /js/auth.js (obsługa AJAX, dynamiczna walidacja)
+| - CSS: /css/auth.css (stylizacja interfejsu użytkownika)
+| - PHP: csrf_field() (zabezpieczenie formularzy)
+|
+| Technologie:
+| - PHP 8+ (backend)
+| - MySQL (baza danych)
+| - JavaScript (AJAX do dynamicznego logowania)
+| - HTML, CSS (interfejs)
+*/
+
+session_start();
+if (isset($_SESSION['user_id'])) {
+    header("Location: /dashboard");
+    exit;
+}
 ?>
 
-<h1 class="text-center">Login</h1>
-
-<div id="alert-container"></div>
+<h1 class="text-center">Zaloguj się</h1>
 
 <div class="auth-container">
-    <form id="loginForm" class="auth-form">
+    <form id="loginForm">
         <?= csrf_field() ?>
-        
-        <div class="form-group">
-            <label for="email">Email Address</label>
-            <input type="email" id="email" name="email" class="form-control" placeholder="Enter your email" required>
+        <div class="mb-3">
+            <label for="email" class="form-label">Adres e-mail</label>
+            <input type="email" class="form-control" id="email" name="email" required>
         </div>
-
-        <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" class="form-control" placeholder="Enter your password" required>
+        <div class="mb-3">
+            <label for="password" class="form-label">Hasło</label>
+            <input type="password" class="form-control" id="password" name="password" required>
         </div>
-
-        <div class="form-group form-check">
-            <input type="checkbox" id="remember" name="remember" class="form-check-input">
-            <label for="remember" class="form-check-label">Remember Me</label>
-        </div>
-
-        <button type="submit" class="btn btn-primary btn-block">Login</button>
+        <button type="submit" class="btn btn-primary w-100">Zaloguj się</button>
     </form>
-
-    <div class="text-center mt-3">
-        <a href="/auth/password_reset_request">Forgot your password?</a>
-    </div>
-
-    <div class="text-center mt-3">
-        <a href="/auth/register">Don't have an account? Register here</a>
-    </div>
+    <div id="responseMessage" class="alert mt-3" style="display:none;"></div>
+    <p class="text-center mt-2"><a href="/auth/password_reset.php">Nie pamiętasz hasła?</a></p>
 </div>
 
-<script src="/js/auth.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const loginForm = document.getElementById("loginForm");
 
-<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+    loginForm.addEventListener("submit", function(e) {
+        e.preventDefault();
+        loginUser(new FormData(loginForm));
+    });
+
+    function loginUser(formData) {
+        fetch("/api/auth/login.php", {
+            method: "POST",
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            const responseMessage = document.getElementById("responseMessage");
+            responseMessage.style.display = "block";
+
+            if (data.success) {
+                responseMessage.className = "alert alert-success";
+                responseMessage.textContent = "Logowanie pomyślne! Przekierowywanie...";
+                setTimeout(() => window.location.href = "/dashboard", 2000);
+            } else {
+                responseMessage.className = "alert alert-danger";
+                responseMessage.textContent = "Błąd: " + data.error;
+            }
+        })
+        .catch(error => {
+            console.error("Błąd logowania:", error);
+        });
+    }
+});
+</script>
