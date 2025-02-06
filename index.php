@@ -2,13 +2,15 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../vendor/autoload.php';
+define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html'); // Set absolute path
+
+require_once BASE_PATH . '/vendor/autoload.php';
 
 // Set response headers
 header('Content-Type: application/json');
 
 // Load the router
-$dispatcher = require __DIR__ . '/../config/routes.php';
+$dispatcher = require BASE_PATH . '/config/routes.php';
 
 // Normalize request URI
 $httpMethod = $_SERVER['REQUEST_METHOD'];
@@ -17,7 +19,7 @@ $uri = rtrim($uri, '/');
 
 // Redirect root URL to landing page
 if ($uri === '' || $uri === '/' || $uri === '/index.php') {
-    require __DIR__ . '/../App/Views/landing.php';
+    require BASE_PATH . '/App/Views/landing.php';
     exit;
 }
 
