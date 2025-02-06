@@ -1,3 +1,4 @@
+<?php
 /*
 |--------------------------------------------------------------------------
 | Header - Dynamiczny Nagłówek dla Wszystkich Widoków
@@ -8,7 +9,6 @@
 | Ścieżka: App/Views/layouts/header.php
 */
 
-<?php
 session_start();
 
 $isLoggedIn = isset($_SESSION['user_id']);
@@ -59,6 +59,7 @@ $greetings = [
 // Losowe powitanie przy każdym załadowaniu
 $greeting = $isLoggedIn ? $greetings[array_rand($greetings)] : "Witaj w CarFuse! Wynajmij auto i ruszaj w drogę!";
 ?>
+<script type="module" src="/js/main.min.js"></script>
 
 <header>
     <nav class="navbar">
