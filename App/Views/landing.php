@@ -18,6 +18,45 @@
 | - JavaScript (dynamiczna walidacja formularza)
 */
 
+require_once __DIR__ . '/../vendor/autoload.php';
+
+$dispatcher = require __DIR__ . '/../config/routes.php'; // Adjust path if necessary
+
+$httpMethod = $_SERVER['REQUEST_METHOD'];
+$uri = $_SERVER['REQUEST_URI'];
+
+// Normalize URI (remove query strings, ensure leading slash)
+$uri = parse_url($uri, PHP_URL_PATH);
+$uri = rtrim($uri, '/');
+
+$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
+
+switch ($routeInfo[0]) {
+    case FastRoute\Dispatcher::NOT_FOUND:
+        http_response_code(404);
+        echo json_encode(["error" => "404 Not Found"]);
+        break;
+
+    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+        http_response_code(405);
+        echo json_encode(["error" => "405 Method Not Allowed"]);
+        break;
+
+    case FastRoute\Dispatcher::FOUND:
+        [$controller, $method] = $routeInfo[1];
+        $vars = $routeInfo[2];
+
+        if (!class_exists($controller) || !method_exists($controller, $method)) {
+            http_response_code(500);
+            echo json_encode(["error" => "Invalid route handler"]);
+            break;
+        }
+
+        $controllerInstance = new $controller();
+        call_user_func_array([$controllerInstance, $method], $vars);
+        break;
+}
+
 require_once __DIR__ . '/layouts/header.php';
 ?>
 
