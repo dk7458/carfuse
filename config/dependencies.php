@@ -43,16 +43,6 @@ foreach (glob("{$configDirectory}/*.php") as $filePath) {
     }
 }
 
-// ✅ Ensure necessary directories exist
-$templateDirectory = __DIR__ . '/../storage/templates';
-$fileStorageConfig = $config['storage'];
-
-foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $directory) {
-    if (!is_dir($directory)) {
-        mkdir($directory, 0775, true);
-    }
-}
-
 // ✅ Initialize PDO Instances
 try {
     $pdo = new PDO(
@@ -99,7 +89,14 @@ $container->set(LoggerInterface::class, $logger);
 $container->set(DocumentQueue::class, function () use ($fileStorage, $logger) {
     return new DocumentQueue($fileStorage, __DIR__ . '/../storage/document_queue.json', $logger);
 });
+$templateDirectory = __DIR__ . '/../storage/templates';
+$fileStorageConfig = $config['storage'];
 
+foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $directory) {
+    if (!is_dir($directory)) {
+        mkdir($directory, 0775, true);
+    }
+}
 $container->set(Validator::class, fn() => new Validator());
 $container->set(RateLimiter::class, fn() => new RateLimiter($pdo));
 $container->set(AuditService::class, fn() => new AuditService($securePdo));
