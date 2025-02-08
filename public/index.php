@@ -8,7 +8,7 @@ header("Content-Type: text/html; charset=UTF-8");
 //require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
 // Load Routes
-$dispatcher = require __DIR__ . '/../App/config/routes.php';
+$dispatcher = require __DIR__ . '/routes.php';
 
 // Get the Requested URL Path
 $httpMethod = $_SERVER['REQUEST_METHOD'];
