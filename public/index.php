@@ -5,7 +5,7 @@ header("Content-Type: text/html; charset=UTF-8");
 // Load Core Files
 require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+//require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
 // Load Routes
 $dispatcher = require __DIR__ . '/../App/config/routes.php';
