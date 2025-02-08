@@ -9,90 +9,122 @@
 | Path: App/Helpers/SecurityHelper.php
 */
 
-// Add debug logging function
+// Security Configuration
+const SESSION_CONFIG = [
+    'use_only_cookies' => 1,
+    'use_strict_mode' => 1,
+    'cookie_httponly' => 1,
+    'cookie_samesite' => 'Lax',
+    'gc_maxlifetime' => 3600,
+    'cookie_lifetime' => 0,
+    'use_trans_sid' => 0,
+    'sid_bits_per_character' => 6
+];
+
+// Enhanced logging with severity levels
 function securityLog($message, $level = 'info') {
     $logFile = __DIR__ . '/../../logs/security.log';
     $timestamp = date('Y-m-d H:i:s');
+    
+    // Sanitize sensitive data
+    $patterns = [
+        '/user_id[\s]?[=:][\s]?["\']?\w+["\']?/i',
+        '/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/',
+        '/Mozilla\/[^\s]+/'
+    ];
+    $message = preg_replace($patterns, '[REDACTED]', $message);
     $sanitizedMessage = str_replace(["\n", "\r"], '', $message);
+    
     error_log("[$timestamp][$level] $sanitizedMessage\n", 3, $logFile);
 }
 
 function startSecureSession() {
-    if (session_status() === PHP_SESSION_NONE) {
-        // Configure session parameters before starting
-        $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
-        $params = session_get_cookie_params();
-        
-        // Only set session parameters if we haven't started yet
-        if (headers_sent()) {
-            securityLog('Headers already sent before session configuration', 'warning');
-            return false;
-        }
+    if (session_status() !== PHP_SESSION_NONE) {
+        return true;
+    }
 
-        // Configure session cookie
-        session_set_cookie_params([
-            'lifetime' => 0,
-            'path' => '/',
-            'domain' => $_SERVER['HTTP_HOST'],
-            'secure' => $secure,
-            'httponly' => true,
-            'samesite' => 'Lax'
-        ]);
-
-        // Attempt to start session
-        if (@session_start()) {
-            securityLog('Session started successfully');
-            
-            // Initialize session security measures
-            if (empty($_SESSION['initiated'])) {
-                session_regenerate_id(true);
-                $_SESSION['initiated'] = time();
-                $_SESSION['client_ip'] = $_SERVER['REMOTE_ADDR'];
-                $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'];
-                securityLog('New session initiated and secured');
-            }
-            
-            // Validate session
-            if (!validateSessionIntegrity()) {
-                destroySession();
-                securityLog('Session integrity check failed - session destroyed', 'warning');
-                return false;
-            }
-            
-            return true;
-        } else {
-            securityLog('Failed to start session', 'error');
-            return false;
+    // Apply security configuration before session start
+    foreach (SESSION_CONFIG as $key => $value) {
+        if (!ini_set("session.$key", $value)) {
+            securityLog("Failed to set session.$key", 'error');
         }
     }
-    return true;
+
+    // Configure session cookie
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'domain' => $_SERVER['HTTP_HOST'] ?? null,
+        'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+
+    try {
+        if (!session_start()) {
+            throw new Exception('Session start failed');
+        }
+
+        if (empty($_SESSION['initiated'])) {
+            session_regenerate_id(true);
+            $_SESSION['initiated'] = time();
+            $_SESSION['client_ip'] = hash('sha256', $_SERVER['REMOTE_ADDR']);
+            $_SESSION['user_agent'] = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
+            $_SESSION['last_activity'] = time();
+            securityLog('New session initiated');
+        }
+
+        return validateSessionIntegrity();
+    } catch (Exception $e) {
+        securityLog('Session initialization failed: ' . $e->getMessage(), 'critical');
+        return false;
+    }
 }
 
 function validateSessionIntegrity() {
     if (!isset($_SESSION['initiated']) || 
         !isset($_SESSION['client_ip']) || 
-        !isset($_SESSION['user_agent'])) {
+        !isset($_SESSION['user_agent']) ||
+        !isset($_SESSION['last_activity'])) {
+        securityLog('Session integrity check failed: missing required keys', 'warning');
         return false;
     }
+
+    $currentIp = hash('sha256', $_SERVER['REMOTE_ADDR']);
+    $currentAgent = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
     
-    return $_SESSION['client_ip'] === $_SERVER['REMOTE_ADDR'] && 
-           $_SESSION['user_agent'] === $_SERVER['HTTP_USER_AGENT'];
+    if ($_SESSION['client_ip'] !== $currentIp || 
+        $_SESSION['user_agent'] !== $currentAgent) {
+        securityLog('Session integrity check failed: client mismatch', 'warning');
+        return false;
+    }
+
+    // Check for session timeout (30 minutes)
+    if (time() - $_SESSION['last_activity'] > 1800) {
+        securityLog('Session expired due to inactivity', 'info');
+        destroySession();
+        return false;
+    }
+
+    $_SESSION['last_activity'] = time();
+    return true;
 }
 
 function generateCsrfToken() {
     try {
+        // Ensure we have a token and it's not expired
         if (empty($_SESSION['csrf_token']) || 
             !isset($_SESSION['csrf_time']) || 
-            time() - $_SESSION['csrf_time'] > 3600) {
+            (time() - $_SESSION['csrf_time'] > 1800)) {
             
             $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
             $_SESSION['csrf_time'] = time();
-            securityLog('New CSRF token generated');
         }
         return $_SESSION['csrf_token'];
     } catch (Exception $e) {
-        securityLog('Failed to generate CSRF token: ' . $e->getMessage(), 'error');
-        return false;
+        securityLog('CSRF token generation failed: ' . $e->getMessage(), 'error');
+        // Fallback to a less secure but functional token
+        return hash('sha256', uniqid(mt_rand(), true));
     }
 }
 
@@ -130,9 +162,12 @@ function generateSecureToken($length = 64)
 }
 
 function destroySession() {
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        // Log before destroying
-        securityLog('Session destroyed for user: ' . ($_SESSION['user_id'] ?? 'unknown'));
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return false;
+    }
+
+    try {
+        securityLog('Initiating session destruction');
         
         // Clear session data
         $_SESSION = [];
@@ -150,11 +185,16 @@ function destroySession() {
             ]);
         }
         
-        // Destroy session
-        session_destroy();
+        if (!session_destroy()) {
+            throw new Exception('Session destruction failed');
+        }
+        
+        securityLog('Session destroyed successfully');
         return true;
+    } catch (Exception $e) {
+        securityLog('Session destruction error: ' . $e->getMessage(), 'error');
+        return false;
     }
-    return false;
 }
 
 /**
@@ -196,6 +236,6 @@ function setSessionData($key, $value)
 
 // Initialize secure session when the file is included
 if (!startSecureSession()) {
-    securityLog('Failed to initialize secure session', 'critical');
+    securityLog('Critical: Failed to initialize secure session', 'critical');
 }
 ?>
