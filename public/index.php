@@ -4,6 +4,8 @@ header("Content-Type: text/html; charset=UTF-8");
 require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+echo "<!-- Debug: index.php started -->";
+
 ?>
 
 <!DOCTYPE html>
