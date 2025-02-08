@@ -24,14 +24,16 @@ async function fetchAvailableVehicles() {
     showLoadingIndicator();
 
     try {
-        const response = await ajax.get(`/vehicles/available?pickup_date=${pickupDate}`);
+        const response = await fetch(`/api/user/bookings.php?pickup_date=${pickupDate}`);
+        const data = await response.json();
         hideLoadingIndicator();
 
-        if (response.vehicles && response.vehicles.length > 0) {
-            displayAvailableVehicles(response.vehicles);
+        if (data.vehicles && data.vehicles.length > 0) {
+            displayAvailableVehicles(data.vehicles);
         } else {
             showErrorToast('Brak dostępnych pojazdów na wybrany termin.');
             clearVehicles();
+            fetchAlternativeDates(pickupDate);
         }
     } catch (error) {
         hideLoadingIndicator();
@@ -65,6 +67,79 @@ function clearVehicles() {
 }
 
 /**
+ * Fetches alternative dates with available vehicles
+ */
+async function fetchAlternativeDates(pickupDate) {
+    try {
+        const response = await fetch(`/api/user/bookings.php?alternative_dates=true&pickup_date=${pickupDate}`);
+        const data = await response.json();
+        if (data.alternativeDates && data.alternativeDates.length > 0) {
+            displayAlternativeDates(data.alternativeDates, pickupDate);
+        } else {
+            showErrorToast('Brak alternatywnych terminów.');
+        }
+    } catch (error) {
+        console.error('Błąd pobierania alternatywnych terminów:', error);
+        showErrorToast('Nie udało się pobrać alternatywnych terminów.');
+    }
+}
+
+/**
+ * Displays alternative dates in the UI
+ */
+function displayAlternativeDates(alternativeDates, originalDate) {
+    vehiclesContainer.innerHTML = '<p class="text-muted">Brak dostępnych pojazdów.</p>';
+
+    const alternativesContainer = document.createElement('div');
+    alternativesContainer.className = 'alternatives';
+
+    const title = document.createElement('h5');
+    title.innerText = 'Dostępne alternatywne terminy:';
+    alternativesContainer.appendChild(title);
+
+    alternativeDates.forEach(date => {
+        const dateElement = document.createElement('button');
+        dateElement.className = 'alternative-date';
+        dateElement.innerText = date;
+        dateElement.addEventListener('click', () => {
+            document.getElementById('pickup-date').value = date;
+            fetchAvailableVehicles();
+        });
+        alternativesContainer.appendChild(dateElement);
+    });
+
+    const notifyButton = document.createElement('button');
+    notifyButton.className = 'notify-button';
+    notifyButton.innerText = 'Powiadom mnie, gdy pojazdy będą dostępne';
+    notifyButton.addEventListener('click', () => setNotificationAlert(originalDate));
+    alternativesContainer.appendChild(notifyButton);
+
+    vehiclesContainer.appendChild(alternativesContainer);
+}
+
+/**
+ * Sets a notification alert for the user
+ */
+async function setNotificationAlert(pickupDate) {
+    try {
+        const response = await fetch('/api/user/bookings.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pickup_date: pickupDate })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showSuccessToast('Powiadomienie zostało ustawione.');
+        } else {
+            showErrorToast(data.error || 'Nie udało się ustawić powiadomienia.');
+        }
+    } catch (error) {
+        console.error('Błąd ustawiania powiadomienia:', error);
+        showErrorToast('Nie udało się ustawić powiadomienia.');
+    }
+}
+
+/**
  * Handles the booking form submission.
  */
 async function submitBookingRequest(event) {
@@ -77,14 +152,18 @@ async function submitBookingRequest(event) {
     showLoadingIndicator();
 
     try {
-        const response = await ajax.post('/booking/create', formData);
+        const response = await fetch('/api/user/bookings.php', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
         hideLoadingIndicator();
 
-        if (response.success) {
+        if (data.success) {
             showSuccessToast('Rezerwacja zakończona sukcesem!');
             setTimeout(() => window.location.href = "/bookings/view", 1500);
         } else {
-            showErrorToast(response.error || 'Wystąpił problem podczas tworzenia rezerwacji.');
+            showErrorToast(data.error || 'Wystąpił problem podczas tworzenia rezerwacji.');
         }
     } catch (error) {
         hideLoadingIndicator();

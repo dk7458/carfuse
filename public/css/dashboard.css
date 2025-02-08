@@ -1,24 +1,131 @@
-/* dashboard.css _ Dark, Sleek Admin & User Dashboard Styles */
-.dashboard-container {
+/*
+|--------------------------------------------------------------------------
+| Dashboard Styles (dashboard.css)
+|--------------------------------------------------------------------------
+| This file contains styles for both user and admin dashboards.
+| Ensures a dark, sleek, and minimal look with responsive design.
+*/
+
+/* General Dashboard Layout */
+body {
     background-color: #121212;
-    color: #EEE;
+    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.dashboard-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 250px;
+    background: #1E1E1E;
+    padding: 20px;
+    transition: width 0.3s ease;
+}
+
+.sidebar a {
+    display: block;
+    padding: 12px;
+    color: #FFFFFF;
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background 0.3s;
+}
+
+.sidebar a:hover {
+    background: #FFD700;
+    color: #121212;
+}
+
+.sidebar .active {
+    background: #FF8C00;
+}
+
+.main-content {
+    flex-grow: 1;
     padding: 20px;
 }
-.dashboard-widget {
+
+/* Widgets & Stats */
+.widget {
     background: #1E1E1E;
-    border-radius: 8px;
-    padding: 15px;
-    box-shadow: 0px 0px 8px rgba(255, 255, 255, 0.1);
-    transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    margin-bottom: 20px;
+    transition: transform 0.3s;
 }
-.dashboard-widget:hover {
+
+.widget:hover {
     transform: scale(1.05);
-    box-shadow: 0px 0px 12px rgba(255, 255, 255, 0.15);
 }
-.sidebar {
-    background: #181818;
-    width: 250px;
+
+.widget h2 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
 }
-.sidebar a.active {
+
+.widget .value {
+    font-size: 2rem;
+    font-weight: bold;
     color: #FFD700;
 }
+
+/* Tables */
+.dashboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.dashboard-table th, .dashboard-table td {
+    padding: 12px;
+    border-bottom: 1px solid #333;
+    text-align: left;
+}
+
+.dashboard-table th {
+    background: #181818;
+}
+
+.dashboard-table tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Buttons */
+.action-button {
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.action-button:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .dashboard-container {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .sidebar a {
+        display: inline-block;
+        margin: 5px;
+    }
+}
+

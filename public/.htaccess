@@ -10,4 +10,4 @@ RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
 # Redirect all other requests to /public/index.php
-#RewriteRule ^ /public/index.php [QSA,L]
+RewriteRule ^ /public/index.php [QSA,L]

@@ -1,14 +1,124 @@
-/* payments.css _ Payment Processing UI */
+/*
+|--------------------------------------------------------------------------
+| Payments Styles (payments.css)
+|--------------------------------------------------------------------------
+| This file contains styles for the payments page, ensuring a sleek, modern,
+| and secure UI with a dark, minimal aesthetic.
+*/
+
+/* General Payment Page Styles */
+body {
+    background-color: #121212;
+    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
 .payment-container {
+    max-width: 600px;
+    margin: 40px auto;
     background: #1E1E1E;
     padding: 20px;
-    border-radius: 6px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
 }
-.payment-form input {
-    background: #181818;
-    color: #FFF;
+
+.payment-container h2 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 20px;
+}
+
+/* Payment Form */
+.payment-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.payment-form input, .payment-form select, .payment-form button {
+    padding: 12px;
+    font-size: 1rem;
+    border-radius: 5px;
+    border: none;
+}
+
+.payment-form input, .payment-form select {
+    background: #333;
+    color: #fff;
+    border: 1px solid #444;
     width: 100%;
 }
-.payment-form button {
-    @extend .btn-primary;
+
+.payment-form input:focus, .payment-form select:focus {
+    border-color: #FFD700;
+    outline: 0;
 }
+
+.payment-form button {
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.payment-form button:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+}
+
+/* Transaction History */
+.transaction-history {
+    margin-top: 30px;
+}
+
+.transaction-history table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.transaction-history th, .transaction-history td {
+    padding: 12px;
+    border-bottom: 1px solid #333;
+    text-align: left;
+}
+
+.transaction-history th {
+    background: #181818;
+}
+
+.transaction-history tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Payment Success & Error Messages */
+.payment-message {
+    text-align: center;
+    padding: 15px;
+    border-radius: 5px;
+    margin-top: 20px;
+}
+
+.payment-success {
+    background-color: #28a745;
+    color: white;
+}
+
+.payment-error {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .payment-container {
+        padding: 15px;
+    }
+    
+    .transaction-history table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+

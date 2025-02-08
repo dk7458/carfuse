@@ -30,7 +30,11 @@ async function uploadDocument(event) {
     }
 
     try {
-        const response = await ajax.post('/documents/upload', formData);
+        const response = await fetch('/api/user/documents.php?action=upload', {
+            method: 'POST',
+            body: formData
+        }).then(res => res.json());
+
         if (response.success) {
             showSuccessToast('Dokument przesłany pomyślnie.');
             previewDocument(response.documentUrl);
@@ -101,7 +105,14 @@ function handleSignButtonClick() {
  */
 async function signDocument(documentId) {
     try {
-        const response = await ajax.post('/documents/sign', { documentId });
+        const response = await fetch('/api/user/documents.php?action=sign', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ documentId })
+        }).then(res => res.json());
+
         if (response.success) {
             showSuccessToast('Dokument został pomyślnie podpisany.');
         } else {
