@@ -16,12 +16,22 @@ use DocumentManager\Controllers\SignatureController;
 use App\Controllers\UserController;
 
 return simpleDispatcher(function (RouteCollector $router) {
-    // Home Page
+    // Middleware-like Authentication Handling
+    function requireAuth() {
+        require_once BASE_PATH . '/App/Helpers/SecurityHelper.php';
+        if (!isUserLoggedIn()) {
+            http_response_code(403);
+            echo json_encode(["error" => "Unauthorized"]);
+            exit();
+        }
+    }
+
+    // Home Page (Always Loads Index)
     $router->get('/', function () {
-        require BASE_PATH . '/public/index.php'; // Ensuring home is handled within index.php
+        require BASE_PATH . '/public/index.php';
     });
 
-    // Generic Dynamic View Routing for User Dashboard
+    // Dynamic View Routing for User Dashboard
     $router->get('/{view}', function ($vars) {
         $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
         $view = $vars['view'];
@@ -34,8 +44,9 @@ return simpleDispatcher(function (RouteCollector $router) {
         }
     });
 
-    // Dynamic API Routing for Shared Endpoints
+    // Dynamic API Routing with Authentication Check
     $router->get('/api/{endpoint}', function ($vars) {
+        requireAuth(); // Ensure user is logged in
         $endpoint = $vars['endpoint'];
         $apiPath = BASE_PATH . "/public/api/$endpoint.php";
 

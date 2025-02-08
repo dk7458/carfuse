@@ -35,6 +35,7 @@ nav a:hover {
     text-align: center;
     padding: 100px 20px;
     background: url('/public/images/hero-bg.jpg') no-repeat center center/cover;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
 }
 .hero h1 {
     font-size: 48px;
@@ -45,6 +46,14 @@ nav a:hover {
     font-size: 20px;
     opacity: 0.8;
     margin-bottom: 30px;
+}
+.hero-title {
+    font-size: 2.5rem;
+    font-weight: bold;
+}
+.hero-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.8;
 }
 
 /* Search Form */
@@ -88,6 +97,40 @@ nav a:hover {
     background: #181818;
     padding: 20px;
     border-radius: 5px;
+}
+.features-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+.feature-box {
+    background: #1a1a1a;
+    padding: 20px;
+    border-radius: 8px;
+    transition: transform 0.3s ease;
+}
+.feature-box:hover {
+    transform: scale(1.05);
+}
+
+/* CTA Section */
+.cta {
+    margin-top: 40px;
+    background: #28a745;
+    padding: 20px;
+    border-radius: 8px;
+}
+.btn {
+    display: inline-block;
+    background: #007bff;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: background 0.3s ease;
+}
+.btn:hover {
+    background: #0056b3;
 }
 
 /* Footer */

@@ -1,34 +1,24 @@
 <?php
-declare(strict_types=1);
-header("Content-Type: text/html; charset=UTF-8");
-require_once __DIR__ . '/../bootstrap.php';
-require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
-
-echo "<!-- Debug: index.php started -->";
+session_start();
 ?>
 
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carfuse - Wynajmij auto szybko i łatwo</title>
-    <link rel="stylesheet" href="/public/css/style.css">
-    <script src="/public/js/shared.js" defer></script>
+    <title>Minimal CarFuse</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
+    <h1>Welcome to CarFuse (Minimal Version)</h1>
+    <nav>
+        <a href="/">Home</a> | 
+        <a href="/dashboard">Dashboard</a> | 
+        <a href="/profile">Profile</a> | 
+        <a href="/login">Login</a>
+    </nav>
 
-<?php include __DIR__ . '/layouts/header.php'; ?>
-
-<!-- Debugging: Ensure content is being included -->
-<?php
-    echo "<!-- Debug: Loading main content -->";
-    include __DIR__ . '/views/home.php';
-    echo "<!-- Debug: Content loaded successfully -->";
-?>
-
-<?php include __DIR__ . '/layouts/footer.php'; ?>
-
+    <p>This is a test version to confirm core functionality.</p>
 </body>
 </html>

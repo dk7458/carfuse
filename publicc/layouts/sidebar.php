@@ -29,16 +29,4 @@
     </nav>
 </aside>
 
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        document.querySelectorAll(".dashboard-link").forEach(link => {
-            link.addEventListener("click", function(e) {
-                e.preventDefault();
-                let targetView = this.getAttribute("href");
-                fetch(targetView).then(response => response.text()).then(data => {
-                    document.getElementById("dashboard-view").innerHTML = data;
-                });
-            });
-        });
-    });
-</script>
+<script src="/public/js/main.js" defer></script>
