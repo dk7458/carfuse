@@ -7,6 +7,11 @@ RewriteRule ^(.*)$ /public/$1 [L,QSA]
 # Ensure PHP files are executed
 AddHandler application/x-httpd-php .php
 
+# Ensure API requests are allowed
+<FilesMatch "\.(php)$">
+    Require all granted
+</FilesMatch>
+
 # Allow access to static files
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
