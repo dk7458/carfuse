@@ -1,60 +1,45 @@
 document.addEventListener("DOMContentLoaded", function () {
     console.log("Main.js loaded successfully.");
 
-    // Navbar Toggle
-    const navbarToggle = document.getElementById("navbarToggle");
-    if (navbarToggle) {
-        navbarToggle.addEventListener("click", function () {
-            document.getElementById("sidebar").classList.toggle("active");
-        });
+    // Ensure dashboard view container exists before updating it
+    const dashboardView = document.getElementById("dashboard-view");
+    if (!dashboardView) {
+        console.warn("Dashboard view container (#dashboard-view) not found.");
+        return;
     }
 
-    // Toast Notifications Auto Dismiss
-    document.querySelectorAll(".toast").forEach(toast => {
-        setTimeout(() => {
-            toast.classList.add("fade-out");
-            setTimeout(() => toast.remove(), 500);
-        }, 3000);
-    });
-
-    // Handle Modal Open/Close
-    document.querySelectorAll("[data-toggle='modal']").forEach(button => {
-        button.addEventListener("click", function () {
-            const target = this.getAttribute("data-target");
-            const modal = document.getElementById(target);
-            if (modal) modal.classList.add("show");
-        });
-    });
-
-    document.querySelectorAll(".modal .close").forEach(button => {
-        button.addEventListener("click", function () {
-            this.closest(".modal").classList.remove("show");
-        });
-    });
-
-    // Global AJAX Loader
-    document.addEventListener("DOMContentLoaded", function () {
-        const someButton = document.getElementById("element-id"); // Replace with actual element ID
-    
-        if (someButton) {
-            someButton.addEventListener("click", function () {
-                console.log("Button clicked!");
-            });
-        } else {
-            console.warn("Element not found: #element-id");
+    // Handle dashboard link navigation
+    function attachDashboardLinks() {
+        const dashboardLinks = document.querySelectorAll(".dashboard-link");
+        
+        if (dashboardLinks.length === 0) {
+            console.warn("No dashboard links found.");
+            return;
         }
-    });
 
-    document.addEventListener("ajaxStop", function () {
-        document.getElementById("loadingOverlay").style.display = "none";
-    });
+        dashboardLinks.forEach(link => {
+            link.addEventListener("click", function (e) {
+                e.preventDefault();
+                let targetView = this.getAttribute("href");
 
-    // Button Click Logging (Debugging)
-    document.querySelectorAll("button").forEach(button => {
-        button.addEventListener("click", function () {
-            console.log(`Button clicked: ${this.textContent}`);
+                if (!targetView) {
+                    console.warn("Dashboard link has no target view.");
+                    return;
+                }
+
+                fetch(targetView)
+                    .then(response => response.text())
+                    .then(data => {
+                        dashboardView.innerHTML = data;
+                        attachDashboardLinks(); // Re-attach listeners after loading new content
+                    })
+                    .catch(error => console.error("Błąd ładowania widoku:", error));
+            });
         });
-    });
 
-    console.log("Main.js execution completed.");
+        console.log("Dashboard links attached.");
+    }
+
+    // Attach event listeners after short delay (ensures elements are fully loaded)
+    setTimeout(attachDashboardLinks, 100);
 });
