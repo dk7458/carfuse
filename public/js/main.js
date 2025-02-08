@@ -33,8 +33,16 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // Global AJAX Loader
-    document.addEventListener("ajaxStart", function () {
-        document.getElementById("loadingOverlay").style.display = "block";
+    document.addEventListener("DOMContentLoaded", function () {
+        const someButton = document.getElementById("element-id"); // Replace with actual element ID
+    
+        if (someButton) {
+            someButton.addEventListener("click", function () {
+                console.log("Button clicked!");
+            });
+        } else {
+            console.warn("Element not found: #element-id");
+        }
     });
 
     document.addEventListener("ajaxStop", function () {
