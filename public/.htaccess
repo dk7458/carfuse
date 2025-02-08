@@ -8,6 +8,11 @@ AddHandler application/x-httpd-php .php
   Require all denied
 </FilesMatch>
 
+<FilesMatch "\.(php)$">
+    Require all granted
+</FilesMatch>
+
+
 # Prevent direct access to PHP files inside /api/
 RewriteRule ^api/.*\.php$ - [F,L]
 

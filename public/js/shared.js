@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        fetch("/api/shared/charts.php", {
+        fetch("/public/api/shared/charts.php", {
             headers: { "Accept": "application/json" }
         })
         .then(response => {
