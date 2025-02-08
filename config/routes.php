@@ -16,17 +16,38 @@ use DocumentManager\Controllers\SignatureController;
 use App\Controllers\UserController;
 
 return simpleDispatcher(function (RouteCollector $router) {
-    // Welcome Page
+    // Home Page
     $router->get('/', function () {
         require BASE_PATH . '/public/index.php';
     });
 
-    // Test Route
-    $router->get('/test-route', function () {
-        echo json_encode(["message" => "FastRoute is working!"]);
+    // Generic Dynamic View Routing
+    $router->get('/{view}', function ($vars) {
+        $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
+        $view = $vars['view'];
+
+        if (in_array($view, $allowedViews)) {
+            require BASE_PATH . "/public/views/user/$view.php";
+        } else {
+            http_response_code(404);
+            require BASE_PATH . "/public/views/errors/404.php";
+        }
     });
 
-    // API Routes
+    // Dynamic API Routing
+    $router->get('/api/{endpoint}', function ($vars) {
+        $endpoint = $vars['endpoint'];
+        $apiPath = BASE_PATH . "/public/api/$endpoint.php";
+
+        if (file_exists($apiPath)) {
+            require $apiPath;
+        } else {
+            http_response_code(404);
+            echo json_encode(["error" => "API endpoint not found"]);
+        }
+    });
+
+    // Explicit API Routes (Secure Endpoints)
     $router->get('/api/statistics', [DashboardController::class, 'fetchStatistics']);
     $router->get('/api/notifications', [NotificationController::class, 'fetchNotifications']);
     $router->get('/api/bookings', [DashboardController::class, 'getUserBookings']);
@@ -36,7 +57,7 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->get('/login', [AuthController::class, 'loginView']);
     $router->get('/register', [AuthController::class, 'registerView']);
 
-    // User API Routes
+    // User Authentication API
     $router->post('/register', [UserController::class, 'register']);
     $router->post('/login', [UserController::class, 'login']);
     $router->post('/profile/update', [UserController::class, 'updateProfile']);
@@ -63,38 +84,36 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->get('/signature/verify/{userId}/{documentHash}', [SignatureController::class, 'verifySignature']);
     $router->get('/signature/{userId}', [SignatureController::class, 'getSignature']);
 
-    // Dashboard
-    $router->get('/dashboard', [DashboardController::class, 'userDashboard']);
-    $router->get('/bookings', [DashboardController::class, 'getUserBookings']);
-
     // Booking Actions
-    $router->get('/bookings/{id}', [BookingController::class, 'viewBooking']);
     $router->post('/bookings/{id}/reschedule', [BookingController::class, 'rescheduleBooking']);
     $router->post('/bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
 
-    // Notifications API Routes
-    $router->get('/notifications', [NotificationController::class, 'getUserNotifications']);
+    // Notifications API
     $router->post('/notifications/mark-as-read', [NotificationController::class, 'markNotificationAsRead']);
     $router->post('/notifications/delete', [NotificationController::class, 'deleteNotification']);
     $router->post('/notifications/send', [NotificationController::class, 'sendNotification']);
-
-    // Notification Queue Processing
     $router->post('/notifications/process-queue', [NotificationQueueController::class, 'processQueue']);
 
-    // Admin Dashboard
-    $router->get('/admin/dashboard', [AdminDashboardController::class, 'index']);
-    $router->get('/admin/dashboard/data', [AdminDashboardController::class, 'getDashboardData']);
+    // Admin Dynamic Routing
+    $router->get('/admin/{section}', function ($vars) {
+        $allowedSections = ['dashboard', 'reports', 'audit-logs', 'users'];
+        $section = $vars['section'];
+
+        if (in_array($section, $allowedSections)) {
+            require BASE_PATH . "/public/views/admin/$section.php";
+        } else {
+            http_response_code(404);
+            require BASE_PATH . "/public/views/errors/404.php";
+        }
+    });
 
     // Admin Report Routes
-    $router->get('/admin/reports', [ReportController::class, 'index']);
     $router->post('/admin/reports/generate', [ReportController::class, 'generateReport']);
 
     // User Report Routes
-    $router->get('/user/reports', [ReportController::class, 'userReports']);
     $router->post('/user/reports/generate', [ReportController::class, 'generateUserReport']);
 
     // Audit Log Routes
-    $router->get('/admin/audit-logs', [AuditController::class, 'index']);
     $router->post('/admin/audit-logs/fetch', [AuditController::class, 'fetchLogs']);
 
     // Document Manager Routes
