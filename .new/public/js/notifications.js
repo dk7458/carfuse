@@ -1,41 +1,15 @@
 import ajax from './ajax';
 import { showErrorToast, showSuccessToast } from './toasts';
 
-let lastFetchTimestamp = 0;
-const FETCH_INTERVAL = 30000; // 30 seconds
-
 document.addEventListener('DOMContentLoaded', function () {
-    if (document.visibilityState === 'visible') {
-        fetchNotifications();
-    }
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    document.addEventListener('newEvent', handleNewEvent); // Custom event for new actions
-});
-
-/**
- * Handles visibility change events.
- */
-function handleVisibilityChange() {
-    if (document.visibilityState === 'visible') {
-        fetchNotifications();
-    }
-}
-
-/**
- * Handles new events that require fresh notifications.
- */
-function handleNewEvent() {
     fetchNotifications();
-}
+    setInterval(fetchNotifications, 30000); // Refresh notifications every 30 seconds
+});
 
 /**
  * Fetches notifications from the server.
  */
 async function fetchNotifications() {
-    const now = Date.now();
-    if (now - lastFetchTimestamp < FETCH_INTERVAL) return; // Prevent redundant calls
-
-    lastFetchTimestamp = now;
     try {
         const notifications = await ajax.get('/notifications');
         if (notifications.length > 0) {

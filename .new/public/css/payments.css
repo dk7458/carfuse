@@ -1,0 +1,14 @@
+/* payments.css _ Payment Processing UI */
+.payment-container {
+    background: #1E1E1E;
+    padding: 20px;
+    border-radius: 6px;
+}
+.payment-form input {
+    background: #181818;
+    color: #FFF;
+    width: 100%;
+}
+.payment-form button {
+    @extend .btn-primary;
+}

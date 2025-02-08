@@ -1,0 +1,10 @@
+/* documents.css _ Document Management UI */
+.document-upload {
+    border: 2px dashed #FFD700;
+    padding: 20px;
+    text-align: center;
+}
+.document-preview {
+    background: #2A2A2A;
+    padding: 10px;
+}

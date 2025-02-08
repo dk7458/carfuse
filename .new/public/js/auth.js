@@ -27,8 +27,6 @@ async function handleLogin(event) {
 
     if (!validateCredentials(username, password)) return;
 
-    if (await checkAndRefreshSession()) return;
-
     try {
         const response = await ajax.post('/login', { username, password });
         if (response.success) {
@@ -59,8 +57,6 @@ async function handleRegister(event) {
 
     if (!validateCredentials(username, password, confirmPassword, email)) return;
 
-    if (await checkAndRefreshSession()) return;
-
     try {
         const response = await ajax.post('/register', { username, email, password });
         if (response.success) {
@@ -88,7 +84,7 @@ function logout() {
 /**
  * Refreshes the user session and handles expiration
  */
-async function refreshSession() {
+function refreshSession() {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
 
@@ -98,42 +94,17 @@ async function refreshSession() {
         const now = Date.now();
 
         if (now >= expiration) {
-            await logout();
+            logout();
         } else {
-            const response = await ajax.get('/session/refresh');
-            if (response.success) {
-                ajax.setToken(response.token);
-            } else {
-                await logout();
-            }
+            ajax.get('/session/refresh').then(response => {
+                if (response.success) {
+                    ajax.setToken(response.token);
+                }
+            }).catch(() => logout());
         }
     } catch (error) {
-        await logout();
+        logout();
     }
-}
-
-/**
- * Checks and refreshes the session if the token is expired
- */
-async function checkAndRefreshSession() {
-    const token = localStorage.getItem('auth_token');
-    if (!token) return false;
-
-    try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const expiration = payload.exp * 1000;
-        const now = Date.now();
-
-        if (now >= expiration) {
-            await refreshSession();
-            return true;
-        }
-    } catch (error) {
-        await logout();
-        return true;
-    }
-
-    return false;
 }
 
 /**
