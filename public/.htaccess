@@ -3,16 +3,15 @@ DirectoryIndex index.php
 
 AddHandler application/x-httpd-php .php
 
-# Block sensitive files: .env, .htaccess, and system logs
-
+<Directory "/public/api">
+    Require all granted
+</Directory>
 
 <FilesMatch "\.(php)$">
     Require all granted
 </FilesMatch>
 
-
-# Prevent direct access to PHP files inside /api/
-RewriteRule ^api/.*\.php$ - [F,L]
+# Prevent direct access to PHP files inside /api
 
 # Allow direct access to static files (CSS, JS, images)
 RewriteCond %{REQUEST_FILENAME} -f [OR]

@@ -1,8 +1,10 @@
 <?php
-require_once __DIR__ . '/../../helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 
-// Ensure the response is always JSON
-header('Content-Type: application/json');
+header("Access-Control-Allow-Origin: *");  // Allow cross-origin requests
+header("Access-Control-Allow-Methods: GET, POST");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Content-Type: application/json");
 
 // Verify user authentication
 if (!isUserLoggedIn()) {
@@ -34,7 +36,7 @@ $data = [
         ]
     ]
 ];
-
+echo json_encode(["message" => "API is working!"]);
 // Return JSON response
 echo json_encode($data);
 exit();
