@@ -17,6 +17,8 @@ header("Content-Type: text/html; charset=UTF-8");
     <link rel="stylesheet" href="/public/css/style.css">
     <link rel="stylesheet" href="/public/css/home.css"> <!-- Link to home.css -->
     <script src="/public/js/main.js" defer></script>
+    <script src="/public/js/shared.js" defer></script>
+
 </head>
 <body>
 
