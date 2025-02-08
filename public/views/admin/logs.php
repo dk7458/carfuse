@@ -26,6 +26,7 @@ if (!isset($_SESSION['admin_id'])) {
 | - JavaScript (AJAX, dynamiczne ładowanie danych)
 | - HTML, CSS (interfejs)
 */
+?>
 
 <h1 class="text-center">Logi Systemowe</h1>
 
