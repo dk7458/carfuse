@@ -18,10 +18,10 @@ use App\Controllers\UserController;
 return simpleDispatcher(function (RouteCollector $router) {
     // Home Page
     $router->get('/', function () {
-        require __DIR__ . '/../public/home.php';
+        require BASE_PATH . '/public/index.php'; // Ensuring home is handled within index.php
     });
 
-    // Generic Dynamic View Routing
+    // Generic Dynamic View Routing for User Dashboard
     $router->get('/{view}', function ($vars) {
         $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
         $view = $vars['view'];
@@ -30,11 +30,11 @@ return simpleDispatcher(function (RouteCollector $router) {
             require BASE_PATH . "/public/views/user/$view.php";
         } else {
             http_response_code(404);
-            require __DIR__ . "/../public/views/errors/404.php";
+            require BASE_PATH . "/public/views/errors/404.php";
         }
     });
 
-    // Dynamic API Routing
+    // Dynamic API Routing for Shared Endpoints
     $router->get('/api/{endpoint}', function ($vars) {
         $endpoint = $vars['endpoint'];
         $apiPath = BASE_PATH . "/public/api/$endpoint.php";
@@ -47,48 +47,29 @@ return simpleDispatcher(function (RouteCollector $router) {
         }
     });
 
-    // Explicit API Routes (Secure Endpoints)
-    $router->get('/api/statistics', [DashboardController::class, 'fetchStatistics']);
-    $router->get('/api/notifications', [NotificationController::class, 'fetchNotifications']);
-    $router->get('/api/bookings', [DashboardController::class, 'getUserBookings']);
-    $router->get('/api/bookings/{id}', [BookingController::class, 'viewBooking']);
-
-    // Authentication Views
+    // Authentication Routes
     $router->get('/login', [AuthController::class, 'loginView']);
     $router->get('/register', [AuthController::class, 'registerView']);
-
-    // User Authentication API
     $router->post('/register', [UserController::class, 'register']);
     $router->post('/login', [UserController::class, 'login']);
     $router->post('/profile/update', [UserController::class, 'updateProfile']);
     $router->post('/password/reset/request', [UserController::class, 'requestPasswordReset']);
     $router->post('/password/reset', [UserController::class, 'resetPassword']);
 
-    // Password Reset Views
-    $router->get('/password/reset', [AuthController::class, 'passwordResetRequestView']);
-    $router->get('/password/reset/confirm', [AuthController::class, 'passwordResetView']);
-
-    // Payment API Routes
+    // Payment Routes
     $router->post('/payments/process', [PaymentController::class, 'processPayment']);
     $router->post('/payments/refund', [PaymentController::class, 'refundPayment']);
-    $router->post('/payments/installments', [PaymentController::class, 'setupInstallment']);
-    $router->get('/payments/transactions', [PaymentController::class, 'getUserTransactions']);
-
-    // Payment Views
     $router->get('/payments/history', [PaymentController::class, 'viewPaymentHistory']);
     $router->get('/payments/installments', [PaymentController::class, 'viewInstallments']);
-    $router->get('/payments/refunds', [PaymentController::class, 'viewRefunds']);
 
-    // Signature API Routes
-    $router->post('/signature/upload', [SignatureController::class, 'uploadSignature']);
-    $router->get('/signature/verify/{userId}/{documentHash}', [SignatureController::class, 'verifySignature']);
-    $router->get('/signature/{userId}', [SignatureController::class, 'getSignature']);
-
-    // Booking Actions
+    // Bookings Routes
+    $router->get('/bookings', [DashboardController::class, 'getUserBookings']);
+    $router->get('/bookings/{id}', [BookingController::class, 'viewBooking']);
     $router->post('/bookings/{id}/reschedule', [BookingController::class, 'rescheduleBooking']);
     $router->post('/bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
 
-    // Notifications API
+    // Notifications API Routes
+    $router->get('/notifications', [NotificationController::class, 'getUserNotifications']);
     $router->post('/notifications/mark-as-read', [NotificationController::class, 'markNotificationAsRead']);
     $router->post('/notifications/delete', [NotificationController::class, 'deleteNotification']);
     $router->post('/notifications/send', [NotificationController::class, 'sendNotification']);
@@ -109,8 +90,6 @@ return simpleDispatcher(function (RouteCollector $router) {
 
     // Admin Report Routes
     $router->post('/admin/reports/generate', [ReportController::class, 'generateReport']);
-
-    // User Report Routes
     $router->post('/user/reports/generate', [ReportController::class, 'generateUserReport']);
 
     // Audit Log Routes
