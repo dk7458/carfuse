@@ -9,7 +9,6 @@
 | Ścieżka: App/Views/layouts/navbar.php
 */
 ?>
-
 <nav class="navbar">
     <div class="container">
         <a href="/dashboard" class="logo">🚗 CarFuse</a>
@@ -21,16 +20,4 @@
     </div>
 </nav>
 
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        document.querySelectorAll(".dashboard-link").forEach(link => {
-            link.addEventListener("click", function(e) {
-                e.preventDefault();
-                let targetView = this.getAttribute("href");
-                fetch(targetView).then(response => response.text()).then(data => {
-                    document.getElementById("dashboard-view").innerHTML = data;
-                });
-            });
-        });
-    });
-</script>
+
