@@ -43,22 +43,23 @@ function startSecureSession() {
         return true;
     }
 
-    // Apply security configuration before session start
-    foreach (SESSION_CONFIG as $key => $value) {
-        if (!ini_set("session.$key", $value)) {
-            securityLog("Failed to set session.$key", 'error');
+    // Configure PHP settings before session start
+    if (headers_sent()) {
+        securityLog('Headers already sent, cannot modify session settings', 'warning');
+    } else {
+        foreach (SESSION_CONFIG as $key => $value) {
+            @ini_set("session.$key", $value);
         }
-    }
 
-    // Configure session cookie
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path' => '/',
-        'domain' => $_SERVER['HTTP_HOST'] ?? null,
-        'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
-        'httponly' => true,
-        'samesite' => 'Lax'
-    ]);
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => '/',
+            'domain' => $_SERVER['HTTP_HOST'] ?? '',
+            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+    }
 
     try {
         if (!session_start()) {
@@ -71,7 +72,8 @@ function startSecureSession() {
             $_SESSION['client_ip'] = hash('sha256', $_SERVER['REMOTE_ADDR']);
             $_SESSION['user_agent'] = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
             $_SESSION['last_activity'] = time();
-            securityLog('New session initiated');
+            $_SESSION['guest'] = true; // Mark as guest by default
+            securityLog('New guest session initiated');
         }
 
         return validateSessionIntegrity();
@@ -82,21 +84,27 @@ function startSecureSession() {
 }
 
 function validateSessionIntegrity() {
-    if (!isset($_SESSION['initiated']) || 
-        !isset($_SESSION['client_ip']) || 
-        !isset($_SESSION['user_agent']) ||
-        !isset($_SESSION['last_activity'])) {
-        securityLog('Session integrity check failed: missing required keys', 'warning');
+    if (!isset($_SESSION['initiated'])) {
+        securityLog('Session integrity check failed: not initiated', 'warning');
         return false;
     }
 
     $currentIp = hash('sha256', $_SERVER['REMOTE_ADDR']);
     $currentAgent = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
     
-    if ($_SESSION['client_ip'] !== $currentIp || 
-        $_SESSION['user_agent'] !== $currentAgent) {
-        securityLog('Session integrity check failed: client mismatch', 'warning');
-        return false;
+    // Flexible validation for guest sessions
+    if (isset($_SESSION['user_id'])) {
+        // Strict validation for authenticated users
+        if ($_SESSION['client_ip'] !== $currentIp || 
+            $_SESSION['user_agent'] !== $currentAgent) {
+            securityLog('Session integrity check failed: authenticated user mismatch', 'warning');
+            return false;
+        }
+    } else {
+        // Update fingerprint for guest sessions
+        $_SESSION['client_ip'] = $currentIp;
+        $_SESSION['user_agent'] = $currentAgent;
+        $_SESSION['guest'] = true;
     }
 
     // Check for session timeout (30 minutes)
@@ -167,7 +175,8 @@ function destroySession() {
     }
 
     try {
-        securityLog('Initiating session destruction');
+        $wasGuest = $_SESSION['guest'] ?? false;
+        securityLog('Initiating session destruction: ' . ($wasGuest ? 'guest' : 'user') . ' session');
         
         // Clear session data
         $_SESSION = [];
@@ -202,12 +211,10 @@ function destroySession() {
  */
 function isUserLoggedIn()
 {
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        return isset($_SESSION['user_id']) && 
-               isset($_SESSION['initiated']) && 
-               validateSessionIntegrity();
-    }
-    return false;
+    return session_status() === PHP_SESSION_ACTIVE && 
+           isset($_SESSION['user_id']) && 
+           !($_SESSION['guest'] ?? true) && 
+           validateSessionIntegrity();
 }
 
 /**
