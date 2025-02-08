@@ -9,38 +9,91 @@
 | Path: App/Helpers/SecurityHelper.php
 */
 
-// Ensure session is started only once
-function startSecureSession()
-{
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-
-        // Regenerate session ID to prevent session fixation attacks
-        if (!isset($_SESSION['initiated'])) {
-            session_regenerate_id(true);
-            $_SESSION['initiated'] = true;
-        }
-
-        // Set secure session parameters
-        ini_set('session.use_strict_mode', 1);
-        ini_set('session.cookie_httponly', 1);
-        ini_set('session.cookie_secure', isset($_SERVER['HTTPS'])); // Secure only if HTTPS is enabled
-        ini_set('session.use_only_cookies', 1);
-    }
+// Add debug logging function
+function securityLog($message, $level = 'info') {
+    $logFile = __DIR__ . '/../../logs/security.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $sanitizedMessage = str_replace(["\n", "\r"], '', $message);
+    error_log("[$timestamp][$level] $sanitizedMessage\n", 3, $logFile);
 }
 
-// Start session on script load
-startSecureSession();
+function startSecureSession() {
+    if (session_status() === PHP_SESSION_NONE) {
+        // Configure session parameters before starting
+        $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+        $params = session_get_cookie_params();
+        
+        // Only set session parameters if we haven't started yet
+        if (headers_sent()) {
+            securityLog('Headers already sent before session configuration', 'warning');
+            return false;
+        }
 
-/**
- * Generate CSRF token and store it in session.
- */
-function generateCsrfToken()
-{
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        // Configure session cookie
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => '/',
+            'domain' => $_SERVER['HTTP_HOST'],
+            'secure' => $secure,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+
+        // Attempt to start session
+        if (@session_start()) {
+            securityLog('Session started successfully');
+            
+            // Initialize session security measures
+            if (empty($_SESSION['initiated'])) {
+                session_regenerate_id(true);
+                $_SESSION['initiated'] = time();
+                $_SESSION['client_ip'] = $_SERVER['REMOTE_ADDR'];
+                $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'];
+                securityLog('New session initiated and secured');
+            }
+            
+            // Validate session
+            if (!validateSessionIntegrity()) {
+                destroySession();
+                securityLog('Session integrity check failed - session destroyed', 'warning');
+                return false;
+            }
+            
+            return true;
+        } else {
+            securityLog('Failed to start session', 'error');
+            return false;
+        }
     }
-    return $_SESSION['csrf_token'];
+    return true;
+}
+
+function validateSessionIntegrity() {
+    if (!isset($_SESSION['initiated']) || 
+        !isset($_SESSION['client_ip']) || 
+        !isset($_SESSION['user_agent'])) {
+        return false;
+    }
+    
+    return $_SESSION['client_ip'] === $_SERVER['REMOTE_ADDR'] && 
+           $_SESSION['user_agent'] === $_SERVER['HTTP_USER_AGENT'];
+}
+
+function generateCsrfToken() {
+    try {
+        if (empty($_SESSION['csrf_token']) || 
+            !isset($_SESSION['csrf_time']) || 
+            time() - $_SESSION['csrf_time'] > 3600) {
+            
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+            $_SESSION['csrf_time'] = time();
+            securityLog('New CSRF token generated');
+        }
+        return $_SESSION['csrf_token'];
+    } catch (Exception $e) {
+        securityLog('Failed to generate CSRF token: ' . $e->getMessage(), 'error');
+        return false;
+    }
 }
 
 /**
@@ -76,20 +129,32 @@ function generateSecureToken($length = 64)
     return bin2hex(random_bytes($length / 2));
 }
 
-/**
- * Destroy session securely (for logout functionality).
- */
-function destroySession()
-{
-    $_SESSION = [];
-    if (ini_get("session.use_cookies")) {
-        $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000,
-            $params["path"], $params["domain"],
-            $params["secure"], $params["httponly"]
-        );
+function destroySession() {
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        // Log before destroying
+        securityLog('Session destroyed for user: ' . ($_SESSION['user_id'] ?? 'unknown'));
+        
+        // Clear session data
+        $_SESSION = [];
+        
+        // Delete session cookie
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', [
+                'expires' => time() - 42000,
+                'path' => $params['path'],
+                'domain' => $params['domain'],
+                'secure' => $params['secure'],
+                'httponly' => $params['httponly'],
+                'samesite' => 'Lax'
+            ]);
+        }
+        
+        // Destroy session
+        session_destroy();
+        return true;
     }
-    session_destroy();
+    return false;
 }
 
 /**
@@ -97,7 +162,12 @@ function destroySession()
  */
 function isUserLoggedIn()
 {
-    return isset($_SESSION['user_id']);
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        return isset($_SESSION['user_id']) && 
+               isset($_SESSION['initiated']) && 
+               validateSessionIntegrity();
+    }
+    return false;
 }
 
 /**
@@ -122,5 +192,10 @@ function getSessionData($key)
 function setSessionData($key, $value)
 {
     $_SESSION[$key] = $value;
+}
+
+// Initialize secure session when the file is included
+if (!startSecureSession()) {
+    securityLog('Failed to initialize secure session', 'critical');
 }
 ?>
