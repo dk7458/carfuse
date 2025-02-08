@@ -1,4 +1,5 @@
 document.addEventListener("DOMContentLoaded", function () {
+    console.log("Shared.js execution started on index.php.");
     console.log("Shared.js loaded successfully.");
 
     // Home.php interactions: Navbar toggle, CTA smooth scrolling, hero animation
@@ -33,6 +34,13 @@ document.addEventListener("DOMContentLoaded", function () {
         console.warn("Hero section (.hero-section) not found.");
     }
 
+    // Check for chart element and use fallback if absent
+    const chartElement = document.getElementById('chart');
+    if (!chartElement) {
+        console.warn("Chart element not found. Running fallback.");
+        // [Optional fallback logic]
+    }
+
     // Initialize Charts with caching and error handling
     let chartCache = null;
     let lastFetchTime = 0;
@@ -55,6 +63,7 @@ document.addEventListener("DOMContentLoaded", function () {
             return response.json();
         })
         .then(data => {
+            console.log("Chart data:", data);
             if (!data.bookingTrends || !data.revenueTrends) {
                 console.error("Missing chart data.");
                 return;
@@ -63,29 +72,33 @@ document.addEventListener("DOMContentLoaded", function () {
             lastFetchTime = now;
             renderCharts(data);
         })
-        .catch(error => console.error("Błąd ładowania wykresów:", error));
+        .catch(error => console.error("Error fetching chart data:", error));
     }
 
     function renderCharts(data) {
-        const bookingCanvas = document.getElementById("bookingTrends");
-        if (bookingCanvas) {
-            new Chart(bookingCanvas.getContext("2d"), {
-                type: "line",
-                data: data.bookingTrends,
-            });
-        } else {
-            console.warn("Element #bookingTrends not found.");
+        let bookingCanvas = document.getElementById("bookingTrends");
+        if (!bookingCanvas) {
+            console.warn("Element #bookingTrends not found. Creating fallback canvas.");
+            bookingCanvas = document.createElement("canvas");
+            bookingCanvas.id = "bookingTrendsFallback";
+            document.body.appendChild(bookingCanvas);
         }
+        new Chart(bookingCanvas.getContext("2d"), {
+            type: "line",
+            data: data.bookingTrends,
+        });
 
-        const revenueCanvas = document.getElementById("revenueTrends");
-        if (revenueCanvas) {
-            new Chart(revenueCanvas.getContext("2d"), {
-                type: "bar",
-                data: data.revenueTrends,
-            });
-        } else {
-            console.warn("Element #revenueTrends not found.");
+        let revenueCanvas = document.getElementById("revenueTrends");
+        if (!revenueCanvas) {
+            console.warn("Element #revenueTrends not found. Creating fallback canvas.");
+            revenueCanvas = document.createElement("canvas");
+            revenueCanvas.id = "revenueTrendsFallback";
+            document.body.appendChild(revenueCanvas);
         }
+        new Chart(revenueCanvas.getContext("2d"), {
+            type: "bar",
+            data: data.revenueTrends,
+        });
     }
 
     // Update charts every minute

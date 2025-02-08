@@ -6,6 +6,7 @@ header('Content-Type: application/json');
 
 // Verify user authentication
 if (!isUserLoggedIn()) {
+    http_response_code(403);
     echo json_encode(["error" => "Unauthorized"]);
     exit();
 }
