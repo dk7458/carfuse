@@ -15,6 +15,11 @@ AddHandler application/x-httpd-php .php
     SetHandler application/x-httpd-php
 </FilesMatch>
 
+# Ensure PHP session cookies work properly
+php_flag session.auto_start on
+php_value session.use_cookies 1
+php_value session.use_only_cookies 1
+
 # Prevent direct access to PHP files inside /api
 
 # Allow direct access to static files (CSS, JS, images)

@@ -11,6 +11,11 @@ document.addEventListener("DOMContentLoaded", function () {
         return element;
     }
 
+    fetch("/api/shared/charts.php", {
+        headers: { "Accept": "application/json" },
+        credentials: "include" // Ensures session cookies are sent
+    })
+    
     // Event delegation for dynamic elements
     document.addEventListener('click', function(e) {
         // Navbar toggle handling
