@@ -8,38 +8,39 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
     }
 
-    // Handle dashboard link navigation
-    function attachDashboardLinks() {
-        const dashboardLinks = document.querySelectorAll(".dashboard-link");
-        
-        if (dashboardLinks.length === 0) {
-            console.warn("No dashboard links found.");
+    // Handle link navigation with event delegation
+    function handleLinkNavigation(e) {
+        e.preventDefault();
+        const target = e.target.closest(".dashboard-link, .nav-link, .btn-ajax");
+        if (!target) return;
+
+        let targetView = target.getAttribute("href");
+        if (!targetView) {
+            console.warn("Link has no target view.");
             return;
         }
 
-        dashboardLinks.forEach(link => {
-            link.addEventListener("click", function (e) {
-                e.preventDefault();
-                let targetView = this.getAttribute("href");
-
-                if (!targetView) {
-                    console.warn("Dashboard link has no target view.");
-                    return;
+        fetch(targetView)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-
-                fetch(targetView)
-                    .then(response => response.text())
-                    .then(data => {
-                        dashboardView.innerHTML = data;
-                        attachDashboardLinks(); // Re-attach listeners after loading new content
-                    })
-                    .catch(error => console.error("Błąd ładowania widoku:", error));
-            });
-        });
-
-        console.log("Dashboard links attached.");
+                return response.text();
+            })
+            .then(data => {
+                dashboardView.innerHTML = data;
+                attachGlobalListeners(); // Re-attach listeners after loading new content
+            })
+            .catch(error => console.error("Error loading view:", error));
     }
 
-    // Attach event listeners after short delay (ensures elements are fully loaded)
-    setTimeout(attachDashboardLinks, 100);
+    // Attach global event listeners
+    function attachGlobalListeners() {
+        document.body.removeEventListener("click", handleLinkNavigation);
+        document.body.addEventListener("click", handleLinkNavigation);
+        console.log("Global listeners attached.");
+    }
+
+    // Initial attachment of global listeners
+    attachGlobalListeners();
 });

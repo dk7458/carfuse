@@ -10,6 +10,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     document.addEventListener('visibilitychange', handleVisibilityChange);
     document.addEventListener('newEvent', handleNewEvent); // Custom event for new actions
+    setInterval(fetchNotifications, FETCH_INTERVAL); // Polling mechanism
+
+    // Event delegation for dynamically loaded notifications
+    document.getElementById('notifications-container').addEventListener('click', function (event) {
+        if (event.target.classList.contains('mark-as-read')) {
+            markAsRead(event.target.dataset.id);
+        }
+    });
 });
 
 /**
@@ -37,7 +45,12 @@ async function fetchNotifications() {
 
     lastFetchTimestamp = now;
     try {
-        const notifications = await ajax.get('/notifications');
+        const response = await fetch('/api/user/notifications.php');
+        if (response.status === 401) {
+            showErrorToast('Musisz być zalogowany, aby zobaczyć powiadomienia.');
+            return;
+        }
+        const notifications = await response.json();
         if (notifications.length > 0) {
             displayNotifications(notifications);
         } else {
@@ -62,23 +75,10 @@ function displayNotifications(notifications) {
         const notificationElement = document.createElement('div');
         notificationElement.className = `notification ${notification.read ? 'read' : 'unread'}`;
         notificationElement.innerHTML = `
-            <p>${notification.message}</p>
+            <p style="font-weight: ${notification.read ? 'normal' : 'bold'};">${notification.message}</p>
             <button class="mark-as-read" data-id="${notification.id}">Oznacz jako przeczytane</button>
         `;
         notificationsContainer.appendChild(notificationElement);
-    });
-
-    attachMarkAsReadListeners();
-}
-
-/**
- * Adds event listeners to "Mark as Read" buttons.
- */
-function attachMarkAsReadListeners() {
-    document.querySelectorAll('.mark-as-read').forEach(button => {
-        button.addEventListener('click', function () {
-            markAsRead(this.dataset.id);
-        });
     });
 }
 
@@ -87,12 +87,15 @@ function attachMarkAsReadListeners() {
  */
 async function markAsRead(notificationId) {
     try {
-        const response = await ajax.post(`/notifications/${notificationId}/read`);
-        if (response.success) {
+        const response = await fetch(`/api/user/notifications.php/${notificationId}/read`, {
+            method: 'POST'
+        });
+        const result = await response.json();
+        if (result.success) {
             updateNotificationStatus(notificationId);
             showSuccessToast('Powiadomienie oznaczone jako przeczytane.');
         } else {
-            showErrorToast(response.error || 'Błąd oznaczania powiadomienia jako przeczytanego.');
+            showErrorToast(result.error || 'Błąd oznaczania powiadomienia jako przeczytanego.');
         }
     } catch (error) {
         console.error('Błąd oznaczania powiadomienia:', error);
@@ -106,7 +109,9 @@ async function markAsRead(notificationId) {
 function updateNotificationStatus(notificationId) {
     const notificationElement = document.querySelector(`.mark-as-read[data-id="${notificationId}"]`);
     if (notificationElement) {
-        notificationElement.closest('.notification').classList.add('read');
+        const parentElement = notificationElement.closest('.notification');
+        parentElement.classList.add('read');
+        parentElement.querySelector('p').style.fontWeight = 'normal';
         notificationElement.remove();
     }
 }

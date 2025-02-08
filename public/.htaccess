@@ -1,13 +1,26 @@
 RewriteEngine On
 DirectoryIndex index.php
 
-# Ensure PHP files are executed
 AddHandler application/x-httpd-php .php
+
+# Block sensitive files: .env, .htaccess, and system logs
+<FilesMatch "^(\.env|\.htaccess|error_log)$">
+  Require all denied
+</FilesMatch>
+
+# Prevent direct access to PHP files inside /api/
+RewriteRule ^api/.*\.php$ - [F,L]
 
 # Allow direct access to static files (CSS, JS, images)
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
+# Friendly URL routing for /dashboard, /admin, /user
+RewriteCond %{REQUEST_URI} ^/(dashboard|admin|user) [NC]
+RewriteRule ^ /public/index.php [QSA,L]
+
 # Redirect all other requests to /public/index.php
+# Avoid infinite redirects by excluding /public/ requests
+RewriteCond %{REQUEST_URI} !^/public/
 RewriteRule ^ /public/index.php [QSA,L]

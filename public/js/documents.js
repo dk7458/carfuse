@@ -3,6 +3,7 @@ import { showErrorToast, showSuccessToast } from './toasts';
 
 document.addEventListener('DOMContentLoaded', function () {
     initDocumentForm();
+    loadDocumentList();
 });
 
 /**
@@ -30,7 +31,7 @@ async function uploadDocument(event) {
     }
 
     try {
-        const response = await fetch('/api/user/documents.php?action=upload', {
+        const response = await fetch('/api/user/upload_document.php', {
             method: 'POST',
             body: formData
         }).then(res => res.json());
@@ -38,6 +39,7 @@ async function uploadDocument(event) {
         if (response.success) {
             showSuccessToast('Dokument przesłany pomyślnie.');
             previewDocument(response.documentUrl);
+            loadDocumentList();
         } else {
             showErrorToast(response.message || 'Nie udało się przesłać dokumentu.');
         }
@@ -60,6 +62,12 @@ function validateFileUpload(formData) {
     const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg'];
     if (!allowedTypes.includes(file.type)) {
         showErrorToast('Nieobsługiwany format pliku. Dozwolone: PDF, PNG, JPG.');
+        return false;
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+        showErrorToast('Plik jest za duży. Maksymalny rozmiar to 10MB.');
         return false;
     }
 
@@ -115,6 +123,7 @@ async function signDocument(documentId) {
 
         if (response.success) {
             showSuccessToast('Dokument został pomyślnie podpisany.');
+            loadDocumentList();
         } else {
             showErrorToast(response.message || 'Nie udało się podpisać dokumentu.');
         }
@@ -136,4 +145,22 @@ function previewContract(file) {
         }
     };
     reader.readAsDataURL(file);
+}
+
+/**
+ * Loads the document list dynamically.
+ */
+async function loadDocumentList() {
+    try {
+        const response = await fetch('/api/user/documents.php?action=list').then(res => res.json());
+        if (response.success) {
+            const documentList = document.getElementById('document-list');
+            documentList.innerHTML = response.documents.map(doc => `<li>${doc.name}</li>`).join('');
+        } else {
+            showErrorToast('Nie udało się załadować listy dokumentów.');
+        }
+    } catch (error) {
+        console.error('Błąd ładowania listy dokumentów:', error);
+        showErrorToast('Wystąpił problem podczas ładowania listy dokumentów.');
+    }
 }

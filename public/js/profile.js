@@ -9,8 +9,8 @@ document.addEventListener('DOMContentLoaded', function () {
  * Initializes profile form interactions.
  */
 function initProfileForm() {
-    const profileForm = document.getElementById('profile-form');
-    const avatarUpload = document.getElementById('avatar-upload');
+    const profileForm = document.getElementById('profileUpdateForm');
+    const avatarUpload = document.getElementById('avatarUpload');
 
     if (profileForm) profileForm.addEventListener('submit', updateProfile);
     if (avatarUpload) avatarUpload.addEventListener('change', handleAvatarUpload);
@@ -26,11 +26,15 @@ async function updateProfile(event) {
     if (!validateProfileForm(formData)) return;
 
     try {
-        const response = await ajax.post('/profile/update', formData);
-        if (response.success) {
+        const response = await fetch('/api/user/profile.php', {
+            method: 'POST',
+            body: formData,
+        });
+        const result = await response.json();
+        if (result.success) {
             showSuccessToast('Profil zaktualizowany pomyślnie.');
         } else {
-            showErrorToast(response.message || 'Błąd podczas aktualizacji profilu.');
+            showErrorToast(result.message || 'Błąd podczas aktualizacji profilu.');
         }
     } catch (error) {
         console.error('Błąd aktualizacji profilu:', error);
@@ -41,17 +45,31 @@ async function updateProfile(event) {
 /**
  * Handles avatar image upload and preview.
  */
-function handleAvatarUpload(event) {
+async function handleAvatarUpload(event) {
     const fileInput = event.target;
     const file = fileInput.files[0];
 
     if (!validateImage(file)) return;
 
-    const reader = new FileReader();
-    reader.onload = function (e) {
-        document.getElementById('avatar-preview').src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+        const response = await fetch('/api/user/profile.php', {
+            method: 'POST',
+            body: formData,
+        });
+        const result = await response.json();
+        if (result.success) {
+            document.getElementById('profileAvatar').src = result.avatarUrl;
+            showSuccessToast('Zdjęcie profilowe zaktualizowane pomyślnie.');
+        } else {
+            showErrorToast(result.message || 'Błąd podczas aktualizacji zdjęcia profilowego.');
+        }
+    } catch (error) {
+        console.error('Błąd aktualizacji zdjęcia profilowego:', error);
+        showErrorToast('Nie udało się zaktualizować zdjęcia profilowego.');
+    }
 }
 
 /**

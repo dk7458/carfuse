@@ -1,14 +1,19 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const forms = document.querySelectorAll('form');
-
-    forms.forEach(form => {
-        form.addEventListener('submit', function (event) {
-            if (!validateForm(form)) {
-                event.preventDefault();
+    document.body.addEventListener('submit', function (event) {
+        const form = event.target;
+        if (form.tagName === 'FORM') {
+            event.preventDefault();
+            if (validateForm(form)) {
+                submitForm(form);
             }
-        });
+        }
+    });
 
-        attachRealTimeValidation(form);
+    document.body.addEventListener('input', function (event) {
+        const input = event.target;
+        if (input.closest('form')) {
+            validateInput(input);
+        }
     });
 });
 
@@ -29,19 +34,6 @@ function validateForm(form) {
 }
 
 /**
- * Attaches real-time validation to form inputs.
- */
-function attachRealTimeValidation(form) {
-    const inputs = form.querySelectorAll('input[required], textarea[required], select[required]');
-
-    inputs.forEach(input => {
-        input.addEventListener('input', function () {
-            validateInput(input);
-        });
-    });
-}
-
-/**
  * Validates a single input field.
  */
 function validateInput(input) {
@@ -49,33 +41,62 @@ function validateInput(input) {
     const type = input.type;
 
     if (!value) {
-        showError(input, 'To pole jest wymagane.');
+        showError(input, 'This field is required.');
         return false;
     }
 
     if (type === 'email' && !isValidEmail(value)) {
-        showError(input, 'Wprowadź poprawny adres e-mail.');
+        showError(input, 'Please enter a valid email address.');
         return false;
     }
 
     if (type === 'password') {
         if (value.length < 6) {
-            showError(input, 'Hasło musi zawierać co najmniej 6 znaków.');
+            showError(input, 'Password must be at least 6 characters long.');
             return false;
         }
         if (!/\d/.test(value) || !/[A-Za-z]/.test(value)) {
-            showError(input, 'Hasło musi zawierać litery i cyfry.');
+            showError(input, 'Password must contain both letters and numbers.');
             return false;
         }
     }
 
     if (input.dataset.minLength && value.length < input.dataset.minLength) {
-        showError(input, `To pole musi mieć co najmniej ${input.dataset.minLength} znaków.`);
+        showError(input, `This field must be at least ${input.dataset.minLength} characters long.`);
         return false;
     }
 
     clearError(input);
     return true;
+}
+
+/**
+ * Submits the form via AJAX.
+ */
+function submitForm(form) {
+    const formData = new FormData(form);
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    formData.append('_csrf', csrfToken);
+
+    fetch(form.action, {
+        method: form.method,
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            form.reset();
+            showSuccessMessage(form, data.message);
+        } else {
+            showErrorMessages(form, data.errors);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
 }
 
 /**
@@ -101,6 +122,31 @@ function clearError(input) {
         error.remove();
     }
     input.classList.remove('error');
+}
+
+/**
+ * Displays success message after form submission.
+ */
+function showSuccessMessage(form, message) {
+    const successMessage = document.createElement('div');
+    successMessage.classList.add('success-message');
+    successMessage.textContent = message;
+    form.appendChild(successMessage);
+    setTimeout(() => {
+        successMessage.remove();
+    }, 5000);
+}
+
+/**
+ * Displays multiple error messages after form submission.
+ */
+function showErrorMessages(form, errors) {
+    for (const [inputName, message] of Object.entries(errors)) {
+        const input = form.querySelector(`[name="${inputName}"]`);
+        if (input) {
+            showError(input, message);
+        }
+    }
 }
 
 /**
