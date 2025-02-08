@@ -1,7 +1,7 @@
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
 
 header("Access-Control-Allow-Origin: *");  // Allow cross-origin requests
 header("Access-Control-Allow-Methods: GET, POST");
