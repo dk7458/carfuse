@@ -11,6 +11,10 @@ AddHandler application/x-httpd-php .php
     Require all granted
 </FilesMatch>
 
+<FilesMatch "\.php$">
+    SetHandler application/x-httpd-php
+</FilesMatch>
+
 # Prevent direct access to PHP files inside /api
 
 # Allow direct access to static files (CSS, JS, images)
@@ -20,9 +24,4 @@ RewriteRule ^ - [L]
 
 # Friendly URL routing for /dashboard, /admin, /user
 RewriteCond %{REQUEST_URI} ^/(dashboard|admin|user) [NC]
-RewriteRule ^ /public/index.php [QSA,L]
-
-# Redirect all other requests to /public/index.php
-# Avoid infinite redirects by excluding /public/ requests
-RewriteCond %{REQUEST_URI} !^/public/
 RewriteRule ^ /public/index.php [QSA,L]
