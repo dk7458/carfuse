@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../../helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 
 if (!isUserLoggedIn()) {
     header("Location: /login");
@@ -28,4 +28,4 @@ if (!isUserLoggedIn()) {
     </div>
 </div>
 
-<script src="/js/charts.js"></script>
+<script type="text/javascript" src="/js/shared.js"></script>

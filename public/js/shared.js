@@ -1,12 +1,16 @@
 document.addEventListener("DOMContentLoaded", function () {
+    console.log("Shared.js loaded successfully.");
+
     // Home.php interactions: Navbar toggle, CTA smooth scrolling, hero animation
     const navbarToggle = document.getElementById("navbarToggle");
     if (navbarToggle) {
         navbarToggle.addEventListener("click", function () {
-            // ...existing navbar code...
             this.classList.toggle("active");
         });
+    } else {
+        console.warn("Navbar toggle (#navbarToggle) not found.");
     }
+
     const registerBtn = document.getElementById("register-btn");
     if (registerBtn) {
         registerBtn.addEventListener("click", function (e) {
@@ -14,13 +18,19 @@ document.addEventListener("DOMContentLoaded", function () {
             const target = document.querySelector(this.getAttribute("href"));
             if (target) {
                 target.scrollIntoView({ behavior: "smooth" });
+            } else {
+                console.warn("CTA target not found for register button.");
             }
         });
+    } else {
+        console.warn("Register button (#register-btn) not found.");
     }
+
     const heroSection = document.querySelector(".hero-section");
     if (heroSection) {
-        // Simple fade-in effect
         heroSection.classList.add("fade-in");
+    } else {
+        console.warn("Hero section (.hero-section) not found.");
     }
 
     // Initialize Charts with caching and error handling
@@ -34,34 +44,42 @@ document.addEventListener("DOMContentLoaded", function () {
             renderCharts(chartCache);
             return;
         }
-        fetch("/api/shared/charts.php")
-            .then(response => response.json())
-            .then(data => {
-                if (!data.bookingTrends || !data.revenueTrends) {
-                    console.error("Missing chart data");
-                    return;
-                }
-                chartCache = data;
-                lastFetchTime = now;
-                renderCharts(data);
-            })
-            .catch(error => console.error("Błąd ładowania wykresów:", error));
+
+        fetch("/api/shared/charts.php", {
+            headers: { "Accept": "application/json" }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP Error ${response.status} - ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.bookingTrends || !data.revenueTrends) {
+                console.error("Missing chart data.");
+                return;
+            }
+            chartCache = data;
+            lastFetchTime = now;
+            renderCharts(data);
+        })
+        .catch(error => console.error("Błąd ładowania wykresów:", error));
     }
+
     function renderCharts(data) {
         const bookingCanvas = document.getElementById("bookingTrends");
         if (bookingCanvas) {
-            let ctx = bookingCanvas.getContext("2d");
-            new Chart(ctx, {
+            new Chart(bookingCanvas.getContext("2d"), {
                 type: "line",
                 data: data.bookingTrends,
             });
         } else {
             console.warn("Element #bookingTrends not found.");
         }
+
         const revenueCanvas = document.getElementById("revenueTrends");
         if (revenueCanvas) {
-            let ctx = revenueCanvas.getContext("2d");
-            new Chart(ctx, {
+            new Chart(revenueCanvas.getContext("2d"), {
                 type: "bar",
                 data: data.revenueTrends,
             });
@@ -69,17 +87,30 @@ document.addEventListener("DOMContentLoaded", function () {
             console.warn("Element #revenueTrends not found.");
         }
     }
+
     // Update charts every minute
     loadCharts();
     setInterval(loadCharts, cacheDuration);
 
     // Modal handling functions using Bootstrap
     function showModal(modalId) {
-        $("#" + modalId).modal("show");
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            $("#" + modalId).modal("show");
+        } else {
+            console.warn(`Modal (#${modalId}) not found.`);
+        }
     }
+
     function hideModal(modalId) {
-        $("#" + modalId).modal("hide");
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            $("#" + modalId).modal("hide");
+        } else {
+            console.warn(`Modal (#${modalId}) not found.`);
+        }
     }
+
     // Expose modal functions globally if needed
     window.showModal = showModal;
     window.hideModal = hideModal;
