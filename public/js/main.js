@@ -34,11 +34,15 @@ document.addEventListener("DOMContentLoaded", function () {
             .catch(error => console.error("Error loading view:", error));
     }
 
-    // Attach global event listeners
+    // Attach global event listeners with a safety check for document.body
     function attachGlobalListeners() {
-        document.body.removeEventListener("click", handleLinkNavigation);
-        document.body.addEventListener("click", handleLinkNavigation);
-        console.log("Global listeners attached.");
+        if (document.body) {
+            document.body.removeEventListener("click", handleLinkNavigation);
+            document.body.addEventListener("click", handleLinkNavigation);
+            console.log("Global listeners attached.");
+        } else {
+            console.warn("document.body is not available.");
+        }
     }
 
     // Initial attachment of global listeners
