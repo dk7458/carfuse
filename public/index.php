@@ -14,7 +14,7 @@ require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
     <title>Carfuse - Wynajmij auto szybko i łatwo</title>
     <link rel="stylesheet" href="/public/css/style.css">
     <link rel="stylesheet" href="/public/css/home.css">
-    <script src="/public/js/main.js" defer></script>
+    <script src="/public/js/shared.js" defer></script>
 </head>
 <body>
 
@@ -26,8 +26,6 @@ require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 </div>
 
 <?php include __DIR__ . '/layouts/footer.php'; ?>
-
-<script src="/public/js/shared.js" defer></script>
 
 </body>
 </html>
