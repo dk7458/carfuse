@@ -18,7 +18,7 @@ use App\Controllers\UserController;
 return simpleDispatcher(function (RouteCollector $router) {
     // Home Page
     $router->get('/', function () {
-        require BASE_PATH . '/public/index.php';
+        require __DIR__ . '/../public/home.php';
     });
 
     // Generic Dynamic View Routing
@@ -30,7 +30,7 @@ return simpleDispatcher(function (RouteCollector $router) {
             require BASE_PATH . "/public/views/user/$view.php";
         } else {
             http_response_code(404);
-            require BASE_PATH . "/public/views/errors/404.php";
+            require __DIR__ . "/../public/views/errors/404.php";
         }
     });
 

@@ -43,8 +43,8 @@ if (array_key_exists($requestedRoute, $routes)) {
 <?php include __DIR__ . '/layouts/header.php'; ?>
 
 <!-- Dynamically load content -->
-<div id="content">
-    <?php include $page; ?>
+<div id="home-view">
+    <?php include __DIR__ . 'layouts/home.php'; ?>
 </div>
 
 <?php include __DIR__ . '/layouts/footer.php'; ?>
