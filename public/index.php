@@ -5,28 +5,6 @@ require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
-// Define available routes
-$routes = [
-    '/' => 'home.php',
-    '/dashboard' => 'views/user/dashboard.php',
-    '/admin/dashboard' => 'views/admin/dashboard.php',
-    '/bookings' => 'views/user/bookings.php',
-    '/payments' => 'views/user/payments.php',
-    '/documents' => 'views/user/documents.php',
-];
-
-// Get current path
-$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$requestedRoute = rtrim($requestUri, '/');
-
-// Route dynamically or return 404
-if (array_key_exists($requestedRoute, $routes)) {
-    $page = __DIR__ . '/' . $routes[$requestedRoute];
-} else {
-    http_response_code(404);
-    $page = __DIR__ . '/views/errors/404.php';
-}
-
 ?>
 
 <!DOCTYPE html>
@@ -42,10 +20,48 @@ if (array_key_exists($requestedRoute, $routes)) {
 
 <?php include __DIR__ . '/layouts/header.php'; ?>
 
-<!-- Dynamically load content -->
-<div id="home-view">
-    <?php include __DIR__ . 'layouts/home.php'; ?>
-</div>
+<!-- Home Page Content -->
+<section class="hero-section">
+    <h1>Witaj w CarFuse</h1>
+    <p>Wynajmij auto szybko i łatwo!</p>
+    <a href="/register" id="register-btn" class="btn btn-primary">Zarejestruj się</a>
+</section>
+
+<section class="features">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-4 text-center">
+                <img src="/images/icon-fast.png" alt="Szybkie wypożyczenie">
+                <h3>Szybka Rezerwacja</h3>
+                <p>Rezerwuj samochód w kilka sekund.</p>
+            </div>
+            <div class="col-md-4 text-center">
+                <img src="/images/icon-secure.png" alt="Bezpieczne transakcje">
+                <h3>Bezpieczne Transakcje</h3>
+                <p>Gwarantujemy w pełni zabezpieczone płatności.</p>
+            </div>
+            <div class="col-md-4 text-center">
+                <img src="/images/icon-selection.png" alt="Szeroki wybór">
+                <h3>Szeroki Wybór</h3>
+                <p>Wybierz spośród różnych modeli i marek.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="testimonials">
+    <h2 class="text-center">Opinie Klientów</h2>
+    <div class="container">
+        <div class="testimonial">
+            <p>“Najlepsza wypożyczalnia aut, szybko i bezproblemowo!”</p>
+            <strong>- Karol K.</strong>
+        </div>
+        <div class="testimonial">
+            <p>“Bezpieczne płatności i świetna obsługa klienta.”</p>
+            <strong>- Marta Z.</strong>
+        </div>
+    </div>
+</section>
 
 <?php include __DIR__ . '/layouts/footer.php'; ?>
 
