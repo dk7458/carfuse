@@ -1,50 +1,18 @@
 document.addEventListener("DOMContentLoaded", function () {
     console.log("Main.js loaded successfully.");
 
-    // Ensure dashboard view container exists before updating it
+    // Detect if we're on the dashboard page
     const dashboardView = document.getElementById("dashboard-view");
     if (!dashboardView) {
-        console.warn("Dashboard view container (#dashboard-view) not found.");
+        console.log("Dashboard view not found. Assuming home page.");
         return;
     }
 
-    // Handle link navigation with event delegation
-    function handleLinkNavigation(e) {
-        e.preventDefault();
-        const target = e.target.closest(".dashboard-link, .nav-link, .btn-ajax");
-        if (!target) return;
-
-        let targetView = target.getAttribute("href");
-        if (!targetView) {
-            console.warn("Link has no target view.");
-            return;
-        }
-
-        fetch(targetView)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.text();
-            })
-            .then(data => {
-                dashboardView.innerHTML = data;
-                attachGlobalListeners(); // Re-attach listeners after loading new content
-            })
-            .catch(error => console.error("Error loading view:", error));
-    }
-
-    // Attach global event listeners with a safety check for document.body
-    function attachGlobalListeners() {
-        if (document.body) {
-            document.body.removeEventListener("click", handleLinkNavigation);
-            document.body.addEventListener("click", handleLinkNavigation);
-            console.log("Global listeners attached.");
-        } else {
-            console.warn("document.body is not available.");
-        }
-    }
-
-    // Initial attachment of global listeners
-    attachGlobalListeners();
+    // Load default dashboard module when applicable
+    fetch("/dashboard/modules/user/overview.php")
+        .then(response => response.text())
+        .then(data => {
+            dashboardView.innerHTML = data;
+        })
+        .catch(error => console.error("Błąd ładowania domyślnego widoku:", error));
 });

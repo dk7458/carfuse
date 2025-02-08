@@ -1,10 +1,9 @@
 <?php
 declare(strict_types=1);
 header("Content-Type: text/html; charset=UTF-8");
-require_once __DIR__ . '/../bootstrap.php'; // Bootstrap application
-require_once __DIR__ . '/../vendor/autoload.php'; // Load dependencies
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php'; // Load security functions globally
-
+require_once __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 ?>
 
 <!DOCTYPE html>
@@ -14,19 +13,21 @@ require_once __DIR__ . '/../App/Helpers/SecurityHelper.php'; // Load security fu
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Carfuse - Wynajmij auto szybko i łatwo</title>
     <link rel="stylesheet" href="/public/css/style.css">
-    <link rel="stylesheet" href="/public/css/home.css"> <!-- Link to home.css -->
+    <link rel="stylesheet" href="/public/css/home.css">
     <script src="/public/js/main.js" defer></script>
 </head>
 <body>
 
 <?php include __DIR__ . '/layouts/header.php'; ?>
 
-<?php include __DIR__ . '/home.php'; ?>
+<!-- Home view always loads -->
+<div id="home-view">
+    <?php include __DIR__ . '/home.php'; ?>
+</div>
 
 <?php include __DIR__ . '/layouts/footer.php'; ?>
 
-<!-- Place shared.js before closing body tag -->
-<script src="js/shared.js" defer></script>
+<script src="/public/js/shared.js" defer></script>
 
 </body>
 </html>
