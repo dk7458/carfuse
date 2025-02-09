@@ -1,43 +1,38 @@
 <?php
-require_once __DIR__ . '/../../../vendor/autoload.php';
-require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
-require_once __DIR__ . '/../../config/api.php';
-
-// Log the inclusion of the test API
-$logFile = __DIR__ . '/../../../logs/debug.log';
-file_put_contents($logFile, "[API] Including test.php" . PHP_EOL, FILE_APPEND);
-
-// Log the API request at the very start, including requested URI
-file_put_contents($logFile, "[API] Request received for " . ($_SERVER['REQUEST_URI'] ?? 'unknown') . PHP_EOL, FILE_APPEND);
-
-// Ensure response is JSON
-header("Content-Type: application/json");
+// Log the receipt of the request
+file_put_contents('debug.log', date('Y-m-d H:i:s') . " - Received API /test request\n", FILE_APPEND);
 
 // Optional authentication check flag
-$requiresAuth = true;
+$requiresAuth = false;
 
-// Define authentication function with improved error handling
+// Define authentication function
 function requireAuth() {
-    global $logFile;
-    $headers = getallheaders();
-    if (!isset($headers['Authorization'])) {
-        file_put_contents($logFile, "[API] Authentication failed: Missing Authorization header" . PHP_EOL, FILE_APPEND);
-        http_response_code(401);
-        echo json_encode(["error" => "Unauthorized access: Authorization header missing"]);
-        exit();
-    }
-    file_put_contents($logFile, "[API] Authentication succeeded with header: " . $headers['Authorization'] . PHP_EOL, FILE_APPEND);
+	// Check for 'Authorization' header (adjust condition per requirements)
+	if (!isset($_SERVER['HTTP_AUTHORIZATION'])) {
+		file_put_contents('debug.log', date('Y-m-d H:i:s') . " - Authentication failed\n", FILE_APPEND);
+		http_response_code(401);
+		header("Content-Type: application/json");
+		echo json_encode(["error" => "Unauthorized"]);
+		exit();
+	}
+	file_put_contents('debug.log', date('Y-m-d H:i:s') . " - Authentication succeeded\n", FILE_APPEND);
 }
 
 // Perform authentication if required
 if ($requiresAuth) {
-    requireAuth();
+	requireAuth();
 }
 
-// Confirm FastRoute processing by logging the matched route
-file_put_contents($logFile, "[API] FastRoute processed endpoint: " . ($_SERVER['REQUEST_URI'] ?? 'unknown') . PHP_EOL, FILE_APPEND);
+// Set header always for valid JSON
+header("Content-Type: application/json");
 
-// Example response for test endpoint
-echo json_encode(["message" => "Test endpoint accessed successfully"]);
-file_put_contents($logFile, "[API] /test API processed successfully" . PHP_EOL, FILE_APPEND);
+// Explicit success status
+http_response_code(200);
+
+// ...existing code...
+echo json_encode(["status" => "API working"]);
+// ...existing code...
+
+// Log completion of API handling
+file_put_contents('debug.log', date('Y-m-d H:i:s') . " - /test API processed successfully\n", FILE_APPEND);
 ?>

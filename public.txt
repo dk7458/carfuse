@@ -1,224 +1,278 @@
 === public/.htaccess ===
 RewriteEngine On
-DirectoryIndex index.php
+RewriteBase /
 
 # Ensure PHP files are executed
 AddHandler application/x-httpd-php .php
 
-# Allow direct access to static files (CSS, JS, images)
-RewriteCond %{REQUEST_FILENAME} -f [OR]
-RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^ - [L]
+# Block direct access to API PHP files
+RewriteCond %{REQUEST_URI} ^/api/.*\.php$
+RewriteRule ^ - [F,L]
 
-# Redirect all other requests to /public/index.php
-RewriteRule ^ /public/index.php [QSA,L]
-=== public/layouts/header.php ===
-=== public/layouts/footer.php ===
-=== public/layouts/sidebar.php ===
+# Allow direct access to static files (CSS, JS, Images)
+RewriteCond %{REQUEST_URI} ^/(css|js|images)/(.*)$
+RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
+RewriteRule ^(css|js|images)/(.*)$ /public/$1/$2 [L]
+
+# Ensure /dashboard, /profile, and /login load correctly through index.php
+RewriteRule ^(dashboard|profile|login)$ index.php [L]
+
+# Ensure FastRoute processes non-static requests
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]
+
+# PHP session configuration (ensure proper session handling)
+php_flag session.auto_start on
+php_value session.use_cookies 1
+php_value session.use_only_cookies 1
+=== public/api/.htaccess ===
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule \.php$ - [F]
+</IfModule>=== public/api/index.php ===
 <?php
-/*
-|--------------------------------------------------------------------------
-| Sidebar - Nawigacja w Dashboardzie
-|--------------------------------------------------------------------------
-| Plik odpowiada za wyświetlanie bocznego menu nawigacyjnego w dashboardzie.
-| Umożliwia użytkownikom i administratorom przełączanie się między podstronami.
-|
-| Ścieżka: App/Views/layouts/sidebar.php
-*/
-?>
+require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../config/api.php';
 
-<aside class="sidebar">
-    <nav class="sidebar-menu">
-        <ul>
-            <li><a href="/user/dashboard" class="dashboard-link">📊 Panel</a></li>
-            <li><a href="/bookings/view" class="dashboard-link">📅 Moje rezerwacje</a></li>
-            <li><a href="/payments/history" class="dashboard-link">💳 Historia płatności</a></li>
-            <li><a href="/documents/user_documents" class="dashboard-link">📄 Moje dokumenty</a></li>
-            <li><a href="/user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
-            <li><a href="/user/profile" class="dashboard-link">👤 Profil</a></li>
-            <li><a href="/admin/users" class="dashboard-link">👥 Zarządzanie użytkownikami</a></li>
-            <li><a href="/admin/audit_logs" class="dashboard-link">📜 Logi audytowe</a></li>
-            <li><a href="/admin/logs" class="dashboard-link">📂 Logi systemowe</a></li>
-            <li><a href="/admin/reports" class="dashboard-link">📑 Raporty</a></li>
-            <li><a href="/admin/settings" class="dashboard-link">⚙️ Ustawienia</a></li>
-            <li><a href="/logout">🚪 Wyloguj</a></li>
-        </ul>
-    </nav>
-</aside>
+// Log the inclusion of the index API
+$logFile = __DIR__ . '/../../logs/debug.log';
+file_put_contents($logFile, "[API] Including index.php" . PHP_EOL, FILE_APPEND);
 
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        document.querySelectorAll(".dashboard-link").forEach(link => {
-            link.addEventListener("click", function(e) {
-                e.preventDefault();
-                let targetView = this.getAttribute("href");
-                fetch(targetView).then(response => response.text()).then(data => {
-                    document.getElementById("dashboard-view").innerHTML = data;
-                });
-            });
-        });
-    });
-</script>
-=== public/layouts/main copy.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Global Layout Wrapper - main.php
-|--------------------------------------------------------------------------
-| This file ensures all views have a consistent layout with a header and footer.
-|
-| Path: public/layouts/main.php
-*/
+// Log the API request at the very start, including requested URI
+file_put_contents($logFile, "[API] Request received for " . ($_SERVER['REQUEST_URI'] ?? 'unknown') . PHP_EOL, FILE_APPEND);
 
-require_once __DIR__ . '/../bootstrap.php';
-require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+// Ensure response is JSON
+header("Content-Type: application/json");
 
-// Ensure $view is set before including it
-if (!isset($view) || !file_exists($view)) {
-    die("Error: View file not found.");
+// Check for valid Authorization header or session
+$headers = getallheaders();
+if (!isset($headers['Authorization']) && !isset($_SESSION['user_logged_in'])) {
+    http_response_code(401);
+    echo json_encode(["error" => "Unauthorized"]);
+    file_put_contents($logFile, "[API] Unauthorized access - Missing Authorization header or session" . PHP_EOL, FILE_APPEND);
+    exit();
 }
 
-// Include header
-require_once __DIR__ . '/header.php';
-?>
+$routes = require __DIR__ . '/../../config/routes.php';
+$requestedEndpoint = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
 
-<main class="content">
-    <?php include $view; ?>
-</main>
-
+if (array_key_exists($requestedEndpoint, $routes)) {
+    $endpointFile = __DIR__ . '/' . $routes[$requestedEndpoint];
+    if (file_exists($endpointFile)) {
+        require $endpointFile;
+    } else {
+        http_response_code(404);
+        echo json_encode(["error" => "API not found"]);
+        file_put_contents($logFile, "[API] 404 - Endpoint file not found: $requestedEndpoint" . PHP_EOL, FILE_APPEND);
+    }
+} else {
+    http_response_code(404);
+    echo json_encode(["error" => "API not found"]);
+    file_put_contents($logFile, "[API] 404 - Endpoint not found in routes: $requestedEndpoint" . PHP_EOL, FILE_APPEND);
+}
+exit();
+=== public/api/charts.php ===
 <?php
-// Include footer
-require_once __DIR__ . '/footer.php';
-?>
-=== public/layouts/modals.php ===
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+header("Access-Control-Allow-Origin: *");  // Allow cross-origin requests
+header("Access-Control-Allow-Methods: GET, POST");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Content-Type: application/json");
+
+// Verify user authentication
+if (!isUserLoggedIn()) {
+    http_response_code(401);
+    echo json_encode(["error" => "Unauthorized"]);
+    exit();
+}
+
+// Sample chart data (Replace with real database queries)
+$data = [
+    "bookingTrends" => [
+        "labels" => ["Jan", "Feb", "Mar", "Apr"],
+        "datasets" => [
+            [
+                "label" => "Bookings",
+                "data" => [10, 25, 40, 60],
+                "backgroundColor" => "rgba(54, 162, 235, 0.5)"
+            ]
+        ]
+    ],
+    "revenueTrends" => [
+        "labels" => ["Jan", "Feb", "Mar", "Apr"],
+        "datasets" => [
+            [
+                "label" => "Revenue",
+                "data" => [1000, 2500, 4000, 6000],
+                "backgroundColor" => "rgba(75, 192, 192, 0.5)"
+            ]
+        ]
+    ]
+];
+
+// Return JSON response
+echo json_encode($data);
+exit();
+=== public/api/test.php ===
 <?php
-/*
-|--------------------------------------------------------------------------
-| Modale - Okna Modalne
-|--------------------------------------------------------------------------
-| Plik zawiera globalne okna modalne wykorzystywane w aplikacji.
-|
-| Ścieżka: App/Views/layouts/modals.php
-*/
-?>
+require_once __DIR__ . '/../../../vendor/autoload.php';
+require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../config/api.php';
 
-<div id="globalModal" class="modal">
-    <div class="modal-content">
-        <span class="close">&times;</span>
-        <h2 id="modalTitle"></h2>
-        <div id="modalBody"></div>
-        <button class="btn btn-primary" id="modalConfirm">OK</button>
-    </div>
-</div>
-=== public/layouts/main.php ===
+// Log the inclusion of the test API
+$logFile = __DIR__ . '/../../../logs/debug.log';
+file_put_contents($logFile, "[API] Including test.php" . PHP_EOL, FILE_APPEND);
+
+// Log the API request at the very start, including requested URI
+file_put_contents($logFile, "[API] Request received for " . ($_SERVER['REQUEST_URI'] ?? 'unknown') . PHP_EOL, FILE_APPEND);
+
+// Ensure response is JSON
+header("Content-Type: application/json");
+
+// Optional authentication check flag
+$requiresAuth = true;
+
+// Define authentication function with improved error handling
+function requireAuth() {
+    global $logFile;
+    $headers = getallheaders();
+    if (!isset($headers['Authorization'])) {
+        file_put_contents($logFile, "[API] Authentication failed: Missing Authorization header" . PHP_EOL, FILE_APPEND);
+        http_response_code(401);
+        echo json_encode(["error" => "Unauthorized access: Authorization header missing"]);
+        exit();
+    }
+    file_put_contents($logFile, "[API] Authentication succeeded with header: " . $headers['Authorization'] . PHP_EOL, FILE_APPEND);
+}
+
+// Perform authentication if required
+if ($requiresAuth) {
+    requireAuth();
+}
+
+// Confirm FastRoute processing by logging the matched route
+file_put_contents($logFile, "[API] FastRoute processed endpoint: " . ($_SERVER['REQUEST_URI'] ?? 'unknown') . PHP_EOL, FILE_APPEND);
+
+// Example response for test endpoint
+echo json_encode(["message" => "Test endpoint accessed successfully"]);
+file_put_contents($logFile, "[API] /test API processed successfully" . PHP_EOL, FILE_APPEND);
+?>
+=== public/api/shared/initSession.php ===
 <?php
-/*
-|--------------------------------------------------------------------------
-| Global Layout Wrapper - main.php
-|--------------------------------------------------------------------------
-| This wrapper ensures that every view is displayed inside a structured
-| layout with a header and footer.
-|
-| Path: public/layouts/main.php
-*/
 
-require_once __DIR__ . '/../layouts/header.php';
-?>
+$apiLogFile = __DIR__ . '/../../logs/api.log';
 
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
-    <link rel="stylesheet" href="/public/css/dashboard.css">
-    <script src="/public/js/dashboard.js" defer></script>
-</head>
-<body>
+function logApiError($message) {
+    global $apiLogFile;
+    file_put_contents($apiLogFile, date('Y-m-d H:i:s') . " - $message\n", FILE_APPEND);
+}
 
-<?php include __DIR__ . '/../layouts/header.php'; ?>
-
-<div class="dashboard-container">
-    <aside class="sidebar">
-        <?php
-        if ($userRole === 'admin') {
-            include __DIR__ . '/../layouts/sidebars/admin_sidebar.php';
-        } else {
-            include __DIR__ . '/../layouts/sidebars/user_sidebar.php';
+function isProtectedRoute($route) {
+    $protectedRoutes = [
+        '/profile/update',
+        '/password/reset/request',
+        '/password/reset',
+        '/payments/process',
+        '/payments/refund',
+        '/bookings',
+        '/notifications',
+        '/admin',
+        '/documents',
+        '/api'
+    ];
+    foreach ($protectedRoutes as $protectedRoute) {
+        if (strpos($route, $protectedRoute) === 0) {
+            return true;
         }
-        ?>
-    </aside>
-    <main class="main-content">
-        <?php include $view; ?>
-    </main>
-</div>
+    }
+    return false;
+}
 
-<?php include __DIR__ . '/../layouts/footer.php'; ?>
+session_start();
 
-</body>
-</html>
-=== public/layouts/alerts.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Alerts - Globalne Powiadomienia
-|--------------------------------------------------------------------------
-| Plik odpowiada za wyświetlanie globalnych alertów i powiadomień.
-|
-| Ścieżka: App/Views/layouts/alerts.php
-*/
+$requestUri = $_SERVER['REQUEST_URI'];
+
+if (isProtectedRoute($requestUri)) {
+    if (!isset($_SESSION['user_id'])) {
+        logApiError("Unauthorized access attempt to $requestUri");
+        http_response_code(403);
+        echo json_encode(["error" => "Unauthorized"]);
+        exit();
+    }
+}
+
+// Allow guest users to access the homepage without authentication
+if ($requestUri === '/' || $requestUri === '/home') {
+    return;
+}
+
+// Set the response header to JSON
+header('Content-Type: application/json');
+
+// Check if the session is valid
+if (validateSessionIntegrity()) {
+    // Session is active
+    $response = [
+        'status' => 'active',
+        'user_id' => $_SESSION['user_id']
+    ];
+    echo json_encode($response);
+} else {
+    // Session is invalid
+    http_response_code(403);
+    $response = [
+        'error' => 'Unauthorized'
+    ];
+    echo json_encode($response);
+
+    // Log unauthorized session attempts
+    $logMessage = sprintf("[%s] Unauthorized session attempt from IP: %s\n", date('Y-m-d H:i:s'), $_SERVER['REMOTE_ADDR']);
+    file_put_contents(__DIR__ . '/../../logs/api.log', $logMessage, FILE_APPEND);
+}
 ?>
-
-<div id="alert-container"></div>
-=== public/layouts/navbar.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Navbar - Górna Nawigacja Dashboardu
-|--------------------------------------------------------------------------
-| Plik odpowiada za wyświetlanie górnej belki nawigacyjnej w dashboardzie.
-| Pokazuje podstawowe opcje nawigacyjne i dostęp do ustawień konta.
-|
-| Ścieżka: App/Views/layouts/navbar.php
-*/
-?>
-
-<nav class="navbar">
-    <div class="container">
-        <a href="/dashboard" class="logo">🚗 CarFuse</a>
-        <ul class="nav-links">
-            <li><a href="/user/profile" class="dashboard-link">👤 Mój Profil</a></li>
-            <li><a href="/user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
-            <li><a href="/logout">🚪 Wyloguj</a></li>
-        </ul>
-    </div>
-</nav>
-
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        document.querySelectorAll(".dashboard-link").forEach(link => {
-            link.addEventListener("click", function(e) {
-                e.preventDefault();
-                let targetView = this.getAttribute("href");
-                fetch(targetView).then(response => response.text()).then(data => {
-                    document.getElementById("dashboard-view").innerHTML = data;
-                });
-            });
-        });
-    });
-</script>
 === public/css/style.css ===
 /* Dark Minimal Theme */
+
+/* Added CSS Variables for consistency */
+:root {
+    --primary-bg: #121212;
+    --secondary-bg: #181818;
+    --accent-color: #FFD700;
+    --hover-color: #FFC107;
+    --button-bg: #007bff;
+    --button-hover-bg: #0056b3;
+    --success-bg: #28a745;
+    --error-color: #FF4C4C;
+    --font-family: Arial, sans-serif;
+    --base-font-size: 16px;
+    --primary-color: #3498db;
+    --secondary-color: #2ecc71;
+    --tertiary-color: #e74c3c;
+    --font-size-base: 16px;
+    --font-size-large: 24px;
+    --font-size-small: 12px;
+}
+
 body {
-    background-color: #121212;
+    background-color: var(--primary-bg);
     color: #fff;
-    font-family: Arial, sans-serif;
+    font-family: var(--font-family);
     margin: 0;
     padding: 0;
+    font-size: var(--font-size-base);
+    background-color: #f4f4f4;
 }
 header {
-    background-color: #181818;
+    background-color: var(--secondary-bg);
     text-align: center;
     padding: 15px 0;
 }
@@ -235,10 +289,11 @@ nav a {
     color: #fff;
     text-decoration: none;
     margin: 0 15px;
-    font-size: 18px;
+    font-size: 1rem;
+    transition: color 0.3s ease;
 }
 nav a:hover {
-    color: #FFD700;
+    color: var(--accent-color);
 }
 
 /* Hero Section */
@@ -246,6 +301,7 @@ nav a:hover {
     text-align: center;
     padding: 100px 20px;
     background: url('/public/images/hero-bg.jpg') no-repeat center center/cover;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
 }
 .hero h1 {
     font-size: 48px;
@@ -257,6 +313,14 @@ nav a:hover {
     opacity: 0.8;
     margin-bottom: 30px;
 }
+.hero-title {
+    font-size: 2.5rem;
+    font-weight: bold;
+}
+.hero-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.8;
+}
 
 /* Search Form */
 .search-form {
@@ -266,18 +330,19 @@ nav a:hover {
 }
 .search-form input, .search-form button {
     padding: 12px;
-    font-size: 16px;
+    font-size: var(--base-font-size);
     border-radius: 5px;
     border: none;
 }
 .search-form button {
-    background: #FFD700;
-    color: #121212;
+    background: var(--accent-color);
+    color: var(--primary-bg);
     font-weight: bold;
     cursor: pointer;
+    transition: background 0.3s ease;
 }
 .search-form button:hover {
-    background: #FFC107;
+    background: var(--hover-color);
 }
 
 /* Features Section */
@@ -300,6 +365,60 @@ nav a:hover {
     padding: 20px;
     border-radius: 5px;
 }
+.features-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+.feature-box {
+    background: #1a1a1a;
+    padding: 20px;
+    border-radius: 8px;
+    transition: transform 0.3s ease;
+}
+.feature-box:hover {
+    transform: scale(1.05);
+}
+
+/* CTA Section */
+.cta {
+    margin-top: 40px;
+    background: var(--success-bg);
+    padding: 20px;
+    border-radius: 8px;
+}
+.btn {
+    display: inline-block;
+    background: var(--button-bg);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: background 0.3s ease;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    text-align: center;
+    cursor: pointer;
+    font-size: var(--font-size-base);
+}
+.btn:hover {
+    background: var(--button-hover-bg);
+}
+.btn-primary {
+    background-color: var(--primary-color);
+    color: #fff;
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: #fff;
+}
+
+.btn-tertiary {
+    background-color: var(--tertiary-color);
+    color: #fff;
+}
 
 /* Footer */
 .footer {
@@ -311,8 +430,93 @@ nav a:hover {
 
 /* Error Message */
 .error-message {
-    color: #FF4C4C;
+    color: var(--error-color);
     display: none;
+}
+
+/* Responsive Media Queries */
+@media (max-width: 768px) {
+    nav {
+        flex-direction: column;
+    }
+    .hero {
+        padding: 80px 10px;
+    }
+    .feature-list, .features-container {
+        flex-direction: column;
+        gap: 20px;
+    }
+    .navbar .container {
+        flex-direction: column;
+    }
+
+    .navbar .nav-links {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .navbar .nav-links li {
+        margin: 0.5rem 0;
+    }
+
+    .hero-section, .features-section, .testimonials-section {
+        padding: 1rem 0;
+    }
+}
+@media (max-width: 480px) {
+    nav a {
+        margin: 5px 0;
+        font-size: 0.9rem;
+    }
+    .hero h1 {
+        font-size: 2.5rem;
+    }
+    .hero p {
+        font-size: 1rem;
+    }
+}
+
+.navbar {
+    background-color: var(--primary-color);
+    color: #fff;
+    padding: 1rem;
+}
+
+.navbar .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.navbar .nav-links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+}
+
+.navbar .nav-links li {
+    margin-left: 1rem;
+}
+
+.navbar .nav-links a {
+    color: #fff;
+    text-decoration: none;
+    font-size: var(--font-size-base);
+}
+
+.hero-section {
+    background-color: #fff;
+    padding: 2rem 0;
+    text-align: center;
+}
+
+.features-section, .testimonials-section {
+    padding: 2rem 0;
+}
+
+.features-section .icon, .testimonials-section blockquote {
+    font-size: var(--font-size-large);
 }
 === public/css/profile.css ===
 /*
@@ -428,6 +632,41 @@ body {
 }
 
 === public/css/logs.css ===
+/* ...existing code... */
+
+/* Remove redundant table styles */
+/* .logs table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: var(--surface-color);
+}
+.logs table th {
+    background-color: var(--primary-color);
+    color: white;
+}
+.logs table td {
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    text-align: left;
+}
+.logs table tr:nth-child(even) {
+    background-color: #222;
+}
+.logs table tr:hover {
+    background-color: #333;
+} */
+
+/* Ensure tables remain responsive on smaller screens */
+@media (max-width: 768px) {
+    .logs table {
+        display: block;
+        overflow-x: auto;
+    }
+    .logs table th, .logs table td {
+        white-space: nowrap;
+    }
+}
 === public/css/documents.css ===
 /*
 |--------------------------------------------------------------------------
@@ -1813,12 +2052,70 @@ body {
 === public/index.php ===
 <?php
 declare(strict_types=1);
-
-require_once __DIR__ . '/../bootstrap.php'; // Bootstrap application
-require_once __DIR__ . '/../vendor/autoload.php'; // Load dependencies
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php'; // Load security functions globally
-
 header("Content-Type: text/html; charset=UTF-8");
+
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../config/routes.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$logFile = __DIR__ . '/../logs/debug.log';
+file_put_contents($logFile, "[INDEX] Request URI: " . $_SERVER['REQUEST_URI'] . PHP_EOL, FILE_APPEND);
+
+$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+if ($requestUri === '/') {
+    require __DIR__ . '/views/home.php';
+    exit();
+}
+
+$dispatcher = FastRoute\simpleDispatcher(function(FastRoute\RouteCollector $r) use ($routes) {
+    foreach ($routes as $route => $file) {
+        $r->addRoute('GET', "/$route", $file);
+    }
+});
+
+$httpMethod = $_SERVER['REQUEST_METHOD'];
+$uri = $_SERVER['REQUEST_URI'];
+
+// Strip query string (?foo=bar) and decode URI
+if (false !== $pos = strpos($uri, '?')) {
+    $uri = substr($uri, 0, $pos);
+}
+$uri = rawurldecode($uri);
+
+$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
+
+// Log route dispatch information
+file_put_contents($logFile, "[INDEX] Route Info: " . print_r($routeInfo, true) . PHP_EOL, FILE_APPEND);
+
+switch ($routeInfo[0]) {
+    case FastRoute\Dispatcher::NOT_FOUND:
+        http_response_code(404);
+        echo '404 Not Found';
+        file_put_contents($logFile, "[INDEX] 404 Not Found" . PHP_EOL, FILE_APPEND);
+        break;
+    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+        http_response_code(405);
+        echo '405 Method Not Allowed';
+        file_put_contents($logFile, "[INDEX] 405 Method Not Allowed" . PHP_EOL, FILE_APPEND);
+        break;
+    case FastRoute\Dispatcher::FOUND:
+        $handler = $routeInfo[1];
+        $vars = $routeInfo[2];
+        // Log the handler and variables
+        file_put_contents($logFile, "[INDEX] Handler: $handler, Vars: " . print_r($vars, true) . PHP_EOL, FILE_APPEND);
+        require __DIR__ . "/../views/$handler";
+        file_put_contents($logFile, "[INDEX] 200 OK: $requestUri" . PHP_EOL, FILE_APPEND);
+        break;
+}
+exit();
+?>
+=== public/home.php ===
+<?php
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 ?>
 
 <!DOCTYPE html>
@@ -1826,19 +2123,69 @@ header("Content-Type: text/html; charset=UTF-8");
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carfuse - Wynajmij auto szybko i łatwo</title>
-    <link rel="stylesheet" href="/public/css/style.css">
-    <link rel="stylesheet" href="/public/css/home.css"> <!-- Link to home.css -->
-    <script src="/public/js/main.js" defer></script>
+    <title>CarFuse - Strona Główna</title>
+    <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
 
-<?php include __DIR__ . '/layouts/header.php'; ?>
+<?php include __DIR__ . '/views/layouts/navbar.php'; ?>
 
-<?php include __DIR__ . '/home.php'; ?>
+<section class="hero-section">
+    <div class="container text-center">
+        <h1>Witaj w CarFuse!</h1>
+        <p>Najlepszy sposób na wynajem i zarządzanie pojazdami.</p>
+        <a href="auth/register.php" class="btn btn-primary">Zarejestruj się</a>
+        <a href="auth/login.php" class="btn btn-secondary">Zaloguj się</a>
+    </div>
+</section>
+
+<section class="features-section">
+    <div class="container">
+        <h2>Dlaczego CarFuse?</h2>
+        <div class="row">
+            <div class="col-md-4 text-center">
+                <i class="icon fas fa-car"></i>
+                <h3>Łatwy Wynajem</h3>
+                <p>Wynajmuj pojazdy szybko i wygodnie online.</p>
+            </div>
+            <div class="col-md-4 text-center">
+                <i class="icon fas fa-lock"></i>
+                <h3>Bezpieczeństwo</h3>
+                <p>Wszystkie rezerwacje są weryfikowane i zabezpieczone.</p>
+            </div>
+            <div class="col-md-4 text-center">
+                <i class="icon fas fa-wallet"></i>
+                <h3>Elastyczne Płatności</h3>
+                <p>Obsługujemy płatności kartą, PayPal i inne metody.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="testimonials-section">
+    <div class="container">
+        <h2>Opinie Klientów</h2>
+        <div class="row">
+            <div class="col-md-6">
+                <blockquote>
+                    <p>"Najlepsza platforma do wynajmu aut! Proces jest szybki i bezproblemowy."</p>
+                    <cite>- Jan Kowalski</cite>
+                </blockquote>
+            </div>
+            <div class="col-md-6">
+                <blockquote>
+                    <p>"Wspaniała obsługa klienta i bardzo dobre ceny. Polecam!"</p>
+                    <cite>- Anna Nowak</cite>
+                </blockquote>
+            </div>
+        </div>
+    </div>
+</section>
 
 <?php include __DIR__ . '/layouts/footer.php'; ?>
 
+<script type="module" src="js/shared.js"></script>
+<script type="module" src="js/api.js"></script>
 </body>
 </html>
 === public/views/auth/register.php ===
@@ -3768,6 +4115,193 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 </script>
+=== public/views/layouts/header.php ===
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarFuse Dashboard</title>
+    <link rel="stylesheet" href="/public/css/main.css">
+    <script src="/public/js/main.js" defer></script>
+</head>
+<body>
+=== public/views/layouts/footer.php ===
+</body>
+</html>
+=== public/views/layouts/sidebar.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Sidebar - Nawigacja w Dashboardzie
+|--------------------------------------------------------------------------
+| Plik odpowiada za wyświetlanie bocznego menu nawigacyjnego w dashboardzie.
+| Umożliwia użytkownikom i administratorom przełączanie się między podstronami.
+|
+| Ścieżka: App/Views/layouts/sidebar.php
+*/
+?>
+
+<aside class="sidebar">
+    <nav class="sidebar-menu">
+        <ul>
+            <li><a href="/user/dashboard" class="dashboard-link">📊 Panel</a></li>
+            <li><a href="/bookings/view" class="dashboard-link">📅 Moje rezerwacje</a></li>
+            <li><a href="/payments/history" class="dashboard-link">💳 Historia płatności</a></li>
+            <li><a href="/documents/user_documents" class="dashboard-link">📄 Moje dokumenty</a></li>
+            <li><a href="/user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
+            <li><a href="/user/profile" class="dashboard-link">👤 Profil</a></li>
+            <li><a href="/admin/users" class="dashboard-link">👥 Zarządzanie użytkownikami</a></li>
+            <li><a href="/admin/audit_logs" class="dashboard-link">📜 Logi audytowe</a></li>
+            <li><a href="/admin/logs" class="dashboard-link">📂 Logi systemowe</a></li>
+            <li><a href="/admin/reports" class="dashboard-link">📑 Raporty</a></li>
+            <li><a href="/admin/settings" class="dashboard-link">⚙️ Ustawienia</a></li>
+            <li><a href="/logout">🚪 Wyloguj</a></li>
+        </ul>
+    </nav>
+</aside>
+
+<script src="/public/js/main.js" defer></script>
+=== public/views/layouts/main copy.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Global Layout Wrapper - main.php
+|--------------------------------------------------------------------------
+| This file ensures all views have a consistent layout with a header and footer.
+|
+| Path: public/layouts/main.php
+*/
+
+require_once __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+
+// Ensure $view is set before including it
+if (!isset($view) || !file_exists($view)) {
+    die("Error: View file not found.");
+}
+
+// Include header
+require_once __DIR__ . '/header.php';
+?>
+
+<main class="content">
+    <?php include $view; ?>
+</main>
+
+<?php
+// Include footer
+require_once __DIR__ . '/footer.php';
+?>
+=== public/views/layouts/modals.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Modale - Okna Modalne
+|--------------------------------------------------------------------------
+| Plik zawiera globalne okna modalne wykorzystywane w aplikacji.
+|
+| Ścieżka: App/Views/layouts/modals.php
+*/
+?>
+
+<div id="globalModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2 id="modalTitle"></h2>
+        <div id="modalBody"></div>
+        <button class="btn btn-primary" id="modalConfirm">OK</button>
+    </div>
+</div>
+=== public/views/layouts/main.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Global Layout Wrapper - main.php
+|--------------------------------------------------------------------------
+| This wrapper ensures that every view is displayed inside a structured
+| layout with a header and footer.
+|
+| Path: public/layouts/main.php
+*/
+
+require_once __DIR__ . '/../layouts/header.php';
+?>
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/public/css/main.css">
+    <script src="/public/js/main.js" defer></script>
+</head>
+<body>
+
+<?php include __DIR__ . '/../layouts/header.php'; ?>
+
+<div class="dashboard-container">
+    <aside class="sidebar">
+        <?php
+        if ($userRole === 'admin') {
+            include __DIR__ . '/../layouts/sidebars/admin_sidebar.php';
+        } else {
+            include __DIR__ . '/../layouts/sidebars/user_sidebar.php';
+        }
+        ?>
+    </aside>
+    <main class="main-content">
+        <?php include $view; ?>
+    </main>
+</div>
+
+<?php include __DIR__ . '/../layouts/footer.php'; ?>
+
+</body>
+</html>
+=== public/views/layouts/alerts.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Alerts - Globalne Powiadomienia
+|--------------------------------------------------------------------------
+| Plik odpowiada za wyświetlanie globalnych alertów i powiadomień.
+|
+| Ścieżka: App/Views/layouts/alerts.php
+*/
+?>
+
+<div id="alert-container"></div>
+=== public/views/layouts/navbar.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Navbar - Górna Nawigacja Dashboardu
+|--------------------------------------------------------------------------
+| Plik odpowiada za wyświetlanie górnej belki nawigacyjnej w dashboardzie.
+| Pokazuje podstawowe opcje nawigacyjne i dostęp do ustawień konta.
+|
+| Ścieżka: App/Views/layouts/navbar.php
+*/
+?>
+<nav class="navbar">
+    <div class="container">
+        <a href="/dashboard" class="logo">🚗 CarFuse</a>
+        <ul class="nav-links">
+            <li><a href="/user/profile" class="dashboard-link">👤 Mój Profil</a></li>
+            <li><a href="/user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
+            <li><a href="/logout">🚪 Wyloguj</a></li>
+        </ul>
+    </div>
+</nav>
+<?php if (strpos($_SERVER['REQUEST_URI'], '/dashboard') !== false): ?>
+    <script src="/js/main.js"></script>
+<?php endif; ?>
+<script src="/js/shared.js"></script>
+
+
 === public/views/payments/make_payment.php ===
 <?php
 /*
@@ -4313,13 +4847,42 @@ document.addEventListener("DOMContentLoaded", function() {
     fetchRefunds();
 });
 </script>
-=== public/views/user/profile.php ===
+=== public/views/dashboard.php ===
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarFuse - Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<?php include __DIR__ . '/layouts/navbar.php'; ?>
+
+<div class="dashboard-container">
+    <div id="dashboard-view">
+        <!-- Dashboard content will be loaded here -->
+    </div>
+</div>
+
+<?php include __DIR__ . '/layouts/footer.php'; ?>
+<script src="/js/shared.js"></script>
+<script src="/js/main.js"></script>
+</body>
+</html>
+<?php
+// ...existing code...
+$page = 'dashboard';
+// ...existing code...
+?>=== public/views/user/profile.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['user_id'])) {
     header("Location: /login.php");
     exit();
 }
+$page = 'profile';
+
 ?>
 
 /*
@@ -5205,8 +5768,19 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>
 === public/views/home.php ===
 <?php
-require_once __DIR__ . '/../helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$logFile = __DIR__ . '/../../logs/debug.log';
+
+// Log the inclusion of the home view
+file_put_contents($logFile, "[VIEW] Including home.php" . PHP_EOL, FILE_APPEND);
 ?>
+<?php $page = 'home'; ?>
 
 <!DOCTYPE html>
 <html lang="pl">
@@ -5214,18 +5788,18 @@ require_once __DIR__ . '/../helpers/SecurityHelper.php';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CarFuse - Strona Główna</title>
-    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-
 <?php include __DIR__ . '/layouts/navbar.php'; ?>
 
 <section class="hero-section">
     <div class="container text-center">
         <h1>Witaj w CarFuse!</h1>
         <p>Najlepszy sposób na wynajem i zarządzanie pojazdami.</p>
-        <a href="/auth/register.php" class="btn btn-primary">Zarejestruj się</a>
-        <a href="/auth/login.php" class="btn btn-secondary">Zaloguj się</a>
+        <a href="/dashboard" class="btn btn-primary">Panel</a>
+        <a href="#features-section" class="btn btn-secondary" id="register-btn">Zaloguj się</a>
+        <a href="/profile" class="btn btn-tertiary">Profil</a>
     </div>
 </section>
 
@@ -5273,7 +5847,6 @@ require_once __DIR__ . '/../helpers/SecurityHelper.php';
 </section>
 
 <?php include __DIR__ . '/layouts/footer.php'; ?>
-
 <script src="/js/shared.js"></script>
 </body>
 </html>
@@ -5584,6 +6157,8 @@ if (!file_exists($view)) {
     $view = __DIR__ . "/dashboard_modules/404.php"; // Load 404 if module doesn't exist
 }
 
+// Removed any redundant <script> tags for main.js to prevent double loading
+
 include __DIR__ . '/../layouts/main.php';
 ?>
 === public/views/dashboard/modules/admin/payments/dashboard.php ===
@@ -5809,7 +6384,7 @@ if (!isUserLoggedIn()) {
 </div>
 === public/views/dashboard/modules/shared/charts.php ===
 <?php
-require_once __DIR__ . '/../../helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 
 if (!isUserLoggedIn()) {
     header("Location: /login");
@@ -5838,7 +6413,7 @@ if (!isUserLoggedIn()) {
     </div>
 </div>
 
-<script src="/js/charts.js"></script>
+<script type="text/javascript" src="/js/shared.js"></script>
 === public/views/dashboard/modules/shared/tables.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
@@ -5886,26 +6461,6 @@ if (!isUserLoggedIn()) {
 </div>
 
 <script src="/js/modals.js"></script>
-=== public/index copy.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| CarFuse Homepage
-|--------------------------------------------------------------------------
-| This is now the landing page and entry point for the application.
-|
-| Path: public/index.php
-*/
-
-declare(strict_types=1);
-
-require_once __DIR__ . '/../bootstrap.php';
-require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
-
-$view = __DIR__ . '/views/home.php'; // Home page content
-include __DIR__ . '/layouts/main.php';
-?>
 === public/logout.php ===
 <?php
 
@@ -5924,50 +6479,76 @@ exit;
 http_response_code(200);
 echo json_encode(["message" => "Logged out successfully."]);
 === public/js/main.js ===
-document.addEventListener("DOMContentLoaded", function () {
-    console.log("Main.js loaded successfully.");
+import { apiFetch } from './api.js';
 
-    // Ensure dashboard view container exists before updating it
-    const dashboardView = document.getElementById("dashboard-view");
-    if (!dashboardView) {
-        console.warn("Dashboard view container (#dashboard-view) not found.");
+document.addEventListener("DOMContentLoaded", function () {
+    console.log("Main.js Loaded");
+    // Ensure this runs only once
+    if (window.mainJsInitialized) return;
+    window.mainJsInitialized = true;
+
+    // Run script only on dashboard pages
+    if (!window.location.pathname.includes("/dashboard")) {
+        console.log("main.js: Not on dashboard. Exiting.");
         return;
     }
 
-    // Handle dashboard link navigation
-    function attachDashboardLinks() {
-        const dashboardLinks = document.querySelectorAll(".dashboard-link");
-        
-        if (dashboardLinks.length === 0) {
-            console.warn("No dashboard links found.");
-            return;
-        }
+    console.log("Main.js loaded successfully.");
 
-        dashboardLinks.forEach(link => {
-            link.addEventListener("click", function (e) {
-                e.preventDefault();
-                let targetView = this.getAttribute("href");
-
-                if (!targetView) {
-                    console.warn("Dashboard link has no target view.");
-                    return;
-                }
-
-                fetch(targetView)
-                    .then(response => response.text())
-                    .then(data => {
-                        dashboardView.innerHTML = data;
-                        attachDashboardLinks(); // Re-attach listeners after loading new content
-                    })
-                    .catch(error => console.error("Błąd ładowania widoku:", error));
-            });
-        });
-
-        console.log("Dashboard links attached.");
+    // Detect if we're on the dashboard page
+    const dashboardView = document.getElementById("dashboard-view");
+    if (!dashboardView) {
+        console.log("Dashboard view not found. main.js will not run on homepage.");
+        return;
     }
 
-    // Attach event listeners after short delay (ensures elements are fully loaded)
-    setTimeout(attachDashboardLinks, 100);
+    // Prevent execution if not on dashboard
+    if (!document.querySelector(".dashboard-container")) {
+        return;
+    }
+
+    async function fetchData(endpoint) {
+        try {
+            const response = await fetch(endpoint, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('apiToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Failed to fetch data:', error);
+        }
+    }
+
+    // Load default dashboard module with session credentials
+    apiFetch("/dashboard/modules/user/overview.php", {
+        credentials: "include"
+    })
+    .then(response => response.text())
+    .then(data => {
+        dashboardView.innerHTML = data;
+    })
+    .catch(error => console.error("main.js fetch error:", error));
+
+    document.querySelectorAll(".dashboard-link").forEach(link => {
+        link.addEventListener("click", function(e) {
+            e.preventDefault();
+            let targetView = this.getAttribute("href");
+            apiFetch(targetView)
+                .then(r => r.text())
+                .then(data => {
+                    document.getElementById("dashboard-view").innerHTML = data;
+                })
+                .catch(err => console.error("Dashboard link error:", err));
+        });
+    });
 });
 === public/js/ajax.js ===
 class Ajax {
@@ -6096,21 +6677,74 @@ import ajax from './ajax';
 import { showErrorToast } from './toasts';
 
 document.addEventListener('DOMContentLoaded', function () {
-    fetchStatistics();
+    loadDashboardContent();
     setInterval(checkUserActivity, 60000); // Aktualizuj statystyki tylko przy aktywności użytkownika
     window.addEventListener('resize', handleResponsiveUpdates);
 });
 
 /**
- * Fetches real-time statistics for the dashboard.
+ * Loads the main dashboard content dynamically.
  */
-async function fetchStatistics() {
+async function loadDashboardContent() {
     try {
-        const response = await ajax.get('/statistics');
-        updateWidgets(response);
+        const response = await ajax.get('/user/overview.php');
+        document.getElementById('dashboard-content').innerHTML = response;
+        fetchDashboardData();
     } catch (error) {
-        showErrorToast('Nie udało się pobrać statystyk.');
-        console.error('Błąd pobierania statystyk:', error);
+        showErrorToast('Nie udało się załadować zawartości pulpitu.');
+        console.error('Błąd ładowania zawartości pulpitu:', error);
+    }
+}
+
+/**
+ * Fetches dashboard data based on user role.
+ */
+async function fetchDashboardData() {
+    const role = getUserRole();
+    if (role === 'admin') {
+        await fetchAdminStatistics();
+    } else {
+        await fetchUserStatistics();
+    }
+}
+
+/**
+ * Fetches admin-specific statistics for the dashboard.
+ */
+async function fetchAdminStatistics() {
+    try {
+        showLoadingIndicators();
+        const [totalUsers, totalBookings, totalRevenue] = await Promise.all([
+            ajax.get('/statistics/totalUsers'),
+            ajax.get('/statistics/totalBookings'),
+            ajax.get('/statistics/totalRevenue')
+        ]);
+        updateWidgets({
+            totalUsers: totalUsers.data,
+            totalBookings: totalBookings.data,
+            totalRevenue: totalRevenue.data
+        });
+    } catch (error) {
+        showErrorToast('Nie udało się pobrać statystyk administratora.');
+        console.error('Błąd pobierania statystyk administratora:', error);
+    } finally {
+        hideLoadingIndicators();
+    }
+}
+
+/**
+ * Fetches user-specific statistics for the dashboard.
+ */
+async function fetchUserStatistics() {
+    try {
+        showLoadingIndicators();
+        const response = await ajax.get('/statistics/user');
+        updateWidgets(response.data);
+    } catch (error) {
+        showErrorToast('Nie udało się pobrać statystyk użytkownika.');
+        console.error('Błąd pobierania statystyk użytkownika:', error);
+    } finally {
+        hideLoadingIndicators();
     }
 }
 
@@ -6154,8 +6788,36 @@ function formatCurrency(amount) {
  */
 function checkUserActivity() {
     if (document.visibilityState === 'visible') {
-        fetchStatistics();
+        fetchDashboardData();
     }
+}
+
+/**
+ * Shows loading indicators for widgets.
+ */
+function showLoadingIndicators() {
+    const widgets = document.querySelectorAll('.widget');
+    widgets.forEach(widget => {
+        widget.classList.add('loading');
+    });
+}
+
+/**
+ * Hides loading indicators for widgets.
+ */
+function hideLoadingIndicators() {
+    const widgets = document.querySelectorAll('.widget');
+    widgets.forEach(widget => {
+        widget.classList.remove('loading');
+    });
+}
+
+/**
+ * Mock function to get user role.
+ */
+function getUserRole() {
+    // Replace with actual implementation
+    return 'user'; // or 'admin'
 }
 === public/js/notifications.js ===
 import ajax from './ajax';
@@ -6170,6 +6832,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     document.addEventListener('visibilitychange', handleVisibilityChange);
     document.addEventListener('newEvent', handleNewEvent); // Custom event for new actions
+    setInterval(fetchNotifications, FETCH_INTERVAL); // Polling mechanism
+
+    // Event delegation for dynamically loaded notifications
+    document.getElementById('notifications-container').addEventListener('click', function (event) {
+        if (event.target.classList.contains('mark-as-read')) {
+            markAsRead(event.target.dataset.id);
+        }
+    });
 });
 
 /**
@@ -6197,7 +6867,12 @@ async function fetchNotifications() {
 
     lastFetchTimestamp = now;
     try {
-        const notifications = await ajax.get('/notifications');
+        const response = await fetch('/api/user/notifications.php');
+        if (response.status === 401) {
+            showErrorToast('Musisz być zalogowany, aby zobaczyć powiadomienia.');
+            return;
+        }
+        const notifications = await response.json();
         if (notifications.length > 0) {
             displayNotifications(notifications);
         } else {
@@ -6222,23 +6897,10 @@ function displayNotifications(notifications) {
         const notificationElement = document.createElement('div');
         notificationElement.className = `notification ${notification.read ? 'read' : 'unread'}`;
         notificationElement.innerHTML = `
-            <p>${notification.message}</p>
+            <p style="font-weight: ${notification.read ? 'normal' : 'bold'};">${notification.message}</p>
             <button class="mark-as-read" data-id="${notification.id}">Oznacz jako przeczytane</button>
         `;
         notificationsContainer.appendChild(notificationElement);
-    });
-
-    attachMarkAsReadListeners();
-}
-
-/**
- * Adds event listeners to "Mark as Read" buttons.
- */
-function attachMarkAsReadListeners() {
-    document.querySelectorAll('.mark-as-read').forEach(button => {
-        button.addEventListener('click', function () {
-            markAsRead(this.dataset.id);
-        });
     });
 }
 
@@ -6247,12 +6909,15 @@ function attachMarkAsReadListeners() {
  */
 async function markAsRead(notificationId) {
     try {
-        const response = await ajax.post(`/notifications/${notificationId}/read`);
-        if (response.success) {
+        const response = await fetch(`/api/user/notifications.php/${notificationId}/read`, {
+            method: 'POST'
+        });
+        const result = await response.json();
+        if (result.success) {
             updateNotificationStatus(notificationId);
             showSuccessToast('Powiadomienie oznaczone jako przeczytane.');
         } else {
-            showErrorToast(response.error || 'Błąd oznaczania powiadomienia jako przeczytanego.');
+            showErrorToast(result.error || 'Błąd oznaczania powiadomienia jako przeczytanego.');
         }
     } catch (error) {
         console.error('Błąd oznaczania powiadomienia:', error);
@@ -6266,7 +6931,9 @@ async function markAsRead(notificationId) {
 function updateNotificationStatus(notificationId) {
     const notificationElement = document.querySelector(`.mark-as-read[data-id="${notificationId}"]`);
     if (notificationElement) {
-        notificationElement.closest('.notification').classList.add('read');
+        const parentElement = notificationElement.closest('.notification');
+        parentElement.classList.add('read');
+        parentElement.querySelector('p').style.fontWeight = 'normal';
         notificationElement.remove();
     }
 }
@@ -6282,16 +6949,21 @@ function displayNoNotificationsMessage() {
 }
 === public/js/forms.js ===
 document.addEventListener('DOMContentLoaded', function () {
-    const forms = document.querySelectorAll('form');
-
-    forms.forEach(form => {
-        form.addEventListener('submit', function (event) {
-            if (!validateForm(form)) {
-                event.preventDefault();
+    document.body.addEventListener('submit', function (event) {
+        const form = event.target;
+        if (form.tagName === 'FORM') {
+            event.preventDefault();
+            if (validateForm(form)) {
+                submitForm(form);
             }
-        });
+        }
+    });
 
-        attachRealTimeValidation(form);
+    document.body.addEventListener('input', function (event) {
+        const input = event.target;
+        if (input.closest('form')) {
+            validateInput(input);
+        }
     });
 });
 
@@ -6312,19 +6984,6 @@ function validateForm(form) {
 }
 
 /**
- * Attaches real-time validation to form inputs.
- */
-function attachRealTimeValidation(form) {
-    const inputs = form.querySelectorAll('input[required], textarea[required], select[required]');
-
-    inputs.forEach(input => {
-        input.addEventListener('input', function () {
-            validateInput(input);
-        });
-    });
-}
-
-/**
  * Validates a single input field.
  */
 function validateInput(input) {
@@ -6332,33 +6991,62 @@ function validateInput(input) {
     const type = input.type;
 
     if (!value) {
-        showError(input, 'To pole jest wymagane.');
+        showError(input, 'This field is required.');
         return false;
     }
 
     if (type === 'email' && !isValidEmail(value)) {
-        showError(input, 'Wprowadź poprawny adres e-mail.');
+        showError(input, 'Please enter a valid email address.');
         return false;
     }
 
     if (type === 'password') {
         if (value.length < 6) {
-            showError(input, 'Hasło musi zawierać co najmniej 6 znaków.');
+            showError(input, 'Password must be at least 6 characters long.');
             return false;
         }
         if (!/\d/.test(value) || !/[A-Za-z]/.test(value)) {
-            showError(input, 'Hasło musi zawierać litery i cyfry.');
+            showError(input, 'Password must contain both letters and numbers.');
             return false;
         }
     }
 
     if (input.dataset.minLength && value.length < input.dataset.minLength) {
-        showError(input, `To pole musi mieć co najmniej ${input.dataset.minLength} znaków.`);
+        showError(input, `This field must be at least ${input.dataset.minLength} characters long.`);
         return false;
     }
 
     clearError(input);
     return true;
+}
+
+/**
+ * Submits the form via AJAX.
+ */
+function submitForm(form) {
+    const formData = new FormData(form);
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    formData.append('_csrf', csrfToken);
+
+    fetch(form.action, {
+        method: form.method,
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            form.reset();
+            showSuccessMessage(form, data.message);
+        } else {
+            showErrorMessages(form, data.errors);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
 }
 
 /**
@@ -6387,6 +7075,31 @@ function clearError(input) {
 }
 
 /**
+ * Displays success message after form submission.
+ */
+function showSuccessMessage(form, message) {
+    const successMessage = document.createElement('div');
+    successMessage.classList.add('success-message');
+    successMessage.textContent = message;
+    form.appendChild(successMessage);
+    setTimeout(() => {
+        successMessage.remove();
+    }, 5000);
+}
+
+/**
+ * Displays multiple error messages after form submission.
+ */
+function showErrorMessages(form, errors) {
+    for (const [inputName, message] of Object.entries(errors)) {
+        const input = form.querySelector(`[name="${inputName}"]`);
+        if (input) {
+            showError(input, message);
+        }
+    }
+}
+
+/**
  * Checks if an email is valid.
  */
 function isValidEmail(email) {
@@ -6405,8 +7118,8 @@ document.addEventListener('DOMContentLoaded', function () {
  * Initializes profile form interactions.
  */
 function initProfileForm() {
-    const profileForm = document.getElementById('profile-form');
-    const avatarUpload = document.getElementById('avatar-upload');
+    const profileForm = document.getElementById('profileUpdateForm');
+    const avatarUpload = document.getElementById('avatarUpload');
 
     if (profileForm) profileForm.addEventListener('submit', updateProfile);
     if (avatarUpload) avatarUpload.addEventListener('change', handleAvatarUpload);
@@ -6422,11 +7135,15 @@ async function updateProfile(event) {
     if (!validateProfileForm(formData)) return;
 
     try {
-        const response = await ajax.post('/profile/update', formData);
-        if (response.success) {
+        const response = await fetch('/api/user/profile.php', {
+            method: 'POST',
+            body: formData,
+        });
+        const result = await response.json();
+        if (result.success) {
             showSuccessToast('Profil zaktualizowany pomyślnie.');
         } else {
-            showErrorToast(response.message || 'Błąd podczas aktualizacji profilu.');
+            showErrorToast(result.message || 'Błąd podczas aktualizacji profilu.');
         }
     } catch (error) {
         console.error('Błąd aktualizacji profilu:', error);
@@ -6437,17 +7154,31 @@ async function updateProfile(event) {
 /**
  * Handles avatar image upload and preview.
  */
-function handleAvatarUpload(event) {
+async function handleAvatarUpload(event) {
     const fileInput = event.target;
     const file = fileInput.files[0];
 
     if (!validateImage(file)) return;
 
-    const reader = new FileReader();
-    reader.onload = function (e) {
-        document.getElementById('avatar-preview').src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+        const response = await fetch('/api/user/profile.php', {
+            method: 'POST',
+            body: formData,
+        });
+        const result = await response.json();
+        if (result.success) {
+            document.getElementById('profileAvatar').src = result.avatarUrl;
+            showSuccessToast('Zdjęcie profilowe zaktualizowane pomyślnie.');
+        } else {
+            showErrorToast(result.message || 'Błąd podczas aktualizacji zdjęcia profilowego.');
+        }
+    } catch (error) {
+        console.error('Błąd aktualizacji zdjęcia profilowego:', error);
+        showErrorToast('Nie udało się zaktualizować zdjęcia profilowego.');
+    }
 }
 
 /**
@@ -6777,6 +7508,7 @@ import { showErrorToast, showSuccessToast } from './toasts';
 
 document.addEventListener('DOMContentLoaded', function () {
     initDocumentForm();
+    loadDocumentList();
 });
 
 /**
@@ -6804,7 +7536,7 @@ async function uploadDocument(event) {
     }
 
     try {
-        const response = await fetch('/api/user/documents.php?action=upload', {
+        const response = await fetch('/api/user/upload_document.php', {
             method: 'POST',
             body: formData
         }).then(res => res.json());
@@ -6812,6 +7544,7 @@ async function uploadDocument(event) {
         if (response.success) {
             showSuccessToast('Dokument przesłany pomyślnie.');
             previewDocument(response.documentUrl);
+            loadDocumentList();
         } else {
             showErrorToast(response.message || 'Nie udało się przesłać dokumentu.');
         }
@@ -6834,6 +7567,12 @@ function validateFileUpload(formData) {
     const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg'];
     if (!allowedTypes.includes(file.type)) {
         showErrorToast('Nieobsługiwany format pliku. Dozwolone: PDF, PNG, JPG.');
+        return false;
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+        showErrorToast('Plik jest za duży. Maksymalny rozmiar to 10MB.');
         return false;
     }
 
@@ -6889,6 +7628,7 @@ async function signDocument(documentId) {
 
         if (response.success) {
             showSuccessToast('Dokument został pomyślnie podpisany.');
+            loadDocumentList();
         } else {
             showErrorToast(response.message || 'Nie udało się podpisać dokumentu.');
         }
@@ -6910,6 +7650,24 @@ function previewContract(file) {
         }
     };
     reader.readAsDataURL(file);
+}
+
+/**
+ * Loads the document list dynamically.
+ */
+async function loadDocumentList() {
+    try {
+        const response = await fetch('/api/user/documents.php?action=list').then(res => res.json());
+        if (response.success) {
+            const documentList = document.getElementById('document-list');
+            documentList.innerHTML = response.documents.map(doc => `<li>${doc.name}</li>`).join('');
+        } else {
+            showErrorToast('Nie udało się załadować listy dokumentów.');
+        }
+    } catch (error) {
+        console.error('Błąd ładowania listy dokumentów:', error);
+        showErrorToast('Wystąpił problem podczas ładowania listy dokumentów.');
+    }
 }
 === public/js/payments.js ===
 import ajax from './ajax';
@@ -7071,34 +7829,202 @@ document.addEventListener("DOMContentLoaded", function () {
     fetchBookings();
 });
 === public/js/shared.js ===
-document.addEventListener("DOMContentLoaded", function () {
-    // Initialize Charts
-    function loadCharts() {
-        fetch("/api/shared/charts.php")
-            .then(response => response.json())
-            .then(data => {
-                let ctx = document.getElementById("bookingTrends").getContext("2d");
-                new Chart(ctx, {
-                    type: "line",
-                    data: data.bookingTrends,
-                });
+// Ensure this script only runs once
+if (!window.sharedJsInitialized) {
+    window.sharedJsInitialized = true;
+    console.log("Shared.js: homepage initialization started.");
 
-                ctx = document.getElementById("revenueTrends").getContext("2d");
-                new Chart(ctx, {
-                    type: "bar",
-                    data: data.revenueTrends,
+    // Workaround for importing dependencies
+    function loadScript(src, callback) {
+        const script = document.createElement("script");
+        script.src = src;
+        script.onload = callback;
+        script.onerror = function () {
+            console.error(`Failed to load script: ${src}`);
+        };
+        document.head.appendChild(script);
+    }
+
+    // Load api.js dynamically if not already loaded
+    if (!window.apiFetch) {
+        loadScript("js/api.js", function () {
+            console.log("api.js loaded successfully.");
+            main(); // Call the main function after loading dependencies
+        });
+    } else {
+        main();
+    }
+
+    function main() {
+        console.log("Shared.js: running initialization.");
+
+        // Utility function for checking elements
+        function getElement(selector, context = document) {
+            const element = context.querySelector(selector);
+            if (!element) {
+                console.warn(`Element not found: ${selector}`);
+                return null;
+            }
+            return element;
+        }
+
+        // Improved API call with proper authentication and logging
+        async function apiCall(endpoint, options = {}) {
+            const token = localStorage.getItem("authToken");
+            if (!token) {
+                console.error("API call failed: Missing authentication token.");
+                alert("Authentication error: Please log in.");
+                window.location.href = '/auth/login';
+                return null;
+            }
+            options.headers = {
+                ...options.headers,
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            };
+            try {
+                const response = await fetch(endpoint, options);
+                if (response.status === 401) {
+                    console.error("API call failed: Unauthorized (401).");
+                    await refreshToken();
+                    return apiCall(endpoint, options); // Retry the API call
+                }
+                if (response.status === 403) {
+                    console.error("API call failed: Forbidden (403).");
+                    alert("Authentication error: Access forbidden.");
+                    return null;
+                }
+                if (!response.ok) {
+                    const error = await response.json();
+                    console.error("API Error:", error);
+                    throw error;
+                }
+                return await response.json();
+            } catch (error) {
+                console.error("API call failed:", error);
+                return null;
+            }
+        }
+
+        // Function to refresh JWT token
+        async function refreshToken() {
+            const refreshToken = localStorage.getItem("refreshToken");
+            if (!refreshToken) {
+                console.error("Refresh token missing.");
+                alert("Session expired. Please log in again.");
+                window.location.href = '/auth/login';
+                return;
+            }
+            try {
+                const response = await fetch('api/auth/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: refreshToken })
                 });
+                if (!response.ok) {
+                    throw new Error('Failed to refresh token');
+                }
+                const data = await response.json();
+                localStorage.setItem("authToken", data.access_token);
+                console.log("Token refreshed successfully.");
+            } catch (error) {
+                console.error("Token refresh failed:", error);
+                alert("Session expired. Please log in again.");
+                window.location.href = '/auth/login';
+            }
+        }
+
+        // Session-based initialization
+        apiCall("api/shared/initSession.php")
+            .then((data) => {
+                if (data) {
+                    console.log("Session initialized successfully for homepage.");
+                }
             })
-            .catch(error => console.error("Błąd ładowania wykresów:", error));
+            .catch((error) => console.error("Session init error:", error));
+
+        // Navbar toggle & CTA scrolling
+        document.addEventListener("click", function (e) {
+            // Navbar toggle handling
+            if (e.target.matches("#navbarToggle, #navbarToggle *")) {
+                const navbar = getElement("#navbarSupportedContent");
+                if (navbar) {
+                    navbar.classList.toggle("show");
+                    console.log("Navbar toggled successfully.");
+                }
+            }
+
+            // Register button handling
+            if (e.target.matches("#register-btn")) {
+                e.preventDefault();
+                const href = e.target.getAttribute("href");
+                const target = href ? getElement(href) : null;
+                if (target) {
+                    target.scrollIntoView({ behavior: "smooth" });
+                    console.log("Smooth scroll triggered on homepage CTA.");
+                }
+            }
+        });
+
+        console.log("Shared.js: homepage initialization completed.");
+    }
+}
+
+(function() {
+    function isProtectedEndpoint(url) {
+        const protectedEndpoints = [
+            '/api/profile/update',
+            '/api/password/reset/request',
+            '/api/password/reset',
+            '/api/payments/process',
+            '/api/payments/refund',
+            '/api/bookings',
+            '/api/notifications',
+            '/api/admin',
+            '/api/documents'
+        ];
+        return protectedEndpoints.some(endpoint => url.startsWith(endpoint));
     }
 
-    // Initialize Modals
-    function showModal(modalId) {
-        $("#" + modalId).modal("show");
+    function apiFetch(url, options = {}) {
+        if (!options.headers) {
+            options.headers = {};
+        }
+
+        if (isProtectedEndpoint(url)) {
+            const token = localStorage.getItem('token');
+            if (token) {
+                options.headers['Authorization'] = 'Bearer ' + token;
+            } else {
+                console.warn('Missing token for protected endpoint:', url);
+            }
+        }
+
+        return fetch(url, options)
+            .then(async response => {
+                if (response.status === 401) {
+                    console.warn('Unauthorized response. Attempting token refresh...');
+                    // ...token refresh logic...
+                    // After refresh, retry original request or handle failure
+                }
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Request failed [${response.status}]: ${errorText}`);
+                }
+                return response;
+            })
+            .catch(error => {
+                console.error('API fetch error:', error.message);
+                throw error;
+            });
     }
 
-    loadCharts();
-});
+    // Expose functions to the global scope
+    window.apiFetch = apiFetch;
+
+    // Log successful API script loading
+    console.log('Shared API script loaded successfully');
+})();
 === public/js/admin.js ===
 document.addEventListener("DOMContentLoaded", function () {
     // Fetch and manage admin dashboard data
@@ -7113,7 +8039,7 @@ document.addEventListener("DOMContentLoaded", function () {
             .catch(error => console.error("Błąd ładowania dashboardu:", error));
     }
 
-    // Fetch and manage users
+    // Fetch and manage users with role dropdown update
     function fetchUsers() {
         fetch("/api/admin/users.php")
             .then(response => response.json())
@@ -7129,9 +8055,14 @@ document.addEventListener("DOMContentLoaded", function () {
                             <tr>
                                 <td>${user.id}</td>
                                 <td>${user.name}</td>
-                                <td>${user.role}</td>
                                 <td>
-                                    <button class="btn btn-sm btn-warning" onclick="changeUserRole(${user.id})">Zmień rolę</button>
+                                    <select onchange="updateUserRole(${user.id}, this.value)">
+                                        <option value="admin" ${user.role === "admin" ? "selected" : ""}>Admin</option>
+                                        <option value="user" ${user.role === "user" ? "selected" : ""}>User</option>
+                                        <option value="staff" ${user.role === "staff" ? "selected" : ""}>Staff</option>
+                                    </select>
+                                </td>
+                                <td>
                                     <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Usuń</button>
                                 </td>
                             </tr>
@@ -7141,6 +8072,24 @@ document.addEventListener("DOMContentLoaded", function () {
             })
             .catch(error => console.error("Błąd ładowania użytkowników:", error));
     }
+
+    // Update user role via AJAX
+    window.updateUserRole = function (userId, newRole) {
+        fetch("/api/admin/update_user_role.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: userId, role: newRole })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.success){
+                alert("Rola użytkownika zmieniona.");
+            } else {
+                alert("Nie udało się zmienić roli.");
+            }
+        })
+        .catch(error => console.error("Błąd aktualizacji roli użytkownika:", error));
+    };
 
     function deleteUser(userId) {
         if (confirm("Czy na pewno chcesz usunąć użytkownika?")) {
@@ -7154,9 +8103,11 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    // Fetch and manage reports
-    function fetchReports() {
-        fetch("/api/admin/reports.php")
+    // Fetch and manage reports with filtering and export functionality
+    function fetchReports(filter = "") {
+        let url = "/api/admin/reports.php";
+        if(filter) url += `?filter=${encodeURIComponent(filter)}`;
+        fetch(url)
             .then(response => response.json())
             .then(data => {
                 const reportTable = document.getElementById("reportList");
@@ -7182,9 +8133,88 @@ document.addEventListener("DOMContentLoaded", function () {
             .catch(error => console.error("Błąd ładowania raportów:", error));
     }
 
+    // Export reports as CSV or PDF
+    window.exportReports = function (format) {
+        fetch(`/api/admin/reports_export.php?format=${format}`)
+            .then(response => response.blob())
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `reports.${format}`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            })
+            .catch(error => console.error("Błąd eksportu raportów:", error));
+    };
+
+    // Fetch and manage transactions with refund handling
+    function fetchTransactions() {
+        fetch("/api/admin/transactions.php")
+            .then(response => response.json())
+            .then(data => {
+                const transactionTable = document.getElementById("transactionList");
+                transactionTable.innerHTML = "";
+
+                if (data.length === 0) {
+                    transactionTable.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Brak transakcji.</td></tr>`;
+                } else {
+                    data.forEach(tx => {
+                        transactionTable.innerHTML += `
+                            <tr>
+                                <td>${tx.id}</td>
+                                <td>${tx.amount}</td>
+                                <td>${tx.date}</td>
+                                <td>${tx.status}</td>
+                                <td>
+                                    ${tx.refundable ? `<button class="btn btn-sm btn-warning" onclick="refundTransaction(${tx.id})">Refund</button>` : ""}
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            })
+            .catch(error => console.error("Błąd ładowania transakcji:", error));
+    }
+
+    // Handle refund action with confirmation dialog
+    window.refundTransaction = function (transactionId) {
+        if (confirm("Czy chcesz wydać refundację dla tej transakcji?")) {
+            fetch("/api/admin/refund_transaction.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: transactionId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.success){
+                    alert("Refundacja została przeprowadzona.");
+                    fetchTransactions();
+                } else {
+                    alert("Refundacja nie powiodła się.");
+                }
+            })
+            .catch(error => console.error("Błąd refundacji transakcji:", error));
+        }
+    };
+
+    // Dummy function to view report details
+    window.viewReport = function(reportId) {
+        // ...existing code to view report...
+        alert("Wyświetlanie raportu: " + reportId);
+    };
+
+    // Event listener for report filtering input
+    document.getElementById("reportFilter")?.addEventListener("input", function (e) {
+        fetchReports(e.target.value);
+    });
+
+    // Initial data loading
     loadAdminDashboard();
     fetchUsers();
     fetchReports();
+    fetchTransactions();
 });
 === public/js/bookings.js ===
 import ajax from './ajax';
@@ -7441,19 +8471,73 @@ function clearErrors() {
         errorContainer.style.display = 'none';
     }
 }
+=== public/js/api.js ===
+(function() {
+    function apiFetch(url, options = {}) {
+        if (!options.headers) {
+            options.headers = {};
+        }
+        // Attach bearer token
+        const token = localStorage.getItem('token');
+        if (token) {
+            options.headers['Authorization'] = 'Bearer ' + token;
+        }
+
+        return fetch(url, options)
+            .then(async response => {
+                if (response.status === 401) {
+                    console.warn('Unauthorized response. Attempting token refresh...');
+                    // ...token refresh logic...
+                    // After refresh, retry original request or handle failure
+                }
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Request failed [${response.status}]: ${errorText}`);
+                }
+                return response;
+            })
+            .catch(error => {
+                console.error('API fetch error:', error.message);
+                throw error;
+            });
+    }
+
+    function getUserData(userId) {
+        return apiFetch(`/api/user/${userId}`);
+    }
+
+    function updateProfile(data) {
+        return apiFetch('/api/profile/update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    }
+
+    // Expose functions to the global scope
+    window.apiFetch = apiFetch;
+    window.getUserData = getUserData;
+    window.updateProfile = updateProfile;
+
+    // Log successful API script loading
+    console.log('API script loaded successfully');
+})();
 === public/api.php ===
 <?php
 
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
-
-
 // Load encryption keys
 $config = require __DIR__ . '/../config/encryption.php';
 $jwtSecret = $config['jwt_secret'] ?? '';
+
+header('Content-Type: application/json');
 
 function validateToken()
 {
@@ -7476,4 +8560,43 @@ function validateToken()
         echo json_encode(["error" => "Unauthorized: Invalid token"]);
         exit;
     }
+}
+
+function requireAuth() {
+    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if (!$authHeader || !isset($_SESSION['user_id'])) {
+        error_log("[API] Unauthorized access attempt\n", 3, __DIR__ . '/../logs/debug.log');
+        http_response_code(401);
+        exit('Unauthorized');
+    }
+}
+
+// Handle CORS preflight requests
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    exit;
+}
+
+// Parse API request
+$requestUri = $_SERVER['REQUEST_URI'];
+$requestMethod = $_SERVER['REQUEST_METHOD'];
+$apiPath = str_replace('/api/', '', $requestUri);
+
+// Protect all API routes (except login/register)
+if (!in_array($apiPath, ['auth/login', 'auth/register'])) {
+    validateToken();
+}
+
+// Route API calls
+$endpoint = $_GET['endpoint'] ?? '';
+$apiFile = __DIR__ . '/' . $endpoint . '.php';
+if (file_exists($apiFile)) {
+    error_log("[API] Processing endpoint: $endpoint\n", 3, __DIR__ . '/../logs/debug.log');
+    requireAuth();
+    require_once $apiFile;
+} else {
+    error_log("[API] Endpoint not found: $endpoint\n", 3, __DIR__ . '/../logs/debug.log');
+    http_response_code(404);
+    echo json_encode(['error' => 'API not found']);
 }
