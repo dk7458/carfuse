@@ -73,6 +73,14 @@ return simpleDispatcher(function (RouteCollector $router) use ($routes) {
         require BASE_PATH . '/public/views/dashboard.php';
     });
 
+    // Logout route to destroy session and redirect to login
+    $router->get('/logout', function () {
+        session_start();
+        session_destroy();
+        header('Location: /login');
+        exit();
+    });
+
     // Payment Routes
     $router->post('/payments/process', [PaymentController::class, 'processPayment']);
     $router->post('/payments/refund', [PaymentController::class, 'refundPayment']);
