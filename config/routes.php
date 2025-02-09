@@ -12,11 +12,11 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) {
     // Register routes in the correct order
     $router->addRoute('GET', '/test', 'test.php');
     $router->addRoute('GET', '/dashboard', '/dashboard/dashboard.php');
-    $router->addRoute('GET', '/', 'home.php');
+    $router->addRoute('GET', '/', '/home.php');
     $router->addRoute('GET', '/profile', 'user/profile.php');
-    $router->addRoute('GET', '/user/profile', 'user/profile.php');
+    $router->addRoute('GET', '/user/profile', '/user/profile.php');
     $router->addRoute('GET', '/vehicles', 'vehicles.php');
-    $router->addRoute('GET', '/login', 'auth/login.php');
+    $router->addRoute('GET', '/login', '/auth/login.php');
     $router->addRoute('GET', '/{view}', 'default.php'); // Dynamic view route
 });
 

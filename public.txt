@@ -2,22 +2,25 @@
 === public/.htaccess ===
 RewriteEngine On
 
-# ✅ Ensure all requests go through index.php (EXCEPT static files and APIs)
-RewriteCond %{REQUEST_URI} !^/(css|js|images|api)/.*$
-RewriteRule ^ index.php [QSA,L]
-
 # ✅ Allow direct access to API files
 RewriteCond %{REQUEST_URI} ^/api/.*\.php$
-RewriteCond %{REQUEST_FILENAME} -f
+RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^ - [L]
 
-# 🔒 Protect sensitive backend files (Prevent direct access to config & helper files)
-RewriteRule ^(App/|config/|helpers/|private/).* - [F,L]
-
-# ✅ Allow direct access to static files
-RewriteCond %{REQUEST_URI} ^/(css|js|images)/(.*)$
+# ✅ Allow direct access to static files (CSS, JS, images)
+RewriteCond %{REQUEST_URI} ^/(css|js|images|api)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
-RewriteRule ^(css|js|images)/(.*)$ /public/$1/$2 [L]
+RewriteRule ^(css|js|images|api)/(.*)$ /public/$1/$2 [L]
+
+# ✅ Protect backend files while allowing frontend access to specific backend components
+RewriteCond %{REQUEST_URI} ^/App/(.*)$
+RewriteCond %{REQUEST_URI} !^/App/Services/PublicAccess/
+RewriteRule ^ - [F,L]
+
+# ✅ Forward all non-API, non-static requests to FastRoute in index.php
+RewriteCond %{REQUEST_URI} !^/api/.*$
+RewriteCond %{REQUEST_URI} !^/(css|js|images|public)/.*$
+RewriteRule ^ index.php [QSA,L]
 === public/dashboard.php ===
 <?php
 session_start();
@@ -43,119 +46,6 @@ if (!isset($_SESSION["user_id"])) {
     <p><a href="/logout.php">Logout</a></p>
 </body>
 </html>
-=== public/config/routes.php ===
-<?php
-
-use FastRoute\RouteCollector;
-use function FastRoute\simpleDispatcher;
-use App\Controllers\AuthController;
-use App\Controllers\PaymentController;
-use App\Controllers\DashboardController;
-use App\Controllers\BookingController;
-use App\Controllers\NotificationController;
-use App\Controllers\NotificationQueueController;
-use App\Controllers\AdminDashboardController;
-use App\Controllers\ReportController;
-use AuditManager\Controllers\AuditController;
-use DocumentManager\Controllers\DocumentController;
-use DocumentManager\Controllers\SignatureController;
-use App\Controllers\UserController;
-
-return simpleDispatcher(function (RouteCollector $router) {
-    // Middleware-like Authentication Handling
-    if (!function_exists('requireAuth')) {
-        function requireAuth() {
-            require_once BASE_PATH . '/App/Helpers/SecurityHelper.php';
-            if (!isUserLoggedIn()) {
-                http_response_code(403);
-                echo json_encode(["error" => "Unauthorized"]);
-                exit();
-            }
-        }
-    }
-
-    // Home Page: now use a dedicated view to avoid recursion
-    $router->get('/', function () {
-        file_put_contents(__DIR__ . "/../debug.log", "Home Route Hit\n", FILE_APPEND);
-        require BASE_PATH . "/public/views/home.php"; // use a dedicated home view file
-    });
-    
-
-    // Authentication Routes (Static First)
-    $router->get('/login', [AuthController::class, 'loginView']);
-    $router->get('/register', [AuthController::class, 'registerView']);
-    $router->post('/register', [UserController::class, 'register']);
-    $router->post('/login', [UserController::class, 'login']);
-    $router->post('/profile/update', [UserController::class, 'updateProfile']);
-    $router->post('/password/reset/request', [UserController::class, 'requestPasswordReset']);
-    $router->post('/password/reset', [UserController::class, 'resetPassword']);
-
-    // Dashboard & Profile (Static First)
-    $router->get('/dashboard', [DashboardController::class, 'userDashboard']);
-    $router->get('/profile', function () { require BASE_PATH . "/public/views/user/profile.php"; });
-
-    // Payments (Static First)
-    $router->get('/payments/history', [PaymentController::class, 'viewPaymentHistory']);
-    $router->get('/payments/installments', [PaymentController::class, 'viewInstallments']);
-    $router->post('/payments/process', [PaymentController::class, 'processPayment']);
-    $router->post('/payments/refund', [PaymentController::class, 'refundPayment']);
-
-    // Bookings (Static First)
-    $router->get('/bookings', [DashboardController::class, 'getUserBookings']);
-    $router->get('/bookings/{id}', [BookingController::class, 'viewBooking']);
-    $router->post('/bookings/{id}/reschedule', [BookingController::class, 'rescheduleBooking']);
-    $router->post('/bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
-
-    // Notifications API Routes
-    $router->get('/notifications', [NotificationController::class, 'getUserNotifications']);
-    $router->post('/notifications/mark-as-read', [NotificationController::class, 'markNotificationAsRead']);
-    $router->post('/notifications/delete', [NotificationController::class, 'deleteNotification']);
-    $router->post('/notifications/send', [NotificationController::class, 'sendNotification']);
-    $router->post('/notifications/process-queue', [NotificationQueueController::class, 'processQueue']);
-
-    // Dynamic API Routing (Auth Required)
-    $router->get('/api/{endpoint}', function ($vars) {
-        requireAuth();
-        $endpoint = $vars['endpoint'];
-        $apiPath = BASE_PATH . "/public/api/$endpoint.php";
-
-        if (file_exists($apiPath)) {
-            require $apiPath;
-        } else {
-            http_response_code(404);
-            echo json_encode(["error" => "API endpoint not found"]);
-        }
-    });
-
-    // Admin Routes (Static First)
-    $router->get('/admin/dashboard', [AdminDashboardController::class, 'index']);
-    $router->get('/admin/reports', [ReportController::class, 'index']);
-    $router->post('/admin/reports/generate', [ReportController::class, 'generateReport']);
-    $router->post('/user/reports/generate', [ReportController::class, 'generateUserReport']);
-
-    // Audit Logs
-    $router->post('/admin/audit-logs/fetch', [AuditController::class, 'fetchLogs']);
-
-    // Document Manager Routes
-    $router->post('/documents/upload-template', [DocumentController::class, 'uploadTemplate']);
-    $router->post('/documents/generate-contract/{bookingId}/{userId}', [DocumentController::class, 'generateContract']);
-    $router->post('/documents/upload-terms', [DocumentController::class, 'uploadTerms']);
-    $router->post('/documents/generate-invoice/{bookingId}', [DocumentController::class, 'generateInvoice']);
-    $router->delete('/documents/{documentId}', [DocumentController::class, 'deleteDocument']);
-
-    // Dynamic View Routing (Must be Last)
-    $router->get('/{view}', function ($vars) {
-        $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
-        $view = $vars['view'];
-
-        if (in_array($view, $allowedViews)) {
-            require BASE_PATH . "/public/views/user/$view.php";
-        } else {
-            http_response_code(404);
-            require BASE_PATH . "/public/views/errors/404.php";
-        }
-    });
-});
 === public/api/views/profile.php ===
 <?php
 require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
@@ -364,44 +254,57 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../config/routes.php';
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+// ✅ Load Bootstrap & Services
+$bootstrap = require_once __DIR__ . '/../bootstrap.php';
+$logger = $bootstrap['logger'];
 
+// ✅ Start Secure Session
 startSecureSession();
-// Debugging: List available views
-$viewsDirectory = __DIR__ . "/views/";
-$availableViews = scandir($viewsDirectory);
-echo "<pre>Available Views:\n" . print_r($availableViews, true) . "</pre>";
 
-// Get the requested URL path
+// ✅ Get Requested URI
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$logger->info("Requested URI: $requestUri");
 
-// ✅ Prevent API requests from being misrouted
+// ✅ PRIORITIZE API REQUEST HANDLING
 if (strpos($requestUri, '/api/') === 0) {
-    http_response_code(404);
-    echo json_encode(["error" => "Invalid API request"]);
-    exit;
+    $apiPath = $_SERVER['DOCUMENT_ROOT'] . $requestUri . '.php';
+
+    if (file_exists($apiPath)) {
+        $logger->info("API Request Served: $requestUri");
+        require $apiPath;
+        exit;
+    } else {
+        http_response_code(404);
+        $logger->error("API Not Found: $requestUri");
+        echo json_encode(["error" => "API Not Found"]);
+        exit;
+    }
 }
 
-// ✅ Serve home page for `/`
-if ($requestUri === '/' || $requestUri === '/index.php') {
-    require __DIR__ . '/views/home.php';
-    exit;
-}
+// ✅ FastRoute Dispatching for Views
+$dispatcher = require __DIR__ . '/../config/routes.php';
+$routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], $requestUri);
 
-// ✅ Serve other views dynamically
-$viewPath = __DIR__ . "/views$requestUri.php";
-if (file_exists($viewPath)) {
-    require $viewPath;
-    exit;
-} else {
-    echo "View not found: " . htmlspecialchars($viewPath); // Debugging output
-}
+switch ($routeInfo[0]) {
+    case FastRoute\Dispatcher::FOUND:
+        $viewPath = __DIR__ . "/views/" . $routeInfo[1];
+        
+        if (file_exists($viewPath)) {
+            $logger->info("Rendering View: " . $routeInfo[1]);
+            require $viewPath;
+        } else {
+            http_response_code(404);
+            $logger->error("View Not Found: " . $routeInfo[1]);
+            require __DIR__ . "/views/errors/404.php";
+        }
+        exit;
 
-// 🚀 If no matching view, show 404 page
-http_response_code(404);
-echo "404 Not Found";
+    case FastRoute\Dispatcher::NOT_FOUND:
+        http_response_code(404);
+        $logger->error("404 Not Found: $requestUri");
+        require __DIR__ . "/views/errors/404.php";
+        exit;
+}
 ?>
 === public/views/auth/register.php ===
 <?php
@@ -3091,9 +2994,9 @@ $page = 'dashboard';
 // ...existing code...
 ?>=== public/views/user/profile.php ===
 <?php
-require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
 if (!isset($_SESSION['user_id'])) {
-    header("Location: /login.php");
+    header("Location: /login");
     exit();
 }
 $page = 'profile';
@@ -4678,6 +4581,1553 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <p><a href="/">Back to Home</a></p>
 </body>
 </html>
+=== public/js/main.js ===
+import { apiFetch } from './api.js';
+
+document.addEventListener("DOMContentLoaded", function () {
+    console.log("Main.js Loaded");
+    // Ensure this runs only once
+    if (window.mainJsInitialized) return;
+    window.mainJsInitialized = true;
+
+    // Run script only on dashboard pages
+    if (!window.location.pathname.includes("/dashboard")) {
+        console.log("main.js: Not on dashboard. Exiting.");
+        return;
+    }
+
+    console.log("Main.js loaded successfully.");
+
+    // Detect if we're on the dashboard page
+    const dashboardView = document.getElementById("dashboard-view");
+    if (!dashboardView) {
+        console.log("Dashboard view not found. main.js will not run on homepage.");
+        return;
+    }
+
+    // Prevent execution if not on dashboard
+    if (!document.querySelector(".dashboard-container")) {
+        return;
+    }
+
+    async function fetchData(endpoint) {
+        try {
+            const response = await fetch(endpoint, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('apiToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Failed to fetch data:', error);
+        }
+    }
+
+    // Load default dashboard module with session credentials
+    apiFetch("/dashboard/modules/user/overview.php", {
+        credentials: "include"
+    })
+    .then(response => response.text())
+    .then(data => {
+        dashboardView.innerHTML = data;
+    })
+    .catch(error => console.error("main.js fetch error:", error));
+
+    document.querySelectorAll(".dashboard-link").forEach(link => {
+        link.addEventListener("click", function(e) {
+            e.preventDefault();
+            let targetView = this.getAttribute("href");
+            apiFetch(targetView)
+                .then(r => r.text())
+                .then(data => {
+                    document.getElementById("dashboard-view").innerHTML = data;
+                })
+                .catch(err => console.error("Dashboard link error:", err));
+        });
+    });
+});
+=== public/js/ajax.js ===
+class Ajax {
+    constructor() {
+        this.baseUrl = '/api';
+        this.token = localStorage.getItem('auth_token') || null;
+    }
+
+    /**
+     * Stores the authentication token for future requests.
+     */
+    setToken(token) {
+        this.token = token;
+        localStorage.setItem('auth_token', token);
+    }
+
+    /**
+     * Makes an API request with automatic retry and session handling.
+     */
+    async request(endpoint, method = 'GET', data = null, retry = true) {
+        const url = `${this.baseUrl}${endpoint}`;
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': this.token ? `Bearer ${this.token}` : ''
+        };
+
+        const options = { method, headers };
+
+        if (data) {
+            options.body = JSON.stringify(data);
+        }
+
+        try {
+            const response = await fetch(url, options);
+
+            if (response.status === 401 && retry) {
+                // Attempt token refresh before retrying request
+                const refreshed = await this.refreshToken();
+                if (refreshed) {
+                    return this.request(endpoint, method, data, false);
+                }
+                throw new Error('Unauthorized: Session expired.');
+            }
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Błąd API:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Fetches data using GET method.
+     */
+    get(endpoint) {
+        return this.request(endpoint, 'GET');
+    }
+
+    /**
+     * Sends data using POST method.
+     */
+    post(endpoint, data) {
+        return this.request(endpoint, 'POST', data);
+    }
+
+    /**
+     * Updates data using PUT method.
+     */
+    put(endpoint, data) {
+        return this.request(endpoint, 'PUT', data);
+    }
+
+    /**
+     * Deletes a resource using DELETE method.
+     */
+    delete(endpoint) {
+        return this.request(endpoint, 'DELETE');
+    }
+
+    /**
+     * Attempts to refresh the session token.
+     */
+    async refreshToken() {
+        try {
+            const response = await fetch(`${this.baseUrl}/session/refresh`, {
+                method: 'POST',
+                headers: { 'Authorization': this.token ? `Bearer ${this.token}` : '' }
+            });
+
+            if (!response.ok) {
+                this.clearToken();
+                return false;
+            }
+
+            const data = await response.json();
+            if (data.success && data.token) {
+                this.setToken(data.token);
+                return true;
+            }
+
+            return false;
+        } catch (error) {
+            console.error('Błąd odświeżania tokena:', error);
+            this.clearToken();
+            return false;
+        }
+    }
+
+    /**
+     * Clears stored authentication token.
+     */
+    clearToken() {
+        this.token = null;
+        localStorage.removeItem('auth_token');
+    }
+}
+
+// Ensures global availability
+window.ajax = new Ajax();
+=== public/js/dashboard.js ===
+import ajax from './ajax';
+import { showErrorToast } from './toasts';
+
+document.addEventListener('DOMContentLoaded', function () {
+    loadDashboardContent();
+    setInterval(checkUserActivity, 60000); // Aktualizuj statystyki tylko przy aktywności użytkownika
+    window.addEventListener('resize', handleResponsiveUpdates);
+});
+
+/**
+ * Loads the main dashboard content dynamically.
+ */
+async function loadDashboardContent() {
+    try {
+        const response = await ajax.get('/user/overview.php');
+        document.getElementById('dashboard-content').innerHTML = response;
+        fetchDashboardData();
+    } catch (error) {
+        showErrorToast('Nie udało się załadować zawartości pulpitu.');
+        console.error('Błąd ładowania zawartości pulpitu:', error);
+    }
+}
+
+/**
+ * Fetches dashboard data based on user role.
+ */
+async function fetchDashboardData() {
+    const role = getUserRole();
+    if (role === 'admin') {
+        await fetchAdminStatistics();
+    } else {
+        await fetchUserStatistics();
+    }
+}
+
+/**
+ * Fetches admin-specific statistics for the dashboard.
+ */
+async function fetchAdminStatistics() {
+    try {
+        showLoadingIndicators();
+        const [totalUsers, totalBookings, totalRevenue] = await Promise.all([
+            ajax.get('/statistics/totalUsers'),
+            ajax.get('/statistics/totalBookings'),
+            ajax.get('/statistics/totalRevenue')
+        ]);
+        updateWidgets({
+            totalUsers: totalUsers.data,
+            totalBookings: totalBookings.data,
+            totalRevenue: totalRevenue.data
+        });
+    } catch (error) {
+        showErrorToast('Nie udało się pobrać statystyk administratora.');
+        console.error('Błąd pobierania statystyk administratora:', error);
+    } finally {
+        hideLoadingIndicators();
+    }
+}
+
+/**
+ * Fetches user-specific statistics for the dashboard.
+ */
+async function fetchUserStatistics() {
+    try {
+        showLoadingIndicators();
+        const response = await ajax.get('/statistics/user');
+        updateWidgets(response.data);
+    } catch (error) {
+        showErrorToast('Nie udało się pobrać statystyk użytkownika.');
+        console.error('Błąd pobierania statystyk użytkownika:', error);
+    } finally {
+        hideLoadingIndicators();
+    }
+}
+
+/**
+ * Updates dashboard widgets based on API data.
+ */
+function updateWidgets(data) {
+    updateWidget('total-users', data.totalUsers);
+    updateWidget('active-sessions', data.activeSessions);
+    updateWidget('new-bookings', data.newBookings);
+    updateWidget('total-revenue', formatCurrency(data.totalRevenue));
+}
+
+/**
+ * Updates a single widget if it exists.
+ */
+function updateWidget(widgetId, value) {
+    const widget = document.getElementById(widgetId);
+    if (widget) {
+        widget.innerText = value ?? 'Brak danych';
+    }
+}
+
+/**
+ * Handles dynamic UI responsiveness updates.
+ */
+function handleResponsiveUpdates() {
+    console.log('Zaktualizowano UI na podstawie zmiany rozmiaru ekranu.');
+    // Można dodać dodatkowe funkcje do aktualizacji widżetów lub układu
+}
+
+/**
+ * Formats numbers into readable currency format.
+ */
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(amount);
+}
+
+/**
+ * Checks user activity and updates statistics only if the tab is active.
+ */
+function checkUserActivity() {
+    if (document.visibilityState === 'visible') {
+        fetchDashboardData();
+    }
+}
+
+/**
+ * Shows loading indicators for widgets.
+ */
+function showLoadingIndicators() {
+    const widgets = document.querySelectorAll('.widget');
+    widgets.forEach(widget => {
+        widget.classList.add('loading');
+    });
+}
+
+/**
+ * Hides loading indicators for widgets.
+ */
+function hideLoadingIndicators() {
+    const widgets = document.querySelectorAll('.widget');
+    widgets.forEach(widget => {
+        widget.classList.remove('loading');
+    });
+}
+
+/**
+ * Mock function to get user role.
+ */
+function getUserRole() {
+    // Replace with actual implementation
+    return 'user'; // or 'admin'
+}
+=== public/js/shared copy.js ===
+// Ensure this script only runs once
+if (!window.sharedJsInitialized) {
+    window.sharedJsInitialized = true;
+    console.log("Shared.js: homepage initialization started.");
+
+    // Workaround for importing dependencies
+    function loadScript(src, callback) {
+        const script = document.createElement("script");
+        script.src = src;
+        script.onload = callback;
+        script.onerror = function () {
+            console.error(`Failed to load script: ${src}`);
+        };
+        document.head.appendChild(script);
+    }
+
+    // Load api.js dynamically if not already loaded
+    if (!window.apiFetch) {
+        loadScript("js/api.js", function () {
+            console.log("api.js loaded successfully.");
+            main(); // Call the main function after loading dependencies
+        });
+    } else {
+        main();
+    }
+
+    function main() {
+        console.log("Shared.js: running initialization.");
+
+        // Utility function for checking elements
+        function getElement(selector, context = document) {
+            const element = context.querySelector(selector);
+            if (!element) {
+                console.warn(`Element not found: ${selector}`);
+                return null;
+            }
+            return element;
+        }
+
+        // Improved API call with proper authentication and logging
+        async function apiCall(endpoint, options = {}) {
+            const token = localStorage.getItem("authToken");
+            if (!token) {
+                console.error("API call failed: Missing authentication token.");
+                alert("Authentication error: Please log in.");
+                window.location.href = '/auth/login';
+                return null;
+            }
+            options.headers = {
+                ...options.headers,
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            };
+            try {
+                const response = await fetch(endpoint, options);
+                if (response.status === 401) {
+                    console.error("API call failed: Unauthorized (401).");
+                    await refreshToken();
+                    return apiCall(endpoint, options); // Retry the API call
+                }
+                if (response.status === 403) {
+                    console.error("API call failed: Forbidden (403).");
+                    alert("Authentication error: Access forbidden.");
+                    return null;
+                }
+                if (!response.ok) {
+                    const error = await response.json();
+                    console.error("API Error:", error);
+                    throw error;
+                }
+                return await response.json();
+            } catch (error) {
+                console.error("API call failed:", error);
+                return null;
+            }
+        }
+
+        // Function to refresh JWT token
+        async function refreshToken() {
+            const refreshToken = localStorage.getItem("refreshToken");
+            if (!refreshToken) {
+                console.error("Refresh token missing.");
+                alert("Session expired. Please log in again.");
+                window.location.href = '/auth/login';
+                return;
+            }
+            try {
+                const response = await fetch('api/auth/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: refreshToken })
+                });
+                if (!response.ok) {
+                    throw new Error('Failed to refresh token');
+                }
+                const data = await response.json();
+                localStorage.setItem("authToken", data.access_token);
+                console.log("Token refreshed successfully.");
+            } catch (error) {
+                console.error("Token refresh failed:", error);
+                alert("Session expired. Please log in again.");
+                window.location.href = '/auth/login';
+            }
+        }
+
+        // Session-based initialization
+        apiCall("api/shared/initSession.php")
+            .then((data) => {
+                if (data) {
+                    console.log("Session initialized successfully for homepage.");
+                }
+            })
+            .catch((error) => console.error("Session init error:", error));
+
+        // Navbar toggle & CTA scrolling
+        document.addEventListener("click", function (e) {
+            // Navbar toggle handling
+            if (e.target.matches("#navbarToggle, #navbarToggle *")) {
+                const navbar = getElement("#navbarSupportedContent");
+                if (navbar) {
+                    navbar.classList.toggle("show");
+                    console.log("Navbar toggled successfully.");
+                }
+            }
+
+            // Register button handling
+            if (e.target.matches("#register-btn")) {
+                e.preventDefault();
+                const href = e.target.getAttribute("href");
+                const target = href ? getElement(href) : null;
+                if (target) {
+                    target.scrollIntoView({ behavior: "smooth" });
+                    console.log("Smooth scroll triggered on homepage CTA.");
+                }
+            }
+        });
+
+        console.log("Shared.js: homepage initialization completed.");
+    }
+}
+
+(function() {
+    function isProtectedEndpoint(url) {
+        const protectedEndpoints = [
+            '/api/profile/update',
+            '/api/password/reset/request',
+            '/api/password/reset',
+            '/api/payments/process',
+            '/api/payments/refund',
+            '/api/bookings',
+            '/api/notifications',
+            '/api/admin',
+            '/api/documents'
+        ];
+        return protectedEndpoints.some(endpoint => url.startsWith(endpoint));
+    }
+
+    function apiFetch(url, options = {}) {
+        if (!options.headers) {
+            options.headers = {};
+        }
+
+        if (isProtectedEndpoint(url)) {
+            const token = localStorage.getItem('token');
+            if (token) {
+                options.headers['Authorization'] = 'Bearer ' + token;
+            } else {
+                console.warn('Missing token for protected endpoint:', url);
+            }
+        }
+
+        return fetch(url, options)
+            .then(async response => {
+                if (response.status === 401) {
+                    console.warn('Unauthorized response. Attempting token refresh...');
+                    // ...token refresh logic...
+                    // After refresh, retry original request or handle failure
+                }
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Request failed [${response.status}]: ${errorText}`);
+                }
+                return response;
+            })
+            .catch(error => {
+                console.error('API fetch error:', error.message);
+                throw error;
+            });
+    }
+
+    // Expose functions to the global scope
+    window.apiFetch = apiFetch;
+
+    // Log successful API script loading
+    console.log('Shared API script loaded successfully');
+})();
+=== public/js/notifications.js ===
+import ajax from './ajax';
+import { showErrorToast, showSuccessToast } from './toasts';
+
+let lastFetchTimestamp = 0;
+const FETCH_INTERVAL = 30000; // 30 seconds
+
+document.addEventListener('DOMContentLoaded', function () {
+    if (document.visibilityState === 'visible') {
+        fetchNotifications();
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('newEvent', handleNewEvent); // Custom event for new actions
+    setInterval(fetchNotifications, FETCH_INTERVAL); // Polling mechanism
+
+    // Event delegation for dynamically loaded notifications
+    document.getElementById('notifications-container').addEventListener('click', function (event) {
+        if (event.target.classList.contains('mark-as-read')) {
+            markAsRead(event.target.dataset.id);
+        }
+    });
+});
+
+/**
+ * Handles visibility change events.
+ */
+function handleVisibilityChange() {
+    if (document.visibilityState === 'visible') {
+        fetchNotifications();
+    }
+}
+
+/**
+ * Handles new events that require fresh notifications.
+ */
+function handleNewEvent() {
+    fetchNotifications();
+}
+
+/**
+ * Fetches notifications from the server.
+ */
+async function fetchNotifications() {
+    const now = Date.now();
+    if (now - lastFetchTimestamp < FETCH_INTERVAL) return; // Prevent redundant calls
+
+    lastFetchTimestamp = now;
+    try {
+        const response = await fetch('/api/user/notifications.php');
+        if (response.status === 401) {
+            showErrorToast('Musisz być zalogowany, aby zobaczyć powiadomienia.');
+            return;
+        }
+        const notifications = await response.json();
+        if (notifications.length > 0) {
+            displayNotifications(notifications);
+        } else {
+            displayNoNotificationsMessage();
+        }
+    } catch (error) {
+        console.error('Błąd pobierania powiadomień:', error);
+        showErrorToast('Nie udało się pobrać powiadomień.');
+    }
+}
+
+/**
+ * Displays notifications in the UI.
+ */
+function displayNotifications(notifications) {
+    const notificationsContainer = document.getElementById('notifications-container');
+    if (!notificationsContainer) return;
+
+    notificationsContainer.innerHTML = '';
+
+    notifications.forEach(notification => {
+        const notificationElement = document.createElement('div');
+        notificationElement.className = `notification ${notification.read ? 'read' : 'unread'}`;
+        notificationElement.innerHTML = `
+            <p style="font-weight: ${notification.read ? 'normal' : 'bold'};">${notification.message}</p>
+            <button class="mark-as-read" data-id="${notification.id}">Oznacz jako przeczytane</button>
+        `;
+        notificationsContainer.appendChild(notificationElement);
+    });
+}
+
+/**
+ * Marks a notification as read.
+ */
+async function markAsRead(notificationId) {
+    try {
+        const response = await fetch(`/api/user/notifications.php/${notificationId}/read`, {
+            method: 'POST'
+        });
+        const result = await response.json();
+        if (result.success) {
+            updateNotificationStatus(notificationId);
+            showSuccessToast('Powiadomienie oznaczone jako przeczytane.');
+        } else {
+            showErrorToast(result.error || 'Błąd oznaczania powiadomienia jako przeczytanego.');
+        }
+    } catch (error) {
+        console.error('Błąd oznaczania powiadomienia:', error);
+        showErrorToast('Nie udało się oznaczyć powiadomienia.');
+    }
+}
+
+/**
+ * Updates the UI when a notification is marked as read.
+ */
+function updateNotificationStatus(notificationId) {
+    const notificationElement = document.querySelector(`.mark-as-read[data-id="${notificationId}"]`);
+    if (notificationElement) {
+        const parentElement = notificationElement.closest('.notification');
+        parentElement.classList.add('read');
+        parentElement.querySelector('p').style.fontWeight = 'normal';
+        notificationElement.remove();
+    }
+}
+
+/**
+ * Displays a message when there are no notifications.
+ */
+function displayNoNotificationsMessage() {
+    const notificationsContainer = document.getElementById('notifications-container');
+    if (!notificationsContainer) return;
+
+    notificationsContainer.innerHTML = `<p class="text-muted">Brak nowych powiadomień.</p>`;
+}
+=== public/js/forms.js ===
+document.addEventListener('DOMContentLoaded', function () {
+    document.body.addEventListener('submit', function (event) {
+        const form = event.target;
+        if (form.tagName === 'FORM') {
+            event.preventDefault();
+            if (validateForm(form)) {
+                submitForm(form);
+            }
+        }
+    });
+
+    document.body.addEventListener('input', function (event) {
+        const input = event.target;
+        if (input.closest('form')) {
+            validateInput(input);
+        }
+    });
+});
+
+/**
+ * Validates form before submission.
+ */
+function validateForm(form) {
+    let isValid = true;
+    const inputs = form.querySelectorAll('input[required], textarea[required], select[required]');
+
+    inputs.forEach(input => {
+        if (!validateInput(input)) {
+            isValid = false;
+        }
+    });
+
+    return isValid;
+}
+
+/**
+ * Validates a single input field.
+ */
+function validateInput(input) {
+    const value = input.value.trim();
+    const type = input.type;
+
+    if (!value) {
+        showError(input, 'This field is required.');
+        return false;
+    }
+
+    if (type === 'email' && !isValidEmail(value)) {
+        showError(input, 'Please enter a valid email address.');
+        return false;
+    }
+
+    if (type === 'password') {
+        if (value.length < 6) {
+            showError(input, 'Password must be at least 6 characters long.');
+            return false;
+        }
+        if (!/\d/.test(value) || !/[A-Za-z]/.test(value)) {
+            showError(input, 'Password must contain both letters and numbers.');
+            return false;
+        }
+    }
+
+    if (input.dataset.minLength && value.length < input.dataset.minLength) {
+        showError(input, `This field must be at least ${input.dataset.minLength} characters long.`);
+        return false;
+    }
+
+    clearError(input);
+    return true;
+}
+
+/**
+ * Submits the form via AJAX.
+ */
+function submitForm(form) {
+    const formData = new FormData(form);
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    formData.append('_csrf', csrfToken);
+
+    fetch(form.action, {
+        method: form.method,
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            form.reset();
+            showSuccessMessage(form, data.message);
+        } else {
+            showErrorMessages(form, data.errors);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+
+/**
+ * Displays an error message next to the form field.
+ */
+function showError(input, message) {
+    let error = input.nextElementSibling;
+    if (!error || !error.classList.contains('error-message')) {
+        error = document.createElement('div');
+        error.classList.add('error-message');
+        input.parentNode.insertBefore(error, input.nextSibling);
+    }
+    error.textContent = message;
+    input.classList.add('error');
+}
+
+/**
+ * Clears an error message when input is corrected.
+ */
+function clearError(input) {
+    let error = input.nextElementSibling;
+    if (error && error.classList.contains('error-message')) {
+        error.remove();
+    }
+    input.classList.remove('error');
+}
+
+/**
+ * Displays success message after form submission.
+ */
+function showSuccessMessage(form, message) {
+    const successMessage = document.createElement('div');
+    successMessage.classList.add('success-message');
+    successMessage.textContent = message;
+    form.appendChild(successMessage);
+    setTimeout(() => {
+        successMessage.remove();
+    }, 5000);
+}
+
+/**
+ * Displays multiple error messages after form submission.
+ */
+function showErrorMessages(form, errors) {
+    for (const [inputName, message] of Object.entries(errors)) {
+        const input = form.querySelector(`[name="${inputName}"]`);
+        if (input) {
+            showError(input, message);
+        }
+    }
+}
+
+/**
+ * Checks if an email is valid.
+ */
+function isValidEmail(email) {
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    return emailPattern.test(email);
+}
+=== public/js/profile.js ===
+import ajax from './ajax';
+import { showErrorToast, showSuccessToast } from './toasts';
+
+document.addEventListener('DOMContentLoaded', function () {
+    initProfileForm();
+});
+
+/**
+ * Initializes profile form interactions.
+ */
+function initProfileForm() {
+    const profileForm = document.getElementById('profileUpdateForm');
+    const avatarUpload = document.getElementById('avatarUpload');
+
+    if (profileForm) profileForm.addEventListener('submit', updateProfile);
+    if (avatarUpload) avatarUpload.addEventListener('change', handleAvatarUpload);
+}
+
+/**
+ * Handles profile update submission.
+ */
+async function updateProfile(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+
+    if (!validateProfileForm(formData)) return;
+
+    try {
+        const response = await fetch('/api/user/profile.php', {
+            method: 'POST',
+            body: formData,
+        });
+        const result = await response.json();
+        if (result.success) {
+            showSuccessToast('Profil zaktualizowany pomyślnie.');
+        } else {
+            showErrorToast(result.message || 'Błąd podczas aktualizacji profilu.');
+        }
+    } catch (error) {
+        console.error('Błąd aktualizacji profilu:', error);
+        showErrorToast('Nie udało się zaktualizować profilu.');
+    }
+}
+
+/**
+ * Handles avatar image upload and preview.
+ */
+async function handleAvatarUpload(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+
+    if (!validateImage(file)) return;
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+        const response = await fetch('/api/user/profile.php', {
+            method: 'POST',
+            body: formData,
+        });
+        const result = await response.json();
+        if (result.success) {
+            document.getElementById('profileAvatar').src = result.avatarUrl;
+            showSuccessToast('Zdjęcie profilowe zaktualizowane pomyślnie.');
+        } else {
+            showErrorToast(result.message || 'Błąd podczas aktualizacji zdjęcia profilowego.');
+        }
+    } catch (error) {
+        console.error('Błąd aktualizacji zdjęcia profilowego:', error);
+        showErrorToast('Nie udało się zaktualizować zdjęcia profilowego.');
+    }
+}
+
+/**
+ * Validates profile form inputs.
+ */
+function validateProfileForm(formData) {
+    const name = formData.get('name').trim();
+    const email = formData.get('email').trim();
+    const password = formData.get('password')?.trim();
+
+    if (!name) {
+        showErrorToast('Imię i nazwisko jest wymagane.');
+        return false;
+    }
+
+    if (!isValidEmail(email)) {
+        showErrorToast('Wprowadź poprawny adres e-mail.');
+        return false;
+    }
+
+    if (password && password.length < 6) {
+        showErrorToast('Hasło musi mieć co najmniej 6 znaków.');
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Validates uploaded image format.
+ */
+function validateImage(file) {
+    if (!file) {
+        showErrorToast('Wybierz obraz do przesłania.');
+        return false;
+    }
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        showErrorToast('Nieobsługiwany format obrazu. Dozwolone: PNG, JPG, WEBP.');
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Checks if an email is valid.
+ */
+function isValidEmail(email) {
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    return emailPattern.test(email);
+}
+=== public/js/auth.js ===
+import ajax from './ajax';
+import { showErrorToast, showSuccessToast } from './toasts';
+
+document.addEventListener('DOMContentLoaded', function () {
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const logoutButton = document.getElementById('logout-button');
+
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    if (registerForm) registerForm.addEventListener('submit', handleRegister);
+    if (logoutButton) logoutButton.addEventListener('click', logout);
+
+    refreshSession(); // Validate session on load
+    setInterval(refreshSession, 60000); // Check session expiration every 60s
+});
+
+/**
+ * Handles user login
+ */
+async function handleLogin(event) {
+    event.preventDefault();
+    clearErrors();
+
+    const formData = new FormData(event.target);
+    const username = formData.get('username').trim();
+    const password = formData.get('password').trim();
+
+    if (!validateCredentials(username, password)) return;
+
+    if (await checkAndRefreshSession()) return;
+
+    try {
+        const response = await ajax.post('/login', { username, password });
+        if (response.success) {
+            ajax.setToken(response.token);
+            showSuccessToast('Logowanie udane! Przekierowywanie...');
+            setTimeout(() => window.location.href = '/dashboard', 1500);
+        } else {
+            showError(response.error || 'Błąd logowania.');
+        }
+    } catch (error) {
+        console.error('Błąd logowania:', error);
+        showError('Nie udało się zalogować.');
+    }
+}
+
+/**
+ * Handles user registration
+ */
+async function handleRegister(event) {
+    event.preventDefault();
+    clearErrors();
+
+    const formData = new FormData(event.target);
+    const username = formData.get('username').trim();
+    const email = formData.get('email').trim();
+    const password = formData.get('password').trim();
+    const confirmPassword = formData.get('confirm_password').trim();
+
+    if (!validateCredentials(username, password, confirmPassword, email)) return;
+
+    if (await checkAndRefreshSession()) return;
+
+    try {
+        const response = await ajax.post('/register', { username, email, password });
+        if (response.success) {
+            ajax.setToken(response.token);
+            showSuccessToast('Rejestracja udana! Przekierowywanie...');
+            setTimeout(() => window.location.href = '/dashboard', 1500);
+        } else {
+            showError(response.error || 'Błąd rejestracji.');
+        }
+    } catch (error) {
+        console.error('Błąd rejestracji:', error);
+        showError('Nie udało się zarejestrować.');
+    }
+}
+
+/**
+ * Logs out user and clears session data
+ */
+function logout() {
+    localStorage.removeItem('auth_token');
+    showSuccessToast('Wylogowano pomyślnie.');
+    setTimeout(() => window.location.href = '/auth/login', 1500);
+}
+
+/**
+ * Refreshes the user session and handles expiration
+ */
+async function refreshSession() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const expiration = payload.exp * 1000;
+        const now = Date.now();
+
+        if (now >= expiration) {
+            await logout();
+        } else {
+            const response = await ajax.get('/session/refresh');
+            if (response.success) {
+                ajax.setToken(response.token);
+            } else {
+                await logout();
+            }
+        }
+    } catch (error) {
+        await logout();
+    }
+}
+
+/**
+ * Checks and refreshes the session if the token is expired
+ */
+async function checkAndRefreshSession() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return false;
+
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const expiration = payload.exp * 1000;
+        const now = Date.now();
+
+        if (now >= expiration) {
+            await refreshSession();
+            return true;
+        }
+    } catch (error) {
+        await logout();
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Clears error messages
+ */
+function clearErrors() {
+    const errorContainer = document.getElementById('error-container');
+    if (errorContainer) {
+        errorContainer.innerText = '';
+        errorContainer.style.display = 'none';
+    }
+}
+
+/**
+ * Displays an error message
+ */
+function showError(message) {
+    const errorContainer = document.getElementById('error-container');
+    if (errorContainer) {
+        errorContainer.innerText = message;
+        errorContainer.style.display = 'block';
+    }
+    showErrorToast(message);
+}
+
+/**
+ * Validates login and registration credentials
+ */
+function validateCredentials(username, password, confirmPassword = null, email = null) {
+    if (!username || username.length < 3) {
+        showError('Nazwa użytkownika musi mieć co najmniej 3 znaki.');
+        return false;
+    }
+
+    if (email && !isValidEmail(email)) {
+        showError('Wprowadź poprawny adres e-mail.');
+        return false;
+    }
+
+    if (!password || password.length < 6) {
+        showError('Hasło musi mieć co najmniej 6 znaków.');
+        return false;
+    }
+
+    if (confirmPassword !== null && password !== confirmPassword) {
+        showError('Hasła nie są identyczne.');
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Validates email format
+ */
+function isValidEmail(email) {
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailPattern.test(email);
+}
+=== public/js/toasts.js ===
+document.addEventListener('DOMContentLoaded', function () {
+    ensureToastContainer();
+});
+
+/**
+ * Ensures the toast container exists on the page.
+ */
+function ensureToastContainer() {
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }
+}
+
+/**
+ * Creates a toast notification.
+ */
+function createToast(type, message, autoDismiss = true, dismissTime = 3000) {
+    const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        console.error('Toast container not found');
+        return;
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <span>${message}</span>
+        <button class="toast-close">&times;</button>
+    `;
+
+    toastContainer.appendChild(toast);
+
+    // Add event listener for manual close
+    toast.querySelector('.toast-close').addEventListener('click', function () {
+        fadeOutToast(toast);
+    });
+
+    if (autoDismiss) {
+        setTimeout(() => fadeOutToast(toast), dismissTime);
+    }
+}
+
+/**
+ * Smoothly fades out and removes a toast notification.
+ */
+function fadeOutToast(toast) {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+}
+
+/**
+ * Displays a success toast.
+ */
+function showSuccessToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('success', message, autoDismiss, dismissTime);
+}
+
+/**
+ * Displays a warning toast.
+ */
+function showWarningToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('warning', message, autoDismiss, dismissTime);
+}
+
+/**
+ * Displays an error toast.
+ */
+function showErrorToast(message, autoDismiss = true, dismissTime = 3000) {
+    createToast('error', message, autoDismiss, dismissTime);
+}
+=== public/js/documents.js ===
+import ajax from './ajax';
+import { showErrorToast, showSuccessToast } from './toasts';
+
+document.addEventListener('DOMContentLoaded', function () {
+    initDocumentForm();
+    loadDocumentList();
+});
+
+/**
+ * Initializes document-related form actions.
+ */
+function initDocumentForm() {
+    const uploadForm = document.getElementById('document-upload-form');
+    const signButton = document.getElementById('sign-button');
+    const uploadInput = document.getElementById('uploadButton');
+
+    if (uploadForm) uploadForm.addEventListener('submit', uploadDocument);
+    if (signButton) signButton.addEventListener('click', handleSignButtonClick);
+    if (uploadInput) uploadInput.addEventListener('change', handleFileSelection);
+}
+
+/**
+ * Handles document upload process.
+ */
+async function uploadDocument(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+
+    if (!validateFileUpload(formData)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/user/upload_document.php', {
+            method: 'POST',
+            body: formData
+        }).then(res => res.json());
+
+        if (response.success) {
+            showSuccessToast('Dokument przesłany pomyślnie.');
+            previewDocument(response.documentUrl);
+            loadDocumentList();
+        } else {
+            showErrorToast(response.message || 'Nie udało się przesłać dokumentu.');
+        }
+    } catch (error) {
+        console.error('Błąd przesyłania dokumentu:', error);
+        showErrorToast('Wystąpił problem podczas przesyłania dokumentu.');
+    }
+}
+
+/**
+ * Validates file upload before sending.
+ */
+function validateFileUpload(formData) {
+    const file = formData.get('document');
+    if (!file) {
+        showErrorToast('Wybierz dokument do przesłania.');
+        return false;
+    }
+
+    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg'];
+    if (!allowedTypes.includes(file.type)) {
+        showErrorToast('Nieobsługiwany format pliku. Dozwolone: PDF, PNG, JPG.');
+        return false;
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+        showErrorToast('Plik jest za duży. Maksymalny rozmiar to 10MB.');
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Handles file selection and previews before upload.
+ */
+function handleFileSelection(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    previewContract(file);
+}
+
+/**
+ * Previews document before signing.
+ */
+function previewDocument(documentUrl) {
+    const previewFrame = document.getElementById('document-preview');
+    if (previewFrame) {
+        previewFrame.src = documentUrl;
+        previewFrame.style.display = 'block';
+    }
+}
+
+/**
+ * Handles document signing process.
+ */
+function handleSignButtonClick() {
+    const documentId = document.getElementById('document-id').value.trim();
+    if (!documentId) {
+        showErrorToast('Wybierz dokument do podpisania.');
+        return;
+    }
+
+    signDocument(documentId);
+}
+
+/**
+ * Sends request to sign a document.
+ */
+async function signDocument(documentId) {
+    try {
+        const response = await fetch('/api/user/documents.php?action=sign', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ documentId })
+        }).then(res => res.json());
+
+        if (response.success) {
+            showSuccessToast('Dokument został pomyślnie podpisany.');
+            loadDocumentList();
+        } else {
+            showErrorToast(response.message || 'Nie udało się podpisać dokumentu.');
+        }
+    } catch (error) {
+        console.error('Błąd podpisywania dokumentu:', error);
+        showErrorToast('Wystąpił problem podczas podpisywania dokumentu.');
+    }
+}
+
+/**
+ * Previews document for user review before submission.
+ */
+function previewContract(file) {
+    const reader = new FileReader();
+    reader.onload = function (event) {
+        const previewFrame = document.getElementById('contractPreview');
+        if (previewFrame) {
+            previewFrame.src = event.target.result;
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+/**
+ * Loads the document list dynamically.
+ */
+async function loadDocumentList() {
+    try {
+        const response = await fetch('/api/user/documents.php?action=list').then(res => res.json());
+        if (response.success) {
+            const documentList = document.getElementById('document-list');
+            documentList.innerHTML = response.documents.map(doc => `<li>${doc.name}</li>`).join('');
+        } else {
+            showErrorToast('Nie udało się załadować listy dokumentów.');
+        }
+    } catch (error) {
+        console.error('Błąd ładowania listy dokumentów:', error);
+        showErrorToast('Wystąpił problem podczas ładowania listy dokumentów.');
+    }
+}
+=== public/js/payments.js ===
+import ajax from './ajax';
+import { showErrorToast, showSuccessToast } from './toasts';
+
+document.addEventListener('DOMContentLoaded', function () {
+    const paymentForm = document.getElementById('paymentForm');
+
+    if (paymentForm) {
+        paymentForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            if (validateForm()) {
+                const paymentDetails = new FormData(paymentForm);
+                processPayment(paymentDetails);
+            }
+        });
+    }
+
+    initRealTimeValidation();
+});
+
+/**
+ * Validates payment form before submission
+ */
+function validateForm() {
+    let isValid = true;
+    const cardNumber = document.getElementById('cardNumber').value.trim();
+    const expiryDate = document.getElementById('expiryDate').value.trim();
+    const cvv = document.getElementById('cvv').value.trim();
+
+    if (!isValidCardNumber(cardNumber)) {
+        showErrorToast('Nieprawidłowy numer karty. Wprowadź 16 cyfr.');
+        isValid = false;
+    }
+
+    if (!isValidExpiryDate(expiryDate)) {
+        showErrorToast('Nieprawidłowa data ważności. Użyj formatu MM/YY.');
+        isValid = false;
+    }
+
+    if (!isValidCVV(cvv)) {
+        showErrorToast('Nieprawidłowy kod CVV. Wprowadź 3 cyfry.');
+        isValid = false;
+    }
+
+    return isValid;
+}
+
+/**
+ * Sends payment request to the API
+ */
+async function processPayment(paymentDetails) {
+    try {
+        const response = await ajax.post('/payments', paymentDetails);
+        if (response.success) {
+            showSuccessToast('Płatność zakończona sukcesem! Przekierowywanie...');
+            setTimeout(() => window.location.href = '/booking/confirmation', 1500);
+        } else {
+            displayErrors(response.errors);
+        }
+    } catch (error) {
+        showErrorToast('Wystąpił błąd podczas przetwarzania płatności.');
+    }
+}
+
+/**
+ * Displays error messages
+ */
+function displayErrors(errors) {
+    errors.forEach(error => showErrorToast(error));
+}
+
+/**
+ * Validates card number format
+ */
+function isValidCardNumber(cardNumber) {
+    return /^\d{16}$/.test(cardNumber);
+}
+
+/**
+ * Validates expiry date format (MM/YY)
+ */
+function isValidExpiryDate(expiryDate) {
+    return /^(0[1-9]|1[0-2])\/\d{2}$/.test(expiryDate);
+}
+
+/**
+ * Validates CVV format (3 digits)
+ */
+function isValidCVV(cvv) {
+    return /^\d{3}$/.test(cvv);
+}
+
+/**
+ * Initializes real-time validation for payment fields
+ */
+function initRealTimeValidation() {
+    document.getElementById('cardNumber')?.addEventListener('input', function () {
+        if (!isValidCardNumber(this.value)) {
+            showErrorToast('Numer karty powinien zawierać 16 cyfr.');
+        }
+    });
+
+    document.getElementById('expiryDate')?.addEventListener('input', function () {
+        if (!isValidExpiryDate(this.value)) {
+            showErrorToast('Nieprawidłowy format daty ważności (MM/YY).');
+        }
+    });
+
+    document.getElementById('cvv')?.addEventListener('input', function () {
+        if (!isValidCVV(this.value)) {
+            showErrorToast('Kod CVV powinien zawierać 3 cyfry.');
+        }
+    });
+}
+=== public/js/user.js ===
+document.addEventListener("DOMContentLoaded", function () {
+    // Fetch and manage user dashboard data
+    function loadUserDashboard() {
+        fetch("/api/user/dashboard.php")
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("totalBookings").textContent = data.totalBookings || 0;
+                document.getElementById("totalPayments").textContent = data.totalPayments + " PLN" || "0 PLN";
+                document.getElementById("totalDocuments").textContent = data.totalDocuments || 0;
+            })
+            .catch(error => console.error("Błąd ładowania dashboardu:", error));
+    }
+
+    // Fetch and manage bookings
+    function fetchBookings() {
+        fetch("/api/user/bookings.php")
+            .then(response => response.json())
+            .then(data => {
+                const bookingTable = document.getElementById("bookingList");
+                bookingTable.innerHTML = "";
+
+                if (data.length === 0) {
+                    bookingTable.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Brak rezerwacji.</td></tr>`;
+                } else {
+                    data.forEach(booking => {
+                        bookingTable.innerHTML += `
+                            <tr>
+                                <td>${booking.id}</td>
+                                <td>${booking.vehicle}</td>
+                                <td>${booking.start_date}</td>
+                                <td>${booking.end_date}</td>
+                                <td>${booking.status}</td>
+                                <td><button class="btn btn-sm btn-info" onclick="viewBooking(${booking.id})">Podgląd</button></td>
+                            </tr>
+                        `;
+                    });
+                }
+            })
+            .catch(error => console.error("Błąd ładowania rezerwacji:", error));
+    }
+
+    loadUserDashboard();
+    fetchBookings();
+});
 === public/js/shared.js ===
 document.addEventListener("DOMContentLoaded", function () {
     console.log("Minimal JavaScript Loaded");
@@ -4687,15 +6137,502 @@ document.addEventListener("DOMContentLoaded", function () {
         .then(data => console.log("API Response:", data))
         .catch(error => console.error("API Error:", error));
 });
-=== public/helpers/SecurityHelper.php ===
-<?php
-function startMinimalSession() {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-        if (!isset($_SESSION['user_id'])) {
-            $_SESSION['guest'] = true;
+=== public/js/admin.js ===
+document.addEventListener("DOMContentLoaded", function () {
+    // Fetch and manage admin dashboard data
+    function loadAdminDashboard() {
+        fetch("/api/admin/dashboard.php")
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("totalUsers").textContent = data.totalUsers || 0;
+                document.getElementById("totalRevenue").textContent = `$${data.totalRevenue || "0.00"}`;
+                document.getElementById("totalBookings").textContent = data.totalBookings || 0;
+            })
+            .catch(error => console.error("Błąd ładowania dashboardu:", error));
+    }
+
+    // Fetch and manage users with role dropdown update
+    function fetchUsers() {
+        fetch("/api/admin/users.php")
+            .then(response => response.json())
+            .then(data => {
+                const userTable = document.getElementById("userList");
+                userTable.innerHTML = "";
+
+                if (data.length === 0) {
+                    userTable.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Brak użytkowników.</td></tr>`;
+                } else {
+                    data.forEach(user => {
+                        userTable.innerHTML += `
+                            <tr>
+                                <td>${user.id}</td>
+                                <td>${user.name}</td>
+                                <td>
+                                    <select onchange="updateUserRole(${user.id}, this.value)">
+                                        <option value="admin" ${user.role === "admin" ? "selected" : ""}>Admin</option>
+                                        <option value="user" ${user.role === "user" ? "selected" : ""}>User</option>
+                                        <option value="staff" ${user.role === "staff" ? "selected" : ""}>Staff</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Usuń</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            })
+            .catch(error => console.error("Błąd ładowania użytkowników:", error));
+    }
+
+    // Update user role via AJAX
+    window.updateUserRole = function (userId, newRole) {
+        fetch("/api/admin/update_user_role.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: userId, role: newRole })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.success){
+                alert("Rola użytkownika zmieniona.");
+            } else {
+                alert("Nie udało się zmienić roli.");
+            }
+        })
+        .catch(error => console.error("Błąd aktualizacji roli użytkownika:", error));
+    };
+
+    function deleteUser(userId) {
+        if (confirm("Czy na pewno chcesz usunąć użytkownika?")) {
+            fetch(`/api/admin/delete_user.php?id=${userId}`, { method: "DELETE" })
+                .then(response => response.json())
+                .then(() => {
+                    alert("Użytkownik usunięty.");
+                    fetchUsers();
+                })
+                .catch(error => console.error("Błąd usuwania użytkownika:", error));
         }
     }
+
+    // Fetch and manage reports with filtering and export functionality
+    function fetchReports(filter = "") {
+        let url = "/api/admin/reports.php";
+        if(filter) url += `?filter=${encodeURIComponent(filter)}`;
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                const reportTable = document.getElementById("reportList");
+                reportTable.innerHTML = "";
+
+                if (data.length === 0) {
+                    reportTable.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Brak raportów.</td></tr>`;
+                } else {
+                    data.forEach(report => {
+                        reportTable.innerHTML += `
+                            <tr>
+                                <td>${report.id}</td>
+                                <td>${report.type}</td>
+                                <td>${report.date}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" onclick="viewReport(${report.id})">Podgląd</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            })
+            .catch(error => console.error("Błąd ładowania raportów:", error));
+    }
+
+    // Export reports as CSV or PDF
+    window.exportReports = function (format) {
+        fetch(`/api/admin/reports_export.php?format=${format}`)
+            .then(response => response.blob())
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `reports.${format}`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            })
+            .catch(error => console.error("Błąd eksportu raportów:", error));
+    };
+
+    // Fetch and manage transactions with refund handling
+    function fetchTransactions() {
+        fetch("/api/admin/transactions.php")
+            .then(response => response.json())
+            .then(data => {
+                const transactionTable = document.getElementById("transactionList");
+                transactionTable.innerHTML = "";
+
+                if (data.length === 0) {
+                    transactionTable.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Brak transakcji.</td></tr>`;
+                } else {
+                    data.forEach(tx => {
+                        transactionTable.innerHTML += `
+                            <tr>
+                                <td>${tx.id}</td>
+                                <td>${tx.amount}</td>
+                                <td>${tx.date}</td>
+                                <td>${tx.status}</td>
+                                <td>
+                                    ${tx.refundable ? `<button class="btn btn-sm btn-warning" onclick="refundTransaction(${tx.id})">Refund</button>` : ""}
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            })
+            .catch(error => console.error("Błąd ładowania transakcji:", error));
+    }
+
+    // Handle refund action with confirmation dialog
+    window.refundTransaction = function (transactionId) {
+        if (confirm("Czy chcesz wydać refundację dla tej transakcji?")) {
+            fetch("/api/admin/refund_transaction.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: transactionId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.success){
+                    alert("Refundacja została przeprowadzona.");
+                    fetchTransactions();
+                } else {
+                    alert("Refundacja nie powiodła się.");
+                }
+            })
+            .catch(error => console.error("Błąd refundacji transakcji:", error));
+        }
+    };
+
+    // Dummy function to view report details
+    window.viewReport = function(reportId) {
+        // ...existing code to view report...
+        alert("Wyświetlanie raportu: " + reportId);
+    };
+
+    // Event listener for report filtering input
+    document.getElementById("reportFilter")?.addEventListener("input", function (e) {
+        fetchReports(e.target.value);
+    });
+
+    // Initial data loading
+    loadAdminDashboard();
+    fetchUsers();
+    fetchReports();
+    fetchTransactions();
+});
+=== public/js/bookings.js ===
+import ajax from './ajax';
+import { showErrorToast, showSuccessToast } from './toasts';
+
+document.addEventListener('DOMContentLoaded', function () {
+    const pickupDateInput = document.getElementById('pickup-date');
+    const bookingForm = document.getElementById('booking-form');
+    const vehiclesContainer = document.getElementById('vehicles-container');
+    const errorContainer = document.getElementById('error-container');
+    const loadingIndicator = document.getElementById('loading-indicator');
+
+    if (pickupDateInput) pickupDateInput.addEventListener('change', fetchAvailableVehicles);
+    if (bookingForm) bookingForm.addEventListener('submit', submitBookingRequest);
+
+    initRealTimeValidation();
+});
+
+/**
+ * Fetches available vehicles based on the selected pickup date.
+ */
+async function fetchAvailableVehicles() {
+    const pickupDate = document.getElementById('pickup-date').value.trim();
+    if (!pickupDate) return;
+
+    showLoadingIndicator();
+
+    try {
+        const response = await fetch(`/api/user/bookings.php?pickup_date=${pickupDate}`);
+        const data = await response.json();
+        hideLoadingIndicator();
+
+        if (data.vehicles && data.vehicles.length > 0) {
+            displayAvailableVehicles(data.vehicles);
+        } else {
+            showErrorToast('Brak dostępnych pojazdów na wybrany termin.');
+            clearVehicles();
+            fetchAlternativeDates(pickupDate);
+        }
+    } catch (error) {
+        hideLoadingIndicator();
+        console.error('Błąd pobierania dostępnych pojazdów:', error);
+        showErrorToast('Nie udało się pobrać dostępnych pojazdów.');
+    }
 }
-startMinimalSession();
-?>
+
+/**
+ * Displays the available vehicles in the UI.
+ */
+function displayAvailableVehicles(vehicles) {
+    vehiclesContainer.innerHTML = '';
+
+    vehicles.forEach(vehicle => {
+        const vehicleElement = document.createElement('div');
+        vehicleElement.className = 'vehicle';
+        vehicleElement.innerHTML = `
+            <h4>${vehicle.name}</h4>
+            <p>Typ: ${vehicle.type}</p>
+        `;
+        vehiclesContainer.appendChild(vehicleElement);
+    });
+}
+
+/**
+ * Clears the vehicle list.
+ */
+function clearVehicles() {
+    vehiclesContainer.innerHTML = '<p class="text-muted">Brak dostępnych pojazdów.</p>';
+}
+
+/**
+ * Fetches alternative dates with available vehicles
+ */
+async function fetchAlternativeDates(pickupDate) {
+    try {
+        const response = await fetch(`/api/user/bookings.php?alternative_dates=true&pickup_date=${pickupDate}`);
+        const data = await response.json();
+        if (data.alternativeDates && data.alternativeDates.length > 0) {
+            displayAlternativeDates(data.alternativeDates, pickupDate);
+        } else {
+            showErrorToast('Brak alternatywnych terminów.');
+        }
+    } catch (error) {
+        console.error('Błąd pobierania alternatywnych terminów:', error);
+        showErrorToast('Nie udało się pobrać alternatywnych terminów.');
+    }
+}
+
+/**
+ * Displays alternative dates in the UI
+ */
+function displayAlternativeDates(alternativeDates, originalDate) {
+    vehiclesContainer.innerHTML = '<p class="text-muted">Brak dostępnych pojazdów.</p>';
+
+    const alternativesContainer = document.createElement('div');
+    alternativesContainer.className = 'alternatives';
+
+    const title = document.createElement('h5');
+    title.innerText = 'Dostępne alternatywne terminy:';
+    alternativesContainer.appendChild(title);
+
+    alternativeDates.forEach(date => {
+        const dateElement = document.createElement('button');
+        dateElement.className = 'alternative-date';
+        dateElement.innerText = date;
+        dateElement.addEventListener('click', () => {
+            document.getElementById('pickup-date').value = date;
+            fetchAvailableVehicles();
+        });
+        alternativesContainer.appendChild(dateElement);
+    });
+
+    const notifyButton = document.createElement('button');
+    notifyButton.className = 'notify-button';
+    notifyButton.innerText = 'Powiadom mnie, gdy pojazdy będą dostępne';
+    notifyButton.addEventListener('click', () => setNotificationAlert(originalDate));
+    alternativesContainer.appendChild(notifyButton);
+
+    vehiclesContainer.appendChild(alternativesContainer);
+}
+
+/**
+ * Sets a notification alert for the user
+ */
+async function setNotificationAlert(pickupDate) {
+    try {
+        const response = await fetch('/api/user/bookings.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pickup_date: pickupDate })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showSuccessToast('Powiadomienie zostało ustawione.');
+        } else {
+            showErrorToast(data.error || 'Nie udało się ustawić powiadomienia.');
+        }
+    } catch (error) {
+        console.error('Błąd ustawiania powiadomienia:', error);
+        showErrorToast('Nie udało się ustawić powiadomienia.');
+    }
+}
+
+/**
+ * Handles the booking form submission.
+ */
+async function submitBookingRequest(event) {
+    event.preventDefault();
+    clearErrors();
+
+    if (!validateBookingForm()) return;
+
+    const formData = new FormData(event.target);
+    showLoadingIndicator();
+
+    try {
+        const response = await fetch('/api/user/bookings.php', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        hideLoadingIndicator();
+
+        if (data.success) {
+            showSuccessToast('Rezerwacja zakończona sukcesem!');
+            setTimeout(() => window.location.href = "/bookings/view", 1500);
+        } else {
+            showErrorToast(data.error || 'Wystąpił problem podczas tworzenia rezerwacji.');
+        }
+    } catch (error) {
+        hideLoadingIndicator();
+        console.error('Błąd tworzenia rezerwacji:', error);
+        showErrorToast('Nie udało się utworzyć rezerwacji.');
+    }
+}
+
+/**
+ * Initializes real-time validation for booking form fields.
+ */
+function initRealTimeValidation() {
+    const requiredFields = ['pickup-date', 'return-date', 'pickup-location', 'dropoff-location'];
+
+    requiredFields.forEach(field => {
+        const input = document.getElementById(field);
+        if (input) {
+            input.addEventListener('input', () => validateField(input));
+        }
+    });
+}
+
+/**
+ * Validates a single form field.
+ */
+function validateField(input) {
+    if (!input.value.trim()) {
+        showError(input.dataset.errorMessage || 'To pole jest wymagane.');
+    } else {
+        clearError();
+    }
+}
+
+/**
+ * Validates the entire booking form before submission.
+ */
+function validateBookingForm() {
+    let isValid = true;
+    const requiredFields = ['pickup-date', 'return-date', 'pickup-location', 'dropoff-location'];
+
+    requiredFields.forEach(field => {
+        const input = document.getElementById(field);
+        if (!input || !input.value.trim()) {
+            showError(`Pole ${field.replace('-', ' ')} jest wymagane.`);
+            isValid = false;
+        }
+    });
+
+    return isValid;
+}
+
+/**
+ * Shows a loading indicator.
+ */
+function showLoadingIndicator() {
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'block';
+    }
+}
+
+/**
+ * Hides the loading indicator.
+ */
+function hideLoadingIndicator() {
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'none';
+    }
+}
+
+/**
+ * Displays an error message.
+ */
+function showError(message) {
+    if (errorContainer) {
+        errorContainer.innerText = message;
+        errorContainer.style.display = 'block';
+    }
+}
+
+/**
+ * Clears all error messages.
+ */
+function clearErrors() {
+    if (errorContainer) {
+        errorContainer.innerText = '';
+        errorContainer.style.display = 'none';
+    }
+}
+=== public/js/api.js ===
+(function() {
+    function apiFetch(url, options = {}) {
+        if (!options.headers) {
+            options.headers = {};
+        }
+        // Attach bearer token
+        const token = localStorage.getItem('token');
+        if (token) {
+            options.headers['Authorization'] = 'Bearer ' + token;
+        }
+
+        return fetch(url, options)
+            .then(async response => {
+                if (response.status === 401) {
+                    console.warn('Unauthorized response. Attempting token refresh...');
+                    // ...token refresh logic...
+                    // After refresh, retry original request or handle failure
+                }
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Request failed [${response.status}]: ${errorText}`);
+                }
+                return response;
+            })
+            .catch(error => {
+                console.error('API fetch error:', error.message);
+                throw error;
+            });
+    }
+
+    function getUserData(userId) {
+        return apiFetch(`/api/user/${userId}`);
+    }
+
+    function updateProfile(data) {
+        return apiFetch('/api/profile/update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    }
+
+    // Expose functions to the global scope
+    window.apiFetch = apiFetch;
+    window.getUserData = getUserData;
+    window.updateProfile = updateProfile;
+
+    // Log successful API script loading
+    console.log('API script loaded successfully');
+})();
