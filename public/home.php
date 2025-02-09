@@ -68,6 +68,7 @@ require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
 <?php include __DIR__ . '/layouts/footer.php'; ?>
 
-<script src="js/shared.js"></script>
+<script type="module" src="js/shared.js"></script>
+<script type="module" src="js/api.js"></script>
 </body>
 </html>

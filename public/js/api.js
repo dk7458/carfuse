@@ -27,6 +27,10 @@ function apiFetch(url, options = {}) {
             throw error;
         });
 }
-// ...existing code...
+
+export function apiCall() {
+    // ...existing code...
+}
+
 export { apiFetch };
 // ...existing code...
