@@ -24,9 +24,10 @@ RewriteRule ^ - [F,L]
 RewriteCond %{REQUEST_URI} ^/(dashboard|profile|auth/login|auth/register)$
 RewriteRule ^(.*)$ /views/$1.php [L]
 
-# ✅ Prevent direct access to `/views/` directory via browser
-RewriteCond %{REQUEST_URI} ^/views/
-RewriteRule ^ - [F,L]
+# ✅ Allow access to `/views/` directory for dynamic routing
+RewriteCond %{REQUEST_URI} ^/views/(.*)$
+RewriteCond %{DOCUMENT_ROOT}/public/views/%1 -f
+RewriteRule ^views/(.*)$ /public/views/$1 [L]
 
 # ✅ Forward all other requests to `/public/index.php` for FastRoute
 RewriteCond %{REQUEST_URI} !^/api/.*$
