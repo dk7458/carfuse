@@ -2,7 +2,7 @@
 
 /**
  * Centralized Bootstrap File
- * Path: /bootstrap.php
+ * Path: bootstrap.php
  *
  * Initializes database connections, logging, and registers necessary services.
  */
@@ -19,36 +19,50 @@ use AuditManager\Middleware\AuditTrailMiddleware;
 use App\Services\EncryptionService;
 
 // ✅ Load Dependencies
-
 require_once __DIR__ . '/vendor/autoload.php';
 $container = require __DIR__ . '/config/dependencies.php';
 define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html'); // Set absolute path
 
+// ✅ Logging Function with Timestamps
+function logBootstrapEvent($message)
+{
+    $timestamp = date('Y-m-d H:i:s');
+    file_put_contents(__DIR__ . '/logs/bootstrap.log', "{$timestamp} - {$message}\n", FILE_APPEND);
+}
+
 // ✅ Retrieve Services from Container
-$pdo = $container->get(PDO::class);
-$logger = $container->get(LoggerInterface::class);
-$notificationService = $container->get(App\Services\NotificationService::class);
-$tokenService = $container->get(App\Services\Auth\TokenService::class);
-$validator = $container->get(App\Services\Validator::class);
+try {
+    $pdo = $container->get(PDO::class);
+    $logger = $container->get(LoggerInterface::class);
+    $notificationService = $container->get(App\Services\NotificationService::class);
+    $tokenService = $container->get(App\Services\Auth\TokenService::class);
+    $validator = $container->get(App\Services\Validator::class);
+    logBootstrapEvent("✅ Services retrieved successfully from the container.");
+} catch (Exception $e) {
+    die("❌ Service retrieval failed: " . $e->getMessage() . "\n");
+}
 
 // ✅ Load Security Helper
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 
-// ✅ Load Configuration Files
+// ✅ Load and Validate Configuration Files
 $configFiles = ['database', 'encryption', 'keymanager'];
 $config = [];
 
 foreach ($configFiles as $file) {
     $path = __DIR__ . "/config/{$file}.php";
     if (!file_exists($path)) {
+        logBootstrapEvent("❌ Missing configuration file: {$file}.php");
         die("❌ Error: Missing required configuration file: {$file}.php\n");
     }
     $config[$file] = require $path;
 }
+logBootstrapEvent("✅ Configuration files loaded successfully.");
 
 // ✅ Ensure Database Configuration Exists
 if (!isset($config['database']['app_database'], $config['database']['secure_database'])) {
-    die("❌ Error: Database configuration is missing or incorrect in config/database.php\n");
+    logBootstrapEvent("❌ Database configuration missing or incorrect.");
+    die("❌ Error: Database configuration missing or incorrect in config/database.php\n");
 }
 
 // ✅ Initialize Database (Eloquent ORM)
@@ -61,8 +75,9 @@ try {
     $capsule->setAsGlobal();
     $capsule->bootEloquent();
 
-    //echo "✅ Eloquent ORM Initialized Successfully.\n";
+    logBootstrapEvent("✅ Eloquent ORM initialized successfully.");
 } catch (Exception $e) {
+    logBootstrapEvent("❌ Eloquent initialization failed: " . $e->getMessage());
     die("❌ Eloquent initialization failed: " . $e->getMessage() . "\n");
 }
 
@@ -71,6 +86,7 @@ $logDir = __DIR__ . '/logs';
 if (!is_dir($logDir)) {
     mkdir($logDir, 0775, true);
 }
+logBootstrapEvent("✅ Log directory verified.");
 
 // ✅ Initialize Logger (Monolog)
 $logFilePath = __DIR__ . '/logs/application.log';
@@ -80,19 +96,27 @@ try {
     $streamHandler = new StreamHandler($logFilePath, Logger::DEBUG);
     $streamHandler->setFormatter(new LineFormatter(null, null, true, true));
     $logger->pushHandler($streamHandler);
-    //echo "✅ Logger Initialized Successfully.\n";
+    logBootstrapEvent("✅ Logger initialized successfully.");
 } catch (Exception $e) {
+    logBootstrapEvent("❌ Logger initialization failed: " . $e->getMessage());
     die("❌ Logger initialization failed: " . $e->getMessage() . "\n");
 }
 
 // ✅ Ensure Encryption Configuration Exists
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
+    logBootstrapEvent("❌ Encryption key missing or invalid.");
     die("❌ Error: Encryption key missing or invalid in config/encryption.php\n");
 }
 
 // ✅ Retrieve Additional Services from Container
-$auditService = $container->get(AuditService::class);
-$encryptionService = $container->get(EncryptionService::class);
+try {
+    $auditService = $container->get(AuditService::class);
+    $encryptionService = $container->get(EncryptionService::class);
+    logBootstrapEvent("✅ Additional services retrieved successfully.");
+} catch (Exception $e) {
+    logBootstrapEvent("❌ Failed to retrieve additional services: " . $e->getMessage());
+    die("❌ Failed to retrieve additional services: " . $e->getMessage() . "\n");
+}
 
 // ✅ Register Middleware (if applicable)
 $auditMiddleware = new AuditTrailMiddleware($auditService, $logger);
@@ -114,12 +138,13 @@ foreach ($requiredServices as $service) {
 
 // ✅ Output warnings for missing dependencies
 if (!empty($missingDependencies)) {
+    logBootstrapEvent("⚠️ Missing dependencies detected: " . implode(', ', $missingDependencies));
     echo "⚠️ Missing dependencies detected: " . implode(', ', $missingDependencies) . "\n";
     echo "⚠️ Ensure dependencies are correctly registered in config/dependencies.php.\n";
 }
 
 // ✅ Output Confirmation
-//echo "✅ Bootstrap process completed successfully.\n";
+logBootstrapEvent("✅ Bootstrap process completed successfully.");
 
 // ✅ Return Configurations for Application Use
 return [
@@ -128,3 +153,4 @@ return [
     'auditService' => $auditService,
     'encryptionService' => $encryptionService,
 ];
+?>
