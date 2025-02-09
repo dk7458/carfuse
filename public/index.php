@@ -57,9 +57,19 @@ switch ($routeInfo[0]) {
         $vars = $routeInfo[2];
 
         if (is_callable($handler)) {
-            file_put_contents(__DIR__ . "/debug.log", "Executing Handler\n", FILE_APPEND);
+            file_put_contents(__DIR__ . "/debug.log", "Executing Handler directly\n", FILE_APPEND);
             try {
                 call_user_func($handler, $vars);
+            } catch (Exception $e) {
+                file_put_contents(__DIR__ . "/debug.log", "Handler Exception: " . $e->getMessage() . "\n", FILE_APPEND);
+                http_response_code(500);
+                echo "Internal Server Error";
+            }
+        } elseif (is_array($handler) && class_exists($handler[0]) && method_exists($handler[0], $handler[1])) {
+            file_put_contents(__DIR__ . "/debug.log", "Instantiating controller: " . $handler[0] . "\n", FILE_APPEND);
+            $controller = new $handler[0]();
+            try {
+                call_user_func([$controller, $handler[1]], $vars);
             } catch (Exception $e) {
                 file_put_contents(__DIR__ . "/debug.log", "Handler Exception: " . $e->getMessage() . "\n", FILE_APPEND);
                 http_response_code(500);
