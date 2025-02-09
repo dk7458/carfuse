@@ -6,8 +6,8 @@ use App\Services\Auth\TokenService;
 use PDO;
 use Exception;
 
-require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
-require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../Helpers/ViewHelper.php';
+require_once __DIR__ . '/../Helpers/SecurityHelper.php';
 
 class AuthController
 {
@@ -18,7 +18,7 @@ class AuthController
     {
         startSecureSession();
         // Load the encryption configuration
-        $configPath = BASE_PATH . '/config/encryption.php';
+        $configPath = __DIR__ . '/../../config/encryption.php';
         if (!file_exists($configPath)) {
             throw new Exception("Encryption configuration missing.");
         }
@@ -37,7 +37,7 @@ class AuthController
         );
 
         // Load the database connection
-        $dbConfig = require BASE_PATH . '/config/database.php';
+        $dbConfig = require BASE_PATH . '/../../config/database.php';
         try {
             $this->pdo = new PDO(
                 "mysql:host={$dbConfig['app_database']['host']};dbname={$dbConfig['app_database']['database']};charset=utf8mb4",
