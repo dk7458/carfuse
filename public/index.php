@@ -22,6 +22,11 @@ $httpMethod = $_SERVER['REQUEST_METHOD'];
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $uri = rtrim($uri, '/');
 
+// Extra logging for direct access to index.php for testing
+if ($uri === '/index.php') {
+    file_put_contents(__DIR__ . "/debug.log", "Direct access to index.php\n", FILE_APPEND);
+}
+
 // Debug - Log Requested URL
 file_put_contents(__DIR__ . "/debug.log", "Request: $uri\n", FILE_APPEND);
 

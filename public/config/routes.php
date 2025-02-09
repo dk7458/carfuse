@@ -28,10 +28,10 @@ return simpleDispatcher(function (RouteCollector $router) {
         }
     }
 
-    // Home Page (Loads Index)
+    // Home Page: now use a dedicated view to avoid recursion
     $router->get('/', function () {
         file_put_contents(__DIR__ . "/../debug.log", "Home Route Hit\n", FILE_APPEND);
-        require __DIR__ . '/../index.php';
+        require BASE_PATH . "/public/views/home.php"; // use a dedicated home view file
     });
     
 
