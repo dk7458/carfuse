@@ -1,220 +1,33 @@
-=== publicc/.htaccess ===
+=== public/.htaccess ===
 RewriteEngine On
 DirectoryIndex index.php
 
 AddHandler application/x-httpd-php .php
 
-<Directory "/public/api">
-    Require all granted
-</Directory>
-
-<FilesMatch "\.(php)$">
-    Require all granted
-</FilesMatch>
-
-<FilesMatch "\.php$">
-    SetHandler application/x-httpd-php
-</FilesMatch>
-
-# Ensure PHP session cookies work properly
-php_flag session.auto_start on
-php_value session.use_cookies 1
-php_value session.use_only_cookies 1
-
-# Prevent direct access to PHP files inside /api
+# Block direct execution of PHP files in /api
+RewriteRule ^api/.*\.php$ - [F,L]
 
 # Allow direct access to static files (CSS, JS, images)
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Friendly URL routing for /dashboard, /admin, /user
-RewriteCond %{REQUEST_URI} ^/(dashboard|admin|user) [NC]
-RewriteRule ^ /public/index.php [QSA,L]
-=== publicc/layouts/header.php ===
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CarFuse Dashboard</title>
-    <link rel="stylesheet" href="/public/css/main.css">
-    <script src="/public/js/main.js" defer></script>
-</head>
-<body>
-=== publicc/layouts/footer.php ===
-</body>
-</html>
-=== publicc/layouts/sidebar.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Sidebar - Nawigacja w Dashboardzie
-|--------------------------------------------------------------------------
-| Plik odpowiada za wyświetlanie bocznego menu nawigacyjnego w dashboardzie.
-| Umożliwia użytkownikom i administratorom przełączanie się między podstronami.
-|
-| Ścieżka: App/Views/layouts/sidebar.php
-*/
-?>
+# Explicitly rewrite '/' to index.php
+RewriteRule ^$ index.php [QSA,L]
 
-<aside class="sidebar">
-    <nav class="sidebar-menu">
-        <ul>
-            <li><a href="/user/dashboard" class="dashboard-link">📊 Panel</a></li>
-            <li><a href="/bookings/view" class="dashboard-link">📅 Moje rezerwacje</a></li>
-            <li><a href="/payments/history" class="dashboard-link">💳 Historia płatności</a></li>
-            <li><a href="/documents/user_documents" class="dashboard-link">📄 Moje dokumenty</a></li>
-            <li><a href="/user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
-            <li><a href="/user/profile" class="dashboard-link">👤 Profil</a></li>
-            <li><a href="/admin/users" class="dashboard-link">👥 Zarządzanie użytkownikami</a></li>
-            <li><a href="/admin/audit_logs" class="dashboard-link">📜 Logi audytowe</a></li>
-            <li><a href="/admin/logs" class="dashboard-link">📂 Logi systemowe</a></li>
-            <li><a href="/admin/reports" class="dashboard-link">📑 Raporty</a></li>
-            <li><a href="/admin/settings" class="dashboard-link">⚙️ Ustawienia</a></li>
-            <li><a href="/logout">🚪 Wyloguj</a></li>
-        </ul>
-    </nav>
-</aside>
+# Forward all non-static requests to index.php
+RewriteRule . index.php [QSA,L]
 
-<script src="/public/js/main.js" defer></script>
-=== publicc/layouts/main copy.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Global Layout Wrapper - main.php
-|--------------------------------------------------------------------------
-| This file ensures all views have a consistent layout with a header and footer.
-|
-| Path: public/layouts/main.php
-*/
+# PHP session configuration
+php_flag session.auto_start on
+php_value session.use_cookies 1
+php_value session.use_only_cookies 1
+=== public/api/.htaccess ===
 
-require_once __DIR__ . '/../bootstrap.php';
-require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
-
-// Ensure $view is set before including it
-if (!isset($view) || !file_exists($view)) {
-    die("Error: View file not found.");
-}
-
-// Include header
-require_once __DIR__ . '/header.php';
-?>
-
-<main class="content">
-    <?php include $view; ?>
-</main>
-
-<?php
-// Include footer
-require_once __DIR__ . '/footer.php';
-?>
-=== publicc/layouts/modals.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Modale - Okna Modalne
-|--------------------------------------------------------------------------
-| Plik zawiera globalne okna modalne wykorzystywane w aplikacji.
-|
-| Ścieżka: App/Views/layouts/modals.php
-*/
-?>
-
-<div id="globalModal" class="modal">
-    <div class="modal-content">
-        <span class="close">&times;</span>
-        <h2 id="modalTitle"></h2>
-        <div id="modalBody"></div>
-        <button class="btn btn-primary" id="modalConfirm">OK</button>
-    </div>
-</div>
-=== publicc/layouts/main.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Global Layout Wrapper - main.php
-|--------------------------------------------------------------------------
-| This wrapper ensures that every view is displayed inside a structured
-| layout with a header and footer.
-|
-| Path: public/layouts/main.php
-*/
-
-require_once __DIR__ . '/../layouts/header.php';
-?>
-
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
-    <link rel="stylesheet" href="/public/css/main.css">
-    <script src="/public/js/main.js" defer></script>
-</head>
-<body>
-
-<?php include __DIR__ . '/../layouts/header.php'; ?>
-
-<div class="dashboard-container">
-    <aside class="sidebar">
-        <?php
-        if ($userRole === 'admin') {
-            include __DIR__ . '/../layouts/sidebars/admin_sidebar.php';
-        } else {
-            include __DIR__ . '/../layouts/sidebars/user_sidebar.php';
-        }
-        ?>
-    </aside>
-    <main class="main-content">
-        <?php include $view; ?>
-    </main>
-</div>
-
-<?php include __DIR__ . '/../layouts/footer.php'; ?>
-
-</body>
-</html>
-=== publicc/layouts/alerts.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Alerts - Globalne Powiadomienia
-|--------------------------------------------------------------------------
-| Plik odpowiada za wyświetlanie globalnych alertów i powiadomień.
-|
-| Ścieżka: App/Views/layouts/alerts.php
-*/
-?>
-
-<div id="alert-container"></div>
-=== publicc/layouts/navbar.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Navbar - Górna Nawigacja Dashboardu
-|--------------------------------------------------------------------------
-| Plik odpowiada za wyświetlanie górnej belki nawigacyjnej w dashboardzie.
-| Pokazuje podstawowe opcje nawigacyjne i dostęp do ustawień konta.
-|
-| Ścieżka: App/Views/layouts/navbar.php
-*/
-?>
-<nav class="navbar">
-    <div class="container">
-        <a href="/dashboard" class="logo">🚗 CarFuse</a>
-        <ul class="nav-links">
-            <li><a href="/user/profile" class="dashboard-link">👤 Mój Profil</a></li>
-            <li><a href="/user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
-            <li><a href="/logout">🚪 Wyloguj</a></li>
-        </ul>
-    </div>
-</nav>
-
-
-=== publicc/api/shared/index.php ===
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule \.php$ - [F]
+</IfModule>=== public/api/index.php ===
 <?php
 require_once __DIR__ . '/../../../vendor/autoload.php';
 require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
@@ -226,6 +39,14 @@ $apiPath = str_replace('/api/', '', $requestUri);
 // Ensure response is JSON
 header("Content-Type: application/json");
 
+// Check for valid Authorization header or session
+$headers = getallheaders();
+if (!isset($headers['Authorization']) && !isset($_SESSION['user_logged_in'])) {
+    http_response_code(401);
+    echo json_encode(["error" => "Unauthorized"]);
+    exit();
+}
+
 // Route API calls dynamically
 $apiFile = __DIR__ . "/$apiPath.php";
 if (file_exists($apiFile)) {
@@ -235,7 +56,7 @@ if (file_exists($apiFile)) {
     echo json_encode(["error" => "API endpoint not found"]);
     exit();
 }
-=== publicc/api/shared/charts.php ===
+=== public/api/charts.php ===
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
@@ -251,7 +72,7 @@ header("Content-Type: application/json");
 
 // Verify user authentication
 if (!isUserLoggedIn()) {
-    http_response_code(403);
+    http_response_code(401);
     echo json_encode(["error" => "Unauthorized"]);
     exit();
 }
@@ -279,21 +100,83 @@ $data = [
         ]
     ]
 ];
-echo json_encode(["message" => "API is working!"]);
+
 // Return JSON response
 echo json_encode($data);
 exit();
-=== publicc/css/style.css ===
+=== public/api/test.php ===
+<?php
+// Helper function for logging
+function logMessage($msg) {
+    file_put_contents('debug.log', date('Y-m-d H:i:s') . " - $msg\n", FILE_APPEND);
+}
+
+// Log the API request at the very start, including requested URI
+logMessage("API request received for " . ($_SERVER['REQUEST_URI'] ?? 'unknown'));
+
+// Optional authentication check flag
+$requiresAuth = false;
+
+// Define authentication function with improved error handling
+function requireAuth() {
+    if (!isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        logMessage("Authentication failed: Missing Authorization header");
+        http_response_code(401);
+        header("Content-Type: application/json");
+        echo json_encode(["error" => "Unauthorized access: Authorization header missing"]);
+        exit();
+    }
+    logMessage("Authentication succeeded with header: " . $_SERVER['HTTP_AUTHORIZATION']);
+}
+
+// Perform authentication if required
+if ($requiresAuth) {
+    requireAuth();
+}
+
+// Confirm FastRoute processing by logging the matched route
+// (Assuming FastRoute routing passes control here)
+logMessage("FastRoute processed endpoint: " . ($_SERVER['REQUEST_URI'] ?? 'unknown'));
+
+// Set header always for valid JSON
+header("Content-Type: application/json");
+
+// Explicit success status ensures HTTP 200 OK for curl -I /api/test
+http_response_code(200);
+
+// ...existing code...
+echo json_encode(["status" => "API working"]);
+// ...existing code...
+
+// Log completion of API handling
+logMessage("/test API processed successfully");
+?>
+=== public/css/style.css ===
 /* Dark Minimal Theme */
+
+/* Added CSS Variables for consistency */
+:root {
+    --primary-bg: #121212;
+    --secondary-bg: #181818;
+    --accent-color: #FFD700;
+    --hover-color: #FFC107;
+    --button-bg: #007bff;
+    --button-hover-bg: #0056b3;
+    --success-bg: #28a745;
+    --error-color: #FF4C4C;
+    --font-family: Arial, sans-serif;
+    --base-font-size: 16px;
+}
+
 body {
-    background-color: #121212;
+    background-color: var(--primary-bg);
     color: #fff;
-    font-family: Arial, sans-serif;
+    font-family: var(--font-family);
     margin: 0;
     padding: 0;
 }
 header {
-    background-color: #181818;
+    background-color: var(--secondary-bg);
     text-align: center;
     padding: 15px 0;
 }
@@ -310,10 +193,11 @@ nav a {
     color: #fff;
     text-decoration: none;
     margin: 0 15px;
-    font-size: 18px;
+    font-size: 1rem;
+    transition: color 0.3s ease;
 }
 nav a:hover {
-    color: #FFD700;
+    color: var(--accent-color);
 }
 
 /* Hero Section */
@@ -350,18 +234,19 @@ nav a:hover {
 }
 .search-form input, .search-form button {
     padding: 12px;
-    font-size: 16px;
+    font-size: var(--base-font-size);
     border-radius: 5px;
     border: none;
 }
 .search-form button {
-    background: #FFD700;
-    color: #121212;
+    background: var(--accent-color);
+    color: var(--primary-bg);
     font-weight: bold;
     cursor: pointer;
+    transition: background 0.3s ease;
 }
 .search-form button:hover {
-    background: #FFC107;
+    background: var(--hover-color);
 }
 
 /* Features Section */
@@ -402,13 +287,13 @@ nav a:hover {
 /* CTA Section */
 .cta {
     margin-top: 40px;
-    background: #28a745;
+    background: var(--success-bg);
     padding: 20px;
     border-radius: 8px;
 }
 .btn {
     display: inline-block;
-    background: #007bff;
+    background: var(--button-bg);
     color: white;
     padding: 10px 15px;
     border-radius: 5px;
@@ -416,7 +301,7 @@ nav a:hover {
     transition: background 0.3s ease;
 }
 .btn:hover {
-    background: #0056b3;
+    background: var(--button-hover-bg);
 }
 
 /* Footer */
@@ -429,10 +314,36 @@ nav a:hover {
 
 /* Error Message */
 .error-message {
-    color: #FF4C4C;
+    color: var(--error-color);
     display: none;
 }
-=== publicc/css/profile.css ===
+
+/* Responsive Media Queries */
+@media (max-width: 768px) {
+    nav {
+        flex-direction: column;
+    }
+    .hero {
+        padding: 80px 10px;
+    }
+    .feature-list, .features-container {
+        flex-direction: column;
+        gap: 20px;
+    }
+}
+@media (max-width: 480px) {
+    nav a {
+        margin: 5px 0;
+        font-size: 0.9rem;
+    }
+    .hero h1 {
+        font-size: 2.5rem;
+    }
+    .hero p {
+        font-size: 1rem;
+    }
+}
+=== public/css/profile.css ===
 /*
 |--------------------------------------------------------------------------
 | Profile Styles (profile.css)
@@ -545,7 +456,7 @@ body {
     }
 }
 
-=== publicc/css/logs.css ===
+=== public/css/logs.css ===
 /* ...existing code... */
 
 /* Remove redundant table styles */
@@ -581,7 +492,7 @@ body {
         white-space: nowrap;
     }
 }
-=== publicc/css/documents.css ===
+=== public/css/documents.css ===
 /*
 |--------------------------------------------------------------------------
 | Documents Styles (documents.css)
@@ -709,7 +620,7 @@ body {
     }
 }
 
-=== publicc/css/dashboard.css ===
+=== public/css/dashboard.css ===
 /*
 |--------------------------------------------------------------------------
 | Dashboard Styles (dashboard.css)
@@ -841,7 +752,7 @@ body {
     }
 }
 
-=== publicc/css/payments.css ===
+=== public/css/payments.css ===
 /*
 |--------------------------------------------------------------------------
 | Payments Styles (payments.css)
@@ -966,7 +877,7 @@ body {
     }
 }
 
-=== publicc/css/notifications.css ===
+=== public/css/notifications.css ===
 /* notifications.css _ Real_Time Notifications */
 
 .notifications-panel {
@@ -1029,7 +940,7 @@ body {
     }
 }
 
-=== publicc/css/main.css ===
+=== public/css/main.css ===
 /* main.css - Unified Styling for CarFuse */
 
 :root {
@@ -1506,7 +1417,7 @@ nav a:hover {
     display: none;
 }
 
-=== publicc/css/transaction-logs.css ===
+=== public/css/transaction-logs.css ===
 /* ...existing code... */
 
 /* Remove redundant table styles */
@@ -1542,7 +1453,7 @@ nav a:hover {
         white-space: nowrap;
     }
 }
-=== publicc/css/auth.css ===
+=== public/css/auth.css ===
 /* ===================================================
    Authentication Pages Styles (Dark Minimal Theme)
    Path: public/css/auth.css
@@ -1637,7 +1548,7 @@ body {
 .auth-container a:hover {
     text-decoration: underline;
 }
-=== publicc/css/home.css ===
+=== public/css/home.css ===
 /*
 |--------------------------------------------------------------------------
 | Home Page Styles (home.css)
@@ -1802,10 +1713,10 @@ body {
     }
 }
 
-=== publicc/css/toasts.css ===
+=== public/css/toasts.css ===
 /* This file has been removed. */
 
-=== publicc/css/bookings.css ===
+=== public/css/bookings.css ===
 /*
 |--------------------------------------------------------------------------
 | Bookings Styles (bookings.css)
@@ -1927,7 +1838,7 @@ body {
     }
 }
 
-=== publicc/css/reports.css ===
+=== public/css/reports.css ===
 /* ...existing code... */
 
 /* Remove redundant table styles */
@@ -1963,15 +1874,54 @@ body {
         white-space: nowrap;
     }
 }
-=== publicc/index.php ===
+=== public/index.php ===
 <?php
 declare(strict_types=1);
 header("Content-Type: text/html; charset=UTF-8");
-require_once __DIR__ . '/../bootstrap.php';
-require_once __DIR__ . '/../vendor/autoload.php';
+
+// Ensure SecurityHelper is loaded early to initialize sessions correctly.
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
-echo "<!-- Debug: index.php started -->";
+// Write debug log entry.
+file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: index.php started\n", FILE_APPEND);
+
+require_once __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+
+// Prevent redundant dispatcher executions.
+if (!isset($GLOBALS['dispatcher_executed'])) {
+    $GLOBALS['dispatcher_executed'] = true;
+    
+    // Determine request URI.
+    $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Routing request for URI: $uri\n", FILE_APPEND);
+    
+    try {
+        // Basic routing: if URI is "/" load home.php, otherwise use FastRoute dispatcher.
+        if ($uri === '/' || $uri === '/index.php') {
+            $route = 'home';
+        } else {
+            // Example: extract route from URI e.g., "/about" becomes "about"
+            $route = trim($uri, '/');
+        }
+        
+        // Dispatch based on route.
+        switch ($route) {
+            case 'home':
+                file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Dispatching to home view\n", FILE_APPEND);
+                $viewFile = __DIR__ . '/views/home.php';
+                break;
+            // ...existing cases for other routes...
+            default:
+                file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Error: No route found for URI: $uri\n", FILE_APPEND);
+                throw new Exception("Page not found");
+        }
+    } catch (Exception $e) {
+        file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Error: Dispatcher failed: " . $e->getMessage() . "\n", FILE_APPEND);
+        echo "<h1>Error:</h1><p>" . htmlspecialchars($e->getMessage()) . "</p>";
+        exit;
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -1987,18 +1937,18 @@ echo "<!-- Debug: index.php started -->";
 
 <?php include __DIR__ . '/layouts/header.php'; ?>
 
-<!-- Debugging: Ensure content is being included -->
+<!-- Debugging: Log main content rendering -->
 <?php
-    echo "<!-- Debug: Loading main content -->";
-    include __DIR__ . '/views/home.php';
-    echo "<!-- Debug: Content loaded successfully -->";
+    file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Loading main content from: $viewFile\n", FILE_APPEND);
+    include $viewFile;
+    file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Content loaded successfully\n", FILE_APPEND);
 ?>
 
 <?php include __DIR__ . '/layouts/footer.php'; ?>
 
 </body>
 </html>
-=== publicc/home.php ===
+=== public/home.php ===
 <?php
 require_once __DIR__ . '/../App/helpers/SecurityHelper.php';
 ?>
@@ -2072,7 +2022,7 @@ require_once __DIR__ . '/../App/helpers/SecurityHelper.php';
 <script src="/js/shared.js"></script>
 </body>
 </html>
-=== publicc/views/auth/register.php ===
+=== public/views/auth/register.php ===
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -2193,7 +2143,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
 </body>
 </html>
-=== publicc/views/auth/password_reset.php ===
+=== public/views/auth/password_reset.php ===
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -2310,7 +2260,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
 </body>
 </html>
-=== publicc/views/auth/login.php ===
+=== public/views/auth/login.php ===
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -2430,7 +2380,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </body>
 </html>
 <?php include __DIR__ . '/../layouts/footer.php'; ?>
-=== publicc/views/auth/reset_request.php ===
+=== public/views/auth/reset_request.php ===
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -2539,7 +2489,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
 </body>
 </html>
-=== publicc/views/admin/payments/dashboard.php ===
+=== public/views/profile.php ===
+=== public/views/admin/payments/dashboard.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['admin_id'])) {
@@ -2711,7 +2662,7 @@ document.addEventListener("DOMContentLoaded", function() {
     fetchTransactions();
 });
 </script>
-=== publicc/views/admin/payments/transactions.php ===
+=== public/views/admin/payments/transactions.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['admin_id'])) {
@@ -2852,7 +2803,7 @@ document.addEventListener("DOMContentLoaded", function() {
     fetchTransactions();
 });
 </script>
-=== publicc/views/admin/payments/refunds.php ===
+=== public/views/admin/payments/refunds.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['admin_id'])) {
@@ -2992,7 +2943,7 @@ document.addEventListener("DOMContentLoaded", function() {
     fetchRefunds();
 });
 </script>
-=== publicc/views/admin/dashboard.php ===
+=== public/views/admin/dashboard.php ===
 <?php require_once __DIR__ . '/../layouts/header.php'; ?>
 
 <h1 class="text-center">Admin Dashboard</h1>
@@ -3050,7 +3001,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <script src="/js/admin.js"></script>
 
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>
-=== publicc/views/admin/users.php ===
+=== public/views/admin/users.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['admin_id'])) {
@@ -3242,7 +3193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit();
 }
 ?>
-=== publicc/views/admin/audit_logs.php ===
+=== public/views/admin/audit_logs.php ===
 <?php
 if (!isset($_SESSION['admin_id'])) {
     header('Location: login.php');
@@ -3387,7 +3338,7 @@ if (!isset($_SESSION['admin_id'])) {
     </script>
 </body>
 </html>
-=== publicc/views/admin/logs.php ===
+=== public/views/admin/logs.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['admin_id'])) {
@@ -3530,7 +3481,7 @@ foreach ($logs as &$log) {
     $log['formatted_date'] = date('Y-m-d H:i:s', strtotime($log['date']));
 }
 ?>
-=== publicc/views/admin/documents.php ===
+=== public/views/admin/documents.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['admin_id'])) {
@@ -3670,7 +3621,7 @@ document.addEventListener("DOMContentLoaded", function() {
     fetchDocuments();
 });
 </script>
-=== publicc/views/admin/reports.php ===
+=== public/views/admin/reports.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['admin_id'])) {
@@ -3835,7 +3786,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['start_date'], $_POST[
     // ...existing code...
 }
 ?>
-=== publicc/views/admin/settings.php ===
+=== public/views/admin/settings.php ===
 /*
 |--------------------------------------------------------------------------
 | Ustawienia Systemowe Administratora
@@ -3999,7 +3950,190 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 </script>
-=== publicc/views/payments/make_payment.php ===
+=== public/views/layouts/header.php ===
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarFuse Dashboard</title>
+    <link rel="stylesheet" href="/public/css/main.css">
+    <script src="/public/js/main.js" defer></script>
+</head>
+<body>
+=== public/views/layouts/footer.php ===
+</body>
+</html>
+=== public/views/layouts/sidebar.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Sidebar - Nawigacja w Dashboardzie
+|--------------------------------------------------------------------------
+| Plik odpowiada za wyświetlanie bocznego menu nawigacyjnego w dashboardzie.
+| Umożliwia użytkownikom i administratorom przełączanie się między podstronami.
+|
+| Ścieżka: App/Views/layouts/sidebar.php
+*/
+?>
+
+<aside class="sidebar">
+    <nav class="sidebar-menu">
+        <ul>
+            <li><a href="/user/dashboard" class="dashboard-link">📊 Panel</a></li>
+            <li><a href="/bookings/view" class="dashboard-link">📅 Moje rezerwacje</a></li>
+            <li><a href="/payments/history" class="dashboard-link">💳 Historia płatności</a></li>
+            <li><a href="/documents/user_documents" class="dashboard-link">📄 Moje dokumenty</a></li>
+            <li><a href="/user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
+            <li><a href="/user/profile" class="dashboard-link">👤 Profil</a></li>
+            <li><a href="/admin/users" class="dashboard-link">👥 Zarządzanie użytkownikami</a></li>
+            <li><a href="/admin/audit_logs" class="dashboard-link">📜 Logi audytowe</a></li>
+            <li><a href="/admin/logs" class="dashboard-link">📂 Logi systemowe</a></li>
+            <li><a href="/admin/reports" class="dashboard-link">📑 Raporty</a></li>
+            <li><a href="/admin/settings" class="dashboard-link">⚙️ Ustawienia</a></li>
+            <li><a href="/logout">🚪 Wyloguj</a></li>
+        </ul>
+    </nav>
+</aside>
+
+<script src="/public/js/main.js" defer></script>
+=== public/views/layouts/main copy.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Global Layout Wrapper - main.php
+|--------------------------------------------------------------------------
+| This file ensures all views have a consistent layout with a header and footer.
+|
+| Path: public/layouts/main.php
+*/
+
+require_once __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+
+// Ensure $view is set before including it
+if (!isset($view) || !file_exists($view)) {
+    die("Error: View file not found.");
+}
+
+// Include header
+require_once __DIR__ . '/header.php';
+?>
+
+<main class="content">
+    <?php include $view; ?>
+</main>
+
+<?php
+// Include footer
+require_once __DIR__ . '/footer.php';
+?>
+=== public/views/layouts/modals.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Modale - Okna Modalne
+|--------------------------------------------------------------------------
+| Plik zawiera globalne okna modalne wykorzystywane w aplikacji.
+|
+| Ścieżka: App/Views/layouts/modals.php
+*/
+?>
+
+<div id="globalModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2 id="modalTitle"></h2>
+        <div id="modalBody"></div>
+        <button class="btn btn-primary" id="modalConfirm">OK</button>
+    </div>
+</div>
+=== public/views/layouts/main.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Global Layout Wrapper - main.php
+|--------------------------------------------------------------------------
+| This wrapper ensures that every view is displayed inside a structured
+| layout with a header and footer.
+|
+| Path: public/layouts/main.php
+*/
+
+require_once __DIR__ . '/../layouts/header.php';
+?>
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/public/css/main.css">
+    <script src="/public/js/main.js" defer></script>
+</head>
+<body>
+
+<?php include __DIR__ . '/../layouts/header.php'; ?>
+
+<div class="dashboard-container">
+    <aside class="sidebar">
+        <?php
+        if ($userRole === 'admin') {
+            include __DIR__ . '/../layouts/sidebars/admin_sidebar.php';
+        } else {
+            include __DIR__ . '/../layouts/sidebars/user_sidebar.php';
+        }
+        ?>
+    </aside>
+    <main class="main-content">
+        <?php include $view; ?>
+    </main>
+</div>
+
+<?php include __DIR__ . '/../layouts/footer.php'; ?>
+
+</body>
+</html>
+=== public/views/layouts/alerts.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Alerts - Globalne Powiadomienia
+|--------------------------------------------------------------------------
+| Plik odpowiada za wyświetlanie globalnych alertów i powiadomień.
+|
+| Ścieżka: App/Views/layouts/alerts.php
+*/
+?>
+
+<div id="alert-container"></div>
+=== public/views/layouts/navbar.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Navbar - Górna Nawigacja Dashboardu
+|--------------------------------------------------------------------------
+| Plik odpowiada za wyświetlanie górnej belki nawigacyjnej w dashboardzie.
+| Pokazuje podstawowe opcje nawigacyjne i dostęp do ustawień konta.
+|
+| Ścieżka: App/Views/layouts/navbar.php
+*/
+?>
+<nav class="navbar">
+    <div class="container">
+        <a href="/dashboard" class="logo">🚗 CarFuse</a>
+        <ul class="nav-links">
+            <li><a href="/user/profile" class="dashboard-link">👤 Mój Profil</a></li>
+            <li><a href="/user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
+            <li><a href="/logout">🚪 Wyloguj</a></li>
+        </ul>
+    </div>
+</nav>
+
+
+=== public/views/payments/make_payment.php ===
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -4122,7 +4256,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 </script>
-=== publicc/views/payments/methods.php ===
+=== public/views/payments/methods.php ===
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -4271,7 +4405,7 @@ document.addEventListener("DOMContentLoaded", function() {
     loadPaymentMethods();
 });
 </script>
-=== publicc/views/payments/history.php ===
+=== public/views/payments/history.php ===
 /*
 |--------------------------------------------------------------------------
 | Historia Płatności
@@ -4406,7 +4540,7 @@ document.addEventListener("DOMContentLoaded", function() {
     fetchPayments();
 });
 </script>
-=== publicc/views/payments/refund.php ===
+=== public/views/payments/refund.php ===
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -4544,7 +4678,8 @@ document.addEventListener("DOMContentLoaded", function() {
     fetchRefunds();
 });
 </script>
-=== publicc/views/user/profile.php ===
+=== public/views/dashboard.php ===
+=== public/views/user/profile.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['user_id'])) {
@@ -4771,7 +4906,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 </script>
-=== publicc/views/user/dashboard.php ===
+=== public/views/user/dashboard.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['user_id'])) {
@@ -4872,7 +5007,7 @@ document.addEventListener("DOMContentLoaded", function() {
     loadDashboardData();
 });
 </script>
-=== publicc/views/user/notifications.php ===
+=== public/views/user/notifications.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['user_id'])) {
@@ -4972,7 +5107,7 @@ document.addEventListener("DOMContentLoaded", function() {
     loadNotifications();
 });
 </script>
-=== publicc/views/user/documents.php ===
+=== public/views/user/documents.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 
@@ -4997,7 +5132,7 @@ if (!isset($_SESSION['user_id'])) {
 </div>
 
 <script src="/js/documents.js"></script>
-=== publicc/views/user/reports.php ===
+=== public/views/user/reports.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 if (!isset($_SESSION['user_id'])) {
@@ -5149,7 +5284,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-=== publicc/views/bookings/view.php ===
+=== public/views/bookings/view.php ===
 <?php
 // Sprawdzenie sesji użytkownika
 
@@ -5288,7 +5423,7 @@ document.addEventListener("DOMContentLoaded", function() {
     fetchBookings();
 });
 </script>
-=== publicc/views/bookings/create.php ===
+=== public/views/bookings/create.php ===
 <?php
 // Sprawdzenie sesji użytkownika
 
@@ -5434,7 +5569,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 </script>
-=== publicc/views/home.php ===
+=== public/views/home.php ===
 <?php
 require_once __DIR__ . '/../helpers/SecurityHelper.php';
 ?>
@@ -5445,7 +5580,8 @@ require_once __DIR__ . '/../helpers/SecurityHelper.php';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CarFuse - Strona Główna</title>
-    <link rel="stylesheet" href="/css/main.css">
+    <!-- Updated global stylesheet -->
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
@@ -5455,8 +5591,10 @@ require_once __DIR__ . '/../helpers/SecurityHelper.php';
     <div class="container text-center">
         <h1>Witaj w CarFuse!</h1>
         <p>Najlepszy sposób na wynajem i zarządzanie pojazdami.</p>
-        <a href="/auth/register.php" class="btn btn-primary">Zarejestruj się</a>
-        <a href="/auth/login.php" class="btn btn-secondary">Zaloguj się</a>
+        <!-- Updated navigation links -->
+        <a href="/dashboard" class="btn btn-primary">Panel</a>
+        <a href="#features-section" class="btn btn-secondary" id="register-btn">Zaloguj się</a>
+        <a href="/profile" class="btn btn-tertiary">Profil</a>
     </div>
 </section>
 
@@ -5508,7 +5646,7 @@ require_once __DIR__ . '/../helpers/SecurityHelper.php';
 <script src="/js/shared.js"></script>
 </body>
 </html>
-=== publicc/views/documents/signing_page.php ===
+=== public/views/documents/signing_page.php ===
 <?php
 // Sprawdzenie sesji użytkownika
 
@@ -5668,7 +5806,7 @@ function getCoordinates(event) {
     return [x, y];
 }
 </script>
-=== publicc/views/documents/user_documents.php ===
+=== public/views/documents/user_documents.php ===
 <?php
 // Sprawdzenie sesji użytkownika
 
@@ -5803,7 +5941,7 @@ document.addEventListener("DOMContentLoaded", function() {
     loadDocuments();
 });
 </script>
-=== publicc/views/dashboard/dashboard.php ===
+=== public/views/dashboard/dashboard.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 $userRole = $_SESSION['user_role'] ?? 'user'; // Assume 'user' role if not set
@@ -5815,9 +5953,11 @@ if (!file_exists($view)) {
     $view = __DIR__ . "/dashboard_modules/404.php"; // Load 404 if module doesn't exist
 }
 
+// Removed any redundant <script> tags for main.js to prevent double loading
+
 include __DIR__ . '/../layouts/main.php';
 ?>
-=== publicc/views/dashboard/modules/admin/payments/dashboard.php ===
+=== public/views/dashboard/modules/admin/payments/dashboard.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 
@@ -5830,7 +5970,7 @@ if (!isUserLoggedIn() || getUserRole() !== 'admin') {
 <div class="payments-dashboard">
     <?php include __DIR__ . '/../../../admin/payments/dashboard.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/admin/payments/transactions.php ===
+=== public/views/dashboard/modules/admin/payments/transactions.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 
@@ -5843,7 +5983,7 @@ if (!isUserLoggedIn() || getUserRole() !== 'admin') {
 <div class="transactions-container">
     <?php include __DIR__ . '/../../../admin/transactions.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/admin/payments/refunds.php ===
+=== public/views/dashboard/modules/admin/payments/refunds.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 
@@ -5856,7 +5996,7 @@ if (!isUserLoggedIn() || getUserRole() !== 'admin') {
 <div class="refunds-container">
     <?php include __DIR__ . '/../../../admin/refunds.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/admin/dashboard.php ===
+=== public/views/dashboard/modules/admin/dashboard.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -5869,7 +6009,7 @@ if (!isUserLoggedIn() || getUserRole() !== 'admin') {
 <div class="dashboard-overview">
     <?php include __DIR__ . '/../../admin/dashboard.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/admin/users.php ===
+=== public/views/dashboard/modules/admin/users.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -5882,7 +6022,7 @@ if (!isUserLoggedIn() || getUserRole() !== 'admin') {
 <div class="users-container">
     <?php include __DIR__ . '/../../admin/users.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/admin/audit_logs.php ===
+=== public/views/dashboard/modules/admin/audit_logs.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -5895,7 +6035,7 @@ if (!isUserLoggedIn() || getUserRole() !== 'admin') {
 <div class="audit-logs-container">
     <?php include __DIR__ . '/../../admin/audit_logs.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/admin/logs.php ===
+=== public/views/dashboard/modules/admin/logs.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -5908,7 +6048,7 @@ if (!isUserLoggedIn() || getUserRole() !== 'admin') {
 <div class="logs-container">
     <?php include __DIR__ . '/../../admin/logs.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/admin/documents.php ===
+=== public/views/dashboard/modules/admin/documents.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -5921,7 +6061,7 @@ if (!isUserLoggedIn() || getUserRole() !== 'admin') {
 <div class="documents-container">
     <?php include __DIR__ . '/../../admin/documents.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/admin/reports.php ===
+=== public/views/dashboard/modules/admin/reports.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -5934,7 +6074,7 @@ if (!isUserLoggedIn() || getUserRole() !== 'admin') {
 <div class="reports-container">
     <?php include __DIR__ . '/../../admin/reports.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/admin/settings.php ===
+=== public/views/dashboard/modules/admin/settings.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -5947,7 +6087,7 @@ if (!isUserLoggedIn() || getUserRole() !== 'admin') {
 <div class="settings-container">
     <?php include __DIR__ . '/../../admin/settings.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/user/profile.php ===
+=== public/views/dashboard/modules/user/profile.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -5960,7 +6100,7 @@ if (!isUserLoggedIn()) {
 <div class="profile-container">
     <?php include __DIR__ . '/../../user/profile.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/user/documentd.php ===
+=== public/views/dashboard/modules/user/documentd.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -5973,7 +6113,7 @@ if (!isUserLoggedIn()) {
 <div class="documents-container">
     <?php include __DIR__ . '/../../user/documents.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/user/overview.php ===
+=== public/views/dashboard/modules/user/overview.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -5986,7 +6126,7 @@ if (!isUserLoggedIn()) {
 <div class="dashboard-overview">
     <?php include __DIR__ . '/../../user/dashboard.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/user/bookings/view.php ===
+=== public/views/dashboard/modules/user/bookings/view.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -5999,7 +6139,7 @@ if (!isUserLoggedIn()) {
 <div class="bookings-container">
     <?php include __DIR__ . '/../../user/bookings.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/user/notifications.php ===
+=== public/views/dashboard/modules/user/notifications.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -6012,7 +6152,7 @@ if (!isUserLoggedIn()) {
 <div class="notifications-container">
     <?php include __DIR__ . '/../../user/notifications.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/user/settings.php ===
+=== public/views/dashboard/modules/user/settings.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -6025,7 +6165,7 @@ if (!isUserLoggedIn()) {
 <div class="settings-container">
     <?php include __DIR__ . '/../../user/settings.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/user/payments.php ===
+=== public/views/dashboard/modules/user/payments.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -6038,7 +6178,7 @@ if (!isUserLoggedIn()) {
 <div class="payments-container">
     <?php include __DIR__ . '/../../user/payments.php'; ?>
 </div>
-=== publicc/views/dashboard/modules/shared/charts.php ===
+=== public/views/dashboard/modules/shared/charts.php ===
 <?php
 require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
 
@@ -6070,7 +6210,7 @@ if (!isUserLoggedIn()) {
 </div>
 
 <script type="text/javascript" src="/js/shared.js"></script>
-=== publicc/views/dashboard/modules/shared/tables.php ===
+=== public/views/dashboard/modules/shared/tables.php ===
 <?php
 require_once __DIR__ . '/../../helpers/SecurityHelper.php';
 
@@ -6097,7 +6237,7 @@ if (!isUserLoggedIn()) {
 </div>
 
 <script src="/js/tables.js"></script>
-=== publicc/views/dashboard/modules/shared/modals.php ===
+=== public/views/dashboard/modules/shared/modals.php ===
 <div class="modal fade" id="confirmationModal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -6117,27 +6257,7 @@ if (!isUserLoggedIn()) {
 </div>
 
 <script src="/js/modals.js"></script>
-=== publicc/index copy.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| CarFuse Homepage
-|--------------------------------------------------------------------------
-| This is now the landing page and entry point for the application.
-|
-| Path: public/index.php
-*/
-
-declare(strict_types=1);
-
-require_once __DIR__ . '/../bootstrap.php';
-require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
-
-$view = __DIR__ . '/views/home.php'; // Home page content
-include __DIR__ . '/layouts/main.php';
-?>
-=== publicc/logout.php ===
+=== public/logout.php ===
 <?php
 
 
@@ -6154,26 +6274,53 @@ exit;
 
 http_response_code(200);
 echo json_encode(["message" => "Logged out successfully."]);
-=== publicc/js/main.js ===
+=== public/js/main.js ===
+import { apiFetch } from './api.js';
+
 document.addEventListener("DOMContentLoaded", function () {
+    // Ensure this runs only once
+    if (window.mainJsInitialized) return;
+    window.mainJsInitialized = true;
+
+    // Run script only on dashboard pages
+    if (!window.location.pathname.includes("/dashboard")) {
+        console.log("main.js: Not on dashboard. Exiting.");
+        return;
+    }
+
     console.log("Main.js loaded successfully.");
 
     // Detect if we're on the dashboard page
     const dashboardView = document.getElementById("dashboard-view");
     if (!dashboardView) {
-        console.log("Dashboard view not found. Assuming home page.");
+        console.log("Dashboard view not found. main.js will not run on homepage.");
         return;
     }
 
-    // Load default dashboard module when applicable
-    fetch("/dashboard/modules/user/overview.php")
-        .then(response => response.text())
-        .then(data => {
-            dashboardView.innerHTML = data;
-        })
-        .catch(error => console.error("Błąd ładowania domyślnego widoku:", error));
+    // Load default dashboard module with session credentials
+    apiFetch("/dashboard/modules/user/overview.php", {
+        credentials: "include"
+    })
+    .then(response => response.text())
+    .then(data => {
+        dashboardView.innerHTML = data;
+    })
+    .catch(error => console.error("main.js fetch error:", error));
+
+    document.querySelectorAll(".dashboard-link").forEach(link => {
+        link.addEventListener("click", function(e) {
+            e.preventDefault();
+            let targetView = this.getAttribute("href");
+            apiFetch(targetView)
+                .then(r => r.text())
+                .then(data => {
+                    document.getElementById("dashboard-view").innerHTML = data;
+                })
+                .catch(err => console.error("Dashboard link error:", err));
+        });
+    });
 });
-=== publicc/js/ajax.js ===
+=== public/js/ajax.js ===
 class Ajax {
     constructor() {
         this.baseUrl = '/api';
@@ -6295,7 +6442,7 @@ class Ajax {
 
 // Ensures global availability
 window.ajax = new Ajax();
-=== publicc/js/dashboard.js ===
+=== public/js/dashboard.js ===
 import ajax from './ajax';
 import { showErrorToast } from './toasts';
 
@@ -6442,7 +6589,7 @@ function getUserRole() {
     // Replace with actual implementation
     return 'user'; // or 'admin'
 }
-=== publicc/js/notifications.js ===
+=== public/js/notifications.js ===
 import ajax from './ajax';
 import { showErrorToast, showSuccessToast } from './toasts';
 
@@ -6570,7 +6717,7 @@ function displayNoNotificationsMessage() {
 
     notificationsContainer.innerHTML = `<p class="text-muted">Brak nowych powiadomień.</p>`;
 }
-=== publicc/js/forms.js ===
+=== public/js/forms.js ===
 document.addEventListener('DOMContentLoaded', function () {
     document.body.addEventListener('submit', function (event) {
         const form = event.target;
@@ -6729,7 +6876,7 @@ function isValidEmail(email) {
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     return emailPattern.test(email);
 }
-=== publicc/js/profile.js ===
+=== public/js/profile.js ===
 import ajax from './ajax';
 import { showErrorToast, showSuccessToast } from './toasts';
 
@@ -6855,7 +7002,7 @@ function isValidEmail(email) {
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     return emailPattern.test(email);
 }
-=== publicc/js/auth.js ===
+=== public/js/auth.js ===
 import ajax from './ajax';
 import { showErrorToast, showSuccessToast } from './toasts';
 
@@ -7051,7 +7198,7 @@ function isValidEmail(email) {
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailPattern.test(email);
 }
-=== publicc/js/toasts.js ===
+=== public/js/toasts.js ===
 document.addEventListener('DOMContentLoaded', function () {
     ensureToastContainer();
 });
@@ -7125,7 +7272,7 @@ function showWarningToast(message, autoDismiss = true, dismissTime = 3000) {
 function showErrorToast(message, autoDismiss = true, dismissTime = 3000) {
     createToast('error', message, autoDismiss, dismissTime);
 }
-=== publicc/js/documents.js ===
+=== public/js/documents.js ===
 import ajax from './ajax';
 import { showErrorToast, showSuccessToast } from './toasts';
 
@@ -7292,7 +7439,7 @@ async function loadDocumentList() {
         showErrorToast('Wystąpił problem podczas ładowania listy dokumentów.');
     }
 }
-=== publicc/js/payments.js ===
+=== public/js/payments.js ===
 import ajax from './ajax';
 import { showErrorToast, showSuccessToast } from './toasts';
 
@@ -7406,7 +7553,7 @@ function initRealTimeValidation() {
         }
     });
 }
-=== publicc/js/user.js ===
+=== public/js/user.js ===
 document.addEventListener("DOMContentLoaded", function () {
     // Fetch and manage user dashboard data
     function loadUserDashboard() {
@@ -7451,10 +7598,14 @@ document.addEventListener("DOMContentLoaded", function () {
     loadUserDashboard();
     fetchBookings();
 });
-=== publicc/js/shared.js ===
+=== public/js/shared.js ===
+import { apiFetch } from './api.js';
+
 document.addEventListener("DOMContentLoaded", function () {
-    console.log("Shared.js execution started on index.php.");
-    
+    if (window.sharedJsInitialized) return;
+    window.sharedJsInitialized = true;
+    console.log("Shared.js: homepage initialization started.");
+
     // Utility function for checking elements
     function getElement(selector, context = document) {
         const element = context.querySelector(selector);
@@ -7465,13 +7616,22 @@ document.addEventListener("DOMContentLoaded", function () {
         return element;
     }
 
-    fetch("/api/shared/charts.php", {
-        headers: { "Accept": "application/json" },
-        credentials: "include" // Ensures session cookies are sent
+    // Session-based initialization
+    apiFetch("/api/shared/initSession.php", {
+        credentials: "include",
+        headers: { "Accept": "application/json" }
     })
-    
-    // Event delegation for dynamic elements
-    document.addEventListener('click', function(e) {
+    .then(response => {
+        if (!response.ok) {
+            console.error("Session init failed:", response.status);
+        } else {
+            console.log("Session initialized successfully for homepage.");
+        }
+    })
+    .catch(error => console.error("Session init error:", error));
+
+    // Navbar toggle & CTA scrolling
+    document.addEventListener("click", function(e) {
         // Navbar toggle handling
         if (e.target.matches('#navbarToggle, #navbarToggle *')) {
             const navbar = getElement('#navbarSupportedContent');
@@ -7488,112 +7648,14 @@ document.addEventListener("DOMContentLoaded", function () {
             const target = href ? getElement(href) : null;
             if (target) {
                 target.scrollIntoView({ behavior: 'smooth' });
-                console.log('Smooth scroll initiated');
+                console.log("Smooth scroll triggered on homepage CTA.");
             }
         }
     });
 
-    // Enhanced chart handling with caching
-    let chartData = null;
-    let lastFetchTime = 0;
-    const CACHE_DURATION = 60000; // 60 seconds
-
-    async function getChartData() {
-        const now = Date.now();
-        if (chartData && (now - lastFetchTime < CACHE_DURATION)) {
-            console.log('Using cached chart data');
-            return chartData;
-        }
-
-        try {
-            console.log('Fetching fresh chart data');
-            const response = await fetch("/public/api/shared/charts.php");
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            
-            chartData = await response.json();
-            lastFetchTime = now;
-            return chartData;
-        } catch (error) {
-            console.error('Chart data fetch error:', error);
-            return null;
-        }
-    }
-
-    function createFallbackCanvas(id) {
-        console.log(`Creating fallback canvas for ${id}`);
-        const canvas = document.createElement('canvas');
-        canvas.id = `${id}_fallback`;
-        canvas.style.width = '100%';
-        canvas.style.maxHeight = '400px';
-        return canvas;
-    }
-
-    async function initializeCharts() {
-        const data = await getChartData();
-        if (!data) return;
-
-        ['bookingTrends', 'revenueTrends'].forEach(chartId => {
-            let canvas = getElement(`#${chartId}`);
-            if (!canvas) {
-                canvas = createFallbackCanvas(chartId);
-                document.body.appendChild(canvas);
-            }
-
-            try {
-                new Chart(canvas.getContext('2d'), {
-                    type: chartId === 'bookingTrends' ? 'line' : 'bar',
-                    data: data[chartId],
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false
-                    }
-                });
-                console.log(`${chartId} chart rendered successfully`);
-            } catch (error) {
-                console.error(`Error rendering ${chartId}:`, error);
-            }
-        });
-    }
-
-    // Enhanced modal handling
-    const modalHandler = {
-        show: function(modalId) {
-            const modal = getElement(`#${modalId}`);
-            if (modal) {
-                try {
-                    $(modal).modal('show');
-                    console.log(`Modal ${modalId} shown successfully`);
-                } catch (error) {
-                    console.error(`Bootstrap modal error for ${modalId}:`, error);
-                }
-            }
-        },
-        hide: function(modalId) {
-            const modal = getElement(`#${modalId}`);
-            if (modal) {
-                try {
-                    $(modal).modal('hide');
-                    console.log(`Modal ${modalId} hidden successfully`);
-                } catch (error) {
-                    console.error(`Bootstrap modal error for ${modalId}:`, error);
-                }
-            }
-        }
-    };
-
-    // Initialize charts
-    initializeCharts();
-    
-    // Expose modal functions globally
-    window.showModal = modalHandler.show;
-    window.hideModal = modalHandler.hide;
-
-    // Setup chart refresh
-    setInterval(initializeCharts, CACHE_DURATION);
-
-    console.log('Shared.js initialization completed');
+    console.log("Shared.js: homepage initialization completed.");
 });
-=== publicc/js/admin.js ===
+=== public/js/admin.js ===
 document.addEventListener("DOMContentLoaded", function () {
     // Fetch and manage admin dashboard data
     function loadAdminDashboard() {
@@ -7784,7 +7846,7 @@ document.addEventListener("DOMContentLoaded", function () {
     fetchReports();
     fetchTransactions();
 });
-=== publicc/js/bookings.js ===
+=== public/js/bookings.js ===
 import ajax from './ajax';
 import { showErrorToast, showSuccessToast } from './toasts';
 
@@ -8039,7 +8101,40 @@ function clearErrors() {
         errorContainer.style.display = 'none';
     }
 }
-=== publicc/api.php ===
+=== public/js/api.js ===
+// ...existing code...
+function apiFetch(url, options = {}) {
+    if (!options.headers) {
+        options.headers = {};
+    }
+    // Attach bearer token
+    const token = localStorage.getItem('token');
+    if (token) {
+        options.headers['Authorization'] = 'Bearer ' + token;
+    }
+
+    return fetch(url, options)
+        .then(async response => {
+            if (response.status === 401) {
+                console.warn('Unauthorized response. Attempting token refresh...');
+                // ...token refresh logic...
+                // After refresh, retry original request or handle failure
+            }
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Request failed [${response.status}]: ${errorText}`);
+            }
+            return response;
+        })
+        .catch(error => {
+            console.error('API fetch error:', error.message);
+            throw error;
+        });
+}
+// ...existing code...
+export { apiFetch };
+// ...existing code...
+=== public/api.php ===
 <?php
 
 require_once __DIR__ . '/../vendor/autoload.php';

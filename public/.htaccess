@@ -3,19 +3,17 @@ DirectoryIndex index.php
 
 AddHandler application/x-httpd-php .php
 
-# Block direct execution of PHP files in /api
-RewriteRule ^api/.*\.php$ - [F,L]
+# Block direct access to /api/*.php
+RewriteCond %{REQUEST_URI} ^/api/.*\.php
+RewriteRule ^ - [F,L]
 
-# Allow direct access to static files (CSS, JS, images)
+# Allow accesses to existing files
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Explicitly rewrite '/' to index.php
-RewriteRule ^$ index.php [QSA,L]
-
-# Forward all non-static requests to index.php
-RewriteRule . index.php [QSA,L]
+# Route everything else to index.php
+RewriteRule ^ index.php [L]
 
 # PHP session configuration
 php_flag session.auto_start on

@@ -19,5 +19,9 @@
         </ul>
     </div>
 </nav>
+<script src="/js/shared.js"></script>
+<?php if (strpos($_SERVER['REQUEST_URI'], '/dashboard') !== false): ?>
+    <script src="/js/main.js"></script>
+<?php endif; ?>
 
 

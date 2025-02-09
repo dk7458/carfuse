@@ -15,7 +15,14 @@ use DocumentManager\Controllers\DocumentController;
 use DocumentManager\Controllers\SignatureController;
 use App\Controllers\UserController;
 
-return simpleDispatcher(function (RouteCollector $router) {
+$routes = [
+    'home' => 'home.php',
+    'dashboard' => 'dashboard.php',
+    'profile' => 'profile.php',
+    // Add more routes as needed
+];
+
+return simpleDispatcher(function (RouteCollector $router) use ($routes) {
 
     // Logging helper for route execution
     function logRoute($route) {
@@ -110,12 +117,11 @@ return simpleDispatcher(function (RouteCollector $router) {
     // --- Dynamic routes (placed after static routes to avoid conflicts) ---
 
     // Dynamic View Routing for User Dashboard (/dashboard, /profile, etc.)
-    $router->get('/{view}', function ($vars) {
+    $router->get('/{view}', function ($vars) use ($routes) {
         logRoute('/' . $vars['view']);
-        $allowedViews = ['bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
         $view = $vars['view'];
-        if (in_array($view, $allowedViews)) {
-            require BASE_PATH . "/public/views/user/$view.php";
+        if (array_key_exists($view, $routes)) {
+            require BASE_PATH . "/public/views/user/" . $routes[$view];
         } else {
             http_response_code(404);
             require BASE_PATH . "/public/views/errors/404.php";

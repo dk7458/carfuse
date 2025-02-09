@@ -1,7 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -35,6 +35,22 @@ function validateToken()
     }
 }
 
+function requireAuth() {
+    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if (!$authHeader || !isset($_SESSION['user_id'])) {
+        error_log("[API] Unauthorized access attempt\n", 3, __DIR__ . '/../logs/debug.log');
+        http_response_code(401);
+        exit('Unauthorized');
+    }
+}
+
+// Handle CORS preflight requests
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    exit;
+}
+
 // Parse API request
 $requestUri = $_SERVER['REQUEST_URI'];
 $requestMethod = $_SERVER['REQUEST_METHOD'];
@@ -46,20 +62,14 @@ if (!in_array($apiPath, ['auth/login', 'auth/register'])) {
 }
 
 // Route API calls
-switch ($apiPath) {
-    case "user/data":
-        require __DIR__ . "/user/data.php";
-        break;
-    
-    case "admin/reports":
-        require __DIR__ . "/admin/reports.php";
-        break;
-
-    case "shared/charts":
-        require __DIR__ . "/shared/charts.php";
-        break;
-
-    default:
-        http_response_code(404);
-        echo json_encode(["error" => "API endpoint not found"]);
+$endpoint = $_GET['endpoint'] ?? '';
+$apiFile = __DIR__ . '/' . $endpoint . '.php';
+if (file_exists($apiFile)) {
+    error_log("[API] Processing endpoint: $endpoint\n", 3, __DIR__ . '/../logs/debug.log');
+    requireAuth();
+    require_once $apiFile;
+} else {
+    error_log("[API] Endpoint not found: $endpoint\n", 3, __DIR__ . '/../logs/debug.log');
+    http_response_code(404);
+    echo json_encode(['error' => 'API not found']);
 }

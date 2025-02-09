@@ -1,0 +1,492 @@
+=== config/encryption.php ===
+<?php
+
+return [
+    'encryption_key' => 'otxOolI5XGT3+Sd6d7RhSaoSIwH2uKr2y676KU+Zm3/dYHggqrqOFUbxoO4XnL7amEppppfP6jiThGvXnf9cFXqkwbPkQ1mPgfZuXtr0ylHWJYkim3zFzig=',
+    'cipher' => 'AES-256-CBC',
+    'jwt_secret' => 'your-secure-jwt-secret',
+    'jwt_refresh_secret' => 'your-secure-refresh-jwt-secret',
+];
+=== config/app.php ===
+<?php
+
+/**
+ * General Application Configuration
+ */
+
+return [
+    'name' => 'CarFuse',
+    'env' => 'development',  // Options: development, staging, production
+    'debug' => false,  // Set to true for debugging
+    'timezone' => 'UTC',
+];
+=== config/dependencies.php ===
+<?php
+
+require_once __DIR__ . '/../vendor/autoload.php'; // Ensure autoload is included
+
+use DI\Container;
+use App\Services\Validator;
+use App\Services\RateLimiter;
+use App\Services\Auth\TokenService;
+use App\Services\NotificationService;
+use App\Services\UserService;
+use App\Services\PaymentService;
+use App\Services\BookingService;
+use App\Services\MetricsService;
+use App\Services\ReportService;
+use App\Services\RevenueService;
+use App\Services\EncryptionService;
+use App\Services\Security\KeyManager;
+use App\Queues\NotificationQueue;
+use App\Queues\DocumentQueue;
+use DocumentManager\Services\DocumentService;
+use DocumentManager\Services\FileStorage;
+use DocumentManager\Services\TemplateService;
+use DocumentManager\Services\SignatureService;
+use AuditManager\Services\AuditService;
+use App\Models\Payment;
+use Psr\Log\LoggerInterface;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
+use Monolog\Formatter\LineFormatter;
+use App\Services\PayUService;
+use GuzzleHttp\Client;
+
+// ✅ Initialize Dependency Container
+$container = new Container();
+
+// ✅ Load configuration
+$configDirectory = __DIR__;
+$config = [];
+
+foreach (glob("{$configDirectory}/*.php") as $filePath) {
+    $fileName = basename($filePath, '.php');
+    if ($fileName !== 'dependencies') {
+        $config[$fileName] = require $filePath;
+    }
+}
+
+// ✅ Ensure necessary directories exist
+$templateDirectory = __DIR__ . '/../storage/templates';
+$fileStorageConfig = $config['storage'];
+
+foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $directory) {
+    if (!is_dir($directory)) {
+        mkdir($directory, 0775, true);
+    }
+}
+
+// ✅ Initialize Logger First
+$logger = new Logger('carfuse');
+$logFile = __DIR__ . '/../logs/app.log';
+
+if (!file_exists(dirname($logFile))) {
+    mkdir(dirname($logFile), 0775, true);
+}
+
+$streamHandler = new StreamHandler($logFile, Logger::DEBUG);
+$formatter = new LineFormatter(null, null, true, true);
+$streamHandler->setFormatter($formatter);
+$logger->pushHandler($streamHandler);
+
+$container->set(LoggerInterface::class, $logger);
+
+// ✅ Initialize Encryption Service
+$encryptionService = new EncryptionService($config['encryption']['encryption_key']);
+$container->set(EncryptionService::class, fn() => $encryptionService);
+
+// ✅ Initialize File Storage Before Using It Anywhere
+$fileStorage = new FileStorage($fileStorageConfig, $logger, $encryptionService);
+$container->set(FileStorage::class, fn() => $fileStorage);
+
+// ✅ Initialize PDO Instances
+try {
+    $pdo = new PDO(
+        sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
+            $config['database']['app_database']['host'],
+            $config['database']['app_database']['database']
+        ),
+        $config['database']['app_database']['username'],
+        $config['database']['app_database']['password'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+    );
+
+    $securePdo = new PDO(
+        sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
+            $config['database']['secure_database']['host'],
+            $config['database']['secure_database']['database']
+        ),
+        $config['database']['secure_database']['username'],
+        $config['database']['secure_database']['password'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+    );
+} catch (PDOException $e) {
+    throw new RuntimeException("❌ Database connection failed: " . $e->getMessage());
+}
+
+// ✅ Register services in the container
+$container->set(PDO::class, $pdo);
+$container->set('SecurePDO', $securePdo);
+
+$container->set(DocumentQueue::class, function () use ($fileStorage, $logger) {
+    return new DocumentQueue($fileStorage, __DIR__ . '/../storage/document_queue.json', $logger);
+});
+
+$container->set(Validator::class, fn() => new Validator());
+$container->set(RateLimiter::class, fn() => new RateLimiter($pdo));
+$container->set(AuditService::class, fn() => new AuditService($securePdo));
+
+$container->set(DocumentService::class, function () use ($pdo, $logger, $container) {
+    return new DocumentService(
+        $pdo,
+        $container->get(AuditService::class),
+        $container->get(FileStorage::class),
+        $container->get(EncryptionService::class),
+        new TemplateService(__DIR__ . '/../storage/templates'),
+        $logger
+    );
+});
+
+$container->set(TokenService::class, fn() => new TokenService($config['encryption']['jwt_secret'], $config['encryption']['jwt_refresh_secret']));
+$container->set(NotificationService::class, fn() => new NotificationService($pdo, $logger, $config['notifications']));
+$container->set(NotificationQueue::class, fn() => new NotificationQueue($container->get(NotificationService::class), __DIR__ . '/../storage/notification_queue.json', $logger));
+$container->set(UserService::class, fn() => new UserService($securePdo, $logger, $config['encryption']['jwt_secret']));
+$container->set(Payment::class, fn() => new Payment());
+
+$container->set(PaymentService::class, function () use ($pdo, $logger, $config) {
+    return new PaymentService($pdo, $logger, new Payment(), $config['payu']['api_key'], $config['payu']['api_secret']);
+});
+
+$container->set(PayUService::class, fn() => new PayUService(new Client(), $logger, $config['payu']));
+$container->set(BookingService::class, fn() => new BookingService($pdo, $logger));
+$container->set(MetricsService::class, fn() => new MetricsService($pdo));
+$container->set(ReportService::class, fn() => new ReportService($pdo));
+$container->set(RevenueService::class, fn() => new RevenueService($pdo));
+
+$container->set(SignatureService::class, function () use ($config, $container) {
+    return new SignatureService(
+        new Client(),
+        $config['signature'],
+        $container->get(FileStorage::class),
+        $container->get(EncryptionService::class),
+        $container->get(LoggerInterface::class)
+    );
+});
+
+$container->set(TemplateService::class, fn() => new TemplateService(__DIR__ . '/../storage/templates'));
+
+$container->set(KeyManager::class, function () use ($config, $logger) {
+    return new KeyManager($config['keymanager']['keys'], $logger);
+});
+
+// ✅ Return the DI container
+return $container;
+=== config/database.php ===
+<?php
+/**
+ * Securely configure database connections without .env
+ * This file is committed to Git and used directly.
+ */
+
+return [
+    'app_database' => [
+        'driver'   => 'mysql',
+        'host'     => 'srv1803.hstgr.io',
+        'port'     => 3306,
+        'database' => 'u122931475_carfuse',
+        'username' => 'u122931475_user',
+        'password' => '59&:NJ9a@',
+        'charset'  => 'utf8mb4',
+        'collation'=> 'utf8mb4_unicode_ci',
+        'prefix'   => '',
+    ],
+    'secure_database' => [
+        'driver'   => 'mysql',
+        'host'     => 'srv1803.hstgr.io',
+        'port'     => 3306,
+        'database' => 'u122931475_secure',
+        'username' => 'u122931475_admin',
+        'password' => '&hNAA*4a8Jx$',
+        'charset'  => 'utf8mb4',
+        'collation'=> 'utf8mb4_unicode_ci',
+        'prefix'   => '',
+    ],
+];
+=== config/payu.php ===
+<?php
+return [
+    'api_key' => 'your-payu-api-key',
+    'api_secret' => 'your-payu-api-secret',
+    'endpoint' => 'https://secure.payu.com/api',
+    'merchant_key' => 'your-merchant-key',
+    'merchant_salt' => 'your-merchant-salt',
+];
+=== config/signature.php ===
+<?php
+
+return [
+    'api_endpoint' => 'https://api.example.com',
+    'api_key' => 'your-api',
+];=== config/storage.php ===
+<?php
+
+return [
+    'base_directory' => __DIR__ . '/../storage/',
+
+    'security' => [
+        'permissions' => [
+            'default' => 0640,  // Default file permissions (owner read/write)
+            'directory' => 0755, // Default directory permissions
+        ],
+        'max_file_size' => 5 * 1024 * 1024, // Max file size (5MB)
+        'allowed_extensions' => ['png', 'jpg', 'svg', 'pdf', 'docx'],
+    ],
+
+    'encryption' => [
+        'enabled' => true,
+    ],
+];
+=== config/logs.php ===
+<?php
+
+/**
+ * Logging Configuration
+ */
+
+return [
+    'log_channel' => 'daily',  // Options: single, daily, syslog
+    'log_path' => __DIR__ . '/../logs/app.log',
+    'log_level' => 'debug',  // Options: debug, info, notice, warning, error, critical, alert, emergency
+];
+=== config/notifications.php ===
+<?php
+
+return [
+    'smtp_host' => 'smtp.example.com',
+    'smtp_user' => 'user@example.com',
+    'smtp_password' => 'password',
+    'smtp_secure' => 'tls',
+    'smtp_port' => 587,
+    'from_email' => 'no-reply@example.com',
+    'from_name' => 'CarFuse Notifications',
+    'fcm_api_key' => 'YOUR_FCM_API_KEY_HERE'
+];
+=== config/keymanager.php ===
+<?php
+
+return [
+    'keys' => [
+        'encryption_key_main' => 'your-main-encryption-key',
+        'encryption_key_backup' => 'your-backup-encryption-key',
+        'encryption_key_signatures' => 'your-signature-encryption-key',
+    ]
+];
+=== config/routes.php ===
+<?php
+
+use FastRoute\RouteCollector;
+use function FastRoute\simpleDispatcher;
+use App\Controllers\AuthController;
+use App\Controllers\PaymentController;
+use App\Controllers\DashboardController;
+use App\Controllers\BookingController;
+use App\Controllers\NotificationController;
+use App\Controllers\NotificationQueueController;
+use App\Controllers\AdminDashboardController;
+use App\Controllers\ReportController;
+use AuditManager\Controllers\AuditController;
+use DocumentManager\Controllers\DocumentController;
+use DocumentManager\Controllers\SignatureController;
+use App\Controllers\UserController;
+
+return simpleDispatcher(function (RouteCollector $router) {
+
+    // Logging helper for route execution
+    function logRoute($route) {
+        file_put_contents(BASE_PATH . '/debug.log', date('Y-m-d H:i:s') . " - Executing route: $route\n", FILE_APPEND);
+    }
+
+    // Middleware-like Authentication Handling
+    function requireAuth() {
+        require_once BASE_PATH . '/App/Helpers/SecurityHelper.php';
+        if (!isUserLoggedIn()) {
+            http_response_code(403);
+            echo json_encode(["error" => "Unauthorized"]);
+            exit();
+        }
+    }
+
+    // --- New and static routes (placed prior to dynamic routes) ---
+
+    // Static test route to verify routing works correctly
+    $router->get('/test', function () {
+        logRoute('/test');
+        echo 'Test route working';
+    });
+
+    // Home Page route updated to use home.php to prevent recursion.
+    $router->get('/', function () {
+        logRoute('/');
+        require BASE_PATH . '/public/home.php';
+    });
+
+    // Authentication Routes (using controller callbacks remain unchanged)
+    $router->get('/login', [AuthController::class, 'loginView']);
+    $router->get('/register', [AuthController::class, 'registerView']);
+    $router->post('/register', [UserController::class, 'register']);
+    $router->post('/login', [UserController::class, 'login']);
+    $router->post('/profile/update', [UserController::class, 'updateProfile']);
+    $router->post('/password/reset/request', [UserController::class, 'requestPasswordReset']);
+    $router->post('/password/reset', [UserController::class, 'resetPassword']);
+
+    // --- Added static /dashboard route to prevent wildcard conflict ---
+    $router->get('/dashboard', function () {
+        logRoute('/dashboard');
+        require BASE_PATH . '/public/views/user/dashboard.php';
+    });
+
+    // Payment Routes
+    $router->post('/payments/process', [PaymentController::class, 'processPayment']);
+    $router->post('/payments/refund', [PaymentController::class, 'refundPayment']);
+    $router->get('/payments/history', [PaymentController::class, 'viewPaymentHistory']);
+    $router->get('/payments/installments', [PaymentController::class, 'viewInstallments']);
+
+    // Bookings Routes
+    $router->get('/bookings', [DashboardController::class, 'getUserBookings']);
+    $router->get('/bookings/{id}', [BookingController::class, 'viewBooking']);
+    $router->post('/bookings/{id}/reschedule', [BookingController::class, 'rescheduleBooking']);
+    $router->post('/bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
+
+    // Notifications API Routes
+    $router->get('/notifications', [NotificationController::class, 'getUserNotifications']);
+    $router->post('/notifications/mark-as-read', [NotificationController::class, 'markNotificationAsRead']);
+    $router->post('/notifications/delete', [NotificationController::class, 'deleteNotification']);
+    $router->post('/notifications/send', [NotificationController::class, 'sendNotification']);
+    $router->post('/notifications/process-queue', [NotificationQueueController::class, 'processQueue']);
+
+    // Admin Dynamic Routing
+    $router->get('/admin/{section}', function ($vars) {
+        logRoute('/admin/' . $vars['section']);
+        $allowedSections = ['dashboard', 'reports', 'audit-logs', 'users'];
+        $section = $vars['section'];
+        if (in_array($section, $allowedSections)) {
+            require BASE_PATH . "/public/views/admin/$section.php";
+        } else {
+            http_response_code(404);
+            require BASE_PATH . "/public/views/errors/404.php";
+        }
+    });
+
+    // Admin Report Routes
+    $router->post('/admin/reports/generate', [ReportController::class, 'generateReport']);
+    $router->post('/user/reports/generate', [ReportController::class, 'generateUserReport']);
+
+    // Audit Log Routes
+    $router->post('/admin/audit-logs/fetch', [AuditController::class, 'fetchLogs']);
+
+    // Document Manager Routes
+    $router->post('/documents/upload-template', [DocumentController::class, 'uploadTemplate']);
+    $router->post('/documents/generate-contract/{bookingId}/{userId}', [DocumentController::class, 'generateContract']);
+    $router->post('/documents/upload-terms', [DocumentController::class, 'uploadTerms']);
+    $router->post('/documents/generate-invoice/{bookingId}', [DocumentController::class, 'generateInvoice']);
+    $router->delete('/documents/{documentId}', [DocumentController::class, 'deleteDocument']);
+
+    // --- Dynamic routes (placed after static routes to avoid conflicts) ---
+
+    // Dynamic View Routing for User Dashboard (/dashboard, /profile, etc.)
+    $router->get('/{view}', function ($vars) {
+        logRoute('/' . $vars['view']);
+        $allowedViews = ['bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
+        $view = $vars['view'];
+        if (in_array($view, $allowedViews)) {
+            require BASE_PATH . "/public/views/user/$view.php";
+        } else {
+            http_response_code(404);
+            require BASE_PATH . "/public/views/errors/404.php";
+        }
+    });
+
+    // Dynamic API Routing with Authentication Check (/api/{endpoint})
+    $router->get('/api/{endpoint}', function ($vars) {
+        logRoute('/api/' . $vars['endpoint'] . ' - start processing');
+        requireAuth(); // Ensure user is logged in
+        $endpoint = $vars['endpoint'];
+        // Additional logging for security and clarity
+        logRoute('Processing API endpoint: ' . $endpoint);
+        $apiPath = BASE_PATH . "/public/api/$endpoint.php";
+        if (file_exists($apiPath)) {
+            require $apiPath;
+        } else {
+            http_response_code(404);
+            echo json_encode(["error" => "API endpoint not found"]);
+        }
+        logRoute('/api/' . $vars['endpoint'] . ' - finished processing');
+    });
+
+});
+=== config/document.php ===
+<?php
+
+return [
+    'encryption' => [
+        'enabled' => true, // Toggle document encryption
+    ],
+    'storage' => [
+        'contracts' => 'contracts/',
+        'templates' => 'templates/',
+        'terms' => 'templates/terms_and_conditions.html',
+    ],
+];
+=== config/api.php ===
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+header("Access-Control-Allow-Origin: *");  // Allow cross-origin requests
+header("Access-Control-Allow-Methods: GET, POST");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Content-Type: application/json");
+
+define('API_TOKEN_EXPIRATION', 3600);
+
+function refreshTokenIfExpired($token) {
+    // ...check if token is expired...
+    // ...refresh logic...
+    return $token; 
+}
+
+// Log request details
+error_log("[API] Request: " . $_SERVER['REQUEST_URI'] . PHP_EOL, 3, __DIR__ . "/debug.log");
+
+function requireAuth() {
+    if (!isUserLoggedIn()) {
+        http_response_code(403);
+        echo json_encode(["error" => "Access denied"]);
+        error_log("[API] Unauthorized request" . PHP_EOL, 3, __DIR__ . "/debug.log");
+        exit();
+    }
+}
+
+$requestedEndpoint = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
+
+// Handle request routing
+switch ($requestedEndpoint) {
+    case 'publicEndpoint':
+        echo json_encode(["public" => "Access granted without auth"]);
+        break;
+    case 'secureEndpoint':
+        requireAuth();
+        echo json_encode(["secure" => "Access granted with auth"]);
+        break;
+    default:
+        http_response_code(404);
+        echo json_encode(["error" => "API not found"]);
+        error_log("[API] 404 - Endpoint not found: $requestedEndpoint" . PHP_EOL, 3, __DIR__ . "/debug.log");
+        break;
+}
+exit();

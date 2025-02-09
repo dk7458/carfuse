@@ -1,6 +1,12 @@
 <?php
-require_once __DIR__ . '/../helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../../vendor/autoload.php';
+require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 ?>
+<?php $page = 'home'; ?>
 
 <!DOCTYPE html>
 <html lang="pl">
@@ -8,18 +14,15 @@ require_once __DIR__ . '/../helpers/SecurityHelper.php';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CarFuse - Strona Główna</title>
-    <!-- Updated global stylesheet -->
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-
 <?php include __DIR__ . '/layouts/navbar.php'; ?>
 
 <section class="hero-section">
     <div class="container text-center">
         <h1>Witaj w CarFuse!</h1>
         <p>Najlepszy sposób na wynajem i zarządzanie pojazdami.</p>
-        <!-- Updated navigation links -->
         <a href="/dashboard" class="btn btn-primary">Panel</a>
         <a href="#features-section" class="btn btn-secondary" id="register-btn">Zaloguj się</a>
         <a href="/profile" class="btn btn-tertiary">Profil</a>
@@ -70,7 +73,6 @@ require_once __DIR__ . '/../helpers/SecurityHelper.php';
 </section>
 
 <?php include __DIR__ . '/layouts/footer.php'; ?>
-
 <script src="/js/shared.js"></script>
 </body>
 </html>

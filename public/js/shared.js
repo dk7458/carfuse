@@ -15,15 +15,32 @@ document.addEventListener("DOMContentLoaded", function () {
         return element;
     }
 
+    // Improved API call with proper authentication and logging
+    async function apiCall(endpoint, options = {}) {
+        try {
+            const response = await fetch(endpoint, {
+                ...options,
+                headers: {
+                    ...options.headers,
+                    'Authorization': `Bearer ${localStorage.getItem('apiToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('API call failed:', error);
+        }
+    }
+
     // Session-based initialization
-    apiFetch("/api/shared/initSession.php", {
-        credentials: "include",
-        headers: { "Accept": "application/json" }
-    })
-    .then(response => {
-        if (!response.ok) {
-            console.error("Session init failed:", response.status);
-        } else {
+    apiCall("/api/shared/initSession.php")
+    .then(data => {
+        if (data) {
             console.log("Session initialized successfully for homepage.");
         }
     })
@@ -53,4 +70,8 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     console.log("Shared.js: homepage initialization completed.");
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  // ...existing shared functionalities...
 });

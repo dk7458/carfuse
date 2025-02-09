@@ -20,6 +20,31 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
     }
 
+    // Prevent execution if not on dashboard
+    if (!document.querySelector(".dashboard-container")) {
+        return;
+    }
+
+    async function fetchData(endpoint) {
+        try {
+            const response = await fetch(endpoint, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('apiToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Failed to fetch data:', error);
+        }
+    }
+
     // Load default dashboard module with session credentials
     apiFetch("/dashboard/modules/user/overview.php", {
         credentials: "include"

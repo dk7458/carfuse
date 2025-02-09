@@ -2,49 +2,50 @@
 declare(strict_types=1);
 header("Content-Type: text/html; charset=UTF-8");
 
-// Ensure SecurityHelper is loaded early to initialize sessions correctly.
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../app/helpers/SecurityHelper.php';
+require_once __DIR__ . '/../config/routes.php';
 
-// Write debug log entry.
-file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: index.php started\n", FILE_APPEND);
-
-require_once __DIR__ . '/../bootstrap.php';
-require_once __DIR__ . '/../vendor/autoload.php';
-
-// Prevent redundant dispatcher executions.
-if (!isset($GLOBALS['dispatcher_executed'])) {
-    $GLOBALS['dispatcher_executed'] = true;
-    
-    // Determine request URI.
-    $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-    file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Routing request for URI: $uri\n", FILE_APPEND);
-    
-    try {
-        // Basic routing: if URI is "/" load home.php, otherwise use FastRoute dispatcher.
-        if ($uri === '/' || $uri === '/index.php') {
-            $route = 'home';
-        } else {
-            // Example: extract route from URI e.g., "/about" becomes "about"
-            $route = trim($uri, '/');
-        }
-        
-        // Dispatch based on route.
-        switch ($route) {
-            case 'home':
-                file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Dispatching to home view\n", FILE_APPEND);
-                $viewFile = __DIR__ . '/views/home.php';
-                break;
-            // ...existing cases for other routes...
-            default:
-                file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Error: No route found for URI: $uri\n", FILE_APPEND);
-                throw new Exception("Page not found");
-        }
-    } catch (Exception $e) {
-        file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Error: Dispatcher failed: " . $e->getMessage() . "\n", FILE_APPEND);
-        echo "<h1>Error:</h1><p>" . htmlspecialchars($e->getMessage()) . "</p>";
-        exit;
-    }
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
+
+$logFile = __DIR__ . '/../logs/debug.log';
+file_put_contents($logFile, "[Index] Request: " . $_SERVER['REQUEST_URI'] . PHP_EOL, FILE_APPEND);
+
+$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+if ($requestUri === '/') {
+    require __DIR__ . '/../views/home.php';
+    exit();
+}
+
+$dispatcher = FastRoute\simpleDispatcher(function(FastRoute\RouteCollector $r) use ($routes) {
+    foreach ($routes as $route => $file) {
+        $r->addRoute('GET', "/$route", $file);
+    }
+});
+
+$httpMethod = $_SERVER['REQUEST_METHOD'];
+$routeInfo = $dispatcher->dispatch($httpMethod, $requestUri);
+
+switch ($routeInfo[0]) {
+    case FastRoute\Dispatcher::NOT_FOUND:
+        http_response_code(404);
+        echo json_encode(["error" => "Not Found"]);
+        file_put_contents($logFile, "[Index] 404 Not Found: $requestUri" . PHP_EOL, FILE_APPEND);
+        break;
+    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+        http_response_code(405);
+        echo json_encode(["error" => "Method Not Allowed"]);
+        file_put_contents($logFile, "[Index] 405 Method Not Allowed: $requestUri" . PHP_EOL, FILE_APPEND);
+        break;
+    case FastRoute\Dispatcher::FOUND:
+        $handler = $routeInfo[1];
+        require __DIR__ . "/../views/$handler";
+        file_put_contents($logFile, "[Index] 200 OK: $requestUri" . PHP_EOL, FILE_APPEND);
+        break;
+}
+exit();
 ?>
 
 <!DOCTYPE html>

@@ -1,14 +1,18 @@
 <?php
+require_once __DIR__ . '/../../../vendor/autoload.php';
+require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../config/api.php';
+
 // Helper function for logging
 function logMessage($msg) {
-    file_put_contents('debug.log', date('Y-m-d H:i:s') . " - $msg\n", FILE_APPEND);
+    file_put_contents(__DIR__ . '/../../logs/debug.log', date('Y-m-d H:i:s') . " - $msg\n", FILE_APPEND);
 }
 
 // Log the API request at the very start, including requested URI
 logMessage("API request received for " . ($_SERVER['REQUEST_URI'] ?? 'unknown'));
 
 // Optional authentication check flag
-$requiresAuth = false;
+$requiresAuth = true;
 
 // Define authentication function with improved error handling
 function requireAuth() {
@@ -34,13 +38,13 @@ logMessage("FastRoute processed endpoint: " . ($_SERVER['REQUEST_URI'] ?? 'unkno
 // Set header always for valid JSON
 header("Content-Type: application/json");
 
-// Explicit success status ensures HTTP 200 OK for curl -I /api/test
-http_response_code(200);
+if (!isUserLoggedIn()) {
+    http_response_code(403);
+    echo json_encode(["error" => "Access denied"]);
+    exit();
+}
 
-// ...existing code...
-echo json_encode(["status" => "API working"]);
-// ...existing code...
-
-// Log completion of API handling
+// Example response for test endpoint
+echo json_encode(["message" => "Test endpoint accessed successfully"]);
 logMessage("/test API processed successfully");
 ?>
