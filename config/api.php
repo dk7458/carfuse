@@ -1,13 +1,13 @@
 <?php
 
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
 // Load encryption keys
-$config = require __DIR__ . '/../config/encryption.php';
+$config = require __DIR__ . '/encryption.php';
 $jwtSecret = $config['jwt_secret'] ?? '';
 
 header('Content-Type: application/json');
