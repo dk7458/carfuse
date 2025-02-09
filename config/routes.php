@@ -14,6 +14,7 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) {
     $router->addRoute('GET', '/dashboard', '/dashboard/dashboard.php');
     $router->addRoute('GET', '/', 'home.php');
     $router->addRoute('GET', '/profile', 'user/profile.php');
+    $router->addRoute('GET', '/user/profile', 'user/profile.php');
     $router->addRoute('GET', '/vehicles', 'vehicles.php');
     $router->addRoute('GET', '/login', 'auth/login.php');
     $router->addRoute('GET', '/{view}', 'default.php'); // Dynamic view route
