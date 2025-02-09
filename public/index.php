@@ -15,7 +15,7 @@ require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 file_put_contents(__DIR__ . "/debug.log", "Routes loading\n", FILE_APPEND);
 
 // Load Routes
-$dispatcher = require __DIR__ . '/routes.php';
+$dispatcher = require __DIR__ . '/config/routes.php';
 
 // Get the Requested URL Path
 $httpMethod = $_SERVER['REQUEST_METHOD'];
