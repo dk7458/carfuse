@@ -77,6 +77,11 @@ function startSecureSession() {
             securityLog('New guest session initiated');
         }
 
+        // CSRF protection
+        if (empty($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+
         return validateSessionIntegrity();
     } catch (Exception $e) {
         securityLog('Session initialization failed: ' . $e->getMessage(), 'critical');
@@ -99,6 +104,7 @@ function validateSessionIntegrity() {
         if ($_SESSION['client_ip'] !== $currentIp || 
             $_SESSION['user_agent'] !== $currentAgent) {
             securityLog('Session integrity check failed: authenticated user mismatch', 'warning');
+            destroySession();
             return false;
         }
     } else {

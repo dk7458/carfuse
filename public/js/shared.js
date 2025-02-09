@@ -40,6 +40,11 @@ if (!window.sharedJsInitialized) {
         // Improved API call with proper authentication and logging
         async function apiCall(endpoint, options = {}) {
             const token = localStorage.getItem("authToken");
+            if (!token) {
+                console.error("API call failed: Missing authentication token.");
+                alert("Authentication error: Please log in.");
+                return null;
+            }
             options.headers = {
                 ...options.headers,
                 Authorization: `Bearer ${token}`,
@@ -47,6 +52,11 @@ if (!window.sharedJsInitialized) {
             };
             try {
                 const response = await fetch(endpoint, options);
+                if (response.status === 403) {
+                    console.error("API call failed: Forbidden (403).");
+                    alert("Authentication error: Access forbidden.");
+                    return null;
+                }
                 if (!response.ok) {
                     const error = await response.json();
                     console.error("API Error:", error);

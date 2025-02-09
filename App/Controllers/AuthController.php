@@ -7,6 +7,7 @@ use PDO;
 use Exception;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
 
 class AuthController
 {
@@ -15,6 +16,7 @@ class AuthController
 
     public function __construct()
     {
+        startSecureSession();
         // Load the encryption configuration
         $configPath = BASE_PATH . '/config/encryption.php';
         if (!file_exists($configPath)) {
@@ -77,6 +79,13 @@ class AuthController
             return;
         }
 
+        if (!validateSessionIntegrity()) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Unauthorized']);
+            $this->logAuthAttempt('failure', 'Unauthorized access attempt');
+            return;
+        }
+
         $email = $_POST['email'] ?? null;
         $password = $_POST['password'] ?? null;
 
@@ -94,6 +103,7 @@ class AuthController
         if (!$user || !password_verify($password, $user['password'])) {
             http_response_code(401);
             echo json_encode(['error' => 'Invalid credentials']);
+            $this->logAuthAttempt('failure', 'Invalid credentials');
             return;
         }
 
@@ -104,6 +114,10 @@ class AuthController
             'access_token' => $token,
             'refresh_token' => $refreshToken
         ]);
+
+        $this->refreshToken();
+        $this->updateSessionActivity();
+        $this->logAuthAttempt('success', 'User logged in');
     }
 
     /**
@@ -150,6 +164,13 @@ class AuthController
             return;
         }
 
+        if (!validateSessionIntegrity()) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Unauthorized']);
+            $this->logAuthAttempt('failure', 'Unauthorized access attempt');
+            return;
+        }
+
         $refreshToken = $_POST['refresh_token'] ?? null;
 
         if ($refreshToken) {
@@ -158,5 +179,23 @@ class AuthController
 
         session_destroy();
         echo json_encode(['message' => 'Logged out successfully']);
+        $this->logAuthAttempt('success', 'User logged out');
+    }
+
+    private function refreshToken()
+    {
+        // Logic to refresh JWT token
+        // ...existing code...
+    }
+
+    private function updateSessionActivity()
+    {
+        $_SESSION['last_activity'] = time();
+    }
+
+    private function logAuthAttempt($status, $message)
+    {
+        $logMessage = sprintf("[%s] %s: %s from IP: %s\n", date('Y-m-d H:i:s'), ucfirst($status), $message, $_SERVER['REMOTE_ADDR']);
+        file_put_contents(__DIR__ . '/../../logs/auth.log', $logMessage, FILE_APPEND);
     }
 }
