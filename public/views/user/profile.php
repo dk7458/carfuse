@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
 if (!isset($_SESSION['user_id'])) {
     header("Location: /login.php");
     exit();
