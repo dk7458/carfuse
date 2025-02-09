@@ -1,18 +1,14 @@
 RewriteEngine On
 
-# ✅ Ensure all requests go through index.php (EXCEPT static files and APIs)
-RewriteCond %{REQUEST_URI} !^/(css|js|images|api)/.*$
-RewriteRule ^ index.php [QSA,L]
-
 # ✅ Allow direct access to API files
 RewriteCond %{REQUEST_URI} ^/api/.*\.php$
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^ - [L]
 
-# 🔒 Protect sensitive backend files (Prevent direct access to config & helper files)
-RewriteRule ^(App/|config/|helpers/|private/).* - [F,L]
-
 # ✅ Allow direct access to static files
 RewriteCond %{REQUEST_URI} ^/(css|js|images)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images)/(.*)$ /public/$1/$2 [L]
+
+# 🚀 Redirect all other requests to index.php for FastRoute
+RewriteRule ^ index.php [QSA,L]

@@ -1,55 +1,13 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+$endpoint = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
+$apiPath = __DIR__ . "/../public/api/$endpoint.php";
 
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Content-Type: application/json");
-
-define('API_TOKEN_EXPIRATION', 3600);
-
-function refreshTokenIfExpired($token) {
-    // ...check if token is expired...
-    // ...refresh logic...
-    return $token; 
-}
-
-$logFile = __DIR__ . '/../logs/debug.log';
-
-// Log request details
-error_log("[API] Request: " . $_SERVER['REQUEST_URI'] . PHP_EOL, 3, $logFile);
-
-function requireAuth() {
-    global $logFile;
-    if (!isUserLoggedIn()) {
-        http_response_code(403);
-        echo json_encode(["error" => "Access denied"]);
-        error_log("[API] Unauthorized request" . PHP_EOL, 3, $logFile);
-        exit();
-    }
-}
-
-$requestedEndpoint = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
-$endpointFile = __DIR__ . '/../public/api/' . $requestedEndpoint . '.php';
-
-// Log the requested endpoint
-error_log("[API] Requested Endpoint: $requestedEndpoint" . PHP_EOL, 3, $logFile);
-
-if (file_exists($endpointFile)) {
-    // Check if the endpoint requires authentication
-    $protectedEndpoints = ['secureEndpoint']; // Add more protected endpoints as needed
-    if (in_array($requestedEndpoint, $protectedEndpoints)) {
-        requireAuth();
-    }
-    require $endpointFile;
+if (file_exists($apiPath)) {
+    require $apiPath;
 } else {
     http_response_code(404);
-    echo json_encode(["error" => "API not found"]);
-    error_log("[API] 404 - Endpoint not found: $requestedEndpoint" . PHP_EOL, 3, $logFile);
+    file_put_contents(__DIR__ . '/../logs/debug.log', date('Y-m-d H:i:s') . " - API Not Found: $endpoint\n", FILE_APPEND);
+    echo json_encode(["error" => "API Not Found"]);
 }
-exit();
+exit;
+?>

@@ -8,37 +8,38 @@ require_once __DIR__ . '/../config/routes.php';
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
 startSecureSession();
-// Debugging: List available views
-$viewsDirectory = __DIR__ . "/views/";
-$availableViews = scandir($viewsDirectory);
-echo "<pre>Available Views:\n" . print_r($availableViews, true) . "</pre>";
 
-// Get the requested URL path
+// ✅ Get requested URI
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
-// ✅ Prevent API requests from being misrouted
+// ✅ Log every request
+file_put_contents(__DIR__ . '/../logs/debug.log', date('Y-m-d H:i:s') . " - Requested URI: $requestUri\n", FILE_APPEND);
+
+// ✅ API REQUEST HANDLING
 if (strpos($requestUri, '/api/') === 0) {
+    $apiPath = __DIR__ . $requestUri . '.php';
+    if (file_exists($apiPath)) {
+        require $apiPath;
+        exit;
+    }
     http_response_code(404);
-    echo json_encode(["error" => "Invalid API request"]);
+    echo json_encode(["error" => "API Not Found"]);
     exit;
 }
 
-// ✅ Serve home page for `/`
-if ($requestUri === '/' || $requestUri === '/index.php') {
-    require __DIR__ . '/views/home.php';
-    exit;
-}
+// ✅ FastRoute Dispatching
+$dispatcher = require __DIR__ . '/../config/routes.php';
+$routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], $requestUri);
 
-// ✅ Serve other views dynamically
-$viewPath = __DIR__ . "/views$requestUri.php";
-if (file_exists($viewPath)) {
-    require $viewPath;
-    exit;
-} else {
-    echo "View not found: " . htmlspecialchars($viewPath); // Debugging output
-}
+switch ($routeInfo[0]) {
+    case FastRoute\Dispatcher::FOUND:
+        file_put_contents(__DIR__ . '/../logs/debug.log', date('Y-m-d H:i:s') . " - Route Found: " . $routeInfo[1] . "\n", FILE_APPEND);
+        require __DIR__ . "/views/" . $routeInfo[1];
+        exit;
 
-// 🚀 If no matching view, show 404 page
-http_response_code(404);
-echo "404 Not Found";
+    case FastRoute\Dispatcher::NOT_FOUND:
+        file_put_contents(__DIR__ . '/../logs/debug.log', date('Y-m-d H:i:s') . " - 404 Not Found: $requestUri\n", FILE_APPEND);
+        require __DIR__ . "/views/errors/404.php";
+        exit;
+}
 ?>

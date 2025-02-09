@@ -1,0 +1,5213 @@
+=== App/Controllers/UserController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\NotificationService;
+use App\Services\Validator;
+use App\Services\RateLimiter;
+use AuditManager\Services\AuditService;
+use PDO;
+use Psr\Log\LoggerInterface;
+use Firebase\JWT\JWT;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+/**
+ * User Management Controller
+ *
+ * Handles user registration, authentication, profile management, and password resets.
+ * Implements enhanced security and scalability features.
+ */
+class UserController
+{
+    private PDO $appDb;
+    private PDO $secureDb;
+    private LoggerInterface $logger;
+    private array $config;
+    private Validator $validator;
+    private RateLimiter $rateLimiter;
+    private AuditService $auditService;
+    private NotificationService $notificationService;
+
+    public function __construct(
+        PDO $appDb,
+        PDO $secureDb,
+        LoggerInterface $logger,
+        array $config,
+        Validator $validator,
+        RateLimiter $rateLimiter,
+        AuditService $auditService,
+        NotificationService $notificationService
+    ) {
+        $this->appDb = $appDb;
+        $this->secureDb = $secureDb;
+        $this->logger = $logger;
+        $this->config = $config;
+        $this->validator = $validator;
+        $this->rateLimiter = $rateLimiter;
+        $this->auditService = $auditService;
+        $this->notificationService = $notificationService;
+    }
+
+    /**
+     * Register a new user
+     */
+    public function register(array $data): array
+    {
+        $rules = [
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users',
+            'password' => 'required|string|min:8|regex:/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/',
+            'phone' => 'required|string|max:20',
+            'address' => 'required|string|max:255',
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        }
+
+        try {
+            // Store user in secure database
+            $stmt = $this->secureDb->prepare("
+                INSERT INTO users (name, email, password_hash, phone, address, role, created_at)
+                VALUES (:name, :email, :password, :phone, :address, 'user', NOW())
+            ");
+            $stmt->execute([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => password_hash($data['password'], PASSWORD_BCRYPT),
+                'phone' => $data['phone'],
+                'address' => $data['address'],
+            ]);
+
+            $userId = $this->secureDb->lastInsertId();
+
+            // Log action in secure database
+            $this->auditService->log(
+                'user_registered',
+                'A new user has been registered.',
+                $userId,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            // Send notification
+            $this->notificationService->sendNotification(
+                $userId,
+                'email',
+                'Welcome to Carfuse! Your account has been created successfully.',
+                ['email' => $data['email']]
+            );
+
+            return ['status' => 'success', 'message' => 'Registration successful'];
+        } catch (\PDOException $e) {
+            $this->logger->error('Registration failed', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Registration failed'];
+        }
+    }
+
+    /**
+     * Authenticate user and generate JWT token
+     */
+    public function login(string $email, string $password, string $ip): array
+    {
+        if ($this->rateLimiter->isRateLimited($ip)) {
+            return ['status' => 'error', 'message' => 'Too many attempts'];
+        }
+
+        // Fetch user from secure database
+        $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user || !password_verify($password, $user['password_hash'])) {
+            $this->auditService->log(
+                'failed_login_attempt',
+                'Failed login attempt.',
+                null,
+                null,
+                $ip
+            );
+            return ['status' => 'error', 'message' => 'Invalid credentials'];
+        }
+
+        $token = $this->generateJWT($user);
+
+        $this->auditService->log(
+            'user_logged_in',
+            'User logged in successfully.',
+            $user['id'],
+            null,
+            $ip
+        );
+
+        return ['status' => 'success', 'token' => $token];
+    }
+
+    /**
+     * Update user profile
+     */
+    public function updateProfile(int $userId, array $data): array
+    {
+        $rules = [
+            'name' => 'string|max:255',
+            'phone' => 'string|max:20',
+            'address' => 'string|max:255',
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        }
+
+        try {
+            $allowedFields = array_keys($rules);
+            $updates = array_intersect_key($data, array_flip($allowedFields));
+            $sql = "UPDATE users SET " . implode(', ', array_map(fn($k) => "$k = :$k", array_keys($updates))) . " WHERE id = :id";
+
+            $stmt = $this->secureDb->prepare($sql);
+            $stmt->execute([...$updates, 'id' => $userId]);
+
+            $this->auditService->log(
+                'user_profile_updated',
+                'User profile updated.',
+                $userId,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            return ['status' => 'success', 'message' => 'Profile updated'];
+        } catch (\PDOException $e) {
+            $this->logger->error('Profile update failed', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Update failed'];
+        }
+    }
+
+    /**
+     * Generate password reset token
+     */
+    public function requestPasswordReset(string $email): array
+    {
+        $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user) {
+            return ['status' => 'error', 'message' => 'Email not found'];
+        }
+
+        $token = bin2hex(random_bytes(32));
+        $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
+
+        $stmt = $this->secureDb->prepare("
+            INSERT INTO password_resets (email, token, expires_at) 
+            VALUES (:email, :token, :expires)
+        ");
+        $stmt->execute([
+            'email' => $email,
+            'token' => $token,
+            'expires' => $expires,
+        ]);
+
+        // Send password reset notification
+        $this->notificationService->sendNotification(
+            $user['id'],
+            'email',
+            "Use this link to reset your password: {$this->config['reset_url']}?token=$token",
+            ['email' => $email]
+        );
+
+        return ['status' => 'success', 'message' => 'Reset instructions sent'];
+    }
+
+    private function generateJWT(array $user): string
+    {
+        $payload = [
+            'sub' => $user['id'],
+            'email' => $user['email'],
+            'role' => $user['role'],
+            'iat' => time(),
+            'exp' => time() + 3600,
+        ];
+
+        return JWT::encode($payload, $this->config['jwt_secret'], 'HS256');
+    }
+
+    public function viewProfile(int $userId)
+    {
+        try {
+            $user = $this->getUserById($userId);
+            view('user/profile', ['user' => $user]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load user profile', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo 'Failed to load user profile.';
+        }
+    }
+
+    public function editProfileView(int $userId)
+    {
+        try {
+            $user = $this->getUserById($userId);
+            view('user/edit_profile', ['user' => $user]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load edit profile view', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo 'Failed to load edit profile view.';
+        }
+    }
+
+    public function userDashboard()
+    {
+        view('dashboard/user_dashboard');
+    }
+}
+=== App/Controllers/BookingController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\BookingService;
+use App\Services\PaymentService;
+use App\Services\Validator;
+use AuditManager\Services\AuditService;
+use App\Services\NotificationService;
+use Psr\Log\LoggerInterface;
+use App\Middleware\AuthMiddleware;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+/**
+ * Booking Controller
+ *
+ * Handles booking operations, including creating, rescheduling,
+ * canceling bookings, and fetching booking details or logs.
+ */
+class BookingController
+{
+    private BookingService $bookingService;
+    private PaymentService $paymentService;
+    private Validator $validator;
+    private AuditService $auditService;
+    private NotificationService $notificationService;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        BookingService $bookingService,
+        PaymentService $paymentService,
+        Validator $validator,
+        AuditService $auditService,
+        NotificationService $notificationService,
+        LoggerInterface $logger
+    ) {
+        $this->bookingService = $bookingService;
+        $this->paymentService = $paymentService;
+        $this->validator = $validator;
+        $this->auditService = $auditService;
+        $this->notificationService = $notificationService;
+        $this->logger = $logger;
+    }
+
+    /**
+     * View Booking Details
+     */
+    public function viewBooking(int $id)
+    {
+        try {
+            AuthMiddleware::validateSession();
+            $booking = $this->bookingService->getBookingById($id);
+            $logs = $this->bookingService->getBookingLogs($id);
+
+            if (!$booking) {
+                throw new \Exception("Booking not found.");
+            }
+
+            view('bookings/view', ['booking' => $booking, 'logs' => $logs]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch booking details', ['error' => $e->getMessage()]);
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Booking not found.']);
+        }
+    }
+
+    /**
+     * Reschedule Booking
+     */
+    public function rescheduleBooking(int $id, array $data): array
+    {
+        AuthMiddleware::validateSession();
+        $rules = [
+            'pickup_date' => 'required|date|after_or_equal:today',
+            'dropoff_date' => 'required|date|after:pickup_date',
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        }
+
+        try {
+            $this->bookingService->rescheduleBooking($id, $data['pickup_date'], $data['dropoff_date']);
+            $this->auditService->log(
+                'booking_rescheduled',
+                'Booking successfully rescheduled.',
+                $this->bookingService->getUserIdByBooking($id),
+                $id,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+            $this->notificationService->sendNotification(
+                $this->bookingService->getUserIdByBooking($id),
+                'email',
+                'Your booking has been rescheduled successfully.',
+                []
+            );
+
+            return ['status' => 'success', 'message' => 'Booking rescheduled successfully'];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to reschedule booking', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to reschedule booking'];
+        }
+    }
+
+    /**
+     * Cancel Booking
+     */
+    public function cancelBooking(int $id): array
+    {
+        AuthMiddleware::validateSession();
+        try {
+            $refundAmount = $this->bookingService->cancelBooking($id);
+
+            if ($refundAmount > 0) {
+                $this->paymentService->processRefundForBooking($id, $refundAmount);
+            }
+
+            $this->auditService->log(
+                'booking_canceled',
+                'Booking successfully canceled.',
+                $this->bookingService->getUserIdByBooking($id),
+                $id,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+            $this->notificationService->sendNotification(
+                $this->bookingService->getUserIdByBooking($id),
+                'email',
+                'Your booking has been canceled.',
+                []
+            );
+
+            return ['status' => 'success', 'message' => 'Booking canceled successfully'];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to cancel booking', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to cancel booking'];
+        }
+    }
+
+    /**
+     * Fetch Booking Logs
+     */
+    public function getBookingLogs(int $bookingId): array
+    {
+        AuthMiddleware::validateSession();
+        try {
+            $logs = $this->bookingService->getBookingLogs($bookingId);
+            return ['status' => 'success', 'logs' => $logs];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch booking logs', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to fetch booking logs'];
+        }
+    }
+
+    /**
+     * List All Bookings for a User
+     */
+    public function getUserBookings(int $userId): array
+    {
+        AuthMiddleware::validateSession();
+        try {
+            $bookings = $this->bookingService->getUserBookings($userId);
+            return ['status' => 'success', 'bookings' => $bookings];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch user bookings', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to fetch user bookings'];
+        }
+    }
+
+    /**
+     * Create New Booking
+     */
+    public function createBooking(array $data): array
+    {
+        AuthMiddleware::validateSession();
+        $rules = [
+            'user_id' => 'required|integer',
+            'vehicle_id' => 'required|integer',
+            'pickup_date' => 'required|date|after_or_equal:today',
+            'dropoff_date' => 'required|date|after:pickup_date',
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        }
+
+        try {
+            if (!$this->bookingService->isVehicleAvailable($data['vehicle_id'], $data['pickup_date'], $data['dropoff_date'])) {
+                return ['status' => 'error', 'message' => 'Vehicle is not available for the selected dates'];
+            }
+
+            $bookingId = $this->bookingService->createBooking($data);
+
+            $this->auditService->log(
+                'booking_created',
+                'New booking created.',
+                $data['user_id'],
+                $bookingId,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+            $this->notificationService->sendNotification(
+                $data['user_id'],
+                'email',
+                'Your booking has been created successfully.',
+                []
+            );
+
+            return ['status' => 'success', 'message' => 'Booking created successfully', 'booking_id' => $bookingId];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to create booking', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to create booking'];
+        }
+    }
+}
+=== App/Controllers/NotificationController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\NotificationService;
+use App\Services\Validator;
+use Psr\Log\LoggerInterface;
+use App\Queue\NotificationQueue;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+/**
+ * Notification Controller
+ *
+ * Handles notification management, including sending notifications,
+ * marking notifications as read, deleting notifications, and
+ * fetching user notifications for display.
+ */
+class NotificationController
+{
+    private NotificationService $notificationService;
+    private Validator $validator;
+    private LoggerInterface $logger;
+    private NotificationQueue $notificationQueue;
+
+    public function __construct(
+        NotificationService $notificationService,
+        Validator $validator,
+        LoggerInterface $logger,
+        NotificationQueue $notificationQueue
+    ) {
+        $this->notificationService = $notificationService;
+        $this->validator = $validator;
+        $this->logger = $logger;
+        $this->notificationQueue = $notificationQueue;
+    }
+
+    /**
+     * Display user notifications in the view.
+     */
+    public function viewNotifications(int $userId): void
+    {
+        try {
+            $notifications = $this->notificationService->getUserNotifications($userId);
+            view('user/notifications', ['notifications' => $notifications]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load notifications view', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo 'An error occurred while fetching notifications.';
+        }
+    }
+
+    /**
+     * Fetch all notifications for a user via API.
+     */
+    public function getUserNotifications(int $userId): array
+    {
+        try {
+            $notifications = $this->notificationService->getUserNotifications($userId);
+            return ['status' => 'success', 'notifications' => $notifications];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch user notifications', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to fetch user notifications'];
+        }
+    }
+
+    /**
+     * Fetch all notifications for a user via AJAX.
+     */
+    public function fetchNotificationsAjax(int $userId): void
+    {
+        try {
+            $notifications = $this->notificationService->getUserNotifications($userId);
+            echo json_encode(['status' => 'success', 'notifications' => $notifications]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch user notifications via AJAX', ['error' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch user notifications']);
+        }
+    }
+
+    /**
+     * Mark a notification as read.
+     */
+    public function markNotificationAsRead(int $notificationId): array
+    {
+        try {
+            $this->notificationService->markAsRead($notificationId);
+            $this->logger->info("Notification marked as read", ['notification_id' => $notificationId]);
+
+            return ['status' => 'success', 'message' => 'Notification marked as read'];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to mark notification as read', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to mark notification as read'];
+        }
+    }
+
+    /**
+     * Mark a notification as read via POST request.
+     */
+    public function markNotificationAsReadPost(): void
+    {
+        $notificationId = $_POST['notification_id'] ?? null;
+
+        if (!$notificationId) {
+            echo json_encode(['status' => 'error', 'message' => 'Notification ID is required']);
+            return;
+        }
+
+        try {
+            $this->notificationService->markAsRead((int)$notificationId);
+            $this->logger->info("Notification marked as read", ['notification_id' => $notificationId]);
+            echo json_encode(['status' => 'success', 'message' => 'Notification marked as read']);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to mark notification as read', ['error' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to mark notification as read']);
+        }
+    }
+
+    /**
+     * Delete a notification.
+     */
+    public function deleteNotification(int $notificationId): array
+    {
+        try {
+            $this->notificationService->deleteNotification($notificationId);
+            $this->logger->info("Notification deleted", ['notification_id' => $notificationId]);
+
+            return ['status' => 'success', 'message' => 'Notification deleted'];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to delete notification', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to delete notification'];
+        }
+    }
+
+    /**
+     * Send a notification to a user.
+     */
+    public function sendNotification(array $data): array
+    {
+        $rules = [
+            'user_id' => 'required|integer',
+            'type' => 'required|in:email,sms,webhook,push',
+            'message' => 'required|string|max:1000',
+            'options' => 'array',
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            $this->logger->warning('Notification validation failed', ['data' => $data]);
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        }
+
+        try {
+            $success = $this->notificationService->sendNotification(
+                $data['user_id'],
+                $data['type'],
+                $data['message'],
+                $data['options'] ?? []
+            );
+
+            if ($success) {
+                $this->logger->info('Notification sent successfully', ['data' => $data]);
+                $this->notificationQueue->queueNotification($data);
+                return ['status' => 'success', 'message' => 'Notification sent successfully'];
+            }
+
+            return ['status' => 'error', 'message' => 'Notification delivery failed'];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send notification', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to send notification'];
+        }
+    }
+
+    /**
+     * Retry sending a notification.
+     */
+    public function retryNotification(array $data): array
+    {
+        $rules = [
+            'user_id' => 'required|integer',
+            'type' => 'required|in:email,sms,webhook,push',
+            'message' => 'required|string|max:1000',
+            'options' => 'array',
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            $this->logger->warning('Retry validation failed', ['data' => $data]);
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        }
+
+        try {
+            $success = $this->notificationService->sendNotificationWithRetry(
+                $data['user_id'],
+                $data['type'],
+                $data['message'],
+                $data['options'] ?? []
+            );
+
+            if ($success) {
+                $this->logger->info('Notification retry succeeded', ['data' => $data]);
+                return ['status' => 'success', 'message' => 'Notification sent successfully after retries'];
+            }
+
+            return ['status' => 'error', 'message' => 'Notification delivery failed after retries'];
+        } catch (\Exception $e) {
+            $this->logger->error('Retry failed', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Retry failed'];
+        }
+    }
+}
+=== App/Controllers/AuthController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\Auth\TokenService;
+use PDO;
+use Exception;
+
+require_once __DIR__ . '/../Helpers/ViewHelper.php';
+require_once __DIR__ . '/../Helpers/SecurityHelper.php';
+
+class AuthController
+{
+    protected TokenService $tokenService;
+    protected PDO $pdo;
+
+    public function __construct()
+    {
+        startSecureSession();
+        // Load the encryption configuration
+        $configPath = __DIR__ . '/../../config/encryption.php';
+        if (!file_exists($configPath)) {
+            throw new Exception("Encryption configuration missing.");
+        }
+
+        $encryptionConfig = require $configPath;
+
+        // Ensure required keys exist
+        if (!isset($encryptionConfig['jwt_secret'], $encryptionConfig['jwt_refresh_secret'])) {
+            throw new Exception("JWT configuration missing in encryption.php.");
+        }
+
+        // Instantiate TokenService
+        $this->tokenService = new TokenService(
+            $encryptionConfig['jwt_secret'],
+            $encryptionConfig['jwt_refresh_secret']
+        );
+
+        // Load the database connection
+        $dbConfig = require BASE_PATH . '/../../config/database.php';
+        try {
+            $this->pdo = new PDO(
+                "mysql:host={$dbConfig['app_database']['host']};dbname={$dbConfig['app_database']['database']};charset=utf8mb4",
+                $dbConfig['app_database']['username'],
+                $dbConfig['app_database']['password'],
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+        } catch (Exception $e) {
+            throw new Exception("Database connection failed: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Show the login page (GET /auth/login)
+     */
+    public function loginView()
+    {
+        view('auth/login');
+    }
+
+    /**
+     * Show the register page (GET /auth/register)
+     */
+    public function registerView()
+    {
+        view('auth/register');
+    }
+
+    /**
+     * Handle user login (POST /auth/login)
+     */
+    public function login()
+    {
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method Not Allowed']);
+            return;
+        }
+
+        if (!validateSessionIntegrity()) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Unauthorized']);
+            $this->logAuthAttempt('failure', 'Unauthorized access attempt');
+            return;
+        }
+
+        $email = $_POST['email'] ?? null;
+        $password = $_POST['password'] ?? null;
+
+        if (!$email || !$password) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Email and password are required']);
+            return;
+        }
+
+        // Fetch user from the database
+        $stmt = $this->pdo->prepare("SELECT * FROM users WHERE email = :email LIMIT 1");
+        $stmt->execute(['email' => $email]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user || !password_verify($password, $user['password'])) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Invalid credentials']);
+            $this->logAuthAttempt('failure', 'Invalid credentials');
+            return;
+        }
+
+        $token = $this->tokenService->generateToken((object) ['id' => $user['id']]);
+        $refreshToken = $this->tokenService->generateRefreshToken((object) ['id' => $user['id']]);
+
+        echo json_encode([
+            'access_token' => $token,
+            'refresh_token' => $refreshToken
+        ]);
+
+        $this->refreshToken();
+        $this->updateSessionActivity();
+        $this->logAuthAttempt('success', 'User logged in');
+    }
+
+    /**
+     * Refresh access token (POST /auth/refresh)
+     */
+    public function refresh()
+    {
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method Not Allowed']);
+            return;
+        }
+
+        $refreshToken = $_POST['refresh_token'] ?? null;
+
+        if (!$refreshToken) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Refresh token is required']);
+            return;
+        }
+
+        $newToken = $this->tokenService->refreshAccessToken($refreshToken);
+
+        if ($newToken) {
+            echo json_encode(['access_token' => $newToken]);
+        } else {
+            http_response_code(401);
+            echo json_encode(['error' => 'Invalid refresh token']);
+        }
+    }
+
+    /**
+     * Handle user logout (POST /auth/logout)
+     */
+    public function logout()
+    {
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method Not Allowed']);
+            return;
+        }
+
+        if (!validateSessionIntegrity()) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Unauthorized']);
+            $this->logAuthAttempt('failure', 'Unauthorized access attempt');
+            return;
+        }
+
+        $refreshToken = $_POST['refresh_token'] ?? null;
+
+        if ($refreshToken) {
+            $this->tokenService->revokeToken($refreshToken);
+        }
+
+        session_destroy();
+        echo json_encode(['message' => 'Logged out successfully']);
+        $this->logAuthAttempt('success', 'User logged out');
+    }
+
+    private function refreshToken()
+    {
+        // Logic to refresh JWT token
+        // ...existing code...
+    }
+
+    private function updateSessionActivity()
+    {
+        $_SESSION['last_activity'] = time();
+    }
+
+    private function logAuthAttempt($status, $message)
+    {
+        $logMessage = sprintf("[%s] %s: %s from IP: %s\n", date('Y-m-d H:i:s'), ucfirst($status), $message, $_SERVER['REMOTE_ADDR']);
+        file_put_contents(__DIR__ . '/../../logs/auth.log', $logMessage, FILE_APPEND);
+    }
+}
+=== App/Controllers/DashboardController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\BookingService;
+use App\Services\StatisticsService;
+use App\Services\NotificationService;
+use App\Services\UserService;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+class DashboardController
+{
+    private BookingService $bookingService;
+    private StatisticsService $statisticsService;
+    private NotificationService $notificationService;
+    private UserService $userService;
+
+    public function __construct(
+        BookingService $bookingService,
+        StatisticsService $statisticsService,
+        NotificationService $notificationService,
+        UserService $userService
+    ) {
+        $this->bookingService = $bookingService;
+        $this->statisticsService = $statisticsService;
+        $this->notificationService = $notificationService;
+        $this->userService = $userService;
+    }
+
+    /**
+     * Render user dashboard view
+     */
+    public function userDashboard()
+    {
+        view('dashboard/user_dashboard');
+    }
+
+    /**
+     * Fetch user bookings
+     */
+    public function getUserBookings(): void
+    {
+        $userId = $_SESSION['user_id'] ?? null;
+        
+        if (!$userId) {
+            echo json_encode(['status' => 'error', 'message' => 'User not authenticated']);
+            return;
+        }
+        
+        try {
+            $bookings = $this->bookingService->getUserBookings($userId);
+            echo json_encode(['status' => 'success', 'bookings' => $bookings]);
+        } catch (\Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Fetch dashboard statistics
+     */
+    public function fetchStatistics(): void
+    {
+        try {
+            $statistics = $this->statisticsService->getDashboardStatistics();
+            echo json_encode(['status' => 'success', 'data' => $statistics]);
+        } catch (\Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Fetch user notifications
+     */
+    public function fetchNotifications(): void
+    {
+        $userId = $_SESSION['user_id'] ?? null;
+        
+        if (!$userId) {
+            echo json_encode(['status' => 'error', 'message' => 'User not authenticated']);
+            return;
+        }
+        
+        try {
+            $notifications = $this->notificationService->getUserNotifications($userId);
+            echo json_encode(['status' => 'success', 'notifications' => $notifications]);
+        } catch (\Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Fetch user profile information
+     */
+    public function fetchUserProfile(): void
+    {
+        $userId = $_SESSION['user_id'] ?? null;
+        
+        if (!$userId) {
+            echo json_encode(['status' => 'error', 'message' => 'User not authenticated']);
+            return;
+        }
+        
+        try {
+            $profile = $this->userService->getUserProfile($userId);
+            echo json_encode(['status' => 'success', 'profile' => $profile]);
+        } catch (\Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+}
+=== App/Controllers/AdminDashboardController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\BookingService;
+use App\Services\PaymentService;
+use App\Services\UserService;
+use Psr\Log\LoggerInterface;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+class AdminDashboardController
+{
+    private BookingService $bookingService;
+    private PaymentService $paymentService;
+    private UserService $userService;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        BookingService $bookingService,
+        PaymentService $paymentService,
+        UserService $userService,
+        LoggerInterface $logger
+    ) {
+        $this->bookingService = $bookingService;
+        $this->paymentService = $paymentService;
+        $this->userService = $userService;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Render the admin dashboard view.
+     */
+    public function index(): void
+    {
+        try {
+            $metrics = [
+                'total_users' => $this->userService->getTotalUsers(),
+                'active_users' => $this->userService->getActiveUsers(),
+                'total_bookings' => $this->bookingService->getTotalBookings(),
+                'completed_bookings' => $this->bookingService->getCompletedBookings(),
+                'canceled_bookings' => $this->bookingService->getCanceledBookings(),
+                'total_revenue' => $this->paymentService->getTotalRevenue(),
+                'total_refunds' => $this->paymentService->getTotalRefunds(),
+                'net_revenue' => $this->paymentService->getNetRevenue(),
+            ];
+
+            // Fetch data for graphs
+            $graphData = [
+                'booking_trends' => $this->bookingService->getMonthlyBookingTrends(),
+                'revenue_trends' => $this->paymentService->getMonthlyRevenueTrends(),
+            ];
+
+            view('admin/dashboard', ['metrics' => $metrics, 'graphData' => $graphData]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load admin dashboard', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo 'Error loading the dashboard. Please try again later.';
+        }
+    }
+
+    /**
+     * Get data for admin dashboard metrics and graphs (API).
+     */
+    public function getDashboardData(): void
+    {
+        try {
+            $metrics = [
+                'total_users' => $this->userService->getTotalUsers(),
+                'active_users' => $this->userService->getActiveUsers(),
+                'total_bookings' => $this->bookingService->getTotalBookings(),
+                'completed_bookings' => $this->bookingService->getCompletedBookings(),
+                'canceled_bookings' => $this->bookingService->getCanceledBookings(),
+                'total_revenue' => $this->paymentService->getTotalRevenue(),
+                'total_refunds' => $this->paymentService->getTotalRefunds(),
+                'net_revenue' => $this->paymentService->getNetRevenue(),
+            ];
+
+            $graphData = [
+                'booking_trends' => $this->bookingService->getMonthlyBookingTrends(),
+                'revenue_trends' => $this->paymentService->getMonthlyRevenueTrends(),
+            ];
+
+            echo json_encode([
+                'status' => 'success',
+                'metrics' => $metrics,
+                'graph_data' => $graphData,
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch admin dashboard data', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch dashboard data']);
+        }
+    }
+}
+=== App/Controllers/PaymentController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\PaymentService;
+use App\Services\Validator;
+use App\Services\NotificationService;
+use AuditManager\Services\AuditService;
+use PDO;
+use Psr\Log\LoggerInterface;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+/**
+ * Payment Controller
+ *
+ * Handles payment processing, refunds, installment payments, and user transactions.
+ */
+class PaymentController
+{
+    private PaymentService $paymentService;
+    private Validator $validator;
+    private NotificationService $notificationService;
+    private AuditService $auditService;
+    private PDO $db;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        PaymentService $paymentService,
+        Validator $validator,
+        NotificationService $notificationService,
+        AuditService $auditService,
+        PDO $db,
+        LoggerInterface $logger
+    ) {
+        $this->paymentService = $paymentService;
+        $this->validator = $validator;
+        $this->notificationService = $notificationService;
+        $this->auditService = $auditService;
+        $this->db = $db;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Process a payment.
+     */
+    public function processPayment(array $data): array
+    {
+        $rules = [
+            'user_id' => 'required|integer',
+            'amount' => 'required|numeric|min:0.01',
+            'payment_method_id' => 'required|integer',
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        }
+
+        try {
+            $transaction = $this->paymentService->processPayment(
+                $data['user_id'],
+                $data['payment_method_id'],
+                $data['amount']
+            );
+
+            $this->auditService->log(
+                'payment_processed',
+                'Payment successfully processed.',
+                $data['user_id'],
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            $this->notificationService->sendNotification(
+                $data['user_id'],
+                'email',
+                "Payment of {$data['amount']} was successfully processed.",
+                ['email' => $transaction['email']]
+            );
+
+            return ['status' => 'success', 'transaction' => $transaction];
+        } catch (\Exception $e) {
+            $this->logger->error('Payment processing failed', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Payment processing failed'];
+        }
+    }
+
+    /**
+     * Refund a payment.
+     */
+    public function refundPayment(array $data): array
+    {
+        $rules = [
+            'transaction_id' => 'required|integer',
+            'amount' => 'required|numeric|min:0.01',
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        }
+
+        try {
+            $refund = $this->paymentService->processRefund(
+                $data['transaction_id'],
+                $data['amount']
+            );
+
+            $this->auditService->log(
+                'refund_processed',
+                'Refund successfully processed.',
+                null,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            $this->notificationService->sendNotification(
+                $refund['user_id'],
+                'email',
+                "A refund of {$data['amount']} was processed for your transaction.",
+                ['email' => $refund['email']]
+            );
+
+            return ['status' => 'success', 'refund' => $refund];
+        } catch (\Exception $e) {
+            $this->logger->error('Refund processing failed', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Refund processing failed'];
+        }
+    }
+
+    /**
+     * Set up installment payments.
+     */
+    public function setupInstallment(array $data): array
+    {
+        $rules = [
+            'user_id' => 'required|integer',
+            'total_amount' => 'required|numeric|min:0.01',
+            'installments' => 'required|integer|min:2',
+            'payment_method_id' => 'required|integer',
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        }
+
+        try {
+            $installmentPlan = $this->paymentService->createInstallmentPlan(
+                $data['user_id'],
+                $data['total_amount'],
+                $data['installments'],
+                $data['payment_method_id']
+            );
+
+            $this->auditService->log(
+                'installment_plan_created',
+                'Installment plan successfully created.',
+                $data['user_id'],
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            $this->notificationService->sendNotification(
+                $data['user_id'],
+                'email',
+                "Your installment plan for {$data['total_amount']} has been set up successfully.",
+                ['email' => $installmentPlan['email']]
+            );
+
+            return ['status' => 'success', 'installment_plan' => $installmentPlan];
+        } catch (\Exception $e) {
+            $this->logger->error('Installment plan setup failed', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Installment plan setup failed'];
+        }
+    }
+
+    /**
+     * Fetch all user transactions.
+     */
+    public function getUserTransactions(int $userId): array
+    {
+        try {
+            $transactions = $this->paymentService->getUserTransactions($userId);
+            return ['status' => 'success', 'transactions' => $transactions];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch user transactions', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to fetch user transactions'];
+        }
+    }
+
+    /**
+     * Fetch payment details.
+     */
+    public function getPaymentDetails(int $transactionId): array
+    {
+        try {
+            $details = $this->paymentService->getPaymentDetails($transactionId);
+            return ['status' => 'success', 'details' => $details];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch payment details', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to fetch payment details'];
+        }
+    }
+}
+=== App/Controllers/ReportController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\ReportService;
+use App\Services\Validator;
+use App\Services\NotificationService;
+use Psr\Log\LoggerInterface;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+class ReportController
+{
+    private ReportService $reportService;
+    private Validator $validator;
+    private NotificationService $notificationService;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        ReportService $reportService,
+        Validator $validator,
+        NotificationService $notificationService,
+        LoggerInterface $logger
+    ) {
+        $this->reportService = $reportService;
+        $this->validator = $validator;
+        $this->notificationService = $notificationService;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Admin Report Dashboard View
+     */
+    public function index()
+    {
+        try {
+            // Render admin report dashboard
+            view('admin/reports');
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load admin report dashboard', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo 'Failed to load report dashboard.';
+        }
+    }
+
+    /**
+     * Generate Report for Admin
+     */
+    public function generateReport(array $data): array
+    {
+        $rules = [
+            'report_type' => 'required|in:bookings,payments,users',
+            'date_range' => 'required|array',
+            'date_range.start' => 'required|date',
+            'date_range.end' => 'required|date',
+            'filters' => 'array',
+            'format' => 'required|in:csv,pdf',
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        }
+
+        try {
+            $report = $this->reportService->generateReport(
+                $data['report_type'],
+                $data['date_range'],
+                $data['filters'] ?? [],
+                $data['format']
+            );
+
+            return ['status' => 'success', 'report' => $report];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to generate report', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to generate report'];
+        }
+    }
+
+    /**
+     * User Report Dashboard View
+     */
+    public function userReports()
+    {
+        try {
+            // Render user report dashboard
+            view('user/reports');
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load user report dashboard', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo 'Failed to load report dashboard.';
+        }
+    }
+
+    /**
+     * Generate Report for Users
+     */
+    public function generateUserReport(array $data): array
+    {
+        $rules = [
+            'user_id' => 'required|integer',
+            'report_type' => 'required|in:bookings,payments',
+            'date_range' => 'required|array',
+            'date_range.start' => 'required|date',
+            'date_range.end' => 'required|date',
+            'format' => 'required|in:csv,pdf',
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        }
+
+        try {
+            $report = $this->reportService->generateUserReport(
+                $data['user_id'],
+                $data['report_type'],
+                $data['date_range'],
+                $data['format']
+            );
+
+            return ['status' => 'success', 'report' => $report];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to generate user report', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Failed to generate report'];
+        }
+    }
+
+    /**
+     * Download a Report
+     */
+    public function downloadReport(string $filePath): void
+    {
+        try {
+            if (!file_exists($filePath)) {
+                http_response_code(404);
+                echo 'Report not found.';
+                return;
+            }
+
+            header('Content-Description: File Transfer');
+            header('Content-Type: application/octet-stream');
+            header('Content-Disposition: attachment; filename=' . basename($filePath));
+            header('Expires: 0');
+            header('Cache-Control: must-revalidate');
+            header('Pragma: public');
+            header('Content-Length: ' . filesize($filePath));
+            readfile($filePath);
+            exit;
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to download report', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo 'Failed to download report.';
+        }
+    }
+}
+=== App/Views/layouts/header.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Header - Dynamiczny Nagłówek dla Wszystkich Widoków
+|--------------------------------------------------------------------------
+| Plik przełącza się dynamicznie pomiędzy stroną główną, pulpitem użytkownika
+| oraz pulpitem administratora. Wyświetla odpowiednie skróty i powitanie.
+|
+| Ścieżka: public/layouts/header.php
+*/
+
+if (!isset($_SESSION)) {
+    session_start();
+}
+
+// Ensure the header is included only once
+if (!empty($_SESSION['layout_loaded'])) {
+    return;
+}
+$_SESSION['layout_loaded'] = true;
+
+$isLoggedIn = isset($_SESSION['user_id']);
+$isAdmin = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+$username = $isLoggedIn ? $_SESSION['username'] : "Gość";
+
+// Pobranie losowego modelu auta z bazy, jeśli są dostępne
+$availableCars = ["Toyota Corolla", "Ford Mustang", "BMW X5", "Audi A6", "Mercedes C-Class"];
+$randomCar = $availableCars[array_rand($availableCars)];
+
+// Lista powitań dynamicznych
+$greetings = [
+    "Hej, $username! $randomCar już czeka na przygodę! 🚗💨",
+    "Witaj, $username! Może dziś przejażdżka $randomCar? 🌍",
+    "$username, świat stoi przed Tobą otworem! $randomCar już grzeje silnik! 🏎️",
+    "Gotowy na podróż, $username? $randomCar nie chce stać w miejscu! 📅",
+    "$username, może czas na spontaniczny wypad? $randomCar jest gotowy! 🎒",
+    "Nie czekaj, $username – $randomCar znika szybciej niż hot dogi na stacji! ⏳",
+    "Witaj, $username! Może dziś coś sportowego? $randomCar czeka na rozgrzanie! 🏁",
+    "Nie musisz mieć własnego auta, $username! $randomCar już czeka, by Ci służyć! 🚗",
+    "Hej, $username! $randomCar to klucz do niezapomnianej podróży! 💰",
+    "$username, weekend bez planu? $randomCar to zawsze dobry pomysł! 🏕️",
+    "Dłuższy wyjazd? Krótki city-break? $randomCar nie pyta – jedzie! 🛣️",
+    "Nie czekaj do ostatniej chwili, $username! $randomCar chce ruszać! 🔥",
+    "Dziś dobry dzień na podróż, $username! $randomCar jest na to gotowy! 🏖️",
+    "Niech nic Cię nie zatrzyma, $username! $randomCar tylko czeka na Twój ruch! 🚙",
+    "$username, wiesz co robi różnicę? Wybór auta. Może $randomCar? 🏜️",
+    "Każda podróż zaczyna się od decyzji – a $randomCar to świetny wybór! 🛤️",
+    "Twój plan na dziś: rezerwacja, kluczyki, $randomCar i w drogę! 🚦",
+    "$username, czas na nową trasę! $randomCar już gotowy do jazdy! 🚘",
+    "Nie odkładaj marzeń na później, $username – wynajmij $randomCar i jedź! 🎯",
+    "Najlepsze podróże zaczynają się od rezerwacji! Może $randomCar? 📌",
+    "$randomCar mówi, że masz jeszcze czas na rezerwację… ale nie za długo! 🏁",
+    "Masz misję, $username! Wsiadaj do $randomCar i ruszaj na wyprawę! 🎯",
+    "Nie masz planów na weekend? $randomCar ma je za Ciebie! 🚀",
+    "Czyżbyś szukał przygody, $username? $randomCar już pali się do jazdy! 🔥",
+    "Twój dzień zapowiada się ciekawie, jeśli wsiądziesz do $randomCar! 🎉",
+    "$username, za godzinę w mieście jest koncert. $randomCar to Twoja wejściówka! 🎶",
+    "Niespodzianka! Twój $randomCar ma bagażnik pełen optymizmu! 📦😁",
+    "$username, w $randomCar radio puszcza tylko najlepsze kawałki do jazdy! 🎧",
+    "$randomCar mówi, że potrzebuje wakacji. Zawieź go gdzieś! 🌴",
+];
+
+$greeting = $isLoggedIn ? $greetings[array_rand($greetings)] : "Witaj w CarFuse! Wynajmij auto i ruszaj w drogę!";
+?>
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carfuse - Wynajem Aut</title>
+    <link rel="stylesheet" href="/public/css/style.css">
+    <script src="/public/js/main.js" defer></script>
+</head>
+<body>
+
+<header>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="logo">🚗 CarFuse</a>
+            <ul class="nav-links">
+                <?php if (!$isLoggedIn): ?>
+                    <li><a href="/auth/login">🔑 Zaloguj się</a></li>
+                    <li><a href="/auth/register">📝 Zarejestruj się</a></li>
+                <?php else: ?>
+                    <li class="greeting"><?= $greeting ?></li>
+                    <?php if ($isAdmin): ?>
+                        <li><a href="/dashboard">⚙️ Panel Admina</a></li>
+                    <?php else: ?>
+                        <li><a href="/dashboard">📊 Panel Użytkownika</a></li>
+                    <?php endif; ?>
+                    <li><a href="/logout">🚪 Wyloguj się</a></li>
+                <?php endif; ?>
+            </ul>
+        </div>
+    </nav>
+</header>
+=== App/Views/layouts/footer.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Footer - Stopka dla Stron Publicznych
+|--------------------------------------------------------------------------
+| Plik zawiera stopkę strony oraz ładuje globalne zasoby JavaScript.
+|
+| Ścieżka: App/Views/layouts/footer.php
+*/
+?>
+
+    </div> <!-- Koniec kontenera -->
+
+    <footer class="footer">
+        <div class="container text-center">
+            <p>&copy; <?= date("Y"); ?> CarFuse. Wszelkie prawa zastrzeżone.</p>
+        </div>
+    </footer>
+</body>
+</html>
+=== App/Views/dashboard.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Dashboard - Centralny Panel dla Użytkownika i Administratora
+|--------------------------------------------------------------------------
+| Ten plik obsługuje zarówno użytkowników, jak i administratorów.
+| Na podstawie roli zmienia dostępne opcje w nawigacji bocznej.
+|
+| Ścieżka: App/Views/dashboard.php
+*/
+require_once __DIR__ . '/../layouts/header.php';
+
+// Sprawdzenie roli użytkownika (przykładowa implementacja)
+$isAdmin = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+?>
+
+<aside class="sidebar">
+    <nav class="sidebar-menu">
+        <ul>
+            <li><a href="#user/dashboard" class="dashboard-link">📊 Panel</a></li>
+            <li><a href="#bookings/view" class="dashboard-link">📅 Moje rezerwacje</a></li>
+            <li><a href="#payments/history" class="dashboard-link">💳 Historia płatności</a></li>
+            <li><a href="#documents/user_documents" class="dashboard-link">📄 Moje dokumenty</a></li>
+            <li><a href="#user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
+            <li><a href="#user/profile" class="dashboard-link">👤 Profil</a></li>
+
+            <?php if ($isAdmin): ?>
+                <li><a href="#admin/users" class="dashboard-link">👥 Zarządzanie użytkownikami</a></li>
+                <li><a href="#admin/audit_logs" class="dashboard-link">📜 Logi audytowe</a></li>
+                <li><a href="#admin/logs" class="dashboard-link">📂 Logi systemowe</a></li>
+                <li><a href="#admin/reports" class="dashboard-link">📑 Raporty</a></li>
+                <li><a href="#admin/settings" class="dashboard-link">⚙️ Ustawienia</a></li>
+                <li><a href="#admin/payments/dashboard" class="dashboard-link">💳 Płatności</a></li>
+                <li><a href="#admin/documents/documents" class="dashboard-link">📄 Dokumenty</a></li>
+            <?php endif; ?>
+
+            <li><a href="/logout">🚪 Wyloguj</a></li>
+        </ul>
+    </nav>
+</aside>
+
+<div id="dashboard-content">
+    <h1 class="text-center">Panel <?= $isAdmin ? 'Administratora' : 'Użytkownika' ?></h1>
+    <div id="dashboard-view">
+        <?php require_once __DIR__ . '/' . ($isAdmin ? 'admin/dashboard-home.php' : 'user/dashboard-home.php'); ?>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        document.querySelectorAll(".dashboard-link").forEach(link => {
+            link.addEventListener("click", function(e) {
+                e.preventDefault();
+                let targetView = this.getAttribute("href").substring(1);
+                fetch(`/App/Views/${targetView}.php`).then(response => response.text()).then(data => {
+                    document.getElementById("dashboard-view").innerHTML = data;
+                });
+            });
+        });
+    });
+</script>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+=== App/Views/error.php ===
+/*
+|--------------------------------------------------------------------------
+| Strona Błędów - Obsługa 404, 500 i innych problemów
+|--------------------------------------------------------------------------
+| Strona wyświetla kreatywny komunikat błędu z tłem przedstawiającym
+| autobus komunikacji miejskiej. Obsługuje różne kody błędów.
+|
+| Ścieżka: App/Views/error.php
+*/
+
+<?php
+
+
+// Pobranie kodu błędu, jeśli nie przekazano, ustaw na 404
+$errorCode = isset($_GET['code']) ? intval($_GET['code']) : 404;
+
+// Lista domyślnych komunikatów dla kodów błędów
+$errorMessages = [
+    403 => "Nie masz uprawnień do tej strony. Może jednak lepiej zostać pasażerem?",
+    404 => "Nie udało nam się odnaleźć tej strony. Może została zabrana na pętlę?",
+    500 => "Coś poszło nie tak po naszej stronie. Pracujemy nad tym jak kierowca przy zmianie trasy.",
+    503 => "System chwilowo niedostępny. Autobus wróci do trasy niebawem!",
+];
+
+// Pobranie komunikatu lub ustawienie domyślnego
+$errorMessage = $errorMessages[$errorCode] ?? "Wystąpił nieznany błąd. Może to znak, by zrobić sobie przerwę? ☕";
+?>
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zamiast jazdy mamy zjazd</title>
+    <link rel="stylesheet" href="/css/main.min.css">
+    <style>
+        body {
+            background: url('/images/bus-error.jpg') no-repeat center center fixed;
+            background-size: cover;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        .error-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 600px;
+            width: 90%;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        p {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .error-code {
+            font-size: 1rem;
+            color: #ffcc00;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #ffcc00;
+            color: black;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .btn:hover {
+            background: #e6b800;
+        }
+    </style>
+</head>
+<body>
+
+<div class="error-container">
+    <h1>Zamiast jazdy mamy zjazd.</h1>
+    <p><?= $errorMessage ?></p>
+    <p class="error-code">Kod błędu: <?= $errorCode ?></p>
+    <a href="/" class="btn">Powrót na stronę główną</a>
+</div>
+
+</body>
+</html>
+=== App/Views/landing.php ===
+<?php
+// Path: App/Views/landing.php
+include __DIR__ . '/../layouts/header.php';
+?>
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carfuse - Wynajmij auto szybko i łatwo</title>
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <style>
+        /* Dark Minimal Theme */
+        body {
+            background-color: #121212;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #181818;
+            text-align: center;
+            padding: 15px 0;
+        }
+        .logo img {
+            max-height: 104px;
+            margin: 15px 0;
+        }
+        nav {
+            display: flex;
+            justify-content: center;
+            padding: 15px 0;
+        }
+        nav a {
+            color: #fff;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 18px;
+        }
+        nav a:hover {
+            color: #FFD700;
+        }
+        .hero {
+            text-align: center;
+            padding: 100px 20px;
+            background: url('/assets/images/hero-bg.jpg') no-repeat center center/cover;
+        }
+        .hero h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+        }
+        .hero p {
+            font-size: 20px;
+            opacity: 0.8;
+            margin-bottom: 30px;
+        }
+        .search-form {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        .search-form input, .search-form button {
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+        }
+        .search-form button {
+            background: #FFD700;
+            color: #121212;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .search-form button:hover {
+            background: #FFC107;
+        }
+        .features {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        .features h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        .feature-list {
+            display: flex;
+            justify-content: center;
+            gap: 50px;
+        }
+        .feature {
+            font-size: 18px;
+            background: #181818;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            background: #181818;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+
+<?php include __DIR__ . '/layouts/header.php'; ?>
+
+<section class="hero">
+    <h1>Znajdź idealne auto na swoją podróż</h1>
+    <p>Elastyczny wynajem, najlepsze ceny i wsparcie 24/7.</p>
+    <form class="search-form" action="/search" method="GET">
+        <input type="text" name="location" placeholder="Wpisz lokalizację odbioru">
+        <input type="date" name="pickup_date">
+        <input type="date" name="return_date">
+        <button type="submit">Szukaj aut</button>
+    </form>
+</section>
+
+<section class="features">
+    <h2>Dlaczego warto wybrać Carfuse?</h2>
+    <div class="feature-list">
+        <div class="feature">✔ Gwarancja najlepszych cen</div>
+        <div class="feature">✔ Wsparcie klienta 24/7</div>
+        <div class="feature">✔ Elastyczne warunki wynajmu</div>
+    </div>
+</section>
+
+<?php include __DIR__ . '/layouts/footer.php'; ?>
+
+</body>
+</html>
+=== App/Models/Booking.php ===
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+
+/**
+ * Booking Model
+ *
+ * Represents a booking and handles database interactions.
+ */
+class Booking extends BaseModel
+{
+    use SoftDeletes;
+
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'user_id',
+        'vehicle_id',
+        'pickup_date',
+        'dropoff_date',
+        'status'
+    ];
+
+    /**
+     * Validation rules for the model.
+     *
+     * @var array
+     */
+    public static $rules = [
+        'user_id' => 'required|exists:users,id',
+        'vehicle_id' => 'required|exists:vehicles,id',
+        'pickup_date' => 'required|date',
+        'dropoff_date' => 'required|date|after_or_equal:pickup_date',
+        'status' => 'required|string|in:pending,confirmed,cancelled,completed',
+    ];
+
+    /**
+     * Relationships
+     */
+
+    /**
+     * Get the user who made the booking.
+     *
+     * @return BelongsTo
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the vehicle associated with the booking.
+     *
+     * @return BelongsTo
+     */
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class);
+    }
+
+    /**
+     * Get the payment associated with the booking.
+     *
+     * @return HasOne
+     */
+    public function payment(): HasOne
+    {
+        return $this->hasOne(Payment::class);
+    }
+
+    /**
+     * Scopes
+     */
+
+    /**
+     * Scope a query to filter active bookings.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'confirmed');
+    }
+
+    /**
+     * Scope a query to filter bookings by user.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param int $userId
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeByUser($query, int $userId)
+    {
+        return $query->where('user_id', $userId);
+    }
+}
+=== App/Models/TransactionLog.php ===
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use App\Services\EncryptionService;
+
+/**
+ * TransactionLog Model
+ *
+ * Represents a financial transaction and handles interactions with the `transaction_logs` table.
+ */
+class TransactionLog extends BaseModel
+{
+    // Define relationships
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    // Define query scopes
+    public function scopeRecent($query)
+    {
+        return $query->orderBy('created_at', 'desc');
+    }
+
+    public function scopeByUser($query, $userId)
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    // Prevent modification of log entries after creation
+    public static function boot()
+    {
+        parent::boot();
+
+        static::updating(function ($model) {
+            return false;
+        });
+    }
+
+    private PDO $db;
+
+    public function __construct(PDO $db)
+    {
+        $this->db = $db;
+    }
+
+    /**
+     * Get all transactions for a user.
+     */
+    public function getByUserId(int $userId): array
+    {
+        $stmt = $this->db->prepare("SELECT * FROM transaction_logs WHERE user_id = :user_id ORDER BY created_at DESC");
+        $stmt->execute([':user_id' => $userId]);
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        // Decrypt transaction details
+        foreach ($transactions as &$transaction) {
+            $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
+        }
+
+        return $transactions;
+    }
+
+    /**
+     * Get transaction by ID.
+     */
+    public function getById(int $id): ?array
+    {
+        $stmt = $this->db->prepare("SELECT * FROM transaction_logs WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $transaction = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+        if ($transaction) {
+            // Decrypt transaction details
+            $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
+        }
+
+        return $transaction;
+    }
+
+    /**
+     * Log a new transaction.
+     */
+    public function create(array $data): int
+    {
+        // Encrypt transaction details
+        $data['amount'] = EncryptionService::encrypt($data['amount']);
+
+        $stmt = $this->db->prepare("
+            INSERT INTO transaction_logs (user_id, booking_id, amount, type, status, created_at)
+            VALUES (:user_id, :booking_id, :amount, :type, :status, NOW())
+        ");
+        $stmt->execute([
+            ':user_id' => $data['user_id'],
+            ':booking_id' => $data['booking_id'],
+            ':amount' => $data['amount'],
+            ':type' => $data['type'],
+            ':status' => $data['status'] ?? 'pending',
+        ]);
+        return $this->db->lastInsertId();
+    }
+
+    /**
+     * Update transaction status.
+     */
+    public function updateStatus(int $id, string $status): bool
+    {
+        $stmt = $this->db->prepare("UPDATE transaction_logs SET status = :status WHERE id = :id");
+        return $stmt->execute([':status' => $status, ':id' => $id]);
+    }
+}
+=== App/Models/Payment.php ===
+<?php
+
+namespace App\Models;
+
+use App\Models\BaseModel;
+use App\Models\User;
+use App\Models\Booking;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo; // Ensure this is included
+
+/**
+ * Payment Model
+ *
+ * Represents a payment transaction in the system.
+ *
+ * @property int $id Primary key
+ * @property int $user_id ID of the user who made the payment
+ * @property int $booking_id ID of the associated booking
+ * @property float $amount Transaction amount
+ * @property string $method Payment method (credit_card, PayPal, etc.)
+ * @property string $status Status of the payment (pending, completed, failed)
+ * @property string|null $transaction_id Unique external transaction identifier
+ * @property \DateTime $created_at Timestamp when the record was created
+ * @property \DateTime $updated_at Timestamp when the record was last updated
+ * @property \DateTime|null $deleted_at Soft delete timestamp
+ */
+class Payment extends BaseModel
+{
+    use SoftDeletes;
+
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'user_id',
+        'booking_id',
+        'amount',
+        'method',
+        'status',
+        'transaction_id'
+    ];
+
+    /**
+     * Attributes that should be hidden for arrays.
+     *
+     * @var array
+     */
+    protected $hidden = [
+        'deleted_at'
+    ];
+
+    /**
+     * Validation rules for the model.
+     *
+     * @var array
+     */
+    public static $rules = [
+        'user_id' => 'required|exists:users,id',
+        'booking_id' => 'required|exists:bookings,id',
+        'amount' => 'required|numeric|min:0',
+        'method' => 'required|string|in:credit_card,paypal,bank_transfer',
+        'status' => 'required|string|in:pending,completed,failed',
+        'transaction_id' => 'nullable|string|max:255',
+    ];
+
+    /**
+     * Relationships
+     */
+
+    /**
+     * Get the user who made the payment.
+     *
+     * @return BelongsTo
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the booking associated with the payment.
+     *
+     * @return BelongsTo
+     */
+    public function booking(): BelongsTo
+    {
+        return $this->belongsTo(Booking::class);
+    }
+
+    /**
+     * Scopes
+     */
+
+    /**
+     * Scope a query to filter payments by user.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param int $userId
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeByUser($query, int $userId)
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    /**
+     * Scope a query to fetch completed payments.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeCompleted($query)
+    {
+        return $query->where('status', 'completed');
+    }
+
+    /**
+     * Scope a query to filter payments by status.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param string $status
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeByStatus($query, string $status)
+    {
+        return $query->where('status', $status);
+    }
+
+    /**
+     * Scope a query to filter payments by a date range.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param string $startDate
+     * @param string $endDate
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeByDateRange($query, string $startDate, string $endDate)
+    {
+        return $query->whereBetween('created_at', [$startDate, $endDate]);
+    }
+}
+=== App/Models/Notification.php ===
+<?php
+
+namespace App\Models;
+
+use DateTime;
+use PDO;
+use PDOException;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/**
+ * Notification Model
+ *
+ * Represents a notification in the system.
+ *
+ * @property int $id
+ * @property int $user_id
+ * @property string $type
+ * @property string $message
+ * @property DateTime $sent_at
+ * @property bool $is_read
+ */
+class Notification extends BaseModel
+{
+    use SoftDeletes;
+
+    private int $id;
+    private int $user_id;
+    private string $type;
+    private string $message;
+    private DateTime $sent_at;
+    private bool $is_read;
+
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'user_id',
+        'type',
+        'message',
+        'sent_at',
+        'is_read'
+    ];
+
+    /**
+     * Validation rules for the model.
+     *
+     * @var array
+     */
+    public static $rules = [
+        'user_id' => 'required|exists:users,id',
+        'type' => 'required|string|max:255',
+        'message' => 'required|string',
+        'sent_at' => 'required|date',
+        'is_read' => 'boolean',
+    ];
+
+    public function __construct(
+        int $user_id,
+        string $type,
+        string $message,
+        DateTime $sent_at = null,
+        bool $is_read = false
+    ) {
+        $this->user_id = $user_id;
+        $this->type = $type;
+        $this->message = $message;
+        $this->sent_at = $sent_at ?? new DateTime();
+        $this->is_read = $is_read;
+    }
+
+    /**
+     * Save the notification to the database.
+     */
+    public function save(PDO $db): bool
+    {
+        try {
+            $stmt = $db->prepare("
+                INSERT INTO notifications (user_id, type, message, sent_at, is_read)
+                VALUES (:user_id, :type, :message, :sent_at, :is_read)
+            ");
+            $success = $stmt->execute([
+                ':user_id' => $this->user_id,
+                ':type' => $this->type,
+                ':message' => $this->message,
+                ':sent_at' => $this->sent_at->format('Y-m-d H:i:s'),
+                ':is_read' => (int)$this->is_read,
+            ]);
+
+            if ($success) {
+                $this->id = (int)$db->lastInsertId();
+            }
+
+            return $success;
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Mark the notification as read.
+     */
+    public function markAsRead(PDO $db): bool
+    {
+        try {
+            $stmt = $db->prepare("
+                UPDATE notifications
+                SET is_read = 1
+                WHERE id = :id
+            ");
+            return $stmt->execute([':id' => $this->id]);
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Delete the notification from the database.
+     */
+    public function delete(PDO $db): bool
+    {
+        try {
+            $stmt = $db->prepare("
+                DELETE FROM notifications
+                WHERE id = :id
+            ");
+            return $stmt->execute([':id' => $this->id]);
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Fetch all notifications for a specific user.
+     */
+    public static function getByUserId(PDO $db, int $user_id): array
+    {
+        try {
+            $stmt = $db->prepare("
+                SELECT * FROM notifications
+                WHERE user_id = :user_id
+                ORDER BY sent_at DESC
+            ");
+            $stmt->execute([':user_id' => $user_id]);
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            return array_map(function ($data) {
+                return new self(
+                    $data['user_id'],
+                    $data['type'],
+                    $data['message'],
+                    new DateTime($data['sent_at']),
+                    (bool)$data['is_read']
+                );
+            }, $results);
+        } catch (PDOException $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Fetch a single notification by its ID.
+     */
+    public static function getById(PDO $db, int $id): ?self
+    {
+        try {
+            $stmt = $db->prepare("
+                SELECT * FROM notifications
+                WHERE id = :id
+            ");
+            $stmt->execute([':id' => $id]);
+            $data = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($data) {
+                return new self(
+                    $data['user_id'],
+                    $data['type'],
+                    $data['message'],
+                    new DateTime($data['sent_at']),
+                    (bool)$data['is_read']
+                );
+            }
+
+            return null;
+        } catch (PDOException $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Mark all notifications as read for a user.
+     */
+    public static function markAllAsRead(PDO $db, int $user_id): bool
+    {
+        try {
+            $stmt = $db->prepare("
+                UPDATE notifications
+                SET is_read = 1
+                WHERE user_id = :user_id
+            ");
+            return $stmt->execute([':user_id' => $user_id]);
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Relationships
+     */
+
+    /**
+     * Get the user associated with the notification.
+     *
+     * @return BelongsTo
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Scopes
+     */
+
+    /**
+     * Scope a query to filter unread notifications.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeUnread($query)
+    {
+        return $query->where('is_read', false);
+    }
+}
+=== App/Models/PaymentMethod.php ===
+<?php
+
+namespace App\Models;
+
+use PDO;
+use App\Models\BaseModel;
+use App\Models\User;
+
+/**
+ * PaymentMethod Model
+ *
+ * Represents a payment method and handles interactions with the `payment_methods` table.
+ */
+class PaymentMethod extends BaseModel
+{
+    protected $fillable = ['name', 'description', 'is_active', 'user_id', 'payment_type'];
+    private PDO $db;
+
+    public function __construct(PDO $db)
+    {
+        $this->db = $db;
+    }
+
+    /**
+     * Get all available payment methods.
+     */
+    public function getAll(): array
+    {
+        $stmt = $this->db->query("SELECT * FROM payment_methods WHERE is_active = 1");
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get payment method by ID.
+     */
+    public function getById(int $id): ?array
+    {
+        $stmt = $this->db->prepare("SELECT * FROM payment_methods WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Add a new payment method.
+     */
+    public function create(array $data): int
+    {
+        $validPaymentTypes = ['credit_card', 'paypal', 'bank_transfer'];
+        if (!in_array($data['payment_type'], $validPaymentTypes)) {
+            throw new \InvalidArgumentException("Invalid payment type.");
+        }
+
+        $stmt = $this->db->prepare("
+            INSERT INTO payment_methods (name, description, is_active, created_at, user_id, payment_type)
+            VALUES (:name, :description, :is_active, NOW(), :user_id, :payment_type)
+        ");
+        $stmt->execute([
+            ':name' => $data['name'],
+            ':description' => $data['description'] ?? '',
+            ':is_active' => $data['is_active'] ?? 1,
+            ':user_id' => $data['user_id'],
+            ':payment_type' => $data['payment_type'],
+        ]);
+        return $this->db->lastInsertId();
+    }
+
+    /**
+     * Define relationship with User.
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Scope to filter by user.
+     */
+    public function scopeByUser($query, $userId)
+    {
+        return $query->where('user_id', $userId);
+    }
+}
+=== App/Models/Vehicle.php ===
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Vehicle extends BaseModel
+{
+    protected string $table = 'vehicles';
+
+    protected array $fillable = [
+        'registration_number',
+        'type',
+        'status',
+        'make',
+        'model',
+        'year',
+    ];
+
+    public static array $rules = [
+        'registration_number' => 'required|string|unique:vehicles,registration_number',
+        'type' => 'required|string',
+        'status' => 'required|in:available,unavailable,maintenance',
+        'make' => 'required|string|max:255',
+        'model' => 'required|string|max:255',
+        'year' => 'required|integer|min:1886|max:' . date('Y'),
+    ];
+
+    /**
+     * Relationships
+     */
+
+    // Get vehicle's bookings
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class, 'vehicle_id', 'id');
+    }
+
+    /**
+     * Scopes
+     */
+
+    // Scope a query to only include available vehicles
+    public function scopeAvailable($query)
+    {
+        return $query->where('status', 'available');
+    }
+
+    // Scope a query to only include vehicles of a specific type
+    public function scopeByType($query, $type)
+    {
+        return $query->where('type', $type);
+    }
+
+    /**
+     * Events
+     */
+
+    // Actions to take after vehicle creation
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($vehicle) {
+            // Ensure vehicle status is properly managed
+            if (empty($vehicle->status)) {
+                $vehicle->status = 'available';
+            }
+        });
+    }
+}
+=== App/Models/User.php ===
+<?php
+
+namespace App\Models;
+
+use App\Models\BaseModel;
+use App\Models\Booking;
+use App\Models\Notification;
+use App\Models\Payment;
+use App\Traits\HasUuid;
+use App\Traits\SoftDeletes;
+use App\Helpers\HashHelper;
+
+/**
+ * User Model
+ * 
+ * Represents a user in the system with their associated data and relationships.
+ * 
+ * @property string $id UUID of the user
+ * @property string $name User's first name
+ * @property string $surname User's last name
+ * @property string $email User's email address
+ * @property string $password_hash Hashed password
+ * @property string $role User role (user, admin, super_admin)
+ * @property string $phone Phone number
+ * @property string $address Physical address
+ * @property \DateTime $created_at
+ * @property \DateTime $updated_at
+ * @property \DateTime $deleted_at
+ */
+class User extends BaseModel
+{
+    use HasUuid, SoftDeletes;
+
+    protected string $table = 'users';
+
+    protected array $fillable = [
+        'name',
+        'surname',
+        'email',
+        'password',
+        'role',
+        'phone',
+        'address',
+    ];
+
+    protected array $hidden = [
+        'password_hash',
+        'remember_token',
+        'deleted_at',
+    ];
+
+    protected array $dates = [
+        'created_at',
+        'updated_at',
+        'deleted_at',
+        'email_verified_at',
+    ];
+
+    public static array $rules = [
+        'name' => 'required|string|max:255',
+        'surname' => 'required|string|max:255',
+        'email' => 'required|email|unique:users,email',
+        'password' => 'required|min:8|regex:/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/',
+        'role' => 'required|in:user,admin,super_admin',
+        'phone' => 'required|string|max:20',
+        'address' => 'required|string|max:255',
+    ];
+
+    /**
+     * Relationships
+     */
+
+    // Get user's bookings
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class, 'user_id', 'id');
+    }
+
+    // Get user's payments
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'user_id', 'id');
+    }
+
+    // Get user's notifications
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class, 'user_id', 'id');
+    }
+
+    /**
+     * Accessors
+     */
+
+    // Get user's full name
+    public function getFullNameAttribute(): string
+    {
+        return "{$this->name} {$this->surname}";
+    }
+
+    /**
+     * Mutators
+     */
+
+    // Set password (automatically hash)
+    public function setPasswordAttribute(string $value): void
+    {
+        $this->attributes['password_hash'] = HashHelper::hash($value);
+    }
+
+    /**
+     * Helpers
+     */
+
+    // Check if user is an admin
+    public function isAdmin(): bool
+    {
+        return in_array($this->role, ['admin', 'super_admin']);
+    }
+
+    // Check if user is a super admin
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin';
+    }
+
+    // Check if user has a specific permission
+    public function hasPermission(string $permission): bool
+    {
+        $rolePermissions = [
+            'user' => ['read_own'],
+            'admin' => ['read_own', 'read_all', 'write_all'],
+            'super_admin' => ['read_own', 'read_all', 'write_all', 'delete_all'],
+        ];
+
+        return in_array($permission, $rolePermissions[$this->role] ?? []);
+    }
+
+    /**
+     * Scopes
+     */
+
+    // Scope a query to only include active users
+    public function scopeActive($query)
+    {
+        return $query->whereNull('deleted_at');
+    }
+
+    // Scope a query to only include users with a specific role
+    public function scopeWithRole($query, string $role)
+    {
+        return $query->where('role', $role);
+    }
+
+    /**
+     * Events
+     */
+
+    // Actions to take after user creation
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($user) {
+            if (empty($user->id)) {
+                $user->id = (string) \Ramsey\Uuid\Uuid::uuid4();
+            }
+        });
+
+        static::deleting(function ($user) {
+            // Perform any cleanup tasks like logging the deletion
+        });
+    }
+}
+=== App/Models/BaseModel.php ===
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
+
+
+class BaseModel extends Model
+{
+    use SoftDeletes;
+
+    /**
+     * The "booting" method of the model.
+     *
+     * @return void
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Automatically generate UUID for primary key
+        static::creating(function ($model) {
+            if (empty($model->{$model->getKeyName()})) {
+                $model->{$model->getKeyName()} = (string) Str::uuid();
+            }
+        });
+
+        // Apply global scope for soft deletes
+        static::addGlobalScope('softDeletes', function (Builder $builder) {
+            $builder->whereNull('deleted_at');
+        });
+
+        // Apply global scope for default ordering
+        static::addGlobalScope('order', function (Builder $builder) {
+            $builder->orderBy('created_at', 'desc');
+        });
+    }
+
+    /**
+     * Indicates if the IDs are auto-incrementing.
+     *
+     * @var bool
+     */
+    public $incrementing = false;
+
+    /**
+     * The data type of the primary key.
+     *
+     * @var string
+     */
+    protected $keyType = 'string';
+
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [];
+
+    /**
+     * Log changes made to the model.
+     *
+     * @return void
+     */
+    protected static function bootLogging()
+    {
+        static::updated(function ($model) {
+            // Log changes
+        });
+    }
+}
+=== App/Models/Report.php ===
+<?php
+
+namespace App\Models;
+
+use App\Models\BaseModel;
+use App\Models\Admin;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/**
+ * Report Model
+ *
+ * Represents an admin report in the system.
+ */
+class Report extends BaseModel
+{
+    use SoftDeletes;
+
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'admin_id',
+        'title',
+        'content',
+        'status',
+        'created_at',
+        'updated_at'
+    ];
+
+    /**
+     * Relationships
+     */
+
+    /**
+     * Get the admin who created the report.
+     *
+     * @return BelongsTo
+     */
+    public function admin(): BelongsTo
+    {
+        return $this->belongsTo(Admin::class);
+    }
+
+    /**
+     * Scopes
+     */
+
+    /**
+     * Scope a query to filter reports by a date range.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param string $start
+     * @param string $end
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeByDateRange($query, string $start, string $end)
+    {
+        return $query->whereBetween('created_at', [$start, $end]);
+    }
+}
+=== App/Models/RefundLog.php ===
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/**
+ * RefundLog Model
+ *
+ * Represents a refund and handles interactions with the `refund_logs` table.
+ */
+class RefundLog extends Model  // Directly extend Eloquent's Model for testing
+{
+    use SoftDeletes;
+
+    protected $fillable = ['booking_id', 'amount', 'reason', 'status', 'user_id', 'payment_id'];
+
+    /**
+     * Validation rules for the model.
+     */
+    public static $rules = [
+        'booking_id' => 'required|exists:bookings,id',
+        'amount' => 'required|numeric|min:0',
+        'reason' => 'nullable|string',
+        'status' => 'required|string|in:pending,approved,denied',
+        'user_id' => 'required|exists:users,id',
+        'payment_id' => 'required|exists:payments,id',
+    ];
+
+    /**
+     * Relationship with User.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Relationship with Payment.
+     */
+    public function payment(): BelongsTo
+    {
+        return $this->belongsTo(Payment::class);
+    }
+}=== App/Models/Signature.php ===
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use App\Services\EncryptionService;
+
+class Signature extends BaseModel
+{
+    // Define relationships
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    // Ensure secure storage handling using encryption
+    public function setSignatureAttribute($value)
+    {
+        $this->attributes['signature'] = EncryptionService::encrypt($value);
+    }
+
+    public function getSignatureAttribute($value)
+    {
+        return EncryptionService::decrypt($value);
+    }
+
+    // Implement validation rules to only allow specific file types
+    public static function rules()
+    {
+        return [
+            'signature' => 'required|mimes:png,jpg,svg|max:2048',
+        ];
+    }
+}
+=== App/Queues/DocumentQueue.php ===
+<?php
+
+namespace App\Queues;
+
+use DocumentManager\Services\FileStorage;
+use Psr\Log\LoggerInterface;
+
+class DocumentQueue
+{
+    private FileStorage $fileStorage;
+    private string $queueFile;
+    private LoggerInterface $logger;
+    private const MAX_RETRY_ATTEMPTS = 3;
+
+    public function __construct(FileStorage $fileStorage, string $queueFile, LoggerInterface $logger)
+    {
+        $this->fileStorage = $fileStorage;
+        $this->queueFile = $queueFile;
+        $this->logger = $logger;
+    }
+
+    public function push(array $document): void
+    {
+        $queue = $this->getQueue();
+        $document['attempts'] = 0;
+        $queue[] = $document;
+        $this->saveQueue($queue);
+        $this->logger->info('Document added to queue', $document);
+    }
+
+    public function process(): void
+    {
+        $queue = $this->getQueue();
+        foreach ($queue as $index => $document) {
+            try {
+                $success = $this->fileStorage->storeFile($document['file_path'], $document['destination']);
+
+                if ($success) {
+                    unset($queue[$index]);
+                    $this->logger->info('Document processed successfully', $document);
+                } else {
+                    $queue[$index]['attempts']++;
+                    $this->logger->warning('Document processing failed, retrying...', [
+                        'document' => $document,
+                        'attempts' => $queue[$index]['attempts'],
+                    ]);
+                }
+
+                if ($queue[$index]['attempts'] >= self::MAX_RETRY_ATTEMPTS) {
+                    $this->logger->error('Max retry attempts reached for document', $document);
+                    unset($queue[$index]);
+                }
+            } catch (\Exception $e) {
+                $this->logger->error('Error processing document', [
+                    'document' => $document,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $this->saveQueue(array_values($queue));
+    }
+
+    private function getQueue(): array
+    {
+        if (!file_exists($this->queueFile)) {
+            return [];
+        }
+        return json_decode(file_get_contents($this->queueFile), true) ?? [];
+    }
+
+    private function saveQueue(array $queue): void
+    {
+        file_put_contents($this->queueFile, json_encode($queue, JSON_PRETTY_PRINT));
+    }
+}
+=== App/Queues/NotificationQueue.php ===
+<?php
+
+namespace App\Queues;
+
+use App\Services\NotificationService;
+use Psr\Log\LoggerInterface;
+
+class NotificationQueue
+{
+    private string $queueFile;
+    private NotificationService $notificationService;
+    private LoggerInterface $logger;
+    private const MAX_RETRY_ATTEMPTS = 3;
+
+    public function __construct(
+        NotificationService $notificationService,
+        string $queueFile,
+        LoggerInterface $logger
+    ) {
+        $this->notificationService = $notificationService;
+        $this->queueFile = $queueFile;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Push a notification onto the queue
+     */
+    public function push(array $notification): void
+    {
+        $queue = $this->getQueue();
+        $notification['attempts'] = 0; // Initialize retry attempts
+        $queue[] = $notification;
+        $this->saveQueue($queue);
+        $this->logger->info('Notification added to queue', $notification);
+    }
+
+    /**
+     * Process the notification queue
+     */
+    public function process(): void
+    {
+        $queue = $this->getQueue();
+        foreach ($queue as $index => $notification) {
+            try {
+                $success = $this->notificationService->sendNotification(
+                    $notification['user_id'],
+                    $notification['type'],
+                    $notification['message'],
+                    $notification['options']
+                );
+
+                if ($success) {
+                    unset($queue[$index]); // Remove notification on success
+                    $this->logger->info('Notification processed successfully', $notification);
+                } else {
+                    $queue[$index]['attempts']++;
+                    $this->logger->warning('Notification failed, retrying...', [
+                        'notification' => $notification,
+                        'attempts' => $queue[$index]['attempts'],
+                    ]);
+                }
+
+                // Remove notifications that exceed retry attempts
+                if ($queue[$index]['attempts'] >= self::MAX_RETRY_ATTEMPTS) {
+                    $this->logger->error('Max retry attempts reached for notification', $notification);
+                    unset($queue[$index]);
+                }
+            } catch (\Exception $e) {
+                $this->logger->error('Error processing notification', [
+                    'notification' => $notification,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $this->saveQueue(array_values($queue)); // Reindex and save the queue
+    }
+
+    /**
+     * Retrieve the current queue
+     */
+    private function getQueue(): array
+    {
+        if (!file_exists($this->queueFile)) {
+            return [];
+        }
+        return json_decode(file_get_contents($this->queueFile), true) ?? [];
+    }
+
+    /**
+     * Save the current queue to the file
+     */
+    private function saveQueue(array $queue): void
+    {
+        file_put_contents($this->queueFile, json_encode($queue, JSON_PRETTY_PRINT));
+    }
+}
+=== App/Services/MetricsService.php ===
+<?php
+
+namespace App\Services;
+
+use PDO;
+
+class MetricsService
+{
+    private PDO $db;
+
+    public function __construct(PDO $db)
+    {
+        $this->db = $db;
+    }
+
+    /**
+     * Fetch dashboard metrics
+     */
+    public function getDashboardMetrics(): array
+    {
+        $metrics = [
+            'total_users' => 0,
+            'active_users' => 0,
+            'total_bookings' => 0,
+            'completed_bookings' => 0,
+            'canceled_bookings' => 0,
+            'total_revenue' => 0.0,
+            'total_refunds' => 0.0,
+            'net_revenue' => 0.0,
+        ];
+
+        // Fetch total and active users
+        $stmt = $this->db->query("SELECT COUNT(*) AS total_users, SUM(active = 1) AS active_users FROM users");
+        $userData = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($userData) {
+            $metrics['total_users'] = $userData['total_users'];
+            $metrics['active_users'] = $userData['active_users'];
+        }
+
+        // Fetch bookings data
+        $stmt = $this->db->query("
+            SELECT 
+                COUNT(*) AS total_bookings,
+                SUM(status = 'completed') AS completed_bookings,
+                SUM(status = 'canceled') AS canceled_bookings
+            FROM bookings
+        ");
+        $bookingData = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($bookingData) {
+            $metrics['total_bookings'] = $bookingData['total_bookings'];
+            $metrics['completed_bookings'] = $bookingData['completed_bookings'];
+            $metrics['canceled_bookings'] = $bookingData['canceled_bookings'];
+        }
+
+        // Fetch revenue and refunds
+        $stmt = $this->db->query("
+            SELECT 
+                SUM(CASE WHEN type = 'payment' THEN amount ELSE 0 END) AS total_revenue,
+                SUM(CASE WHEN type = 'refund' THEN amount ELSE 0 END) AS total_refunds
+            FROM transaction_logs
+            WHERE status = 'completed'
+        ");
+        $revenueData = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($revenueData) {
+            $metrics['total_revenue'] = $revenueData['total_revenue'] ?? 0.0;
+            $metrics['total_refunds'] = $revenueData['total_refunds'] ?? 0.0;
+            $metrics['net_revenue'] = $metrics['total_revenue'] - $metrics['total_refunds'];
+        }
+
+        return $metrics;
+    }
+}
+=== App/Services/UserService.php ===
+<?php
+
+namespace App\Services;
+
+use PDO;
+use PDOException;
+use Psr\Log\LoggerInterface;
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+/**
+ * UserService
+ * 
+ * Handles user-related operations such as creation, updates, authentication, role management,
+ * password management, and logging.
+ */
+class UserService
+{
+    private PDO $db;
+    private LoggerInterface $logger;
+    private string $jwtSecret;
+
+    public function __construct(PDO $db, LoggerInterface $logger, string $jwtSecret)
+    {
+        $this->db = $db;
+        $this->logger = $logger;
+        $this->jwtSecret = $jwtSecret;
+    }
+
+    /**
+     * Create a new user
+     */
+    public function createUser(array $data): array
+    {
+        $rules = [
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users',
+            'password' => 'required|string|min:8|regex:/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/',
+            'phone' => 'required|string|max:20',
+            'address' => 'required|string|max:255',
+        ];
+
+        $validator = new Validator();
+        if (!$validator->validate($data, $rules)) {
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $validator->errors()];
+        }
+
+        try {
+            $stmt = $this->db->prepare("
+                INSERT INTO users (name, email, password, phone, address, role, created_at)
+                VALUES (:name, :email, :password, :phone, :address, 'user', NOW())
+            ");
+
+            $stmt->execute([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => password_hash($data['password'], PASSWORD_BCRYPT),
+                'phone' => $data['phone'],
+                'address' => $data['address']
+            ]);
+
+            $this->logAction(null, 'user_created', ['email' => $data['email']]);
+            return ['status' => 'success', 'message' => 'User created successfully'];
+        } catch (PDOException $e) {
+            $this->logger->error('User creation failed', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'User creation failed'];
+        }
+    }
+
+    /**
+     * Update an existing user's information
+     */
+    public function updateUser(int $id, array $data): array
+    {
+        $allowedFields = ['name', 'phone', 'address'];
+        $updates = array_intersect_key($data, array_flip($allowedFields));
+
+        if (empty($updates)) {
+            return ['status' => 'error', 'message' => 'No valid fields to update'];
+        }
+
+        try {
+            $sql = "UPDATE users SET " . implode(', ', array_map(fn($k) => "$k = :$k", array_keys($updates))) . " WHERE id = :id";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([...$updates, 'id' => $id]);
+
+            $this->logAction($id, 'user_updated', $updates);
+            return ['status' => 'success', 'message' => 'User updated successfully'];
+        } catch (PDOException $e) {
+            $this->logger->error('User update failed', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'User update failed'];
+        }
+    }
+
+    /**
+     * Delete a user (soft delete)
+     */
+    public function deleteUser(int $id): bool
+    {
+        try {
+            $stmt = $this->db->prepare("UPDATE users SET deleted_at = NOW() WHERE id = :id");
+            $stmt->execute(['id' => $id]);
+
+            $this->logAction($id, 'user_deleted');
+            return true;
+        } catch (PDOException $e) {
+            $this->logger->error('User deletion failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Authenticate a user
+     */
+    public function authenticate(string $email, string $password): ?string
+    {
+        $stmt = $this->db->prepare("SELECT * FROM users WHERE email = :email AND deleted_at IS NULL");
+        $stmt->execute(['email' => $email]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user || !password_verify($password, $user['password'])) {
+            $this->logAction(null, 'authentication_failed', ['email' => $email]);
+            return null;
+        }
+
+        $this->logAction($user['id'], 'authentication_successful');
+        return $this->generateJWT($user);
+    }
+
+    /**
+     * Change a user's password
+     */
+    public function changePassword(int $id, string $newPassword): bool
+    {
+        try {
+            $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
+            $stmt = $this->db->prepare("UPDATE users SET password = :password WHERE id = :id");
+            $stmt->execute(['password' => $hashedPassword, 'id' => $id]);
+
+            $this->logAction($id, 'password_changed');
+            return true;
+        } catch (PDOException $e) {
+            $this->logger->error('Password change failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Assign a role to a user
+     */
+    public function assignRole(int $id, string $role): bool
+    {
+        $validRoles = ['user', 'admin', 'super_admin'];
+        if (!in_array($role, $validRoles)) {
+            return false;
+        }
+
+        try {
+            $stmt = $this->db->prepare("UPDATE users SET role = :role WHERE id = :id");
+            $stmt->execute(['role' => $role, 'id' => $id]);
+
+            $this->logAction($id, 'role_assigned', ['role' => $role]);
+            return true;
+        } catch (PDOException $e) {
+            $this->logger->error('Role assignment failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Generate a JWT token for a user
+     */
+    private function generateJWT(array $user): string
+    {
+        $payload = [
+            'sub' => $user['id'],
+            'email' => $user['email'],
+            'role' => $user['role'],
+            'iat' => time(),
+            'exp' => time() + 3600, // Token expires in 1 hour
+        ];
+
+        return JWT::encode($payload, $this->jwtSecret, 'HS256');
+    }
+
+    /**
+     * Log an action for auditing purposes
+     */
+    private function logAction(?int $userId, string $action, array $details = []): void
+    {
+        $this->logger->info($action, ['user_id' => $userId, 'details' => $details]);
+    }
+}
+=== App/Services/Validator.php ===
+<?php
+
+namespace App\Services;
+
+/**
+ * Validator Service
+ *
+ * Validates input data against defined rules.
+ */
+class Validator
+{
+    private array $errors = [];
+
+    /**
+     * Validate data against rules.
+     */
+    public function validate(array $data, array $rules): bool
+    {
+        $this->errors = [];
+
+        foreach ($rules as $field => $ruleSet) {
+            $rulesArray = explode('|', $ruleSet);
+            foreach ($rulesArray as $rule) {
+                $this->applyRule($field, $data[$field] ?? null, $rule);
+            }
+        }
+
+        return empty($this->errors);
+    }
+
+    /**
+     * Get validation errors.
+     */
+    public function errors(): array
+    {
+        return $this->errors;
+    }
+
+    /**
+     * Apply a validation rule to a field.
+     */
+    private function applyRule(string $field, $value, string $rule): void
+    {
+        if ($rule === 'required' && empty($value)) {
+            $this->errors[$field][] = 'This field is required.';
+        } elseif (str_starts_with($rule, 'max:')) {
+            $maxLength = (int)explode(':', $rule)[1];
+            if (strlen($value) > $maxLength) {
+                $this->errors[$field][] = "Maximum length is $maxLength characters.";
+            }
+        } elseif ($rule === 'email' && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+            $this->errors[$field][] = 'Invalid email address.';
+        } elseif (str_starts_with($rule, 'regex:')) {
+            $pattern = substr($rule, 6);
+            if (!preg_match($pattern, $value)) {
+                $this->errors[$field][] = 'Invalid format.';
+            }
+        }
+    }
+}
+=== App/Services/BookingService.php ===
+<?php
+
+namespace App\Services;
+
+use PDO;
+use Psr\Log\LoggerInterface;
+
+class BookingService
+{
+    private PDO $db;
+    private LoggerInterface $logger;
+
+    public function __construct(PDO $db, LoggerInterface $logger)
+    {
+        $this->db = $db;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Get booking details by ID
+     */
+    public function getBookingById(int $id): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT b.*, CONCAT(f.make, ' ', f.model) AS vehicle
+            FROM bookings b
+            JOIN fleet f ON b.vehicle_id = f.id
+            WHERE b.id = :id
+        ");
+        $stmt->execute(['id' => $id]);
+        $booking = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$booking) {
+            throw new \Exception('Booking not found');
+        }
+
+        return $booking;
+    }
+
+    /**
+     * Reschedule a booking
+     */
+    public function rescheduleBooking(int $id, string $pickupDate, string $dropoffDate): void
+    {
+        $stmt = $this->db->prepare("
+            UPDATE bookings
+            SET pickup_date = :pickup_date, dropoff_date = :dropoff_date, status = 'rescheduled'
+            WHERE id = :id
+        ");
+        $stmt->execute([
+            'id' => $id,
+            'pickup_date' => $pickupDate,
+            'dropoff_date' => $dropoffDate,
+        ]);
+    }
+
+    /**
+     * Cancel a booking and calculate refund amount
+     */
+    public function cancelBooking(int $id): float
+    {
+        $stmt = $this->db->prepare("
+            UPDATE bookings
+            SET status = 'canceled'
+            WHERE id = :id
+        ");
+        $stmt->execute(['id' => $id]);
+
+        // Calculate refund amount (example: 80% of total price if canceled)
+        $refundStmt = $this->db->prepare("
+            SELECT total_price * 0.8 AS refund_amount
+            FROM bookings
+            WHERE id = :id
+        ");
+        $refundStmt->execute(['id' => $id]);
+        $result = $refundStmt->fetch(PDO::FETCH_ASSOC);
+
+        return $result['refund_amount'] ?? 0.0;
+    }
+
+    /**
+     * Get user ID associated with a booking
+     */
+    public function getUserIdByBooking(int $id): int
+    {
+        $stmt = $this->db->prepare("
+            SELECT user_id 
+            FROM bookings 
+            WHERE id = :id
+        ");
+        $stmt->execute(['id' => $id]);
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Get monthly booking trends for the current year
+     */
+    public function getMonthlyBookingTrends(): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT 
+                MONTH(created_at) AS month, 
+                COUNT(*) AS total
+            FROM bookings
+            WHERE YEAR(created_at) = YEAR(CURRENT_DATE)
+            GROUP BY MONTH(created_at)
+            ORDER BY MONTH(created_at)
+        ");
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get total number of bookings
+     */
+    public function getTotalBookings(): int
+    {
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM bookings");
+        $stmt->execute();
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Get the number of completed bookings
+     */
+    public function getCompletedBookings(): int
+    {
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM bookings WHERE status = 'completed'");
+        $stmt->execute();
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Get the number of canceled bookings
+     */
+    public function getCanceledBookings(): int
+    {
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM bookings WHERE status = 'canceled'");
+        $stmt->execute();
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Get booking logs for a specific booking ID
+     */
+    public function getBookingLogs(int $bookingId): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT 
+                action, 
+                details, 
+                created_at 
+            FROM booking_logs
+            WHERE booking_id = :booking_id
+            ORDER BY created_at DESC
+        ");
+        $stmt->execute(['booking_id' => $bookingId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Check booking availability
+     */
+    private function isBookingAvailable(int $vehicleId, string $pickupDate, string $dropoffDate): bool
+    {
+        $stmt = $this->db->prepare("
+            SELECT COUNT(*) 
+            FROM bookings 
+            WHERE vehicle_id = :vehicle_id 
+              AND status NOT IN ('canceled', 'completed')
+              AND (
+                  (pickup_date BETWEEN :pickup_date AND :dropoff_date) OR
+                  (dropoff_date BETWEEN :pickup_date AND :dropoff_date) OR
+                  (:pickup_date BETWEEN pickup_date AND dropoff_date) OR
+                  (:dropoff_date BETWEEN pickup_date AND dropoff_date)
+              )
+        ");
+        $stmt->execute([
+            'vehicle_id' => $vehicleId,
+            'pickup_date' => $pickupDate,
+            'dropoff_date' => $dropoffDate,
+        ]);
+        return (int)$stmt->fetchColumn() === 0;
+    }
+
+    /**
+     * Create a new booking
+     */
+    public function createBooking(int $userId, int $vehicleId, string $pickupDate, string $dropoffDate): array
+    {
+        if (!$this->isBookingAvailable($vehicleId, $pickupDate, $dropoffDate)) {
+            $this->logger->warning('Booking attempt failed: vehicle not available', [
+                'user_id' => $userId,
+                'vehicle_id' => $vehicleId,
+                'pickup_date' => $pickupDate,
+                'dropoff_date' => $dropoffDate,
+            ]);
+            return ['status' => 'error', 'message' => 'Vehicle not available for the selected dates'];
+        }
+
+        try {
+            $stmt = $this->db->prepare("
+                INSERT INTO bookings (user_id, vehicle_id, pickup_date, dropoff_date, status)
+                VALUES (:user_id, :vehicle_id, :pickup_date, :dropoff_date, 'booked')
+            ");
+            $stmt->execute([
+                'user_id' => $userId,
+                'vehicle_id' => $vehicleId,
+                'pickup_date' => $pickupDate,
+                'dropoff_date' => $dropoffDate,
+            ]);
+
+            $this->logger->info('Booking created successfully', [
+                'user_id' => $userId,
+                'vehicle_id' => $vehicleId,
+                'pickup_date' => $pickupDate,
+                'dropoff_date' => $dropoffDate,
+            ]);
+
+            return ['status' => 'success', 'message' => 'Booking created successfully'];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to create booking', [
+                'error' => $e->getMessage(),
+                'user_id' => $userId,
+                'vehicle_id' => $vehicleId,
+                'pickup_date' => $pickupDate,
+                'dropoff_date' => $dropoffDate,
+            ]);
+            return ['status' => 'error', 'message' => 'Failed to create booking'];
+        }
+    }
+}
+=== App/Services/Auth/TokenService.php ===
+<?php
+
+namespace App\Services\Auth;
+
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+use Illuminate\Support\Facades\Cache;
+
+class TokenService
+{
+    private string $secretKey;
+    private string $refreshSecretKey;
+
+    public function __construct(string $secretKey, string $refreshSecretKey)
+    {
+        if (empty($secretKey) || empty($refreshSecretKey)) {
+            throw new \RuntimeException('❌ JWT secrets are missing.');
+        }
+
+        $this->secretKey = $secretKey;
+        $this->refreshSecretKey = $refreshSecretKey;
+    }
+
+    public function generateToken($user): string
+    {
+        $payload = [
+            'iss' => "your-issuer",
+            'sub' => $user->id,
+            'iat' => time(),
+            'exp' => time() + 3600
+        ];
+
+        return JWT::encode($payload, $this->secretKey, 'HS256');
+    }
+
+    public function verifyToken(string $token): ?array
+    {
+        try {
+            $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
+            return (array) $decoded;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    public function generateRefreshToken($user): string
+    {
+        $payload = [
+            'iss' => "your-issuer",
+            'sub' => $user->id,
+            'iat' => time(),
+            'exp' => time() + 604800
+        ];
+
+        return JWT::encode($payload, $this->refreshSecretKey, 'HS256');
+    }
+
+    public function refreshAccessToken(string $refreshToken): ?string
+    {
+        $decoded = $this->verifyToken($refreshToken);
+        if ($decoded) {
+            $userId = $decoded['sub'];
+
+            if (Cache::has("revoked_refresh_token_$refreshToken")) {
+                return null;
+            }
+
+            return $this->generateToken((object) ['id' => $userId]);
+        }
+        return null;
+    }
+
+    public function revokeToken(string $token): void
+    {
+        Cache::put("revoked_refresh_token_$token", true, 604800);
+    }
+}
+=== App/Services/NotificationService.php ===
+<?php
+
+namespace App\Services;
+
+use PDO;
+use Psr\Log\LoggerInterface;
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+/**
+ * NotificationService
+ *
+ * Handles various notification types (email, SMS, webhook, push notifications).
+ */
+class NotificationService
+{
+    private PDO $pdo;
+    private LoggerInterface $logger;
+    private array $config;
+
+    public function __construct(PDO $pdo, LoggerInterface $logger, array $config)
+    {
+        $this->pdo = $pdo;
+        $this->logger = $logger;
+        $this->config = $config;
+    }
+
+    /**
+     * Send a notification
+     */
+    public function sendNotification(int $userId, string $type, string $message, array $options = []): bool
+    {
+        try {
+            $this->storeNotification($userId, $type, $message);
+            return $this->dispatchNotification($userId, $type, $message, $options);
+        } catch (\Exception $e) {
+            $this->logger->error('Notification failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Store notification in the database
+     */
+    private function storeNotification(int $userId, string $type, string $message): void
+    {
+        $stmt = $this->pdo->prepare("
+            INSERT INTO notifications (user_id, type, message, sent_at, is_read)
+            VALUES (:user_id, :type, :message, NOW(), 0)
+        ");
+        $stmt->execute([
+            'user_id' => $userId,
+            'type' => $type,
+            'message' => $message,
+        ]);
+    }
+
+    /**
+     * Dispatch the appropriate notification method
+     */
+    private function dispatchNotification(int $userId, string $type, string $message, array $options): bool
+    {
+        return match ($type) {
+            'email' => $this->sendEmail($options['email'] ?? '', $message, $options['subject'] ?? 'Notification'),
+            'sms' => $this->sendSMS($options['phone'] ?? '', $message),
+            'webhook' => $this->sendWebhook($options['url'] ?? '', $message),
+            'push' => $this->sendPushNotification($options['device_token'] ?? '', $message),
+            default => throw new \InvalidArgumentException("Unsupported notification type: $type"),
+        };
+    }
+
+    /**
+     * Send an email using PHPMailer
+     */
+    private function sendEmail(string $to, string $message, string $subject): bool
+    {
+        if (empty($to)) return false;
+
+        try {
+            $mail = new PHPMailer(true);
+            $mail->isSMTP();
+            $mail->Host = $this->config['smtp_host'];
+            $mail->SMTPAuth = true;
+            $mail->Username = $this->config['smtp_user'];
+            $mail->Password = $this->config['smtp_password'];
+            $mail->SMTPSecure = $this->config['smtp_secure'] ?? 'tls';
+            $mail->Port = $this->config['smtp_port'];
+            $mail->setFrom($this->config['from_email'], $this->config['from_name']);
+            $mail->addAddress($to);
+            $mail->Subject = $subject;
+            $mail->isHTML(true);
+            $mail->Body = "<p>$message</p>";
+            $mail->send();
+
+            return true;
+        } catch (Exception $e) {
+            $this->logger->error('Email failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Send an SMS
+     */
+    private function sendSMS(string $phone, string $message): bool
+    {
+        if (empty($phone)) return false;
+
+        try {
+            $this->logger->info("Sending SMS to $phone: $message");
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('SMS failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Send a webhook notification
+     */
+    private function sendWebhook(string $url, string $message): bool
+    {
+        if (empty($url)) return false;
+
+        try {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['message' => $message]));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            $response = curl_exec($ch);
+            curl_close($ch);
+
+            return $response !== false;
+        } catch (\Exception $e) {
+            $this->logger->error('Webhook failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Send a push notification
+     */
+    private function sendPushNotification(string $deviceToken, string $message): bool
+    {
+        if (empty($deviceToken)) return false;
+
+        try {
+            $payload = [
+                'to' => $deviceToken,
+                'notification' => ['title' => 'Notification', 'body' => $message],
+            ];
+            return $this->sendFCMRequest($payload);
+        } catch (\Exception $e) {
+            $this->logger->error('Push notification failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Send Firebase Cloud Messaging (FCM) request
+     */
+    private function sendFCMRequest(array $payload): bool
+    {
+        $ch = curl_init('https://fcm.googleapis.com/fcm/send');
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: key=' . $this->config['fcm_api_key'],
+        ]);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        $response = curl_exec($ch);
+
+        curl_close($ch);
+        return $response !== false;
+    }
+}
+=== App/Services/TransactionService.php ===
+<?php
+
+namespace App\Services;
+
+use PDO;
+
+class TransactionService
+{
+    private PDO $db;
+
+    public function __construct(PDO $db)
+    {
+        $this->db = $db;
+    }
+
+    /**
+     * Get transactions by user ID.
+     */
+    public function getByUserId(int $userId): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT * FROM transaction_logs WHERE user_id = :user_id ORDER BY created_at DESC
+        ");
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Log a transaction.
+     */
+    public function create(array $data): void
+    {
+        $stmt = $this->db->prepare("
+            INSERT INTO transaction_logs (user_id, booking_id, amount, type, status, created_at)
+            VALUES (:user_id, :booking_id, :amount, :type, :status, NOW())
+        ");
+        $stmt->execute([
+            ':user_id' => $data['user_id'],
+            ':booking_id' => $data['booking_id'],
+            ':amount' => $data['amount'],
+            ':type' => $data['type'],
+            ':status' => $data['status'],
+        ]);
+    }
+}
+=== App/Services/EncryptionService.php ===
+<?php
+
+namespace App\Services;
+
+use Exception;
+use RuntimeException;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * EncryptionService
+ *
+ * Provides functionality for encrypting/decrypting strings and files securely.
+ */
+class EncryptionService
+{
+    private string $encryptionKey;
+    private string $cipher = 'AES-256-CBC';
+    private int $ivLength;
+
+    public function __construct(string $encryptionKey)
+    {
+        if (empty($encryptionKey) || strlen($encryptionKey) < 32) {
+            throw new RuntimeException('❌ Encryption key is missing or too short. It must be at least 32 characters long.');
+        }
+
+        $this->encryptionKey = $encryptionKey;
+        $this->ivLength = openssl_cipher_iv_length($this->cipher);
+
+        if ($this->ivLength === false) {
+            throw new RuntimeException('❌ Unable to determine IV length for the cipher.');
+        }
+    }
+
+    public function encrypt(string $data): string
+    {
+        $iv = random_bytes($this->ivLength);
+        $encrypted = openssl_encrypt($data, $this->cipher, $this->encryptionKey, 0, $iv);
+
+        if ($encrypted === false) {
+            throw new RuntimeException('❌ Encryption failed.');
+        }
+
+        return base64_encode($iv . $encrypted);
+    }
+
+    public function decrypt(string $encryptedData): ?string
+    {
+        $decoded = base64_decode($encryptedData, true);
+        if ($decoded === false) {
+            Log::error('❌ Decryption failed: Invalid base64 input.');
+            return null;
+        }
+
+        $iv = substr($decoded, 0, $this->ivLength);
+        $cipherText = substr($decoded, $this->ivLength);
+
+        if (strlen($iv) !== $this->ivLength) {
+            throw new RuntimeException('❌ Invalid IV length.');
+        }
+
+        $decrypted = openssl_decrypt($cipherText, $this->cipher, $this->encryptionKey, 0, $iv);
+
+        if ($decrypted === false) {
+            Log::error('❌ Decryption failed: Data may have been tampered with.');
+            return null;
+        }
+
+        return $decrypted;
+    }
+
+    /**
+     * Encrypt a file.
+     */
+    public function encryptFile(string $inputFile, string $outputFile): bool
+    {
+        $this->validateFile($inputFile);
+        $data = file_get_contents($inputFile);
+
+        if ($data === false) {
+            throw new \RuntimeException("Failed to read file: $inputFile");
+        }
+
+        return $this->writeFile($outputFile, $this->encrypt($data));
+    }
+
+    /**
+     * Decrypt a file.
+     */
+    public function decryptFile(string $inputFile, string $outputFile): bool
+    {
+        $this->validateFile($inputFile);
+        $encryptedData = file_get_contents($inputFile);
+
+        if ($encryptedData === false) {
+            throw new \RuntimeException("Failed to read encrypted file: $inputFile");
+        }
+
+        $decryptedData = $this->decrypt($encryptedData);
+        if ($decryptedData === null) {
+            throw new \RuntimeException("Failed to decrypt file: $inputFile");
+        }
+
+        return $this->writeFile($outputFile, $decryptedData);
+    }
+
+    /**
+     * Sign data using HMAC SHA-256.
+     */
+    public function sign(string $data): string
+    {
+        return hash_hmac('sha256', $data, $this->encryptionKey);
+    }
+
+    /**
+     * Verify the integrity of signed data.
+     */
+    public function verify(string $data, string $signature): bool
+    {
+        return hash_equals($this->sign($data), $signature);
+    }
+
+    /**
+     * Validate if a file exists and is readable.
+     */
+    private function validateFile(string $filePath): void
+    {
+        if (!file_exists($filePath) || !is_readable($filePath)) {
+            throw new \InvalidArgumentException("File not found or not readable: $filePath");
+        }
+    }
+
+    /**
+     * Write data to a file.
+     */
+    private function writeFile(string $filePath, string $data): bool
+    {
+        if (file_put_contents($filePath, $data) === false) {
+            throw new \RuntimeException("Failed to write to file: $filePath");
+        }
+
+        return true;
+    }
+}
+=== App/Services/RateLimiter.php ===
+<?php
+
+namespace App\Services;
+
+use PDO;
+
+/**
+ * Rate Limiter Service
+ *
+ * Implements IP-based rate limiting.
+ */
+class RateLimiter
+{
+    private PDO $db;
+
+    public function __construct(PDO $db)
+    {
+        $this->db = $db;
+    }
+
+    /**
+     * Check if an IP is rate-limited.
+     */
+    public function isRateLimited(string $ip): bool
+    {
+        $stmt = $this->db->prepare("
+            SELECT COUNT(*) FROM login_attempts 
+            WHERE ip_address = ? AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+        ");
+        $stmt->execute([$ip]);
+
+        return $stmt->fetchColumn() >= 5;
+    }
+
+    /**
+     * Record a failed login attempt.
+     */
+    public function recordFailedAttempt(string $ip): void
+    {
+        $stmt = $this->db->prepare("
+            INSERT INTO login_attempts (ip_address, created_at) 
+            VALUES (?, NOW())
+        ");
+        $stmt->execute([$ip]);
+    }
+}
+=== App/Services/RevenueService.php ===
+<?php
+
+namespace App\Services;
+
+use PDO;
+
+class RevenueService
+{
+    private PDO $db;
+
+    public function __construct(PDO $db)
+    {
+        $this->db = $db;
+    }
+
+    /**
+     * Fetch monthly revenue trends
+     */
+    public function getMonthlyRevenueTrends(): array
+    {
+        $stmt = $this->db->query("
+            SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, SUM(amount) AS revenue
+            FROM transaction_logs
+            WHERE type = 'payment' AND status = 'completed'
+            GROUP BY month
+            ORDER BY month
+        ");
+
+        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $labels = array_column($data, 'month');
+        $amounts = array_column($data, 'revenue');
+
+        return [
+            'labels' => $labels,
+            'data' => $amounts,
+        ];
+    }
+}
+=== App/Services/Security/KeyManager.php ===
+<?php
+
+namespace App\Services\Security;
+
+use Exception;
+use Psr\Log\LoggerInterface;
+
+class KeyManager
+{
+    private array $keys;
+    private LoggerInterface $logger;
+
+    public function __construct(array $keys, LoggerInterface $logger)
+    {
+        $this->keys = $keys;
+        $this->logger = $logger;
+    }
+
+    public function getKey(string $identifier): string
+    {
+        $keyName = 'encryption_key_' . strtolower($identifier);
+
+        if (!isset($this->keys[$keyName]) || empty($this->keys[$keyName])) {
+            $this->logger->error("Encryption key for {$identifier} not found.");
+            throw new Exception("Encryption key for {$identifier} not found.");
+        }
+
+        return $this->keys[$keyName];
+    }
+
+    public function generateKey(): string
+    {
+        return base64_encode(random_bytes(32)); // AES-256 key
+    }
+
+    public function storeKey(string $identifier, string $key): void
+    {
+        $this->logger->info("Storing key for {$identifier}");
+        // Implementation for storing key securely (e.g., database, key vault)
+    }
+
+    public function rotateKey(string $identifier): void
+    {
+        $newKey = $this->generateKey();
+        $this->storeKey($identifier, $newKey);
+        $this->logger->info("Rotated key for {$identifier}");
+    }
+
+    public function revokeKey(string $identifier): void
+    {
+        $this->logger->info("Revoking key for {$identifier}");
+        // Implementation for revoking key securely
+    }
+}
+=== App/Services/ReportService.php ===
+<?php
+
+namespace App\Services;
+
+use PDO;
+
+class ReportService
+{
+    private PDO $db;
+
+    public function __construct(PDO $db)
+    {
+        $this->db = $db;
+    }
+
+    /**
+     * Generate a report for admin
+     */
+    public function generateReport(string $reportType, array $dateRange, array $filters = [], string $format): string
+    {
+        $data = match ($reportType) {
+            'bookings' => $this->getBookingReportData($dateRange, $filters),
+            'payments' => $this->getPaymentReportData($dateRange, $filters),
+            'users' => $this->getUserReportData($dateRange, $filters),
+            default => throw new \InvalidArgumentException("Invalid report type: $reportType"),
+        };
+
+        return $this->exportReport($data, $reportType, $format);
+    }
+
+    /**
+     * Generate a user-specific report
+     */
+    public function generateUserReport(int $userId, string $reportType, array $dateRange, string $format): string
+    {
+        $data = match ($reportType) {
+            'bookings' => $this->getUserBookingReportData($userId, $dateRange),
+            'payments' => $this->getUserPaymentReportData($userId, $dateRange),
+            default => throw new \InvalidArgumentException("Invalid report type: $reportType"),
+        };
+
+        return $this->exportReport($data, "{$reportType}_user_{$userId}", $format);
+    }
+
+    /**
+     * Fetch booking report data
+     */
+    private function getBookingReportData(array $dateRange, array $filters): array
+    {
+        $query = "
+            SELECT b.id, b.pickup_date, b.dropoff_date, b.status, b.total_price, u.email AS user_email
+            FROM bookings b
+            JOIN users u ON b.user_id = u.id
+            WHERE b.created_at BETWEEN :start AND :end
+        ";
+
+        if (!empty($filters['status'])) {
+            $query .= " AND b.status = :status";
+        }
+
+        $stmt = $this->db->prepare($query);
+        $params = [
+            ':start' => $dateRange['start'],
+            ':end' => $dateRange['end'],
+        ];
+
+        if (!empty($filters['status'])) {
+            $params[':status'] = $filters['status'];
+        }
+
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Fetch payment report data
+     */
+    private function getPaymentReportData(array $dateRange, array $filters): array
+    {
+        $query = "
+            SELECT t.id, t.amount, t.type, t.status, t.created_at, u.email AS user_email
+            FROM transaction_logs t
+            JOIN users u ON t.user_id = u.id
+            WHERE t.created_at BETWEEN :start AND :end
+        ";
+
+        if (!empty($filters['type'])) {
+            $query .= " AND t.type = :type";
+        }
+
+        $stmt = $this->db->prepare($query);
+        $params = [
+            ':start' => $dateRange['start'],
+            ':end' => $dateRange['end'],
+        ];
+
+        if (!empty($filters['type'])) {
+            $params[':type'] = $filters['type'];
+        }
+
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Fetch user report data
+     */
+    private function getUserReportData(array $dateRange, array $filters): array
+    {
+        $query = "
+            SELECT id, email, created_at, active
+            FROM users
+            WHERE created_at BETWEEN :start AND :end
+        ";
+
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([
+            ':start' => $dateRange['start'],
+            ':end' => $dateRange['end'],
+        ]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Fetch user-specific booking report data
+     */
+    private function getUserBookingReportData(int $userId, array $dateRange): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT id, pickup_date, dropoff_date, status, total_price
+            FROM bookings
+            WHERE user_id = :user_id AND created_at BETWEEN :start AND :end
+        ");
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':start' => $dateRange['start'],
+            ':end' => $dateRange['end'],
+        ]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Fetch user-specific payment report data
+     */
+    private function getUserPaymentReportData(int $userId, array $dateRange): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT id, amount, type, status, created_at
+            FROM transaction_logs
+            WHERE user_id = :user_id AND created_at BETWEEN :start AND :end
+        ");
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':start' => $dateRange['start'],
+            ':end' => $dateRange['end'],
+        ]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Export the report data
+     */
+    private function exportReport(array $data, string $reportName, string $format): string
+    {
+        $filePath = __DIR__ . "/../../storage/reports/{$reportName}_" . date('YmdHis') . ".{$format}";
+
+        if ($format === 'csv') {
+            $file = fopen($filePath, 'w');
+            if (!empty($data)) {
+                fputcsv($file, array_keys($data[0])); // Add headers
+                foreach ($data as $row) {
+                    fputcsv($file, $row);
+                }
+            }
+            fclose($file);
+        } elseif ($format === 'pdf') {
+            // For simplicity, we use plain text for PDF export (enhance later with libraries like FPDF or TCPDF)
+            $content = '';
+            foreach ($data as $row) {
+                $content .= implode(' | ', $row) . "\n";
+            }
+            file_put_contents($filePath, $content);
+        } else {
+            throw new \InvalidArgumentException("Unsupported format: $format");
+        }
+
+        return $filePath;
+    }
+}
+=== App/Services/PaymentService.php ===
+<?php
+
+namespace App\Services;
+
+use App\Models\Booking;
+use App\Models\TransactionLog;
+use App\Models\Payment;
+use PDO;
+use Psr\Log\LoggerInterface;
+
+class PaymentService
+{
+    private PDO $pdo;
+    private LoggerInterface $logger;
+    private Payment $paymentModel;
+    private string $payuApiKey;
+    private string $payuApiSecret;
+
+    public function __construct(PDO $pdo, LoggerInterface $logger, Payment $paymentModel, string $payuApiKey, string $payuApiSecret)
+    {
+        $this->db = $pdo;
+        $this->logger = $logger;
+        $this->paymentModel = $paymentModel;
+        $this->payuApiKey = $payuApiKey;
+        $this->payuApiSecret = $payuApiSecret;
+    }
+
+    public function processPayment(int $bookingId, float $amount, string $paymentMethod): bool
+    {
+        try {
+            $this->paymentModel->createPayment($bookingId, $amount, $paymentMethod);
+
+            $booking = new Booking($this->db);
+            $booking->updateStatus($bookingId, 'paid');
+
+            $this->logTransaction($bookingId, $amount, 'payment');
+
+            $this->logger->info("Payment processed for booking $bookingId");
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('Payment processing failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    public function processRefund(int $bookingId, float $amount): bool
+    {
+        try {
+            $this->paymentModel->createRefund($bookingId, $amount);
+
+            $stmt = $this->db->prepare("UPDATE bookings SET refund_status = 'processed' WHERE id = :id");
+            $stmt->execute([':id' => $bookingId]);
+
+            $this->logTransaction($bookingId, $amount, 'refund');
+
+            $this->logger->info("Refund processed for booking $bookingId");
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('Refund processing failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    private function logTransaction(int $bookingId, float $amount, string $type): void
+    {
+        $transactionLog = new TransactionLog($this->db);
+        $transactionLog->create([
+            'booking_id' => $bookingId,
+            'amount' => $amount,
+            'type' => $type,
+            'status' => 'completed',
+        ]);
+    }
+
+    public function getMonthlyRevenueTrends(): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT MONTH(created_at) AS month, SUM(amount) AS total
+            FROM transaction_logs
+            WHERE type = 'payment' AND YEAR(created_at) = YEAR(CURRENT_DATE)
+            GROUP BY MONTH(created_at)
+            ORDER BY MONTH(created_at)
+        ");
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+}
+=== App/Services/PayUService.php ===
+<?php
+
+namespace App\Services;
+
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
+use Psr\Log\LoggerInterface;
+require_once __DIR__ . '/../../config/payu.php';
+/**
+ * PayUService
+ * 
+ * Handles PayU API integration, including payment initialization, verification, and refunds.
+ */
+class PayUService
+{
+    private Client $client;
+    private LoggerInterface $logger;
+    private string $merchantKey;
+    private string $merchantSalt;
+    private string $endpoint;
+
+    public function __construct(Client $client, LoggerInterface $logger, array $config)
+    {
+        $this->client = $client;
+        $this->logger = $logger;
+        $this->merchantKey = $config['merchant_key'];
+        $this->merchantSalt = $config['merchant_salt'];
+        $this->endpoint = $config['endpoint'];
+    }
+
+    /**
+     * Initialize a payment transaction
+     *
+     * @param string $transactionId
+     * @param float $amount
+     * @param string $productInfo
+     * @param string $customerEmail
+     * @param string $customerPhone
+     * @return array
+     */
+    public function initiatePayment(string $transactionId, float $amount, string $productInfo, string $customerEmail, string $customerPhone): array
+    {
+        $hash = $this->generateHash($transactionId, $amount, $productInfo, $customerEmail);
+
+        $params = [
+            'key' => $this->merchantKey,
+            'txnid' => $transactionId,
+            'amount' => $amount,
+            'productinfo' => $productInfo,
+            'firstname' => $customerEmail, // Assuming first name is derived from the email
+            'email' => $customerEmail,
+            'phone' => $customerPhone,
+            'surl' => $this->endpoint . '/success', // Success callback URL
+            'furl' => $this->endpoint . '/failure', // Failure callback URL
+            'hash' => $hash,
+            'service_provider' => 'payu_paisa'
+        ];
+
+        try {
+            $response = $this->client->post($this->endpoint . '/_payment', [
+                'form_params' => $params,
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (RequestException $e) {
+            $this->logger->error('PayU payment initialization failed', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Payment initialization failed'];
+        }
+    }
+
+    /**
+     * Verify a payment transaction
+     *
+     * @param string $transactionId
+     * @return array
+     */
+    public function verifyPayment(string $transactionId): array
+    {
+        $params = [
+            'key' => $this->merchantKey,
+            'command' => 'verify_payment',
+            'var1' => $transactionId,
+        ];
+
+        try {
+            $response = $this->client->post($this->endpoint . '/payment/verify', [
+                'form_params' => $params,
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (RequestException $e) {
+            $this->logger->error('PayU payment verification failed', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Payment verification failed'];
+        }
+    }
+
+    /**
+     * Process a refund
+     *
+     * @param string $transactionId
+     * @param float $amount
+     * @return array
+     */
+    public function processRefund(string $transactionId, float $amount): array
+    {
+        $params = [
+            'key' => $this->merchantKey,
+            'command' => 'refund_transaction',
+            'var1' => $transactionId,
+            'var2' => $amount,
+        ];
+
+        try {
+            $response = $this->client->post($this->endpoint . '/refund', [
+                'form_params' => $params,
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (RequestException $e) {
+            $this->logger->error('PayU refund processing failed', ['error' => $e->getMessage()]);
+            return ['status' => 'error', 'message' => 'Refund processing failed'];
+        }
+    }
+
+    /**
+     * Generate hash for PayU API
+     *
+     * @param string $transactionId
+     * @param float $amount
+     * @param string $productInfo
+     * @param string $customerEmail
+     * @return string
+     */
+    private function generateHash(string $transactionId, float $amount, string $productInfo, string $customerEmail): string
+    {
+        $hashString = implode('|', [
+            $this->merchantKey,
+            $transactionId,
+            $amount,
+            $productInfo,
+            $customerEmail,
+            $this->merchantSalt
+        ]);
+
+        return hash('sha512', $hashString);
+    }
+}
+=== App/Middleware/EncryptionMiddleware.php ===
+<?php
+
+namespace App\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use App\Services\EncryptionService;
+
+class EncryptionMiddleware
+{
+    /**
+     * Handle an incoming request.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Closure  $next
+     * @return mixed
+     */
+    public function handle(Request $request, Closure $next)
+    {
+        // Encrypt sensitive data in the request
+        if ($this->isSensitiveEndpoint($request)) {
+            $this->encryptRequestData($request);
+        }
+
+        $response = $next($request);
+
+        // Encrypt sensitive data in the response
+        if ($this->isSensitiveEndpoint($request)) {
+            $this->encryptResponseData($response);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Determine if the request is for a sensitive endpoint.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return bool
+     */
+    private function isSensitiveEndpoint(Request $request): bool
+    {
+        $sensitiveEndpoints = [
+            '/user/profile-data',
+            // Add other sensitive endpoints here
+        ];
+
+        return in_array($request->path(), $sensitiveEndpoints);
+    }
+
+    /**
+     * Encrypt sensitive data in the request.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return void
+     */
+    private function encryptRequestData(Request $request): void
+    {
+        $data = $request->all();
+        foreach ($data as $key => $value) {
+            if ($this->isSensitiveField($key)) {
+                $data[$key] = EncryptionService::encrypt($value);
+            }
+        }
+        $request->merge($data);
+    }
+
+    /**
+     * Encrypt sensitive data in the response.
+     *
+     * @param  \Illuminate\Http\Response  $response
+     * @return void
+     */
+    private function encryptResponseData($response): void
+    {
+        $data = $response->getContent();
+        $encryptedData = EncryptionService::encrypt($data);
+        $response->setContent($encryptedData);
+    }
+
+    /**
+     * Determine if the field is sensitive.
+     *
+     * @param  string  $field
+     * @return bool
+     */
+    private function isSensitiveField(string $field): bool
+    {
+        $sensitiveFields = [
+            'password',
+            'email',
+            'phone',
+            // Add other sensitive fields here
+        ];
+
+        return in_array($field, $sensitiveFields);
+    }
+}
+=== App/Middleware/AuthMiddleware.php ===
+<?php
+
+namespace App\Middleware;
+
+use App\Services\Auth\TokenService;
+use Exception;
+
+require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
+
+class AuthMiddleware
+{
+    protected TokenService $tokenService;
+
+    public function __construct()
+    {
+        $configPath = BASE_PATH . '/config/encryption.php';
+        if (!file_exists($configPath)) {
+            throw new Exception("Encryption configuration missing.");
+        }
+
+        $encryptionConfig = require $configPath;
+
+        if (!isset($encryptionConfig['jwt_secret'], $encryptionConfig['jwt_refresh_secret'])) {
+            throw new Exception("JWT configuration missing in encryption.php.");
+        }
+
+        $this->tokenService = new TokenService(
+            $encryptionConfig['jwt_secret'],
+            $encryptionConfig['jwt_refresh_secret']
+        );
+    }
+
+    public function handle($request, $next)
+    {
+        $publicRoutes = ['/public', '/api/public']; // Define public routes
+
+        if (in_array($request->getPathInfo(), $publicRoutes)) {
+            return $next($request); // Allow guest access for public routes
+        }
+
+        if (!validateSessionIntegrity()) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Session expired']);
+            $this->logAuthAttempt('failure', 'Session expired');
+            return;
+        }
+
+        $authHeader = $request->getHeader('Authorization');
+        if (!$authHeader) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Unauthorized']);
+            $this->logAuthAttempt('failure', 'Missing Authorization header');
+            return;
+        }
+
+        $token = str_replace('Bearer ', '', $authHeader);
+        if (!$this->tokenService->validateToken($token)) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Invalid token']);
+            $this->logAuthAttempt('failure', 'Invalid token');
+            return;
+        }
+
+        return $next($request);
+    }
+
+    private function logAuthAttempt($status, $message)
+    {
+        $logMessage = sprintf("[%s] %s: %s from IP: %s\n", date('Y-m-d H:i:s'), ucfirst($status), $message, $_SERVER['REMOTE_ADDR']);
+        file_put_contents(__DIR__ . '/../../logs/auth.log', $logMessage, FILE_APPEND);
+    }
+}
+=== App/Helpers/ViewHelper.php ===
+<?php
+
+function view($viewName, $data = [])
+{
+    $viewPath = BASE_PATH . "/App/Views/{$viewName}.php";
+
+    if (!file_exists($viewPath)) {
+        die("❌ View not found: {$viewName}");
+    }
+
+    extract($data); // Extract data for use inside views
+    require $viewPath;
+}
+=== App/Helpers/SecurityHelper.php ===
+<?php
+/*
+|--------------------------------------------------------------------------
+| Security Helper - Centralized Session & Security Functions
+|--------------------------------------------------------------------------
+| This file handles secure session management, CSRF protection, input sanitization,
+| and user session handling to ensure global consistency and security.
+|
+| Path: App/Helpers/SecurityHelper.php
+*/
+
+// Security Configuration
+const SESSION_CONFIG = [
+    'use_only_cookies' => 1,
+    'use_strict_mode' => 1,
+    'cookie_httponly' => 1,
+    'cookie_samesite' => 'Lax',
+    'gc_maxlifetime' => 3600,
+    'cookie_lifetime' => 0,
+    'use_trans_sid' => 0,
+    'sid_bits_per_character' => 6
+];
+
+// Enhanced logging with severity levels
+function securityLog($message, $level = 'info') {
+    $logFile = __DIR__ . '/../../logs/security.log';
+    $timestamp = date('Y-m-d H:i:s');
+    
+    // Sanitize sensitive data
+    $patterns = [
+        '/user_id[\s]?[=:][\s]?["\']?\w+["\']?/i',
+        '/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/',
+        '/Mozilla\/[^\s]+/'
+    ];
+    $message = preg_replace($patterns, '[REDACTED]', $message);
+    $sanitizedMessage = str_replace(["\n", "\r"], '', $message);
+    
+    error_log("[$timestamp][$level] $sanitizedMessage\n", 3, $logFile);
+}
+
+function startSecureSession() {
+    // Avoid duplicate initializations
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        return true;
+    }
+
+    if (headers_sent()) {
+        securityLog('Headers already sent, cannot modify session settings', 'warning');
+    } else {
+        foreach (SESSION_CONFIG as $key => $value) {
+            @ini_set("session.$key", $value);
+        }
+
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => '/',
+            'domain' => $_SERVER['HTTP_HOST'] ?? '',
+            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+    }
+
+    try {
+        if (!session_start()) { // will only be called if not already active
+            throw new Exception('Session start failed');
+        }
+
+        // Initialize session only once
+        if (empty($_SESSION['initiated'])) {
+            session_regenerate_id(true);
+            $_SESSION['initiated'] = time();
+            $_SESSION['client_ip'] = hash('sha256', $_SERVER['REMOTE_ADDR']);
+            $_SESSION['user_agent'] = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
+            $_SESSION['last_activity'] = time();
+            $_SESSION['guest'] = true; // Default guest initialization
+            securityLog('New guest session initiated');
+        }
+
+        // CSRF protection
+        if (empty($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+
+        return validateSessionIntegrity();
+    } catch (Exception $e) {
+        securityLog('Session initialization failed: ' . $e->getMessage(), 'critical');
+        return false;
+    }
+}
+
+function validateSessionIntegrity() {
+    if (!isset($_SESSION['initiated'])) {
+        securityLog('Session integrity check failed: not initiated', 'warning');
+        return false;
+    }
+
+    $currentIp = hash('sha256', $_SERVER['REMOTE_ADDR']);
+    $currentAgent = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
+    
+    // Flexible validation for guest sessions
+    if (isset($_SESSION['user_id'])) {
+        // Strict validation for authenticated users
+        if ($_SESSION['client_ip'] !== $currentIp || 
+            $_SESSION['user_agent'] !== $currentAgent) {
+            securityLog('Session integrity check failed: authenticated user mismatch', 'warning');
+            destroySession();
+            return false;
+        }
+    } else {
+        // Update fingerprint for guest sessions
+        $_SESSION['client_ip'] = $currentIp;
+        $_SESSION['user_agent'] = $currentAgent;
+        $_SESSION['guest'] = true;
+    }
+
+    // Check for session timeout (30 minutes)
+    if (time() - $_SESSION['last_activity'] > 1800) {
+        securityLog('Session expired due to inactivity', 'info');
+        destroySession();
+        return false;
+    }
+
+    $_SESSION['last_activity'] = time();
+    return true;
+}
+
+function generateCsrfToken() {
+    try {
+        // Ensure we have a token and it's not expired
+        if (empty($_SESSION['csrf_token']) || 
+            !isset($_SESSION['csrf_time']) || 
+            (time() - $_SESSION['csrf_time'] > 1800)) {
+            
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+            $_SESSION['csrf_time'] = time();
+        }
+        return $_SESSION['csrf_token'];
+    } catch (Exception $e) {
+        securityLog('CSRF token generation failed: ' . $e->getMessage(), 'error');
+        // Fallback to a less secure but functional token
+        return hash('sha256', uniqid(mt_rand(), true));
+    }
+}
+
+/**
+ * Validate CSRF token from user input.
+ */
+function validateCsrfToken($token)
+{
+    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+}
+
+/**
+ * Return CSRF hidden input field for forms.
+ */
+function csrf_field()
+{
+    $token = generateCsrfToken();
+    return '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">';
+}
+
+/**
+ * Sanitize user input to prevent XSS.
+ */
+function sanitizeInput($data)
+{
+    return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * Generate secure random string (for password resets, API keys, etc.).
+ */
+function generateSecureToken($length = 64)
+{
+    return bin2hex(random_bytes($length / 2));
+}
+
+function destroySession() {
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return false;
+    }
+
+    try {
+        $wasGuest = $_SESSION['guest'] ?? false;
+        securityLog('Initiating session destruction: ' . ($wasGuest ? 'guest' : 'user') . ' session');
+        
+        // Clear session data
+        $_SESSION = [];
+        
+        // Delete session cookie
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', [
+                'expires' => time() - 42000,
+                'path' => $params['path'],
+                'domain' => $params['domain'],
+                'secure' => $params['secure'],
+                'httponly' => $params['httponly'],
+                'samesite' => 'Lax'
+            ]);
+        }
+        
+        if (!session_destroy()) {
+            throw new Exception('Session destruction failed');
+        }
+        
+        securityLog('Session destroyed successfully');
+        return true;
+    } catch (Exception $e) {
+        securityLog('Session destruction error: ' . $e->getMessage(), 'error');
+        return false;
+    }
+}
+
+/**
+ * Check if a user is logged in.
+ */
+function isUserLoggedIn()
+{
+    return session_status() === PHP_SESSION_ACTIVE && 
+           isset($_SESSION['user_id']) && 
+           !($_SESSION['guest'] ?? true) && 
+           validateSessionIntegrity();
+}
+
+/**
+ * Get the logged-in user's role.
+ */
+function getUserRole()
+{
+    return $_SESSION['user_role'] ?? 'guest';
+}
+
+/**
+ * Get session data safely.
+ */
+function getSessionData($key)
+{
+    return $_SESSION[$key] ?? null;
+}
+
+/**
+ * Set session data safely.
+ */
+function setSessionData($key, $value)
+{
+    $_SESSION[$key] = $value;
+}
+
+// Initialize secure session when the file is included
+if (!startSecureSession()) {
+    securityLog('Critical: Failed to initialize secure session', 'critical');
+}
+?>
+=== App/Helpers/dateHelper.php ===
+=== App/Helpers/utils.php ===

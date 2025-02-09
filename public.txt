@@ -1,2193 +1,408 @@
+=== public/profile.php ===
 === public/.htaccess ===
 RewriteEngine On
-RewriteBase /
 
-# Ensure PHP files are executed
-AddHandler application/x-httpd-php .php
+# ✅ Ensure all requests go through index.php (EXCEPT static files and APIs)
+RewriteCond %{REQUEST_URI} !^/(css|js|images|api)/.*$
+RewriteRule ^ index.php [QSA,L]
 
-# Block direct access to API PHP files
+# ✅ Allow direct access to API files
 RewriteCond %{REQUEST_URI} ^/api/.*\.php$
-RewriteRule ^ - [F,L]
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
 
-# Allow direct access to static files (CSS, JS, Images)
+# 🔒 Protect sensitive backend files (Prevent direct access to config & helper files)
+RewriteRule ^(App/|config/|helpers/|private/).* - [F,L]
+
+# ✅ Allow direct access to static files
 RewriteCond %{REQUEST_URI} ^/(css|js|images)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images)/(.*)$ /public/$1/$2 [L]
-
-# Ensure /dashboard, /profile, and /login load correctly through index.php
-RewriteRule ^(dashboard|profile|login)$ index.php [L]
-
-# Ensure FastRoute processes non-static requests
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^ index.php [QSA,L]
-
-# PHP session configuration (ensure proper session handling)
-php_flag session.auto_start on
-php_value session.use_cookies 1
-php_value session.use_only_cookies 1
-=== public/api/.htaccess ===
-
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteRule \.php$ - [F]
-</IfModule>=== public/api/index.php ===
+=== public/dashboard.php ===
 <?php
-require_once __DIR__ . '/../../vendor/autoload.php';
-require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
-require_once __DIR__ . '/../../config/api.php';
-
-// Log the inclusion of the index API
-$logFile = __DIR__ . '/../../logs/debug.log';
-file_put_contents($logFile, "[API] Including index.php" . PHP_EOL, FILE_APPEND);
-
-// Log the API request at the very start, including requested URI
-file_put_contents($logFile, "[API] Request received for " . ($_SERVER['REQUEST_URI'] ?? 'unknown') . PHP_EOL, FILE_APPEND);
-
-// Ensure response is JSON
-header("Content-Type: application/json");
-
-// Check for valid Authorization header or session
-$headers = getallheaders();
-if (!isset($headers['Authorization']) && !isset($_SESSION['user_logged_in'])) {
-    http_response_code(401);
-    echo json_encode(["error" => "Unauthorized"]);
-    file_put_contents($logFile, "[API] Unauthorized access - Missing Authorization header or session" . PHP_EOL, FILE_APPEND);
+session_start();
+if (!isset($_SESSION["user_id"])) {
+    header("Location: /login");
     exit();
 }
+?>
 
-$routes = require __DIR__ . '/../../config/routes.php';
-$requestedEndpoint = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/css/shared.css">
+</head>
+<body>
+    <h1>Dashboard</h1>
+    <p>Welcome, <?= htmlspecialchars($_SESSION["username"] ?? "User") ?>!</p>
 
-if (array_key_exists($requestedEndpoint, $routes)) {
-    $endpointFile = __DIR__ . '/' . $routes[$requestedEndpoint];
-    if (file_exists($endpointFile)) {
-        require $endpointFile;
-    } else {
-        http_response_code(404);
-        echo json_encode(["error" => "API not found"]);
-        file_put_contents($logFile, "[API] 404 - Endpoint file not found: $requestedEndpoint" . PHP_EOL, FILE_APPEND);
+    <p><a href="/profile">View Profile</a></p>
+    <p><a href="/logout.php">Logout</a></p>
+</body>
+</html>
+=== public/config/routes.php ===
+<?php
+
+use FastRoute\RouteCollector;
+use function FastRoute\simpleDispatcher;
+use App\Controllers\AuthController;
+use App\Controllers\PaymentController;
+use App\Controllers\DashboardController;
+use App\Controllers\BookingController;
+use App\Controllers\NotificationController;
+use App\Controllers\NotificationQueueController;
+use App\Controllers\AdminDashboardController;
+use App\Controllers\ReportController;
+use AuditManager\Controllers\AuditController;
+use DocumentManager\Controllers\DocumentController;
+use DocumentManager\Controllers\SignatureController;
+use App\Controllers\UserController;
+
+return simpleDispatcher(function (RouteCollector $router) {
+    // Middleware-like Authentication Handling
+    if (!function_exists('requireAuth')) {
+        function requireAuth() {
+            require_once BASE_PATH . '/App/Helpers/SecurityHelper.php';
+            if (!isUserLoggedIn()) {
+                http_response_code(403);
+                echo json_encode(["error" => "Unauthorized"]);
+                exit();
+            }
+        }
     }
-} else {
-    http_response_code(404);
-    echo json_encode(["error" => "API not found"]);
-    file_put_contents($logFile, "[API] 404 - Endpoint not found in routes: $requestedEndpoint" . PHP_EOL, FILE_APPEND);
-}
-exit();
-=== public/api/charts.php ===
-<?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
-header("Access-Control-Allow-Origin: *");  // Allow cross-origin requests
-header("Access-Control-Allow-Methods: GET, POST");
-header("Access-Control-Allow-Headers: Content-Type");
+    // Home Page: now use a dedicated view to avoid recursion
+    $router->get('/', function () {
+        file_put_contents(__DIR__ . "/../debug.log", "Home Route Hit\n", FILE_APPEND);
+        require BASE_PATH . "/public/views/home.php"; // use a dedicated home view file
+    });
+    
+
+    // Authentication Routes (Static First)
+    $router->get('/login', [AuthController::class, 'loginView']);
+    $router->get('/register', [AuthController::class, 'registerView']);
+    $router->post('/register', [UserController::class, 'register']);
+    $router->post('/login', [UserController::class, 'login']);
+    $router->post('/profile/update', [UserController::class, 'updateProfile']);
+    $router->post('/password/reset/request', [UserController::class, 'requestPasswordReset']);
+    $router->post('/password/reset', [UserController::class, 'resetPassword']);
+
+    // Dashboard & Profile (Static First)
+    $router->get('/dashboard', [DashboardController::class, 'userDashboard']);
+    $router->get('/profile', function () { require BASE_PATH . "/public/views/user/profile.php"; });
+
+    // Payments (Static First)
+    $router->get('/payments/history', [PaymentController::class, 'viewPaymentHistory']);
+    $router->get('/payments/installments', [PaymentController::class, 'viewInstallments']);
+    $router->post('/payments/process', [PaymentController::class, 'processPayment']);
+    $router->post('/payments/refund', [PaymentController::class, 'refundPayment']);
+
+    // Bookings (Static First)
+    $router->get('/bookings', [DashboardController::class, 'getUserBookings']);
+    $router->get('/bookings/{id}', [BookingController::class, 'viewBooking']);
+    $router->post('/bookings/{id}/reschedule', [BookingController::class, 'rescheduleBooking']);
+    $router->post('/bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
+
+    // Notifications API Routes
+    $router->get('/notifications', [NotificationController::class, 'getUserNotifications']);
+    $router->post('/notifications/mark-as-read', [NotificationController::class, 'markNotificationAsRead']);
+    $router->post('/notifications/delete', [NotificationController::class, 'deleteNotification']);
+    $router->post('/notifications/send', [NotificationController::class, 'sendNotification']);
+    $router->post('/notifications/process-queue', [NotificationQueueController::class, 'processQueue']);
+
+    // Dynamic API Routing (Auth Required)
+    $router->get('/api/{endpoint}', function ($vars) {
+        requireAuth();
+        $endpoint = $vars['endpoint'];
+        $apiPath = BASE_PATH . "/public/api/$endpoint.php";
+
+        if (file_exists($apiPath)) {
+            require $apiPath;
+        } else {
+            http_response_code(404);
+            echo json_encode(["error" => "API endpoint not found"]);
+        }
+    });
+
+    // Admin Routes (Static First)
+    $router->get('/admin/dashboard', [AdminDashboardController::class, 'index']);
+    $router->get('/admin/reports', [ReportController::class, 'index']);
+    $router->post('/admin/reports/generate', [ReportController::class, 'generateReport']);
+    $router->post('/user/reports/generate', [ReportController::class, 'generateUserReport']);
+
+    // Audit Logs
+    $router->post('/admin/audit-logs/fetch', [AuditController::class, 'fetchLogs']);
+
+    // Document Manager Routes
+    $router->post('/documents/upload-template', [DocumentController::class, 'uploadTemplate']);
+    $router->post('/documents/generate-contract/{bookingId}/{userId}', [DocumentController::class, 'generateContract']);
+    $router->post('/documents/upload-terms', [DocumentController::class, 'uploadTerms']);
+    $router->post('/documents/generate-invoice/{bookingId}', [DocumentController::class, 'generateInvoice']);
+    $router->delete('/documents/{documentId}', [DocumentController::class, 'deleteDocument']);
+
+    // Dynamic View Routing (Must be Last)
+    $router->get('/{view}', function ($vars) {
+        $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
+        $view = $vars['view'];
+
+        if (in_array($view, $allowedViews)) {
+            require BASE_PATH . "/public/views/user/$view.php";
+        } else {
+            http_response_code(404);
+            require BASE_PATH . "/public/views/errors/404.php";
+        }
+    });
+});
+=== public/api/views/profile.php ===
+<?php
+require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
+
+// Log the receipt of the request
+file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - Received API /views/profile request\n", FILE_APPEND);
+
+// Set header for valid JSON
 header("Content-Type: application/json");
 
-// Verify user authentication
+// Check if user is logged in
 if (!isUserLoggedIn()) {
-    http_response_code(401);
+    http_response_code(403);
     echo json_encode(["error" => "Unauthorized"]);
+    file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - Unauthorized access to /views/profile\n", FILE_APPEND);
     exit();
 }
 
-// Sample chart data (Replace with real database queries)
-$data = [
-    "bookingTrends" => [
-        "labels" => ["Jan", "Feb", "Mar", "Apr"],
-        "datasets" => [
-            [
-                "label" => "Bookings",
-                "data" => [10, 25, 40, 60],
-                "backgroundColor" => "rgba(54, 162, 235, 0.5)"
-            ]
-        ]
-    ],
-    "revenueTrends" => [
-        "labels" => ["Jan", "Feb", "Mar", "Apr"],
-        "datasets" => [
-            [
-                "label" => "Revenue",
-                "data" => [1000, 2500, 4000, 6000],
-                "backgroundColor" => "rgba(75, 192, 192, 0.5)"
-            ]
-        ]
-    ]
+// Explicit success status
+http_response_code(200);
+
+// Load user profile details dynamically
+$userProfile = [
+    "name" => "John Doe",
+    "email" => "john.doe@example.com",
+    "accountStatus" => "Active"
+    // ...additional profile details...
 ];
 
-// Return JSON response
-echo json_encode($data);
-exit();
-=== public/api/test.php ===
+// Return JSON response with user profile details
+echo json_encode($userProfile);
+
+// Log completion of API handling
+file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - /views/profile API processed successfully\n", FILE_APPEND);
+?>
+=== public/api/views/dashboard.php ===
+=== public/api/views/vehicles.php ===
 <?php
-require_once __DIR__ . '/../../../vendor/autoload.php';
-require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
-require_once __DIR__ . '/../../config/api.php';
+// Log the receipt of the request
+file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - Received API /views/vehicles request\n", FILE_APPEND);
 
-// Log the inclusion of the test API
-$logFile = __DIR__ . '/../../../logs/debug.log';
-file_put_contents($logFile, "[API] Including test.php" . PHP_EOL, FILE_APPEND);
-
-// Log the API request at the very start, including requested URI
-file_put_contents($logFile, "[API] Request received for " . ($_SERVER['REQUEST_URI'] ?? 'unknown') . PHP_EOL, FILE_APPEND);
-
-// Ensure response is JSON
+// Set header for valid JSON
 header("Content-Type: application/json");
 
-// Optional authentication check flag
-$requiresAuth = true;
+// Explicit success status
+http_response_code(200);
 
-// Define authentication function with improved error handling
-function requireAuth() {
-    global $logFile;
-    $headers = getallheaders();
-    if (!isset($headers['Authorization'])) {
-        file_put_contents($logFile, "[API] Authentication failed: Missing Authorization header" . PHP_EOL, FILE_APPEND);
-        http_response_code(401);
-        echo json_encode(["error" => "Unauthorized access: Authorization header missing"]);
-        exit();
-    }
-    file_put_contents($logFile, "[API] Authentication succeeded with header: " . $headers['Authorization'] . PHP_EOL, FILE_APPEND);
+// Load available vehicles dynamically
+$vehicles = [
+    ["id" => 1, "name" => "2019 Toyota Camry", "price_per_day" => 50, "availability" => true],
+    ["id" => 2, "name" => "2018 Honda Accord", "price_per_day" => 45, "availability" => true],
+    ["id" => 3, "name" => "2020 Ford Mustang", "price_per_day" => 70, "availability" => false],
+    // ...additional vehicles...
+];
+
+// Return JSON response with available vehicles
+echo json_encode($vehicles);
+
+// Log completion of API handling
+file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - /views/vehicles API processed successfully\n", FILE_APPEND);
+?>
+=== public/api/views/home.php ===
+=== public/api/views/reports.php ===
+<?php
+require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
+
+// Log the receipt of the request
+file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - Received API /views/reports request\n", FILE_APPEND);
+
+// Set header for valid JSON
+header("Content-Type: application/json");
+
+// Check if admin is logged in
+if (!isAdminLoggedIn()) {
+    http_response_code(403);
+    echo json_encode(["error" => "Unauthorized"]);
+    file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - Unauthorized access to /views/reports\n", FILE_APPEND);
+    exit();
+}
+
+// Explicit success status
+http_response_code(200);
+
+// Load reports data dynamically
+$revenueData = [
+    "totalRevenue" => 50000,
+    "monthlyRevenue" => 5000,
+    // ...additional revenue data...
+];
+$recentTransactions = [
+    ["id" => 201, "user" => "John Doe", "amount" => 24000, "date" => "2023-10-01"],
+    ["id" => 202, "user" => "Jane Smith", "amount" => 22000, "date" => "2023-10-02"],
+    // ...additional transactions...
+];
+$systemActivity = [
+    ["id" => 1, "activity" => "User login", "timestamp" => "2023-10-01 12:00:00"],
+    ["id" => 2, "activity" => "Booking created", "timestamp" => "2023-10-01 12:05:00"],
+    // ...additional activities...
+];
+
+// Prepare response data
+$responseData = [
+    "revenueData" => $revenueData,
+    "recentTransactions" => $recentTransactions,
+    "systemActivity" => $systemActivity
+];
+
+// Return JSON response with reports data
+echo json_encode($responseData);
+
+// Log completion of API handling
+file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - /views/reports API processed successfully\n", FILE_APPEND);
+?>
+=== public/api/test.php ===
+<?php
+// Log the receipt of the request
+file_put_contents('debug.log', date('Y-m-d H:i:s') . " - Received API /test request\n", FILE_APPEND);
+
+// Optional authentication check flag
+$requiresAuth = false;
+
+// Define authentication function
+function requireAuthTest() {
+	// Check for 'Authorization' header (adjust condition per requirements)
+	if (!isset($_SERVER['HTTP_AUTHORIZATION'])) {
+		file_put_contents('debug.log', date('Y-m-d H:i:s') . " - Authentication failed\n", FILE_APPEND);
+		http_response_code(401);
+		header("Content-Type: application/json");
+		echo json_encode(["error" => "Unauthorized"]);
+		exit();
+	}
+	file_put_contents('debug.log', date('Y-m-d H:i:s') . " - Authentication succeeded\n", FILE_APPEND);
 }
 
 // Perform authentication if required
 if ($requiresAuth) {
-    requireAuth();
+	requireAuthTest();
 }
 
-// Confirm FastRoute processing by logging the matched route
-file_put_contents($logFile, "[API] FastRoute processed endpoint: " . ($_SERVER['REQUEST_URI'] ?? 'unknown') . PHP_EOL, FILE_APPEND);
+// Set header always for valid JSON
+header("Content-Type: application/json");
 
-// Example response for test endpoint
-echo json_encode(["message" => "Test endpoint accessed successfully"]);
-file_put_contents($logFile, "[API] /test API processed successfully" . PHP_EOL, FILE_APPEND);
+// Explicit success status
+http_response_code(200);
+
+// ...existing code...
+echo json_encode(["status" => "API working"]);
+// ...existing code...
+
+// Log completion of API handling
+file_put_contents('debug.log', date('Y-m-d H:i:s') . " - /test API processed successfully\n", FILE_APPEND);
 ?>
-=== public/api/shared/initSession.php ===
-<?php
-
-$apiLogFile = __DIR__ . '/../../logs/api.log';
-
-function logApiError($message) {
-    global $apiLogFile;
-    file_put_contents($apiLogFile, date('Y-m-d H:i:s') . " - $message\n", FILE_APPEND);
-}
-
-function isProtectedRoute($route) {
-    $protectedRoutes = [
-        '/profile/update',
-        '/password/reset/request',
-        '/password/reset',
-        '/payments/process',
-        '/payments/refund',
-        '/bookings',
-        '/notifications',
-        '/admin',
-        '/documents',
-        '/api'
-    ];
-    foreach ($protectedRoutes as $protectedRoute) {
-        if (strpos($route, $protectedRoute) === 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-session_start();
-
-$requestUri = $_SERVER['REQUEST_URI'];
-
-if (isProtectedRoute($requestUri)) {
-    if (!isset($_SESSION['user_id'])) {
-        logApiError("Unauthorized access attempt to $requestUri");
-        http_response_code(403);
-        echo json_encode(["error" => "Unauthorized"]);
-        exit();
-    }
-}
-
-// Allow guest users to access the homepage without authentication
-if ($requestUri === '/' || $requestUri === '/home') {
-    return;
-}
-
-// Set the response header to JSON
-header('Content-Type: application/json');
-
-// Check if the session is valid
-if (validateSessionIntegrity()) {
-    // Session is active
-    $response = [
-        'status' => 'active',
-        'user_id' => $_SESSION['user_id']
-    ];
-    echo json_encode($response);
-} else {
-    // Session is invalid
-    http_response_code(403);
-    $response = [
-        'error' => 'Unauthorized'
-    ];
-    echo json_encode($response);
-
-    // Log unauthorized session attempts
-    $logMessage = sprintf("[%s] Unauthorized session attempt from IP: %s\n", date('Y-m-d H:i:s'), $_SERVER['REMOTE_ADDR']);
-    file_put_contents(__DIR__ . '/../../logs/api.log', $logMessage, FILE_APPEND);
-}
-?>
-=== public/css/style.css ===
-/* Dark Minimal Theme */
-
-/* Added CSS Variables for consistency */
-:root {
-    --primary-bg: #121212;
-    --secondary-bg: #181818;
-    --accent-color: #FFD700;
-    --hover-color: #FFC107;
-    --button-bg: #007bff;
-    --button-hover-bg: #0056b3;
-    --success-bg: #28a745;
-    --error-color: #FF4C4C;
-    --font-family: Arial, sans-serif;
-    --base-font-size: 16px;
-    --primary-color: #3498db;
-    --secondary-color: #2ecc71;
-    --tertiary-color: #e74c3c;
-    --font-size-base: 16px;
-    --font-size-large: 24px;
-    --font-size-small: 12px;
-}
-
+=== public/css/shared.css ===
 body {
-    background-color: var(--primary-bg);
-    color: #fff;
-    font-family: var(--font-family);
-    margin: 0;
-    padding: 0;
-    font-size: var(--font-size-base);
-    background-color: #f4f4f4;
-}
-header {
-    background-color: var(--secondary-bg);
-    text-align: center;
-    padding: 15px 0;
-}
-.logo img {
-    max-height: 104px;
-    margin: 15px 0;
-}
-nav {
-    display: flex;
-    justify-content: center;
-    padding: 15px 0;
-}
-nav a {
-    color: #fff;
-    text-decoration: none;
-    margin: 0 15px;
-    font-size: 1rem;
-    transition: color 0.3s ease;
-}
-nav a:hover {
-    color: var(--accent-color);
-}
-
-/* Hero Section */
-.hero {
-    text-align: center;
-    padding: 100px 20px;
-    background: url('/public/images/hero-bg.jpg') no-repeat center center/cover;
-    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
-}
-.hero h1 {
-    font-size: 48px;
-    margin-bottom: 20px;
-    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
-}
-.hero p {
-    font-size: 20px;
-    opacity: 0.8;
-    margin-bottom: 30px;
-}
-.hero-title {
-    font-size: 2.5rem;
-    font-weight: bold;
-}
-.hero-subtitle {
-    font-size: 1.2rem;
-    opacity: 0.8;
-}
-
-/* Search Form */
-.search-form {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-}
-.search-form input, .search-form button {
-    padding: 12px;
-    font-size: var(--base-font-size);
-    border-radius: 5px;
-    border: none;
-}
-.search-form button {
-    background: var(--accent-color);
-    color: var(--primary-bg);
-    font-weight: bold;
-    cursor: pointer;
-    transition: background 0.3s ease;
-}
-.search-form button:hover {
-    background: var(--hover-color);
-}
-
-/* Features Section */
-.features {
-    text-align: center;
-    padding: 60px 20px;
-}
-.features h2 {
-    font-size: 36px;
-    margin-bottom: 20px;
-}
-.feature-list {
-    display: flex;
-    justify-content: center;
-    gap: 50px;
-}
-.feature {
-    font-size: 18px;
-    background: #181818;
-    padding: 20px;
-    border-radius: 5px;
-}
-.features-container {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-}
-.feature-box {
-    background: #1a1a1a;
-    padding: 20px;
-    border-radius: 8px;
-    transition: transform 0.3s ease;
-}
-.feature-box:hover {
-    transform: scale(1.05);
-}
-
-/* CTA Section */
-.cta {
-    margin-top: 40px;
-    background: var(--success-bg);
-    padding: 20px;
-    border-radius: 8px;
-}
-.btn {
-    display: inline-block;
-    background: var(--button-bg);
-    color: white;
-    padding: 10px 15px;
-    border-radius: 5px;
-    text-decoration: none;
-    transition: background 0.3s ease;
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 4px;
-    text-align: center;
-    cursor: pointer;
-    font-size: var(--font-size-base);
-}
-.btn:hover {
-    background: var(--button-hover-bg);
-}
-.btn-primary {
-    background-color: var(--primary-color);
-    color: #fff;
-}
-
-.btn-secondary {
-    background-color: var(--secondary-color);
-    color: #fff;
-}
-
-.btn-tertiary {
-    background-color: var(--tertiary-color);
-    color: #fff;
-}
-
-/* Footer */
-.footer {
-    text-align: center;
-    padding: 20px;
-    background: #181818;
-    opacity: 0.8;
-}
-
-/* Error Message */
-.error-message {
-    color: var(--error-color);
-    display: none;
-}
-
-/* Responsive Media Queries */
-@media (max-width: 768px) {
-    nav {
-        flex-direction: column;
-    }
-    .hero {
-        padding: 80px 10px;
-    }
-    .feature-list, .features-container {
-        flex-direction: column;
-        gap: 20px;
-    }
-    .navbar .container {
-        flex-direction: column;
-    }
-
-    .navbar .nav-links {
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .navbar .nav-links li {
-        margin: 0.5rem 0;
-    }
-
-    .hero-section, .features-section, .testimonials-section {
-        padding: 1rem 0;
-    }
-}
-@media (max-width: 480px) {
-    nav a {
-        margin: 5px 0;
-        font-size: 0.9rem;
-    }
-    .hero h1 {
-        font-size: 2.5rem;
-    }
-    .hero p {
-        font-size: 1rem;
-    }
-}
-
-.navbar {
-    background-color: var(--primary-color);
-    color: #fff;
-    padding: 1rem;
-}
-
-.navbar .container {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.navbar .nav-links {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-}
-
-.navbar .nav-links li {
-    margin-left: 1rem;
-}
-
-.navbar .nav-links a {
-    color: #fff;
-    text-decoration: none;
-    font-size: var(--font-size-base);
-}
-
-.hero-section {
-    background-color: #fff;
-    padding: 2rem 0;
-    text-align: center;
-}
-
-.features-section, .testimonials-section {
-    padding: 2rem 0;
-}
-
-.features-section .icon, .testimonials-section blockquote {
-    font-size: var(--font-size-large);
-}
-=== public/css/profile.css ===
-/*
-|--------------------------------------------------------------------------
-| Profile Styles (profile.css)
-|--------------------------------------------------------------------------
-| This file contains styles for the user profile page, including form fields,
-| avatar upload, and account settings. Designed with a sleek, modern look.
-*/
-
-/* General Profile Page Styles */
-body {
-    background-color: #121212;
-    color: #ffffff;
-    font-family: 'Arial', sans-serif;
-    margin: 0;
-    padding: 0;
-}
-
-.profile-container {
-    max-width: 600px;
-    margin: 40px auto;
-    background: #1E1E1E;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
-    text-align: center;
-}
-
-.profile-container h2 {
-    font-size: 2rem;
-    margin-bottom: 20px;
-}
-
-/* Avatar Upload */
-.avatar-upload {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.avatar-preview {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    border: 3px solid #FFD700;
-    object-fit: cover;
-    margin-bottom: 10px;
-}
-
-.avatar-upload input[type="file"] {
-    display: none;
-}
-
-.upload-label {
-    background: linear-gradient(45deg, #FFD700, #FF8C00);
-    color: #121212;
-    font-weight: bold;
-    padding: 10px 15px;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.upload-label:hover {
-    background: linear-gradient(45deg, #FFC107, #FF4500);
-}
-
-/* Profile Form */
-.profile-form {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.profile-form input, .profile-form select, .profile-form button {
-    padding: 12px;
-    font-size: 1rem;
-    border-radius: 5px;
-    border: none;
-}
-
-.profile-form input, .profile-form select {
-    background: #333;
-    color: #fff;
-    border: 1px solid #444;
-    width: 100%;
-}
-
-.profile-form input:focus, .profile-form select:focus {
-    border-color: #FFD700;
-    outline: 0;
-}
-
-.profile-form button {
-    background: linear-gradient(45deg, #FFD700, #FF8C00);
-    color: #121212;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.profile-form button:hover {
-    background: linear-gradient(45deg, #FFC107, #FF4500);
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    .profile-container {
-        padding: 15px;
-    }
-}
-
-=== public/css/logs.css ===
-/* ...existing code... */
-
-/* Remove redundant table styles */
-/* .logs table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-    background-color: var(--surface-color);
-}
-.logs table th {
-    background-color: var(--primary-color);
-    color: white;
-}
-.logs table td {
-    border: 1px solid var(--border-color);
-    padding: 8px;
-    text-align: left;
-}
-.logs table tr:nth-child(even) {
-    background-color: #222;
-}
-.logs table tr:hover {
-    background-color: #333;
-} */
-
-/* Ensure tables remain responsive on smaller screens */
-@media (max-width: 768px) {
-    .logs table {
-        display: block;
-        overflow-x: auto;
-    }
-    .logs table th, .logs table td {
-        white-space: nowrap;
-    }
-}
-=== public/css/documents.css ===
-/*
-|--------------------------------------------------------------------------
-| Documents Styles (documents.css)
-|--------------------------------------------------------------------------
-| This file contains styles for document management, including uploading,
-| signing, and previewing documents. The design follows a dark, modern theme.
-*/
-
-/* General Document Page Styles */
-body {
-    background-color: #121212;
-    color: #ffffff;
-    font-family: 'Arial', sans-serif;
-    margin: 0;
-    padding: 0;
-}
-
-.document-container {
-    max-width: 800px;
-    margin: 40px auto;
-    background: #1E1E1E;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
-}
-
-.document-container h2 {
-    text-align: center;
-    font-size: 2rem;
-    margin-bottom: 20px;
-}
-
-/* Document Upload Section */
-.upload-area {
-    border: 2px dashed #FFD700;
-    padding: 20px;
-    text-align: center;
-    border-radius: 8px;
-    transition: all 0.3s;
-}
-
-.upload-area:hover {
-    background: rgba(255, 255, 255, 0.05);
-}
-
-.upload-input {
-    display: none;
-}
-
-.upload-label {
-    display: block;
-    background: linear-gradient(45deg, #FFD700, #FF8C00);
-    color: #121212;
-    font-weight: bold;
-    padding: 12px 20px;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.upload-label:hover {
-    background: linear-gradient(45deg, #FFC107, #FF4500);
-}
-
-/* Document Preview */
-.document-preview {
-    margin-top: 20px;
-    padding: 15px;
-    background: #242424;
-    border-radius: 8px;
-    text-align: center;
-}
-
-.document-preview iframe {
-    width: 100%;
-    height: 500px;
-    border: none;
-    background: #000;
-}
-
-/* Signature Section */
-.signature-area {
-    text-align: center;
-    margin-top: 20px;
-}
-
-.signature-pad {
-    width: 100%;
-    height: 200px;
-    background: #fff;
-    border-radius: 5px;
-    border: 2px solid #FFD700;
-}
-
-/* Confirmation & Action Buttons */
-.document-actions {
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-    margin-top: 20px;
-}
-
-.document-actions button {
-    background: linear-gradient(45deg, #FFD700, #FF8C00);
-    color: #121212;
-    font-weight: bold;
-    padding: 12px 15px;
-    border-radius: 5px;
-    border: none;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.document-actions button:hover {
-    background: linear-gradient(45deg, #FFC107, #FF4500);
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    .document-container {
-        padding: 15px;
-    }
-    .document-preview iframe {
-        height: 300px;
-    }
-}
-
-=== public/css/dashboard.css ===
-/*
-|--------------------------------------------------------------------------
-| Dashboard Styles (dashboard.css)
-|--------------------------------------------------------------------------
-| This file contains styles for both user and admin dashboards.
-| Ensures a dark, sleek, and minimal look with responsive design.
-*/
-
-/* General Dashboard Layout */
-body {
-    background-color: #121212;
-    color: #ffffff;
-    font-family: 'Arial', sans-serif;
-    margin: 0;
-    padding: 0;
-}
-
-.dashboard-container {
-    display: flex;
-    min-height: 100vh;
-}
-
-.sidebar {
-    width: 250px;
-    background: #1E1E1E;
-    padding: 20px;
-    transition: width 0.3s ease;
-}
-
-.sidebar a {
-    display: block;
-    padding: 12px;
-    color: #FFFFFF;
-    text-decoration: none;
-    border-radius: 5px;
-    transition: background 0.3s;
-}
-
-.sidebar a:hover {
-    background: #FFD700;
-    color: #121212;
-}
-
-.sidebar .active {
-    background: #FF8C00;
-}
-
-.main-content {
-    flex-grow: 1;
-    padding: 20px;
-}
-
-/* Widgets & Stats */
-.widget {
-    background: #1E1E1E;
-    padding: 20px;
-    border-radius: 10px;
-    text-align: center;
-    margin-bottom: 20px;
-    transition: transform 0.3s;
-}
-
-.widget:hover {
-    transform: scale(1.05);
-}
-
-.widget h2 {
-    font-size: 1.5rem;
-    margin-bottom: 10px;
-}
-
-.widget .value {
-    font-size: 2rem;
-    font-weight: bold;
-    color: #FFD700;
-}
-
-/* Tables */
-.dashboard-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-
-.dashboard-table th, .dashboard-table td {
-    padding: 12px;
-    border-bottom: 1px solid #333;
-    text-align: left;
-}
-
-.dashboard-table th {
-    background: #181818;
-}
-
-.dashboard-table tr:hover {
-    background: rgba(255, 255, 255, 0.05);
-}
-
-/* Buttons */
-.action-button {
-    background: linear-gradient(45deg, #FFD700, #FF8C00);
-    color: #121212;
-    font-weight: bold;
-    padding: 10px 15px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.action-button:hover {
-    background: linear-gradient(45deg, #FFC107, #FF4500);
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    .dashboard-container {
-        flex-direction: column;
-    }
-    
-    .sidebar {
-        width: 100%;
-        text-align: center;
-    }
-    
-    .sidebar a {
-        display: inline-block;
-        margin: 5px;
-    }
-}
-
-=== public/css/payments.css ===
-/*
-|--------------------------------------------------------------------------
-| Payments Styles (payments.css)
-|--------------------------------------------------------------------------
-| This file contains styles for the payments page, ensuring a sleek, modern,
-| and secure UI with a dark, minimal aesthetic.
-*/
-
-/* General Payment Page Styles */
-body {
-    background-color: #121212;
-    color: #ffffff;
-    font-family: 'Arial', sans-serif;
-    margin: 0;
-    padding: 0;
-}
-
-.payment-container {
-    max-width: 600px;
-    margin: 40px auto;
-    background: #1E1E1E;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
-}
-
-.payment-container h2 {
-    text-align: center;
-    font-size: 2rem;
-    margin-bottom: 20px;
-}
-
-/* Payment Form */
-.payment-form {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.payment-form input, .payment-form select, .payment-form button {
-    padding: 12px;
-    font-size: 1rem;
-    border-radius: 5px;
-    border: none;
-}
-
-.payment-form input, .payment-form select {
-    background: #333;
-    color: #fff;
-    border: 1px solid #444;
-    width: 100%;
-}
-
-.payment-form input:focus, .payment-form select:focus {
-    border-color: #FFD700;
-    outline: 0;
-}
-
-.payment-form button {
-    background: linear-gradient(45deg, #FFD700, #FF8C00);
-    color: #121212;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.payment-form button:hover {
-    background: linear-gradient(45deg, #FFC107, #FF4500);
-}
-
-/* Transaction History */
-.transaction-history {
-    margin-top: 30px;
-}
-
-.transaction-history table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.transaction-history th, .transaction-history td {
-    padding: 12px;
-    border-bottom: 1px solid #333;
-    text-align: left;
-}
-
-.transaction-history th {
-    background: #181818;
-}
-
-.transaction-history tr:hover {
-    background: rgba(255, 255, 255, 0.05);
-}
-
-/* Payment Success & Error Messages */
-.payment-message {
-    text-align: center;
-    padding: 15px;
-    border-radius: 5px;
-    margin-top: 20px;
-}
-
-.payment-success {
-    background-color: #28a745;
-    color: white;
-}
-
-.payment-error {
-    background-color: #dc3545;
-    color: white;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    .payment-container {
-        padding: 15px;
-    }
-    
-    .transaction-history table {
-        display: block;
-        overflow-x: auto;
-    }
-}
-
-=== public/css/notifications.css ===
-/* notifications.css _ Real_Time Notifications */
-
-.notifications-panel {
-    position: absolute;
-    right: 20px;
-    top: 50px;
-    background: #1E1E1E;
-    color: #FFF;
-    padding: 15px;
-    border-radius: 5px;
-    max-width: 90%;
-    width: 300px;
-    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
-    transform: translateY(-10px);
-    opacity: 0;
-}
-
-.notifications-panel.show {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-.notification.unread {
-    background: #1E1E1E;
-    font-weight: bold;
-    border-left: 5px solid #FF4500; /* Add indicator */
-}
-
-.notification.read {
-    background: #252525;
-    opacity: 0.85;
-}
-
-.notification {
-    position: relative;
-    padding-right: 30px; /* Space for close button */
-}
-
-.notification .close-btn {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: transparent;
-    border: none;
-    color: #FFF;
-    cursor: pointer;
-    font-size: 16px;
-    transition: color 0.3s;
-}
-
-.notification .close-btn:hover {
-    color: #FF4500;
-}
-
-@media (max-width: 600px) {
-    .notifications-panel {
-        right: 10px;
-        top: 10px;
-        width: 100%;
-    }
-}
-
-=== public/css/main.css ===
-/* main.css - Unified Styling for CarFuse */
-
-:root {
-    --bg-color: #121212;
-    --text-color: #f5f5f5;
-    --primary-color: #0066ff;
-    --hover-color: #0044cc;
-    --surface-color: #181818;
-    --border-color: #444;
-    --success-color: #28a745;
-    --warning-color: #ffc107;
-    --error-color: #dc3545;
-    --card-bg: #1E1E1E;
-    --highlight-color: #FFD700;
-}
-
-body {
-    font-family: 'Poppins', sans-serif;
-    color: var(--text-color);
-    background: var(--bg-color);
-    margin: 0;
-    padding: 0;
-}
-
-/* Buttons */
-.btn, .btn-primary {
-    background: linear-gradient(45deg, var(--highlight-color), #FF8C00);
-    color: #000;
-    padding: 10px 15px;
-    border-radius: 6px;
-    transition: 0.3s;
-    font-weight: bold;
-    border: none;
-    cursor: pointer;
-}
-.btn:hover, .btn-primary:hover {
-    filter: brightness(1.2);
-    background-color: var(--hover-color);
-}
-.btn:focus, input[type="submit"]:focus {
-    outline: 2px solid var(--warning-color);
-}
-
-/* Forms */
-input, select, textarea {
-    background: #333;
-    border: 1px solid var(--border-color);
-    color: #fff;
-    padding: 10px;
-    border-radius: 5px;
-    width: 100%;
-}
-input:focus, select:focus, textarea:focus {
-    border-color: var(--primary-color);
-    outline: 0;
-}
-
-/* Navigation */
-nav {
-    background: var(--surface-color);
-    padding: 10px;
-    text-align: center;
-}
-nav a {
-    color: var(--text-color);
-    margin: 0 15px;
-    text-decoration: none;
-}
-nav a:hover {
-    color: var(--highlight-color);
-}
-
-/* Cards & Widgets */
-.card, .widget {
-    background: var(--card-bg);
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(255, 255, 255, 0.1);
-}
-.card h3, .widget h3 {
-    color: var(--text-color);
-    font-size: 1.8rem;
-}
-.card p, .widget p {
-    color: #bbb;
-    font-size: 1.2rem;
-}
-
-/* Tables */
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-    background-color: var(--surface-color);
-}
-th, td {
-    padding: 12px;
-    border-bottom: 1px solid var(--border-color);
-    text-align: left;
-}
-th {
-    background: var(--primary-color);
-    color: white;
-}
-tr:nth-child(even) {
-    background-color: #222;
-}
-tr:hover {
-    background-color: #333;
-}
-
-/* Toast Notifications */
-#toast-container {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
-    max-width: 300px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-.toast {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 15px;
-    border-radius: 5px;
-    font-size: 14px;
-    font-weight: bold;
-    color: #fff;
-    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
-    opacity: 0;
-    transform: translateY(-10px);
-    animation: fadeInUp 0.3s ease-in-out forwards;
-}
-.toast-success {
-    background: var(--success-color);
-}
-.toast-warning {
-    background: var(--warning-color);
-    color: #121212;
-}
-.toast-error {
-    background: var(--error-color);
-}
-.toast .close-btn {
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 16px;
-    cursor: pointer;
-    transition: color 0.3s;
-}
-.toast .close-btn:hover {
-    color: #ffd700;
-}
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-@media (max-width: 600px) {
-    #toast-container {
-        right: 10px;
-        width: 90%;
-    }
-}
-
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
-    body {
-        font-size: 14px;
-    }
-    .card, .widget {
-        margin: 10px 0;
-    }
-    table {
-        display: block;
-        overflow-x: auto;
-    }
-    th, td {
-        white-space: nowrap;
-    }
-    #toast-container {
-        right: 10px;
-        bottom: 10px;
-        max-width: 250px;
-    }
-}
-
-/* Homepage Specific Styles */
-.homepage {
-    /* Hero Section */
-    .hero {
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        background: url('/public/assets/images/hero-bg.jpg') no-repeat center center/cover;
-        position: relative;
-    }
-    .hero h1 {
-        font-size: 3rem;
-        font-weight: bold;
-        text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
-        margin-bottom: 15px;
-    }
-    .hero p {
-        font-size: 1.5rem;
-        opacity: 0.8;
-        margin-bottom: 20px;
-    }
-    .cta-button {
-        display: inline-block;
-        background: linear-gradient(45deg, #FFD700, #FF8C00);
-        color: #121212;
-        font-weight: bold;
-        padding: 12px 25px;
-        border-radius: 8px;
-        text-decoration: none;
-        transition: all 0.3s ease;
-    }
-    .cta-button:hover {
-        background: linear-gradient(45deg, #FFC107, #FF4500);
-        transform: scale(1.05);
-    }
-
-    /* Why Us Section */
-    .why-us {
-        text-align: center;
-        padding: 60px 20px;
-        background: #181818;
-    }
-    .why-us h2 {
-        font-size: 2rem;
-        margin-bottom: 30px;
-    }
-    .features {
-        display: flex;
-        justify-content: center;
-        gap: 50px;
-        flex-wrap: wrap;
-    }
-    .feature {
-        background: #1E1E1E;
-        padding: 20px;
-        border-radius: 10px;
-        text-align: center;
-        width: 250px;
-        transition: transform 0.3s ease;
-    }
-    .feature:hover {
-        transform: translateY(-5px);
-    }
-    .icon {
-        font-size: 2rem;
-        margin-bottom: 10px;
-        color: #FFD700;
-    }
-
-    /* Booking Form */
-    .booking-form {
-        text-align: center;
-        padding: 50px 20px;
-    }
-    .booking-form h2 {
-        font-size: 2rem;
-        margin-bottom: 20px;
-    }
-    .booking-form form {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 15px;
-        max-width: 600px;
-        margin: auto;
-    }
-    .booking-form input, .booking-form button {
-        padding: 12px;
-        font-size: 1rem;
-        border-radius: 5px;
-        border: none;
-    }
-    .booking-form input {
-        width: 100%;
-        max-width: 250px;
-        background: #222;
-        color: #fff;
-        border: 1px solid #444;
-    }
-    .booking-form button {
-        background: #FFD700;
-        color: #121212;
-        font-weight: bold;
-        cursor: pointer;
-        transition: background 0.3s;
-    }
-    .booking-form button:hover {
-        background: #FFC107;
-    }
-
-    /* Responsive Design */
-    @media (max-width: 768px) {
-        .hero h1 {
-            font-size: 2.5rem;
-        }
-        .hero p {
-            font-size: 1.2rem;
-        }
-        .booking-form form {
-            flex-direction: column;
-            align-items: center;
-        }
-        .booking-form input {
-            max-width: 100%;
-        }
-    }
-}
-
-/* Dark Minimal Theme */
-body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
     font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
-}
-header {
-    background-color: var(--surface-color);
+    margin: 20px;
     text-align: center;
-    padding: 15px 0;
 }
-.logo img {
-    max-height: 104px;
-    margin: 15px 0;
+
+h1 {
+    color: #333;
 }
+
 nav {
-    display: flex;
-    justify-content: center;
-    padding: 15px 0;
-}
-nav a {
-    color: var(--text-color);
-    text-decoration: none;
-    margin: 0 15px;
-    font-size: 18px;
-}
-nav a:hover {
-    color: var(--highlight-color);
-}
-
-/* Hero Section */
-.hero {
-    text-align: center;
-    padding: 100px 20px;
-    background: url('/public/images/hero-bg.jpg') no-repeat center center/cover;
-    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
-}
-.hero h1 {
-    font-size: 48px;
-    margin-bottom: 20px;
-    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
-}
-.hero p {
-    font-size: 20px;
-    opacity: 0.8;
-    margin-bottom: 30px;
-}
-.hero-title {
-    font-size: 2.5rem;
-    font-weight: bold;
-}
-.hero-subtitle {
-    font-size: 1.2rem;
-    opacity: 0.8;
-}
-
-/* Search Form */
-.search-form {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-}
-.search-form input, .search-form button {
-    padding: 12px;
-    font-size: 16px;
-    border-radius: 5px;
-    border: none;
-}
-.search-form button {
-    background: var(--highlight-color);
-    color: var(--bg-color);
-    font-weight: bold;
-    cursor: pointer;
-}
-.search-form button:hover {
-    background: var(--warning-color);
-}
-
-/* Features Section */
-.features {
-    text-align: center;
-    padding: 60px 20px;
-}
-.features h2 {
-    font-size: 36px;
     margin-bottom: 20px;
 }
-.feature-list {
-    display: flex;
-    justify-content: center;
-    gap: 50px;
-}
-.feature {
-    font-size: 18px;
-    background: var(--surface-color);
-    padding: 20px;
-    border-radius: 5px;
-}
-.features-container {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-}
-.feature-box {
-    background: #1a1a1a;
-    padding: 20px;
-    border-radius: 8px;
-    transition: transform 0.3s ease;
-}
-.feature-box:hover {
-    transform: scale(1.05);
-}
 
-/* CTA Section */
-.cta {
-    margin-top: 40px;
-    background: var(--success-color);
-    padding: 20px;
-    border-radius: 8px;
-}
-.btn {
-    display: inline-block;
-    background: var(--primary-color);
-    color: white;
-    padding: 10px 15px;
-    border-radius: 5px;
+a {
     text-decoration: none;
-    transition: background 0.3s ease;
-}
-.btn:hover {
-    background: var(--hover-color);
+    color: #007bff;
 }
 
-/* Footer */
-.footer {
-    text-align: center;
-    padding: 20px;
-    background: var(--surface-color);
-    opacity: 0.8;
-}
-
-/* Error Message */
-.error-message {
-    color: var(--error-color);
-    display: none;
-}
-
-=== public/css/transaction-logs.css ===
-/* ...existing code... */
-
-/* Remove redundant table styles */
-/* .transaction-logs table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-    background-color: var(--surface-color);
-}
-.transaction-logs table th {
-    background-color: var(--primary-color);
-    color: white;
-}
-.transaction-logs table td {
-    border: 1px solid var(--border-color);
-    padding: 8px;
-    text-align: left;
-}
-.transaction-logs table tr:nth-child(even) {
-    background-color: #222;
-}
-.transaction-logs table tr:hover {
-    background-color: #333;
-} */
-
-/* Ensure tables remain responsive on smaller screens */
-@media (max-width: 768px) {
-    .transaction-logs table {
-        display: block;
-        overflow-x: auto;
-    }
-    .transaction-logs table th, .transaction-logs table td {
-        white-space: nowrap;
-    }
-}
-=== public/css/auth.css ===
-/* ===================================================
-   Authentication Pages Styles (Dark Minimal Theme)
-   Path: public/css/auth.css
-   Applies to: Login, Register, Forgot Password
-   =================================================== */
-
-   :root {
-    --primary-color: #1a1a1a;
-    --secondary-color: #2c2c2c;
-    --accent-color: #5d9cec;
-    --text-color: #e0e0e0;
-    --error-color: #e74c3c;
-    --border-radius: 8px;
-}
-
-/* Global Styling */
-body {
-    background-color: var(--primary-color);
-    color: var(--text-color);
-    font-family: "Arial", sans-serif;
-}
-
-/* Centering the Authentication Box */
-.auth-container {
-    max-width: 400px;
-    width: 90%;
-    background: var(--secondary-color);
-    padding: 20px;
-    border-radius: var(--border-radius);
-    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
-    text-align: center;
-}
-
-/* Form Inputs */
-.auth-container input {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 12px;
-    border: 1px solid #444;
-    border-radius: var(--border-radius);
-    background-color: #333;
-    color: var(--text-color);
-}
-
-.auth-container input:focus {
-    border-color: var(--accent-color);
-    outline: none;
-}
-
-/* Submit Button */
-.auth-container button {
-    width: 100%;
-    padding: 10px;
-    border: none;
-    border-radius: var(--border-radius);
-    background-color: var(--accent-color);
-    color: white;
-    font-size: 16px;
-    cursor: pointer;
-    transition: 0.3s ease;
-}
-
-.auth-container button:hover {
-    background-color: #3b8ed6;
-}
-
-/* Error & Response Messages */
-.auth-container .alert {
-    padding: 10px;
-    margin-top: 10px;
-    border-radius: var(--border-radius);
-    display: none;
-}
-
-.alert-danger {
-    background-color: var(--error-color);
-    color: white;
-}
-
-.alert-success {
-    background-color: #27ae60;
-    color: white;
-}
-
-/* Forgot Password Link */
-.auth-container a {
-    color: var(--accent-color);
-    font-size: 14px;
-    text-decoration: none;
-}
-
-.auth-container a:hover {
+a:hover {
     text-decoration: underline;
 }
-=== public/css/home.css ===
-/*
-|--------------------------------------------------------------------------
-| Home Page Styles (home.css)
-|--------------------------------------------------------------------------
-| This file contains styles for the home page, ensuring a dark, sleek, and
-| minimal design. It applies to the hero section, booking form, and the
-| "Why Us" section.
-*/
 
-/* General Page Styling */
-body {
-    background-color: #121212;
-    color: #ffffff;
-    font-family: 'Arial', sans-serif;
-    margin: 0;
-    padding: 0;
-}
-
-/* Hero Section */
-.hero {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    background: url('/public/assets/images/hero-bg.jpg') no-repeat center center/cover;
-    position: relative;
-}
-
-.hero h1 {
-    font-size: 3rem;
-    font-weight: bold;
-    text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
-    margin-bottom: 15px;
-}
-
-.hero p {
-    font-size: 1.5rem;
-    opacity: 0.8;
-    margin-bottom: 20px;
-}
-
-.cta-button {
-    display: inline-block;
-    background: linear-gradient(45deg, #FFD700, #FF8C00);
-    color: #121212;
-    font-weight: bold;
-    padding: 12px 25px;
-    border-radius: 8px;
-    text-decoration: none;
-    transition: all 0.3s ease;
-}
-
-.cta-button:hover {
-    background: linear-gradient(45deg, #FFC107, #FF4500);
-    transform: scale(1.05);
-}
-
-/* Why Us Section */
-.why-us {
-    text-align: center;
-    padding: 60px 20px;
-    background: #181818;
-}
-
-.why-us h2 {
-    font-size: 2rem;
-    margin-bottom: 30px;
-}
-
-.features {
-    display: flex;
-    justify-content: center;
-    gap: 50px;
-    flex-wrap: wrap;
-}
-
-.feature {
-    background: #1E1E1E;
-    padding: 20px;
-    border-radius: 10px;
-    text-align: center;
-    width: 250px;
-    transition: transform 0.3s ease;
-}
-
-.feature:hover {
-    transform: translateY(-5px);
-}
-
-.icon {
-    font-size: 2rem;
-    margin-bottom: 10px;
-    color: #FFD700;
-}
-
-/* Booking Form */
-.booking-form {
-    text-align: center;
-    padding: 50px 20px;
-}
-
-.booking-form h2 {
-    font-size: 2rem;
-    margin-bottom: 20px;
-}
-
-.booking-form form {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 15px;
-    max-width: 600px;
+form {
+    max-width: 300px;
     margin: auto;
-}
-
-.booking-form input, .booking-form button {
-    padding: 12px;
-    font-size: 1rem;
-    border-radius: 5px;
-    border: none;
-}
-
-.booking-form input {
-    width: 100%;
-    max-width: 250px;
-    background: #222;
-    color: #fff;
-    border: 1px solid #444;
-}
-
-.booking-form button {
-    background: #FFD700;
-    color: #121212;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.booking-form button:hover {
-    background: #FFC107;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    .hero h1 {
-        font-size: 2.5rem;
-    }
-
-    .hero p {
-        font-size: 1.2rem;
-    }
-
-    .booking-form form {
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .booking-form input {
-        max-width: 100%;
-    }
-}
-
-=== public/css/toasts.css ===
-/* This file has been removed. */
-
-=== public/css/bookings.css ===
-/*
-|--------------------------------------------------------------------------
-| Bookings Styles (bookings.css)
-|--------------------------------------------------------------------------
-| This file contains styles for the booking process, ensuring a sleek and
-| user-friendly experience with a dark, modern aesthetic.
-*/
-
-/* General Booking Page Styles */
-body {
-    background-color: #121212;
-    color: #ffffff;
-    font-family: 'Arial', sans-serif;
-    margin: 0;
-    padding: 0;
-}
-
-.booking-container {
-    max-width: 800px;
-    margin: 40px auto;
-    background: #1E1E1E;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
-}
-
-.booking-container h2 {
-    text-align: center;
-    font-size: 2rem;
-    margin-bottom: 20px;
-}
-
-/* Booking Form */
-.booking-form {
     display: flex;
     flex-direction: column;
-    gap: 15px;
 }
 
-.booking-form input, .booking-form select, .booking-form button {
-    padding: 12px;
-    font-size: 1rem;
-    border-radius: 5px;
-    border: none;
-}
-
-.booking-form input, .booking-form select {
-    background: #333;
-    color: #fff;
-    border: 1px solid #444;
-    width: 100%;
-}
-
-.booking-form input:focus, .booking-form select:focus {
-    border-color: #FFD700;
-    outline: 0;
-}
-
-.booking-form button {
-    background: linear-gradient(45deg, #FFD700, #FF8C00);
-    color: #121212;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.booking-form button:hover {
-    background: linear-gradient(45deg, #FFC107, #FF4500);
-}
-
-/* Vehicle Selection */
-.vehicle-selection {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
-}
-
-.vehicle-card {
-    background: #181818;
-    padding: 15px;
-    border-radius: 8px;
-    text-align: center;
-    transition: transform 0.3s;
-}
-
-.vehicle-card:hover {
-    transform: scale(1.05);
-}
-
-.vehicle-card h3 {
-    color: #FFD700;
-    font-size: 1.2rem;
+input {
     margin-bottom: 10px;
-}
-
-/* Booking Confirmation */
-.booking-confirmation {
-    text-align: center;
-    padding: 20px;
-    background: #242424;
-    border-radius: 8px;
-    margin-top: 30px;
-}
-
-.booking-confirmation p {
-    font-size: 1.2rem;
-    color: #FFD700;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    .booking-container {
-        padding: 15px;
-    }
-    
-    .vehicle-selection {
-        grid-template-columns: 1fr;
-    }
-}
-
-=== public/css/reports.css ===
-/* ...existing code... */
-
-/* Remove redundant table styles */
-/* .reports table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-    background-color: var(--surface-color);
-}
-.reports table th {
-    background-color: var(--primary-color);
-    color: white;
-}
-.reports table td {
-    border: 1px solid var(--border-color);
     padding: 8px;
-    text-align: left;
+    font-size: 16px;
 }
-.reports table tr:nth-child(even) {
-    background-color: #222;
-}
-.reports table tr:hover {
-    background-color: #333;
-} */
 
-/* Ensure tables remain responsive on smaller screens */
-@media (max-width: 768px) {
-    .reports table {
-        display: block;
-        overflow-x: auto;
-    }
-    .reports table th, .reports table td {
-        white-space: nowrap;
-    }
+button {
+    padding: 10px;
+    font-size: 16px;
+    cursor: pointer;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+}
+
+button:hover {
+    background: #0056b3;
 }
 === public/index.php ===
 <?php
-declare(strict_types=1);
-header("Content-Type: text/html; charset=UTF-8");
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../config/routes.php';
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-$logFile = __DIR__ . '/../logs/debug.log';
-file_put_contents($logFile, "[INDEX] Request URI: " . $_SERVER['REQUEST_URI'] . PHP_EOL, FILE_APPEND);
-
-$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-if ($requestUri === '/') {
-    require __DIR__ . '/views/home.php';
-    exit();
-}
-
-$dispatcher = FastRoute\simpleDispatcher(function(FastRoute\RouteCollector $r) use ($routes) {
-    foreach ($routes as $route => $file) {
-        $r->addRoute('GET', "/$route", $file);
-    }
-});
-
-$httpMethod = $_SERVER['REQUEST_METHOD'];
-$uri = $_SERVER['REQUEST_URI'];
-
-// Strip query string (?foo=bar) and decode URI
-if (false !== $pos = strpos($uri, '?')) {
-    $uri = substr($uri, 0, $pos);
-}
-$uri = rawurldecode($uri);
-
-$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
-
-// Log route dispatch information
-file_put_contents($logFile, "[INDEX] Route Info: " . print_r($routeInfo, true) . PHP_EOL, FILE_APPEND);
-
-switch ($routeInfo[0]) {
-    case FastRoute\Dispatcher::NOT_FOUND:
-        http_response_code(404);
-        echo '404 Not Found';
-        file_put_contents($logFile, "[INDEX] 404 Not Found" . PHP_EOL, FILE_APPEND);
-        break;
-    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-        http_response_code(405);
-        echo '405 Method Not Allowed';
-        file_put_contents($logFile, "[INDEX] 405 Method Not Allowed" . PHP_EOL, FILE_APPEND);
-        break;
-    case FastRoute\Dispatcher::FOUND:
-        $handler = $routeInfo[1];
-        $vars = $routeInfo[2];
-        // Log the handler and variables
-        file_put_contents($logFile, "[INDEX] Handler: $handler, Vars: " . print_r($vars, true) . PHP_EOL, FILE_APPEND);
-        require __DIR__ . "/../views/$handler";
-        file_put_contents($logFile, "[INDEX] 200 OK: $requestUri" . PHP_EOL, FILE_APPEND);
-        break;
-}
-exit();
-?>
-=== public/home.php ===
-<?php
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+
+startSecureSession();
+// Debugging: List available views
+$viewsDirectory = __DIR__ . "/views/";
+$availableViews = scandir($viewsDirectory);
+echo "<pre>Available Views:\n" . print_r($availableViews, true) . "</pre>";
+
+// Get the requested URL path
+$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
+// ✅ Prevent API requests from being misrouted
+if (strpos($requestUri, '/api/') === 0) {
+    http_response_code(404);
+    echo json_encode(["error" => "Invalid API request"]);
+    exit;
+}
+
+// ✅ Serve home page for `/`
+if ($requestUri === '/' || $requestUri === '/index.php') {
+    require __DIR__ . '/views/home.php';
+    exit;
+}
+
+// ✅ Serve other views dynamically
+$viewPath = __DIR__ . "/views$requestUri.php";
+if (file_exists($viewPath)) {
+    require $viewPath;
+    exit;
+} else {
+    echo "View not found: " . htmlspecialchars($viewPath); // Debugging output
+}
+
+// 🚀 If no matching view, show 404 page
+http_response_code(404);
+echo "404 Not Found";
 ?>
-
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CarFuse - Strona Główna</title>
-    <link rel="stylesheet" href="css/main.css">
-</head>
-<body>
-
-<?php include __DIR__ . '/views/layouts/navbar.php'; ?>
-
-<section class="hero-section">
-    <div class="container text-center">
-        <h1>Witaj w CarFuse!</h1>
-        <p>Najlepszy sposób na wynajem i zarządzanie pojazdami.</p>
-        <a href="auth/register.php" class="btn btn-primary">Zarejestruj się</a>
-        <a href="auth/login.php" class="btn btn-secondary">Zaloguj się</a>
-    </div>
-</section>
-
-<section class="features-section">
-    <div class="container">
-        <h2>Dlaczego CarFuse?</h2>
-        <div class="row">
-            <div class="col-md-4 text-center">
-                <i class="icon fas fa-car"></i>
-                <h3>Łatwy Wynajem</h3>
-                <p>Wynajmuj pojazdy szybko i wygodnie online.</p>
-            </div>
-            <div class="col-md-4 text-center">
-                <i class="icon fas fa-lock"></i>
-                <h3>Bezpieczeństwo</h3>
-                <p>Wszystkie rezerwacje są weryfikowane i zabezpieczone.</p>
-            </div>
-            <div class="col-md-4 text-center">
-                <i class="icon fas fa-wallet"></i>
-                <h3>Elastyczne Płatności</h3>
-                <p>Obsługujemy płatności kartą, PayPal i inne metody.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="testimonials-section">
-    <div class="container">
-        <h2>Opinie Klientów</h2>
-        <div class="row">
-            <div class="col-md-6">
-                <blockquote>
-                    <p>"Najlepsza platforma do wynajmu aut! Proces jest szybki i bezproblemowy."</p>
-                    <cite>- Jan Kowalski</cite>
-                </blockquote>
-            </div>
-            <div class="col-md-6">
-                <blockquote>
-                    <p>"Wspaniała obsługa klienta i bardzo dobre ceny. Polecam!"</p>
-                    <cite>- Anna Nowak</cite>
-                </blockquote>
-            </div>
-        </div>
-    </div>
-</section>
-
-<?php include __DIR__ . '/layouts/footer.php'; ?>
-
-<script type="module" src="js/shared.js"></script>
-<script type="module" src="js/api.js"></script>
-</body>
-</html>
 === public/views/auth/register.php ===
 <?php
 /*
@@ -5767,21 +3982,6 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 === public/views/home.php ===
-<?php
-require_once __DIR__ . '/../../vendor/autoload.php';
-require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-$logFile = __DIR__ . '/../../logs/debug.log';
-
-// Log the inclusion of the home view
-file_put_contents($logFile, "[VIEW] Including home.php" . PHP_EOL, FILE_APPEND);
-?>
-<?php $page = 'home'; ?>
-
 <!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -5789,62 +3989,31 @@ file_put_contents($logFile, "[VIEW] Including home.php" . PHP_EOL, FILE_APPEND);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CarFuse - Strona Główna</title>
     <link rel="stylesheet" href="/css/style.css">
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            fetch('/api/views/home.php')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('content').innerHTML = data.content;
+                })
+                .catch(error => {
+                    document.getElementById('content').innerHTML = '<p>Error loading content. Please try again later.</p>';
+                    console.error('There was a problem with the fetch operation:', error);
+                });
+        });
+    </script>
 </head>
 <body>
 <?php include __DIR__ . '/layouts/navbar.php'; ?>
 
-<section class="hero-section">
-    <div class="container text-center">
-        <h1>Witaj w CarFuse!</h1>
-        <p>Najlepszy sposób na wynajem i zarządzanie pojazdami.</p>
-        <a href="/dashboard" class="btn btn-primary">Panel</a>
-        <a href="#features-section" class="btn btn-secondary" id="register-btn">Zaloguj się</a>
-        <a href="/profile" class="btn btn-tertiary">Profil</a>
-    </div>
-</section>
-
-<section class="features-section">
-    <div class="container">
-        <h2>Dlaczego CarFuse?</h2>
-        <div class="row">
-            <div class="col-md-4 text-center">
-                <i class="icon fas fa-car"></i>
-                <h3>Łatwy Wynajem</h3>
-                <p>Wynajmuj pojazdy szybko i wygodnie online.</p>
-            </div>
-            <div class="col-md-4 text-center">
-                <i class="icon fas fa-lock"></i>
-                <h3>Bezpieczeństwo</h3>
-                <p>Wszystkie rezerwacje są weryfikowane i zabezpieczone.</p>
-            </div>
-            <div class="col-md-4 text-center">
-                <i class="icon fas fa-wallet"></i>
-                <h3>Elastyczne Płatności</h3>
-                <p>Obsługujemy płatności kartą, PayPal i inne metody.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="testimonials-section">
-    <div class="container">
-        <h2>Opinie Klientów</h2>
-        <div class="row">
-            <div class="col-md-6">
-                <blockquote>
-                    <p>"Najlepsza platforma do wynajmu aut! Proces jest szybki i bezproblemowy."</p>
-                    <cite>- Jan Kowalski</cite>
-                </blockquote>
-            </div>
-            <div class="col-md-6">
-                <blockquote>
-                    <p>"Wspaniała obsługa klienta i bardzo dobre ceny. Polecam!"</p>
-                    <cite>- Anna Nowak</cite>
-                </blockquote>
-            </div>
-        </div>
-    </div>
-</section>
+<div id="content">
+    <!-- Content will be loaded here dynamically -->
+</div>
 
 <?php include __DIR__ . '/layouts/footer.php'; ?>
 <script src="/js/shared.js"></script>
@@ -6461,2142 +4630,72 @@ if (!isUserLoggedIn()) {
 </div>
 
 <script src="/js/modals.js"></script>
-=== public/logout.php ===
+=== public/login.php ===
 <?php
+session_start();
 
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $username = $_POST["username"] ?? "";
+    $password = $_POST["password"] ?? "";
 
-
-setcookie("PHPSESSID", "", time() - 3600, "/");
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-session_unset();
-session_destroy();
-header("Location: /");
-exit;
-
-http_response_code(200);
-echo json_encode(["message" => "Logged out successfully."]);
-=== public/js/main.js ===
-import { apiFetch } from './api.js';
-
-document.addEventListener("DOMContentLoaded", function () {
-    console.log("Main.js Loaded");
-    // Ensure this runs only once
-    if (window.mainJsInitialized) return;
-    window.mainJsInitialized = true;
-
-    // Run script only on dashboard pages
-    if (!window.location.pathname.includes("/dashboard")) {
-        console.log("main.js: Not on dashboard. Exiting.");
-        return;
-    }
-
-    console.log("Main.js loaded successfully.");
-
-    // Detect if we're on the dashboard page
-    const dashboardView = document.getElementById("dashboard-view");
-    if (!dashboardView) {
-        console.log("Dashboard view not found. main.js will not run on homepage.");
-        return;
-    }
-
-    // Prevent execution if not on dashboard
-    if (!document.querySelector(".dashboard-container")) {
-        return;
-    }
-
-    async function fetchData(endpoint) {
-        try {
-            const response = await fetch(endpoint, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('apiToken')}`,
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include'
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            return data;
-        } catch (error) {
-            console.error('Failed to fetch data:', error);
-        }
-    }
-
-    // Load default dashboard module with session credentials
-    apiFetch("/dashboard/modules/user/overview.php", {
-        credentials: "include"
-    })
-    .then(response => response.text())
-    .then(data => {
-        dashboardView.innerHTML = data;
-    })
-    .catch(error => console.error("main.js fetch error:", error));
-
-    document.querySelectorAll(".dashboard-link").forEach(link => {
-        link.addEventListener("click", function(e) {
-            e.preventDefault();
-            let targetView = this.getAttribute("href");
-            apiFetch(targetView)
-                .then(r => r.text())
-                .then(data => {
-                    document.getElementById("dashboard-view").innerHTML = data;
-                })
-                .catch(err => console.error("Dashboard link error:", err));
-        });
-    });
-});
-=== public/js/ajax.js ===
-class Ajax {
-    constructor() {
-        this.baseUrl = '/api';
-        this.token = localStorage.getItem('auth_token') || null;
-    }
-
-    /**
-     * Stores the authentication token for future requests.
-     */
-    setToken(token) {
-        this.token = token;
-        localStorage.setItem('auth_token', token);
-    }
-
-    /**
-     * Makes an API request with automatic retry and session handling.
-     */
-    async request(endpoint, method = 'GET', data = null, retry = true) {
-        const url = `${this.baseUrl}${endpoint}`;
-        const headers = {
-            'Content-Type': 'application/json',
-            'Authorization': this.token ? `Bearer ${this.token}` : ''
-        };
-
-        const options = { method, headers };
-
-        if (data) {
-            options.body = JSON.stringify(data);
-        }
-
-        try {
-            const response = await fetch(url, options);
-
-            if (response.status === 401 && retry) {
-                // Attempt token refresh before retrying request
-                const refreshed = await this.refreshToken();
-                if (refreshed) {
-                    return this.request(endpoint, method, data, false);
-                }
-                throw new Error('Unauthorized: Session expired.');
-            }
-
-            if (!response.ok) {
-                throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error('Błąd API:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Fetches data using GET method.
-     */
-    get(endpoint) {
-        return this.request(endpoint, 'GET');
-    }
-
-    /**
-     * Sends data using POST method.
-     */
-    post(endpoint, data) {
-        return this.request(endpoint, 'POST', data);
-    }
-
-    /**
-     * Updates data using PUT method.
-     */
-    put(endpoint, data) {
-        return this.request(endpoint, 'PUT', data);
-    }
-
-    /**
-     * Deletes a resource using DELETE method.
-     */
-    delete(endpoint) {
-        return this.request(endpoint, 'DELETE');
-    }
-
-    /**
-     * Attempts to refresh the session token.
-     */
-    async refreshToken() {
-        try {
-            const response = await fetch(`${this.baseUrl}/session/refresh`, {
-                method: 'POST',
-                headers: { 'Authorization': this.token ? `Bearer ${this.token}` : '' }
-            });
-
-            if (!response.ok) {
-                this.clearToken();
-                return false;
-            }
-
-            const data = await response.json();
-            if (data.success && data.token) {
-                this.setToken(data.token);
-                return true;
-            }
-
-            return false;
-        } catch (error) {
-            console.error('Błąd odświeżania tokena:', error);
-            this.clearToken();
-            return false;
-        }
-    }
-
-    /**
-     * Clears stored authentication token.
-     */
-    clearToken() {
-        this.token = null;
-        localStorage.removeItem('auth_token');
-    }
-}
-
-// Ensures global availability
-window.ajax = new Ajax();
-=== public/js/dashboard.js ===
-import ajax from './ajax';
-import { showErrorToast } from './toasts';
-
-document.addEventListener('DOMContentLoaded', function () {
-    loadDashboardContent();
-    setInterval(checkUserActivity, 60000); // Aktualizuj statystyki tylko przy aktywności użytkownika
-    window.addEventListener('resize', handleResponsiveUpdates);
-});
-
-/**
- * Loads the main dashboard content dynamically.
- */
-async function loadDashboardContent() {
-    try {
-        const response = await ajax.get('/user/overview.php');
-        document.getElementById('dashboard-content').innerHTML = response;
-        fetchDashboardData();
-    } catch (error) {
-        showErrorToast('Nie udało się załadować zawartości pulpitu.');
-        console.error('Błąd ładowania zawartości pulpitu:', error);
-    }
-}
-
-/**
- * Fetches dashboard data based on user role.
- */
-async function fetchDashboardData() {
-    const role = getUserRole();
-    if (role === 'admin') {
-        await fetchAdminStatistics();
+    // Simulated authentication check
+    if ($username === "admin" && $password === "password") {
+        $_SESSION["user_id"] = 1;
+        $_SESSION["username"] = "admin";
+        header("Location: /dashboard");
+        exit();
     } else {
-        await fetchUserStatistics();
+        $error = "Invalid credentials!";
     }
 }
-
-/**
- * Fetches admin-specific statistics for the dashboard.
- */
-async function fetchAdminStatistics() {
-    try {
-        showLoadingIndicators();
-        const [totalUsers, totalBookings, totalRevenue] = await Promise.all([
-            ajax.get('/statistics/totalUsers'),
-            ajax.get('/statistics/totalBookings'),
-            ajax.get('/statistics/totalRevenue')
-        ]);
-        updateWidgets({
-            totalUsers: totalUsers.data,
-            totalBookings: totalBookings.data,
-            totalRevenue: totalRevenue.data
-        });
-    } catch (error) {
-        showErrorToast('Nie udało się pobrać statystyk administratora.');
-        console.error('Błąd pobierania statystyk administratora:', error);
-    } finally {
-        hideLoadingIndicators();
-    }
-}
-
-/**
- * Fetches user-specific statistics for the dashboard.
- */
-async function fetchUserStatistics() {
-    try {
-        showLoadingIndicators();
-        const response = await ajax.get('/statistics/user');
-        updateWidgets(response.data);
-    } catch (error) {
-        showErrorToast('Nie udało się pobrać statystyk użytkownika.');
-        console.error('Błąd pobierania statystyk użytkownika:', error);
-    } finally {
-        hideLoadingIndicators();
-    }
-}
-
-/**
- * Updates dashboard widgets based on API data.
- */
-function updateWidgets(data) {
-    updateWidget('total-users', data.totalUsers);
-    updateWidget('active-sessions', data.activeSessions);
-    updateWidget('new-bookings', data.newBookings);
-    updateWidget('total-revenue', formatCurrency(data.totalRevenue));
-}
-
-/**
- * Updates a single widget if it exists.
- */
-function updateWidget(widgetId, value) {
-    const widget = document.getElementById(widgetId);
-    if (widget) {
-        widget.innerText = value ?? 'Brak danych';
-    }
-}
-
-/**
- * Handles dynamic UI responsiveness updates.
- */
-function handleResponsiveUpdates() {
-    console.log('Zaktualizowano UI na podstawie zmiany rozmiaru ekranu.');
-    // Można dodać dodatkowe funkcje do aktualizacji widżetów lub układu
-}
-
-/**
- * Formats numbers into readable currency format.
- */
-function formatCurrency(amount) {
-    return new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(amount);
-}
-
-/**
- * Checks user activity and updates statistics only if the tab is active.
- */
-function checkUserActivity() {
-    if (document.visibilityState === 'visible') {
-        fetchDashboardData();
-    }
-}
-
-/**
- * Shows loading indicators for widgets.
- */
-function showLoadingIndicators() {
-    const widgets = document.querySelectorAll('.widget');
-    widgets.forEach(widget => {
-        widget.classList.add('loading');
-    });
-}
-
-/**
- * Hides loading indicators for widgets.
- */
-function hideLoadingIndicators() {
-    const widgets = document.querySelectorAll('.widget');
-    widgets.forEach(widget => {
-        widget.classList.remove('loading');
-    });
-}
-
-/**
- * Mock function to get user role.
- */
-function getUserRole() {
-    // Replace with actual implementation
-    return 'user'; // or 'admin'
-}
-=== public/js/notifications.js ===
-import ajax from './ajax';
-import { showErrorToast, showSuccessToast } from './toasts';
-
-let lastFetchTimestamp = 0;
-const FETCH_INTERVAL = 30000; // 30 seconds
-
-document.addEventListener('DOMContentLoaded', function () {
-    if (document.visibilityState === 'visible') {
-        fetchNotifications();
-    }
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    document.addEventListener('newEvent', handleNewEvent); // Custom event for new actions
-    setInterval(fetchNotifications, FETCH_INTERVAL); // Polling mechanism
-
-    // Event delegation for dynamically loaded notifications
-    document.getElementById('notifications-container').addEventListener('click', function (event) {
-        if (event.target.classList.contains('mark-as-read')) {
-            markAsRead(event.target.dataset.id);
-        }
-    });
-});
-
-/**
- * Handles visibility change events.
- */
-function handleVisibilityChange() {
-    if (document.visibilityState === 'visible') {
-        fetchNotifications();
-    }
-}
-
-/**
- * Handles new events that require fresh notifications.
- */
-function handleNewEvent() {
-    fetchNotifications();
-}
-
-/**
- * Fetches notifications from the server.
- */
-async function fetchNotifications() {
-    const now = Date.now();
-    if (now - lastFetchTimestamp < FETCH_INTERVAL) return; // Prevent redundant calls
-
-    lastFetchTimestamp = now;
-    try {
-        const response = await fetch('/api/user/notifications.php');
-        if (response.status === 401) {
-            showErrorToast('Musisz być zalogowany, aby zobaczyć powiadomienia.');
-            return;
-        }
-        const notifications = await response.json();
-        if (notifications.length > 0) {
-            displayNotifications(notifications);
-        } else {
-            displayNoNotificationsMessage();
-        }
-    } catch (error) {
-        console.error('Błąd pobierania powiadomień:', error);
-        showErrorToast('Nie udało się pobrać powiadomień.');
-    }
-}
-
-/**
- * Displays notifications in the UI.
- */
-function displayNotifications(notifications) {
-    const notificationsContainer = document.getElementById('notifications-container');
-    if (!notificationsContainer) return;
-
-    notificationsContainer.innerHTML = '';
-
-    notifications.forEach(notification => {
-        const notificationElement = document.createElement('div');
-        notificationElement.className = `notification ${notification.read ? 'read' : 'unread'}`;
-        notificationElement.innerHTML = `
-            <p style="font-weight: ${notification.read ? 'normal' : 'bold'};">${notification.message}</p>
-            <button class="mark-as-read" data-id="${notification.id}">Oznacz jako przeczytane</button>
-        `;
-        notificationsContainer.appendChild(notificationElement);
-    });
-}
-
-/**
- * Marks a notification as read.
- */
-async function markAsRead(notificationId) {
-    try {
-        const response = await fetch(`/api/user/notifications.php/${notificationId}/read`, {
-            method: 'POST'
-        });
-        const result = await response.json();
-        if (result.success) {
-            updateNotificationStatus(notificationId);
-            showSuccessToast('Powiadomienie oznaczone jako przeczytane.');
-        } else {
-            showErrorToast(result.error || 'Błąd oznaczania powiadomienia jako przeczytanego.');
-        }
-    } catch (error) {
-        console.error('Błąd oznaczania powiadomienia:', error);
-        showErrorToast('Nie udało się oznaczyć powiadomienia.');
-    }
-}
-
-/**
- * Updates the UI when a notification is marked as read.
- */
-function updateNotificationStatus(notificationId) {
-    const notificationElement = document.querySelector(`.mark-as-read[data-id="${notificationId}"]`);
-    if (notificationElement) {
-        const parentElement = notificationElement.closest('.notification');
-        parentElement.classList.add('read');
-        parentElement.querySelector('p').style.fontWeight = 'normal';
-        notificationElement.remove();
-    }
-}
-
-/**
- * Displays a message when there are no notifications.
- */
-function displayNoNotificationsMessage() {
-    const notificationsContainer = document.getElementById('notifications-container');
-    if (!notificationsContainer) return;
-
-    notificationsContainer.innerHTML = `<p class="text-muted">Brak nowych powiadomień.</p>`;
-}
-=== public/js/forms.js ===
-document.addEventListener('DOMContentLoaded', function () {
-    document.body.addEventListener('submit', function (event) {
-        const form = event.target;
-        if (form.tagName === 'FORM') {
-            event.preventDefault();
-            if (validateForm(form)) {
-                submitForm(form);
-            }
-        }
-    });
-
-    document.body.addEventListener('input', function (event) {
-        const input = event.target;
-        if (input.closest('form')) {
-            validateInput(input);
-        }
-    });
-});
-
-/**
- * Validates form before submission.
- */
-function validateForm(form) {
-    let isValid = true;
-    const inputs = form.querySelectorAll('input[required], textarea[required], select[required]');
-
-    inputs.forEach(input => {
-        if (!validateInput(input)) {
-            isValid = false;
-        }
-    });
-
-    return isValid;
-}
-
-/**
- * Validates a single input field.
- */
-function validateInput(input) {
-    const value = input.value.trim();
-    const type = input.type;
-
-    if (!value) {
-        showError(input, 'This field is required.');
-        return false;
-    }
-
-    if (type === 'email' && !isValidEmail(value)) {
-        showError(input, 'Please enter a valid email address.');
-        return false;
-    }
-
-    if (type === 'password') {
-        if (value.length < 6) {
-            showError(input, 'Password must be at least 6 characters long.');
-            return false;
-        }
-        if (!/\d/.test(value) || !/[A-Za-z]/.test(value)) {
-            showError(input, 'Password must contain both letters and numbers.');
-            return false;
-        }
-    }
-
-    if (input.dataset.minLength && value.length < input.dataset.minLength) {
-        showError(input, `This field must be at least ${input.dataset.minLength} characters long.`);
-        return false;
-    }
-
-    clearError(input);
-    return true;
-}
-
-/**
- * Submits the form via AJAX.
- */
-function submitForm(form) {
-    const formData = new FormData(form);
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    formData.append('_csrf', csrfToken);
-
-    fetch(form.action, {
-        method: form.method,
-        body: formData,
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            form.reset();
-            showSuccessMessage(form, data.message);
-        } else {
-            showErrorMessages(form, data.errors);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
-}
-
-/**
- * Displays an error message next to the form field.
- */
-function showError(input, message) {
-    let error = input.nextElementSibling;
-    if (!error || !error.classList.contains('error-message')) {
-        error = document.createElement('div');
-        error.classList.add('error-message');
-        input.parentNode.insertBefore(error, input.nextSibling);
-    }
-    error.textContent = message;
-    input.classList.add('error');
-}
-
-/**
- * Clears an error message when input is corrected.
- */
-function clearError(input) {
-    let error = input.nextElementSibling;
-    if (error && error.classList.contains('error-message')) {
-        error.remove();
-    }
-    input.classList.remove('error');
-}
-
-/**
- * Displays success message after form submission.
- */
-function showSuccessMessage(form, message) {
-    const successMessage = document.createElement('div');
-    successMessage.classList.add('success-message');
-    successMessage.textContent = message;
-    form.appendChild(successMessage);
-    setTimeout(() => {
-        successMessage.remove();
-    }, 5000);
-}
-
-/**
- * Displays multiple error messages after form submission.
- */
-function showErrorMessages(form, errors) {
-    for (const [inputName, message] of Object.entries(errors)) {
-        const input = form.querySelector(`[name="${inputName}"]`);
-        if (input) {
-            showError(input, message);
-        }
-    }
-}
-
-/**
- * Checks if an email is valid.
- */
-function isValidEmail(email) {
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-    return emailPattern.test(email);
-}
-=== public/js/profile.js ===
-import ajax from './ajax';
-import { showErrorToast, showSuccessToast } from './toasts';
-
-document.addEventListener('DOMContentLoaded', function () {
-    initProfileForm();
-});
-
-/**
- * Initializes profile form interactions.
- */
-function initProfileForm() {
-    const profileForm = document.getElementById('profileUpdateForm');
-    const avatarUpload = document.getElementById('avatarUpload');
-
-    if (profileForm) profileForm.addEventListener('submit', updateProfile);
-    if (avatarUpload) avatarUpload.addEventListener('change', handleAvatarUpload);
-}
-
-/**
- * Handles profile update submission.
- */
-async function updateProfile(event) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-
-    if (!validateProfileForm(formData)) return;
-
-    try {
-        const response = await fetch('/api/user/profile.php', {
-            method: 'POST',
-            body: formData,
-        });
-        const result = await response.json();
-        if (result.success) {
-            showSuccessToast('Profil zaktualizowany pomyślnie.');
-        } else {
-            showErrorToast(result.message || 'Błąd podczas aktualizacji profilu.');
-        }
-    } catch (error) {
-        console.error('Błąd aktualizacji profilu:', error);
-        showErrorToast('Nie udało się zaktualizować profilu.');
-    }
-}
-
-/**
- * Handles avatar image upload and preview.
- */
-async function handleAvatarUpload(event) {
-    const fileInput = event.target;
-    const file = fileInput.files[0];
-
-    if (!validateImage(file)) return;
-
-    const formData = new FormData();
-    formData.append('avatar', file);
-
-    try {
-        const response = await fetch('/api/user/profile.php', {
-            method: 'POST',
-            body: formData,
-        });
-        const result = await response.json();
-        if (result.success) {
-            document.getElementById('profileAvatar').src = result.avatarUrl;
-            showSuccessToast('Zdjęcie profilowe zaktualizowane pomyślnie.');
-        } else {
-            showErrorToast(result.message || 'Błąd podczas aktualizacji zdjęcia profilowego.');
-        }
-    } catch (error) {
-        console.error('Błąd aktualizacji zdjęcia profilowego:', error);
-        showErrorToast('Nie udało się zaktualizować zdjęcia profilowego.');
-    }
-}
-
-/**
- * Validates profile form inputs.
- */
-function validateProfileForm(formData) {
-    const name = formData.get('name').trim();
-    const email = formData.get('email').trim();
-    const password = formData.get('password')?.trim();
-
-    if (!name) {
-        showErrorToast('Imię i nazwisko jest wymagane.');
-        return false;
-    }
-
-    if (!isValidEmail(email)) {
-        showErrorToast('Wprowadź poprawny adres e-mail.');
-        return false;
-    }
-
-    if (password && password.length < 6) {
-        showErrorToast('Hasło musi mieć co najmniej 6 znaków.');
-        return false;
-    }
-
-    return true;
-}
-
-/**
- * Validates uploaded image format.
- */
-function validateImage(file) {
-    if (!file) {
-        showErrorToast('Wybierz obraz do przesłania.');
-        return false;
-    }
-
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-        showErrorToast('Nieobsługiwany format obrazu. Dozwolone: PNG, JPG, WEBP.');
-        return false;
-    }
-
-    return true;
-}
-
-/**
- * Checks if an email is valid.
- */
-function isValidEmail(email) {
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-    return emailPattern.test(email);
-}
-=== public/js/auth.js ===
-import ajax from './ajax';
-import { showErrorToast, showSuccessToast } from './toasts';
-
-document.addEventListener('DOMContentLoaded', function () {
-    const loginForm = document.getElementById('login-form');
-    const registerForm = document.getElementById('register-form');
-    const logoutButton = document.getElementById('logout-button');
-
-    if (loginForm) loginForm.addEventListener('submit', handleLogin);
-    if (registerForm) registerForm.addEventListener('submit', handleRegister);
-    if (logoutButton) logoutButton.addEventListener('click', logout);
-
-    refreshSession(); // Validate session on load
-    setInterval(refreshSession, 60000); // Check session expiration every 60s
-});
-
-/**
- * Handles user login
- */
-async function handleLogin(event) {
-    event.preventDefault();
-    clearErrors();
-
-    const formData = new FormData(event.target);
-    const username = formData.get('username').trim();
-    const password = formData.get('password').trim();
-
-    if (!validateCredentials(username, password)) return;
-
-    if (await checkAndRefreshSession()) return;
-
-    try {
-        const response = await ajax.post('/login', { username, password });
-        if (response.success) {
-            ajax.setToken(response.token);
-            showSuccessToast('Logowanie udane! Przekierowywanie...');
-            setTimeout(() => window.location.href = '/dashboard', 1500);
-        } else {
-            showError(response.error || 'Błąd logowania.');
-        }
-    } catch (error) {
-        console.error('Błąd logowania:', error);
-        showError('Nie udało się zalogować.');
-    }
-}
-
-/**
- * Handles user registration
- */
-async function handleRegister(event) {
-    event.preventDefault();
-    clearErrors();
-
-    const formData = new FormData(event.target);
-    const username = formData.get('username').trim();
-    const email = formData.get('email').trim();
-    const password = formData.get('password').trim();
-    const confirmPassword = formData.get('confirm_password').trim();
-
-    if (!validateCredentials(username, password, confirmPassword, email)) return;
-
-    if (await checkAndRefreshSession()) return;
-
-    try {
-        const response = await ajax.post('/register', { username, email, password });
-        if (response.success) {
-            ajax.setToken(response.token);
-            showSuccessToast('Rejestracja udana! Przekierowywanie...');
-            setTimeout(() => window.location.href = '/dashboard', 1500);
-        } else {
-            showError(response.error || 'Błąd rejestracji.');
-        }
-    } catch (error) {
-        console.error('Błąd rejestracji:', error);
-        showError('Nie udało się zarejestrować.');
-    }
-}
-
-/**
- * Logs out user and clears session data
- */
-function logout() {
-    localStorage.removeItem('auth_token');
-    showSuccessToast('Wylogowano pomyślnie.');
-    setTimeout(() => window.location.href = '/auth/login', 1500);
-}
-
-/**
- * Refreshes the user session and handles expiration
- */
-async function refreshSession() {
-    const token = localStorage.getItem('auth_token');
-    if (!token) return;
-
-    try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const expiration = payload.exp * 1000;
-        const now = Date.now();
-
-        if (now >= expiration) {
-            await logout();
-        } else {
-            const response = await ajax.get('/session/refresh');
-            if (response.success) {
-                ajax.setToken(response.token);
-            } else {
-                await logout();
-            }
-        }
-    } catch (error) {
-        await logout();
-    }
-}
-
-/**
- * Checks and refreshes the session if the token is expired
- */
-async function checkAndRefreshSession() {
-    const token = localStorage.getItem('auth_token');
-    if (!token) return false;
-
-    try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const expiration = payload.exp * 1000;
-        const now = Date.now();
-
-        if (now >= expiration) {
-            await refreshSession();
-            return true;
-        }
-    } catch (error) {
-        await logout();
-        return true;
-    }
-
-    return false;
-}
-
-/**
- * Clears error messages
- */
-function clearErrors() {
-    const errorContainer = document.getElementById('error-container');
-    if (errorContainer) {
-        errorContainer.innerText = '';
-        errorContainer.style.display = 'none';
-    }
-}
-
-/**
- * Displays an error message
- */
-function showError(message) {
-    const errorContainer = document.getElementById('error-container');
-    if (errorContainer) {
-        errorContainer.innerText = message;
-        errorContainer.style.display = 'block';
-    }
-    showErrorToast(message);
-}
-
-/**
- * Validates login and registration credentials
- */
-function validateCredentials(username, password, confirmPassword = null, email = null) {
-    if (!username || username.length < 3) {
-        showError('Nazwa użytkownika musi mieć co najmniej 3 znaki.');
-        return false;
-    }
-
-    if (email && !isValidEmail(email)) {
-        showError('Wprowadź poprawny adres e-mail.');
-        return false;
-    }
-
-    if (!password || password.length < 6) {
-        showError('Hasło musi mieć co najmniej 6 znaków.');
-        return false;
-    }
-
-    if (confirmPassword !== null && password !== confirmPassword) {
-        showError('Hasła nie są identyczne.');
-        return false;
-    }
-
-    return true;
-}
-
-/**
- * Validates email format
- */
-function isValidEmail(email) {
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailPattern.test(email);
-}
-=== public/js/toasts.js ===
-document.addEventListener('DOMContentLoaded', function () {
-    ensureToastContainer();
-});
-
-/**
- * Ensures the toast container exists on the page.
- */
-function ensureToastContainer() {
-    let toastContainer = document.getElementById('toast-container');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.id = 'toast-container';
-        document.body.appendChild(toastContainer);
-    }
-}
-
-/**
- * Creates a toast notification.
- */
-function createToast(type, message, autoDismiss = true, dismissTime = 3000) {
-    const toastContainer = document.getElementById('toast-container');
-    if (!toastContainer) {
-        console.error('Toast container not found');
-        return;
-    }
-
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.innerHTML = `
-        <span>${message}</span>
-        <button class="toast-close">&times;</button>
-    `;
-
-    toastContainer.appendChild(toast);
-
-    // Add event listener for manual close
-    toast.querySelector('.toast-close').addEventListener('click', function () {
-        fadeOutToast(toast);
-    });
-
-    if (autoDismiss) {
-        setTimeout(() => fadeOutToast(toast), dismissTime);
-    }
-}
-
-/**
- * Smoothly fades out and removes a toast notification.
- */
-function fadeOutToast(toast) {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-}
-
-/**
- * Displays a success toast.
- */
-function showSuccessToast(message, autoDismiss = true, dismissTime = 3000) {
-    createToast('success', message, autoDismiss, dismissTime);
-}
-
-/**
- * Displays a warning toast.
- */
-function showWarningToast(message, autoDismiss = true, dismissTime = 3000) {
-    createToast('warning', message, autoDismiss, dismissTime);
-}
-
-/**
- * Displays an error toast.
- */
-function showErrorToast(message, autoDismiss = true, dismissTime = 3000) {
-    createToast('error', message, autoDismiss, dismissTime);
-}
-=== public/js/documents.js ===
-import ajax from './ajax';
-import { showErrorToast, showSuccessToast } from './toasts';
-
-document.addEventListener('DOMContentLoaded', function () {
-    initDocumentForm();
-    loadDocumentList();
-});
-
-/**
- * Initializes document-related form actions.
- */
-function initDocumentForm() {
-    const uploadForm = document.getElementById('document-upload-form');
-    const signButton = document.getElementById('sign-button');
-    const uploadInput = document.getElementById('uploadButton');
-
-    if (uploadForm) uploadForm.addEventListener('submit', uploadDocument);
-    if (signButton) signButton.addEventListener('click', handleSignButtonClick);
-    if (uploadInput) uploadInput.addEventListener('change', handleFileSelection);
-}
-
-/**
- * Handles document upload process.
- */
-async function uploadDocument(event) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-
-    if (!validateFileUpload(formData)) {
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/user/upload_document.php', {
-            method: 'POST',
-            body: formData
-        }).then(res => res.json());
-
-        if (response.success) {
-            showSuccessToast('Dokument przesłany pomyślnie.');
-            previewDocument(response.documentUrl);
-            loadDocumentList();
-        } else {
-            showErrorToast(response.message || 'Nie udało się przesłać dokumentu.');
-        }
-    } catch (error) {
-        console.error('Błąd przesyłania dokumentu:', error);
-        showErrorToast('Wystąpił problem podczas przesyłania dokumentu.');
-    }
-}
-
-/**
- * Validates file upload before sending.
- */
-function validateFileUpload(formData) {
-    const file = formData.get('document');
-    if (!file) {
-        showErrorToast('Wybierz dokument do przesłania.');
-        return false;
-    }
-
-    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg'];
-    if (!allowedTypes.includes(file.type)) {
-        showErrorToast('Nieobsługiwany format pliku. Dozwolone: PDF, PNG, JPG.');
-        return false;
-    }
-
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-        showErrorToast('Plik jest za duży. Maksymalny rozmiar to 10MB.');
-        return false;
-    }
-
-    return true;
-}
-
-/**
- * Handles file selection and previews before upload.
- */
-function handleFileSelection(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    previewContract(file);
-}
-
-/**
- * Previews document before signing.
- */
-function previewDocument(documentUrl) {
-    const previewFrame = document.getElementById('document-preview');
-    if (previewFrame) {
-        previewFrame.src = documentUrl;
-        previewFrame.style.display = 'block';
-    }
-}
-
-/**
- * Handles document signing process.
- */
-function handleSignButtonClick() {
-    const documentId = document.getElementById('document-id').value.trim();
-    if (!documentId) {
-        showErrorToast('Wybierz dokument do podpisania.');
-        return;
-    }
-
-    signDocument(documentId);
-}
-
-/**
- * Sends request to sign a document.
- */
-async function signDocument(documentId) {
-    try {
-        const response = await fetch('/api/user/documents.php?action=sign', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ documentId })
-        }).then(res => res.json());
-
-        if (response.success) {
-            showSuccessToast('Dokument został pomyślnie podpisany.');
-            loadDocumentList();
-        } else {
-            showErrorToast(response.message || 'Nie udało się podpisać dokumentu.');
-        }
-    } catch (error) {
-        console.error('Błąd podpisywania dokumentu:', error);
-        showErrorToast('Wystąpił problem podczas podpisywania dokumentu.');
-    }
-}
-
-/**
- * Previews document for user review before submission.
- */
-function previewContract(file) {
-    const reader = new FileReader();
-    reader.onload = function (event) {
-        const previewFrame = document.getElementById('contractPreview');
-        if (previewFrame) {
-            previewFrame.src = event.target.result;
-        }
-    };
-    reader.readAsDataURL(file);
-}
-
-/**
- * Loads the document list dynamically.
- */
-async function loadDocumentList() {
-    try {
-        const response = await fetch('/api/user/documents.php?action=list').then(res => res.json());
-        if (response.success) {
-            const documentList = document.getElementById('document-list');
-            documentList.innerHTML = response.documents.map(doc => `<li>${doc.name}</li>`).join('');
-        } else {
-            showErrorToast('Nie udało się załadować listy dokumentów.');
-        }
-    } catch (error) {
-        console.error('Błąd ładowania listy dokumentów:', error);
-        showErrorToast('Wystąpił problem podczas ładowania listy dokumentów.');
-    }
-}
-=== public/js/payments.js ===
-import ajax from './ajax';
-import { showErrorToast, showSuccessToast } from './toasts';
-
-document.addEventListener('DOMContentLoaded', function () {
-    const paymentForm = document.getElementById('paymentForm');
-
-    if (paymentForm) {
-        paymentForm.addEventListener('submit', function (event) {
-            event.preventDefault();
-            if (validateForm()) {
-                const paymentDetails = new FormData(paymentForm);
-                processPayment(paymentDetails);
-            }
-        });
-    }
-
-    initRealTimeValidation();
-});
-
-/**
- * Validates payment form before submission
- */
-function validateForm() {
-    let isValid = true;
-    const cardNumber = document.getElementById('cardNumber').value.trim();
-    const expiryDate = document.getElementById('expiryDate').value.trim();
-    const cvv = document.getElementById('cvv').value.trim();
-
-    if (!isValidCardNumber(cardNumber)) {
-        showErrorToast('Nieprawidłowy numer karty. Wprowadź 16 cyfr.');
-        isValid = false;
-    }
-
-    if (!isValidExpiryDate(expiryDate)) {
-        showErrorToast('Nieprawidłowa data ważności. Użyj formatu MM/YY.');
-        isValid = false;
-    }
-
-    if (!isValidCVV(cvv)) {
-        showErrorToast('Nieprawidłowy kod CVV. Wprowadź 3 cyfry.');
-        isValid = false;
-    }
-
-    return isValid;
-}
-
-/**
- * Sends payment request to the API
- */
-async function processPayment(paymentDetails) {
-    try {
-        const response = await ajax.post('/payments', paymentDetails);
-        if (response.success) {
-            showSuccessToast('Płatność zakończona sukcesem! Przekierowywanie...');
-            setTimeout(() => window.location.href = '/booking/confirmation', 1500);
-        } else {
-            displayErrors(response.errors);
-        }
-    } catch (error) {
-        showErrorToast('Wystąpił błąd podczas przetwarzania płatności.');
-    }
-}
-
-/**
- * Displays error messages
- */
-function displayErrors(errors) {
-    errors.forEach(error => showErrorToast(error));
-}
-
-/**
- * Validates card number format
- */
-function isValidCardNumber(cardNumber) {
-    return /^\d{16}$/.test(cardNumber);
-}
-
-/**
- * Validates expiry date format (MM/YY)
- */
-function isValidExpiryDate(expiryDate) {
-    return /^(0[1-9]|1[0-2])\/\d{2}$/.test(expiryDate);
-}
-
-/**
- * Validates CVV format (3 digits)
- */
-function isValidCVV(cvv) {
-    return /^\d{3}$/.test(cvv);
-}
-
-/**
- * Initializes real-time validation for payment fields
- */
-function initRealTimeValidation() {
-    document.getElementById('cardNumber')?.addEventListener('input', function () {
-        if (!isValidCardNumber(this.value)) {
-            showErrorToast('Numer karty powinien zawierać 16 cyfr.');
-        }
-    });
-
-    document.getElementById('expiryDate')?.addEventListener('input', function () {
-        if (!isValidExpiryDate(this.value)) {
-            showErrorToast('Nieprawidłowy format daty ważności (MM/YY).');
-        }
-    });
-
-    document.getElementById('cvv')?.addEventListener('input', function () {
-        if (!isValidCVV(this.value)) {
-            showErrorToast('Kod CVV powinien zawierać 3 cyfry.');
-        }
-    });
-}
-=== public/js/user.js ===
-document.addEventListener("DOMContentLoaded", function () {
-    // Fetch and manage user dashboard data
-    function loadUserDashboard() {
-        fetch("/api/user/dashboard.php")
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById("totalBookings").textContent = data.totalBookings || 0;
-                document.getElementById("totalPayments").textContent = data.totalPayments + " PLN" || "0 PLN";
-                document.getElementById("totalDocuments").textContent = data.totalDocuments || 0;
-            })
-            .catch(error => console.error("Błąd ładowania dashboardu:", error));
-    }
-
-    // Fetch and manage bookings
-    function fetchBookings() {
-        fetch("/api/user/bookings.php")
-            .then(response => response.json())
-            .then(data => {
-                const bookingTable = document.getElementById("bookingList");
-                bookingTable.innerHTML = "";
-
-                if (data.length === 0) {
-                    bookingTable.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Brak rezerwacji.</td></tr>`;
-                } else {
-                    data.forEach(booking => {
-                        bookingTable.innerHTML += `
-                            <tr>
-                                <td>${booking.id}</td>
-                                <td>${booking.vehicle}</td>
-                                <td>${booking.start_date}</td>
-                                <td>${booking.end_date}</td>
-                                <td>${booking.status}</td>
-                                <td><button class="btn btn-sm btn-info" onclick="viewBooking(${booking.id})">Podgląd</button></td>
-                            </tr>
-                        `;
-                    });
-                }
-            })
-            .catch(error => console.error("Błąd ładowania rezerwacji:", error));
-    }
-
-    loadUserDashboard();
-    fetchBookings();
-});
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="/css/shared.css">
+</head>
+<body>
+    <h1>Login</h1>
+
+    <?php if (isset($error)) : ?>
+        <p style="color: red;"><?= htmlspecialchars($error) ?></p>
+    <?php endif; ?>
+
+    <form method="POST">
+        <label>Username:</label>
+        <input type="text" name="username" required>
+        
+        <label>Password:</label>
+        <input type="password" name="password" required>
+        
+        <button type="submit">Login</button>
+    </form>
+
+    <p><a href="/">Back to Home</a></p>
+</body>
+</html>
 === public/js/shared.js ===
-// Ensure this script only runs once
-if (!window.sharedJsInitialized) {
-    window.sharedJsInitialized = true;
-    console.log("Shared.js: homepage initialization started.");
-
-    // Workaround for importing dependencies
-    function loadScript(src, callback) {
-        const script = document.createElement("script");
-        script.src = src;
-        script.onload = callback;
-        script.onerror = function () {
-            console.error(`Failed to load script: ${src}`);
-        };
-        document.head.appendChild(script);
-    }
-
-    // Load api.js dynamically if not already loaded
-    if (!window.apiFetch) {
-        loadScript("js/api.js", function () {
-            console.log("api.js loaded successfully.");
-            main(); // Call the main function after loading dependencies
-        });
-    } else {
-        main();
-    }
-
-    function main() {
-        console.log("Shared.js: running initialization.");
-
-        // Utility function for checking elements
-        function getElement(selector, context = document) {
-            const element = context.querySelector(selector);
-            if (!element) {
-                console.warn(`Element not found: ${selector}`);
-                return null;
-            }
-            return element;
-        }
-
-        // Improved API call with proper authentication and logging
-        async function apiCall(endpoint, options = {}) {
-            const token = localStorage.getItem("authToken");
-            if (!token) {
-                console.error("API call failed: Missing authentication token.");
-                alert("Authentication error: Please log in.");
-                window.location.href = '/auth/login';
-                return null;
-            }
-            options.headers = {
-                ...options.headers,
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-            };
-            try {
-                const response = await fetch(endpoint, options);
-                if (response.status === 401) {
-                    console.error("API call failed: Unauthorized (401).");
-                    await refreshToken();
-                    return apiCall(endpoint, options); // Retry the API call
-                }
-                if (response.status === 403) {
-                    console.error("API call failed: Forbidden (403).");
-                    alert("Authentication error: Access forbidden.");
-                    return null;
-                }
-                if (!response.ok) {
-                    const error = await response.json();
-                    console.error("API Error:", error);
-                    throw error;
-                }
-                return await response.json();
-            } catch (error) {
-                console.error("API call failed:", error);
-                return null;
-            }
-        }
-
-        // Function to refresh JWT token
-        async function refreshToken() {
-            const refreshToken = localStorage.getItem("refreshToken");
-            if (!refreshToken) {
-                console.error("Refresh token missing.");
-                alert("Session expired. Please log in again.");
-                window.location.href = '/auth/login';
-                return;
-            }
-            try {
-                const response = await fetch('api/auth/refresh', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ refresh_token: refreshToken })
-                });
-                if (!response.ok) {
-                    throw new Error('Failed to refresh token');
-                }
-                const data = await response.json();
-                localStorage.setItem("authToken", data.access_token);
-                console.log("Token refreshed successfully.");
-            } catch (error) {
-                console.error("Token refresh failed:", error);
-                alert("Session expired. Please log in again.");
-                window.location.href = '/auth/login';
-            }
-        }
-
-        // Session-based initialization
-        apiCall("api/shared/initSession.php")
-            .then((data) => {
-                if (data) {
-                    console.log("Session initialized successfully for homepage.");
-                }
-            })
-            .catch((error) => console.error("Session init error:", error));
-
-        // Navbar toggle & CTA scrolling
-        document.addEventListener("click", function (e) {
-            // Navbar toggle handling
-            if (e.target.matches("#navbarToggle, #navbarToggle *")) {
-                const navbar = getElement("#navbarSupportedContent");
-                if (navbar) {
-                    navbar.classList.toggle("show");
-                    console.log("Navbar toggled successfully.");
-                }
-            }
-
-            // Register button handling
-            if (e.target.matches("#register-btn")) {
-                e.preventDefault();
-                const href = e.target.getAttribute("href");
-                const target = href ? getElement(href) : null;
-                if (target) {
-                    target.scrollIntoView({ behavior: "smooth" });
-                    console.log("Smooth scroll triggered on homepage CTA.");
-                }
-            }
-        });
-
-        console.log("Shared.js: homepage initialization completed.");
-    }
-}
-
-(function() {
-    function isProtectedEndpoint(url) {
-        const protectedEndpoints = [
-            '/api/profile/update',
-            '/api/password/reset/request',
-            '/api/password/reset',
-            '/api/payments/process',
-            '/api/payments/refund',
-            '/api/bookings',
-            '/api/notifications',
-            '/api/admin',
-            '/api/documents'
-        ];
-        return protectedEndpoints.some(endpoint => url.startsWith(endpoint));
-    }
-
-    function apiFetch(url, options = {}) {
-        if (!options.headers) {
-            options.headers = {};
-        }
-
-        if (isProtectedEndpoint(url)) {
-            const token = localStorage.getItem('token');
-            if (token) {
-                options.headers['Authorization'] = 'Bearer ' + token;
-            } else {
-                console.warn('Missing token for protected endpoint:', url);
-            }
-        }
-
-        return fetch(url, options)
-            .then(async response => {
-                if (response.status === 401) {
-                    console.warn('Unauthorized response. Attempting token refresh...');
-                    // ...token refresh logic...
-                    // After refresh, retry original request or handle failure
-                }
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Request failed [${response.status}]: ${errorText}`);
-                }
-                return response;
-            })
-            .catch(error => {
-                console.error('API fetch error:', error.message);
-                throw error;
-            });
-    }
-
-    // Expose functions to the global scope
-    window.apiFetch = apiFetch;
-
-    // Log successful API script loading
-    console.log('Shared API script loaded successfully');
-})();
-=== public/js/admin.js ===
 document.addEventListener("DOMContentLoaded", function () {
-    // Fetch and manage admin dashboard data
-    function loadAdminDashboard() {
-        fetch("/api/admin/dashboard.php")
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById("totalUsers").textContent = data.totalUsers || 0;
-                document.getElementById("totalRevenue").textContent = `$${data.totalRevenue || "0.00"}`;
-                document.getElementById("totalBookings").textContent = data.totalBookings || 0;
-            })
-            .catch(error => console.error("Błąd ładowania dashboardu:", error));
-    }
+    console.log("Minimal JavaScript Loaded");
 
-    // Fetch and manage users with role dropdown update
-    function fetchUsers() {
-        fetch("/api/admin/users.php")
-            .then(response => response.json())
-            .then(data => {
-                const userTable = document.getElementById("userList");
-                userTable.innerHTML = "";
-
-                if (data.length === 0) {
-                    userTable.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Brak użytkowników.</td></tr>`;
-                } else {
-                    data.forEach(user => {
-                        userTable.innerHTML += `
-                            <tr>
-                                <td>${user.id}</td>
-                                <td>${user.name}</td>
-                                <td>
-                                    <select onchange="updateUserRole(${user.id}, this.value)">
-                                        <option value="admin" ${user.role === "admin" ? "selected" : ""}>Admin</option>
-                                        <option value="user" ${user.role === "user" ? "selected" : ""}>User</option>
-                                        <option value="staff" ${user.role === "staff" ? "selected" : ""}>Staff</option>
-                                    </select>
-                                </td>
-                                <td>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Usuń</button>
-                                </td>
-                            </tr>
-                        `;
-                    });
-                }
-            })
-            .catch(error => console.error("Błąd ładowania użytkowników:", error));
-    }
-
-    // Update user role via AJAX
-    window.updateUserRole = function (userId, newRole) {
-        fetch("/api/admin/update_user_role.php", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: userId, role: newRole })
-        })
+    fetch("/api/test")
         .then(response => response.json())
-        .then(data => {
-            if(data.success){
-                alert("Rola użytkownika zmieniona.");
-            } else {
-                alert("Nie udało się zmienić roli.");
-            }
-        })
-        .catch(error => console.error("Błąd aktualizacji roli użytkownika:", error));
-    };
-
-    function deleteUser(userId) {
-        if (confirm("Czy na pewno chcesz usunąć użytkownika?")) {
-            fetch(`/api/admin/delete_user.php?id=${userId}`, { method: "DELETE" })
-                .then(response => response.json())
-                .then(() => {
-                    alert("Użytkownik usunięty.");
-                    fetchUsers();
-                })
-                .catch(error => console.error("Błąd usuwania użytkownika:", error));
-        }
-    }
-
-    // Fetch and manage reports with filtering and export functionality
-    function fetchReports(filter = "") {
-        let url = "/api/admin/reports.php";
-        if(filter) url += `?filter=${encodeURIComponent(filter)}`;
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                const reportTable = document.getElementById("reportList");
-                reportTable.innerHTML = "";
-
-                if (data.length === 0) {
-                    reportTable.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Brak raportów.</td></tr>`;
-                } else {
-                    data.forEach(report => {
-                        reportTable.innerHTML += `
-                            <tr>
-                                <td>${report.id}</td>
-                                <td>${report.type}</td>
-                                <td>${report.date}</td>
-                                <td>
-                                    <button class="btn btn-sm btn-info" onclick="viewReport(${report.id})">Podgląd</button>
-                                </td>
-                            </tr>
-                        `;
-                    });
-                }
-            })
-            .catch(error => console.error("Błąd ładowania raportów:", error));
-    }
-
-    // Export reports as CSV or PDF
-    window.exportReports = function (format) {
-        fetch(`/api/admin/reports_export.php?format=${format}`)
-            .then(response => response.blob())
-            .then(blob => {
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `reports.${format}`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-            })
-            .catch(error => console.error("Błąd eksportu raportów:", error));
-    };
-
-    // Fetch and manage transactions with refund handling
-    function fetchTransactions() {
-        fetch("/api/admin/transactions.php")
-            .then(response => response.json())
-            .then(data => {
-                const transactionTable = document.getElementById("transactionList");
-                transactionTable.innerHTML = "";
-
-                if (data.length === 0) {
-                    transactionTable.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Brak transakcji.</td></tr>`;
-                } else {
-                    data.forEach(tx => {
-                        transactionTable.innerHTML += `
-                            <tr>
-                                <td>${tx.id}</td>
-                                <td>${tx.amount}</td>
-                                <td>${tx.date}</td>
-                                <td>${tx.status}</td>
-                                <td>
-                                    ${tx.refundable ? `<button class="btn btn-sm btn-warning" onclick="refundTransaction(${tx.id})">Refund</button>` : ""}
-                                </td>
-                            </tr>
-                        `;
-                    });
-                }
-            })
-            .catch(error => console.error("Błąd ładowania transakcji:", error));
-    }
-
-    // Handle refund action with confirmation dialog
-    window.refundTransaction = function (transactionId) {
-        if (confirm("Czy chcesz wydać refundację dla tej transakcji?")) {
-            fetch("/api/admin/refund_transaction.php", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id: transactionId })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if(data.success){
-                    alert("Refundacja została przeprowadzona.");
-                    fetchTransactions();
-                } else {
-                    alert("Refundacja nie powiodła się.");
-                }
-            })
-            .catch(error => console.error("Błąd refundacji transakcji:", error));
-        }
-    };
-
-    // Dummy function to view report details
-    window.viewReport = function(reportId) {
-        // ...existing code to view report...
-        alert("Wyświetlanie raportu: " + reportId);
-    };
-
-    // Event listener for report filtering input
-    document.getElementById("reportFilter")?.addEventListener("input", function (e) {
-        fetchReports(e.target.value);
-    });
-
-    // Initial data loading
-    loadAdminDashboard();
-    fetchUsers();
-    fetchReports();
-    fetchTransactions();
+        .then(data => console.log("API Response:", data))
+        .catch(error => console.error("API Error:", error));
 });
-=== public/js/bookings.js ===
-import ajax from './ajax';
-import { showErrorToast, showSuccessToast } from './toasts';
-
-document.addEventListener('DOMContentLoaded', function () {
-    const pickupDateInput = document.getElementById('pickup-date');
-    const bookingForm = document.getElementById('booking-form');
-    const vehiclesContainer = document.getElementById('vehicles-container');
-    const errorContainer = document.getElementById('error-container');
-    const loadingIndicator = document.getElementById('loading-indicator');
-
-    if (pickupDateInput) pickupDateInput.addEventListener('change', fetchAvailableVehicles);
-    if (bookingForm) bookingForm.addEventListener('submit', submitBookingRequest);
-
-    initRealTimeValidation();
-});
-
-/**
- * Fetches available vehicles based on the selected pickup date.
- */
-async function fetchAvailableVehicles() {
-    const pickupDate = document.getElementById('pickup-date').value.trim();
-    if (!pickupDate) return;
-
-    showLoadingIndicator();
-
-    try {
-        const response = await fetch(`/api/user/bookings.php?pickup_date=${pickupDate}`);
-        const data = await response.json();
-        hideLoadingIndicator();
-
-        if (data.vehicles && data.vehicles.length > 0) {
-            displayAvailableVehicles(data.vehicles);
-        } else {
-            showErrorToast('Brak dostępnych pojazdów na wybrany termin.');
-            clearVehicles();
-            fetchAlternativeDates(pickupDate);
-        }
-    } catch (error) {
-        hideLoadingIndicator();
-        console.error('Błąd pobierania dostępnych pojazdów:', error);
-        showErrorToast('Nie udało się pobrać dostępnych pojazdów.');
-    }
-}
-
-/**
- * Displays the available vehicles in the UI.
- */
-function displayAvailableVehicles(vehicles) {
-    vehiclesContainer.innerHTML = '';
-
-    vehicles.forEach(vehicle => {
-        const vehicleElement = document.createElement('div');
-        vehicleElement.className = 'vehicle';
-        vehicleElement.innerHTML = `
-            <h4>${vehicle.name}</h4>
-            <p>Typ: ${vehicle.type}</p>
-        `;
-        vehiclesContainer.appendChild(vehicleElement);
-    });
-}
-
-/**
- * Clears the vehicle list.
- */
-function clearVehicles() {
-    vehiclesContainer.innerHTML = '<p class="text-muted">Brak dostępnych pojazdów.</p>';
-}
-
-/**
- * Fetches alternative dates with available vehicles
- */
-async function fetchAlternativeDates(pickupDate) {
-    try {
-        const response = await fetch(`/api/user/bookings.php?alternative_dates=true&pickup_date=${pickupDate}`);
-        const data = await response.json();
-        if (data.alternativeDates && data.alternativeDates.length > 0) {
-            displayAlternativeDates(data.alternativeDates, pickupDate);
-        } else {
-            showErrorToast('Brak alternatywnych terminów.');
-        }
-    } catch (error) {
-        console.error('Błąd pobierania alternatywnych terminów:', error);
-        showErrorToast('Nie udało się pobrać alternatywnych terminów.');
-    }
-}
-
-/**
- * Displays alternative dates in the UI
- */
-function displayAlternativeDates(alternativeDates, originalDate) {
-    vehiclesContainer.innerHTML = '<p class="text-muted">Brak dostępnych pojazdów.</p>';
-
-    const alternativesContainer = document.createElement('div');
-    alternativesContainer.className = 'alternatives';
-
-    const title = document.createElement('h5');
-    title.innerText = 'Dostępne alternatywne terminy:';
-    alternativesContainer.appendChild(title);
-
-    alternativeDates.forEach(date => {
-        const dateElement = document.createElement('button');
-        dateElement.className = 'alternative-date';
-        dateElement.innerText = date;
-        dateElement.addEventListener('click', () => {
-            document.getElementById('pickup-date').value = date;
-            fetchAvailableVehicles();
-        });
-        alternativesContainer.appendChild(dateElement);
-    });
-
-    const notifyButton = document.createElement('button');
-    notifyButton.className = 'notify-button';
-    notifyButton.innerText = 'Powiadom mnie, gdy pojazdy będą dostępne';
-    notifyButton.addEventListener('click', () => setNotificationAlert(originalDate));
-    alternativesContainer.appendChild(notifyButton);
-
-    vehiclesContainer.appendChild(alternativesContainer);
-}
-
-/**
- * Sets a notification alert for the user
- */
-async function setNotificationAlert(pickupDate) {
-    try {
-        const response = await fetch('/api/user/bookings.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pickup_date: pickupDate })
-        });
-        const data = await response.json();
-        if (data.success) {
-            showSuccessToast('Powiadomienie zostało ustawione.');
-        } else {
-            showErrorToast(data.error || 'Nie udało się ustawić powiadomienia.');
-        }
-    } catch (error) {
-        console.error('Błąd ustawiania powiadomienia:', error);
-        showErrorToast('Nie udało się ustawić powiadomienia.');
-    }
-}
-
-/**
- * Handles the booking form submission.
- */
-async function submitBookingRequest(event) {
-    event.preventDefault();
-    clearErrors();
-
-    if (!validateBookingForm()) return;
-
-    const formData = new FormData(event.target);
-    showLoadingIndicator();
-
-    try {
-        const response = await fetch('/api/user/bookings.php', {
-            method: 'POST',
-            body: formData
-        });
-        const data = await response.json();
-        hideLoadingIndicator();
-
-        if (data.success) {
-            showSuccessToast('Rezerwacja zakończona sukcesem!');
-            setTimeout(() => window.location.href = "/bookings/view", 1500);
-        } else {
-            showErrorToast(data.error || 'Wystąpił problem podczas tworzenia rezerwacji.');
-        }
-    } catch (error) {
-        hideLoadingIndicator();
-        console.error('Błąd tworzenia rezerwacji:', error);
-        showErrorToast('Nie udało się utworzyć rezerwacji.');
-    }
-}
-
-/**
- * Initializes real-time validation for booking form fields.
- */
-function initRealTimeValidation() {
-    const requiredFields = ['pickup-date', 'return-date', 'pickup-location', 'dropoff-location'];
-
-    requiredFields.forEach(field => {
-        const input = document.getElementById(field);
-        if (input) {
-            input.addEventListener('input', () => validateField(input));
-        }
-    });
-}
-
-/**
- * Validates a single form field.
- */
-function validateField(input) {
-    if (!input.value.trim()) {
-        showError(input.dataset.errorMessage || 'To pole jest wymagane.');
-    } else {
-        clearError();
-    }
-}
-
-/**
- * Validates the entire booking form before submission.
- */
-function validateBookingForm() {
-    let isValid = true;
-    const requiredFields = ['pickup-date', 'return-date', 'pickup-location', 'dropoff-location'];
-
-    requiredFields.forEach(field => {
-        const input = document.getElementById(field);
-        if (!input || !input.value.trim()) {
-            showError(`Pole ${field.replace('-', ' ')} jest wymagane.`);
-            isValid = false;
-        }
-    });
-
-    return isValid;
-}
-
-/**
- * Shows a loading indicator.
- */
-function showLoadingIndicator() {
-    if (loadingIndicator) {
-        loadingIndicator.style.display = 'block';
-    }
-}
-
-/**
- * Hides the loading indicator.
- */
-function hideLoadingIndicator() {
-    if (loadingIndicator) {
-        loadingIndicator.style.display = 'none';
-    }
-}
-
-/**
- * Displays an error message.
- */
-function showError(message) {
-    if (errorContainer) {
-        errorContainer.innerText = message;
-        errorContainer.style.display = 'block';
-    }
-}
-
-/**
- * Clears all error messages.
- */
-function clearErrors() {
-    if (errorContainer) {
-        errorContainer.innerText = '';
-        errorContainer.style.display = 'none';
-    }
-}
-=== public/js/api.js ===
-(function() {
-    function apiFetch(url, options = {}) {
-        if (!options.headers) {
-            options.headers = {};
-        }
-        // Attach bearer token
-        const token = localStorage.getItem('token');
-        if (token) {
-            options.headers['Authorization'] = 'Bearer ' + token;
-        }
-
-        return fetch(url, options)
-            .then(async response => {
-                if (response.status === 401) {
-                    console.warn('Unauthorized response. Attempting token refresh...');
-                    // ...token refresh logic...
-                    // After refresh, retry original request or handle failure
-                }
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Request failed [${response.status}]: ${errorText}`);
-                }
-                return response;
-            })
-            .catch(error => {
-                console.error('API fetch error:', error.message);
-                throw error;
-            });
-    }
-
-    function getUserData(userId) {
-        return apiFetch(`/api/user/${userId}`);
-    }
-
-    function updateProfile(data) {
-        return apiFetch('/api/profile/update', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-    }
-
-    // Expose functions to the global scope
-    window.apiFetch = apiFetch;
-    window.getUserData = getUserData;
-    window.updateProfile = updateProfile;
-
-    // Log successful API script loading
-    console.log('API script loaded successfully');
-})();
-=== public/api.php ===
+=== public/helpers/SecurityHelper.php ===
 <?php
-
-require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
-
-use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
-
-// Load encryption keys
-$config = require __DIR__ . '/../config/encryption.php';
-$jwtSecret = $config['jwt_secret'] ?? '';
-
-header('Content-Type: application/json');
-
-function validateToken()
-{
-    global $jwtSecret;
-
-    $headers = getallheaders();
-    $authHeader = $headers['Authorization'] ?? '';
-
-    if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-        http_response_code(401);
-        echo json_encode(["error" => "Unauthorized: Missing or invalid token"]);
-        exit;
-    }
-
-    $token = substr($authHeader, 7);
-    try {
-        return (array) JWT::decode($token, new Key($jwtSecret, 'HS256'));
-    } catch (Exception $e) {
-        http_response_code(401);
-        echo json_encode(["error" => "Unauthorized: Invalid token"]);
-        exit;
+function startMinimalSession() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+        if (!isset($_SESSION['user_id'])) {
+            $_SESSION['guest'] = true;
+        }
     }
 }
-
-function requireAuth() {
-    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-    if (!$authHeader || !isset($_SESSION['user_id'])) {
-        error_log("[API] Unauthorized access attempt\n", 3, __DIR__ . '/../logs/debug.log');
-        http_response_code(401);
-        exit('Unauthorized');
-    }
-}
-
-// Handle CORS preflight requests
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
-    exit;
-}
-
-// Parse API request
-$requestUri = $_SERVER['REQUEST_URI'];
-$requestMethod = $_SERVER['REQUEST_METHOD'];
-$apiPath = str_replace('/api/', '', $requestUri);
-
-// Protect all API routes (except login/register)
-if (!in_array($apiPath, ['auth/login', 'auth/register'])) {
-    validateToken();
-}
-
-// Route API calls
-$endpoint = $_GET['endpoint'] ?? '';
-$apiFile = __DIR__ . '/' . $endpoint . '.php';
-if (file_exists($apiFile)) {
-    error_log("[API] Processing endpoint: $endpoint\n", 3, __DIR__ . '/../logs/debug.log');
-    requireAuth();
-    require_once $apiFile;
-} else {
-    error_log("[API] Endpoint not found: $endpoint\n", 3, __DIR__ . '/../logs/debug.log');
-    http_response_code(404);
-    echo json_encode(['error' => 'API not found']);
-}
+startMinimalSession();
+?>

@@ -300,16 +300,32 @@ use DocumentManager\Controllers\DocumentController;
 use DocumentManager\Controllers\SignatureController;
 use App\Controllers\UserController;
 
-return simpleDispatcher(function (RouteCollector $router) {
+$logFile = __DIR__ . '/../logs/debug.log';
+$routeLogFile = __DIR__ . '/../logs/routes.log';
+
+// Log the execution of the route dispatcher
+file_put_contents($logFile, "[ROUTES] Initializing routes" . PHP_EOL, FILE_APPEND);
+
+$routes = [
+    'home' => 'home.php',
+    'dashboard' => 'views/dashboard/dashboard.php',
+    'profile' => 'views/user/profile.php',
+    'login' => 'views/auth/login.php',
+    'register' => 'views/auth/register.php',
+
+    // Add more routes as needed
+];
+
+return simpleDispatcher(function (RouteCollector $router) use ($routes, $routeLogFile) {
 
     // Logging helper for route execution
     function logRoute($route) {
-        file_put_contents(BASE_PATH . '/debug.log', date('Y-m-d H:i:s') . " - Executing route: $route\n", FILE_APPEND);
+        file_put_contents(__DIR__ . '/../logs/debug.log', date('Y-m-d H:i:s') . " - Executing route: $route\n", FILE_APPEND);
     }
 
     // Middleware-like Authentication Handling
     function requireAuth() {
-        require_once BASE_PATH . '/App/Helpers/SecurityHelper.php';
+        require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
         if (!isUserLoggedIn()) {
             http_response_code(403);
             echo json_encode(["error" => "Unauthorized"]);
@@ -328,7 +344,7 @@ return simpleDispatcher(function (RouteCollector $router) {
     // Home Page route updated to use home.php to prevent recursion.
     $router->get('/', function () {
         logRoute('/');
-        require BASE_PATH . '/public/home.php';
+        require BASE_PATH . '/public/views/home.php';
     });
 
     // Authentication Routes (using controller callbacks remain unchanged)
@@ -343,7 +359,15 @@ return simpleDispatcher(function (RouteCollector $router) {
     // --- Added static /dashboard route to prevent wildcard conflict ---
     $router->get('/dashboard', function () {
         logRoute('/dashboard');
-        require BASE_PATH . '/public/views/user/dashboard.php';
+        require BASE_PATH . '/public/views/dashboard.php';
+    });
+
+    // Logout route to destroy session and redirect to login
+    $router->get('/logout', function () {
+        session_start();
+        session_destroy();
+        header('Location: /login');
+        exit();
     });
 
     // Payment Routes
@@ -395,12 +419,11 @@ return simpleDispatcher(function (RouteCollector $router) {
     // --- Dynamic routes (placed after static routes to avoid conflicts) ---
 
     // Dynamic View Routing for User Dashboard (/dashboard, /profile, etc.)
-    $router->get('/{view}', function ($vars) {
+    $router->get('/{view}', function ($vars) use ($routes) {
         logRoute('/' . $vars['view']);
-        $allowedViews = ['bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
         $view = $vars['view'];
-        if (in_array($view, $allowedViews)) {
-            require BASE_PATH . "/public/views/user/$view.php";
+        if (array_key_exists($view, $routes)) {
+            require BASE_PATH . "/public/views/" . $routes[$view];
         } else {
             http_response_code(404);
             require BASE_PATH . "/public/views/errors/404.php";
@@ -422,6 +445,14 @@ return simpleDispatcher(function (RouteCollector $router) {
             echo json_encode(["error" => "API endpoint not found"]);
         }
         logRoute('/api/' . $vars['endpoint'] . ' - finished processing');
+    });
+
+    // Log unmatched routes
+    $router->addRoute('*', '/{route:.+}', function ($vars) use ($routeLogFile) {
+        $route = $vars['route'];
+        file_put_contents($routeLogFile, date('Y-m-d H:i:s') . " - Unmatched route: $route\n", FILE_APPEND);
+        http_response_code(404);
+        echo json_encode(["error" => "Route not found"]);
     });
 
 });
@@ -447,7 +478,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-header("Access-Control-Allow-Origin: *");  // Allow cross-origin requests
+header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json");
@@ -460,33 +491,37 @@ function refreshTokenIfExpired($token) {
     return $token; 
 }
 
+$logFile = __DIR__ . '/../logs/debug.log';
+
 // Log request details
-error_log("[API] Request: " . $_SERVER['REQUEST_URI'] . PHP_EOL, 3, __DIR__ . "/debug.log");
+error_log("[API] Request: " . $_SERVER['REQUEST_URI'] . PHP_EOL, 3, $logFile);
 
 function requireAuth() {
+    global $logFile;
     if (!isUserLoggedIn()) {
         http_response_code(403);
         echo json_encode(["error" => "Access denied"]);
-        error_log("[API] Unauthorized request" . PHP_EOL, 3, __DIR__ . "/debug.log");
+        error_log("[API] Unauthorized request" . PHP_EOL, 3, $logFile);
         exit();
     }
 }
 
 $requestedEndpoint = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
+$endpointFile = __DIR__ . '/../public/api/' . $requestedEndpoint . '.php';
 
-// Handle request routing
-switch ($requestedEndpoint) {
-    case 'publicEndpoint':
-        echo json_encode(["public" => "Access granted without auth"]);
-        break;
-    case 'secureEndpoint':
+// Log the requested endpoint
+error_log("[API] Requested Endpoint: $requestedEndpoint" . PHP_EOL, 3, $logFile);
+
+if (file_exists($endpointFile)) {
+    // Check if the endpoint requires authentication
+    $protectedEndpoints = ['secureEndpoint']; // Add more protected endpoints as needed
+    if (in_array($requestedEndpoint, $protectedEndpoints)) {
         requireAuth();
-        echo json_encode(["secure" => "Access granted with auth"]);
-        break;
-    default:
-        http_response_code(404);
-        echo json_encode(["error" => "API not found"]);
-        error_log("[API] 404 - Endpoint not found: $requestedEndpoint" . PHP_EOL, 3, __DIR__ . "/debug.log");
-        break;
+    }
+    require $endpointFile;
+} else {
+    http_response_code(404);
+    echo json_encode(["error" => "API not found"]);
+    error_log("[API] 404 - Endpoint not found: $requestedEndpoint" . PHP_EOL, 3, $logFile);
 }
 exit();
