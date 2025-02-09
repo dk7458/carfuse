@@ -22,8 +22,11 @@ file_put_contents($logFile, "[ROUTES] Initializing routes" . PHP_EOL, FILE_APPEN
 
 $routes = [
     'home' => 'home.php',
-    'dashboard' => 'dashboard.php',
-    'profile' => 'profile.php',
+    'dashboard' => 'views/dashboard/dashboard.php',
+    'profile' => 'views/user/profile.php',
+    'login' => 'views/auth/login.php',
+    'register' => 'views/auth/register.php',
+
     // Add more routes as needed
 ];
 
