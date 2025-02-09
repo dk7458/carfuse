@@ -15,39 +15,54 @@ use DocumentManager\Controllers\DocumentController;
 use DocumentManager\Controllers\SignatureController;
 use App\Controllers\UserController;
 
-return simpleDispatcher(function (RouteCollector $router) {
-    // Home Page
+$logFile = __DIR__ . '/../logs/debug.log';
+$routeLogFile = __DIR__ . '/../logs/routes.log';
+
+// Log the execution of the route dispatcher
+file_put_contents($logFile, "[ROUTES] Initializing routes" . PHP_EOL, FILE_APPEND);
+
+$routes = [
+    'home' => 'home.php',
+    'dashboard' => 'views/dashboard/dashboard.php',
+    'profile' => 'views/user/profile.php',
+    'login' => 'views/auth/login.php',
+    'register' => 'views/auth/register.php',
+
+    // Add more routes as needed
+];
+
+return simpleDispatcher(function (RouteCollector $router) use ($routes, $routeLogFile) {
+
+    // Logging helper for route execution
+    function logRoute($route) {
+        file_put_contents(__DIR__ . '/../logs/debug.log', date('Y-m-d H:i:s') . " - Executing route: $route\n", FILE_APPEND);
+    }
+
+    // Middleware-like Authentication Handling
+    function requireAuth() {
+        require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+        if (!isUserLoggedIn()) {
+            http_response_code(403);
+            echo json_encode(["error" => "Unauthorized"]);
+            exit();
+        }
+    }
+
+    // --- New and static routes (placed prior to dynamic routes) ---
+
+    // Static test route to verify routing works correctly
+    $router->get('/test', function () {
+        logRoute('/test');
+        echo 'Test route working';
+    });
+
+    // Home Page route updated to use home.php to prevent recursion.
     $router->get('/', function () {
-        require BASE_PATH . '/public/index.php'; // Ensuring home is handled within index.php
+        logRoute('/');
+        require BASE_PATH . '/public/views/home.php';
     });
 
-    // Generic Dynamic View Routing for User Dashboard
-    $router->get('/{view}', function ($vars) {
-        $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
-        $view = $vars['view'];
-
-        if (in_array($view, $allowedViews)) {
-            require BASE_PATH . "/public/views/user/$view.php";
-        } else {
-            http_response_code(404);
-            require BASE_PATH . "/public/views/errors/404.php";
-        }
-    });
-
-    // Dynamic API Routing for Shared Endpoints
-    $router->get('/api/{endpoint}', function ($vars) {
-        $endpoint = $vars['endpoint'];
-        $apiPath = BASE_PATH . "/public/api/$endpoint.php";
-
-        if (file_exists($apiPath)) {
-            require $apiPath;
-        } else {
-            http_response_code(404);
-            echo json_encode(["error" => "API endpoint not found"]);
-        }
-    });
-
-    // Authentication Routes
+    // Authentication Routes (using controller callbacks remain unchanged)
     $router->get('/login', [AuthController::class, 'loginView']);
     $router->get('/register', [AuthController::class, 'registerView']);
     $router->post('/register', [UserController::class, 'register']);
@@ -55,6 +70,20 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->post('/profile/update', [UserController::class, 'updateProfile']);
     $router->post('/password/reset/request', [UserController::class, 'requestPasswordReset']);
     $router->post('/password/reset', [UserController::class, 'resetPassword']);
+
+    // --- Added static /dashboard route to prevent wildcard conflict ---
+    $router->get('/dashboard', function () {
+        logRoute('/dashboard');
+        require BASE_PATH . '/public/views/dashboard.php';
+    });
+
+    // Logout route to destroy session and redirect to login
+    $router->get('/logout', function () {
+        session_start();
+        session_destroy();
+        header('Location: /login');
+        exit();
+    });
 
     // Payment Routes
     $router->post('/payments/process', [PaymentController::class, 'processPayment']);
@@ -67,50 +96,7 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->get('/bookings/{id}', [BookingController::class, 'viewBooking']);
     $router->post('/bookings/{id}/reschedule', [BookingController::class, 'rescheduleBooking']);
     $router->post('/bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
-    return simpleDispatcher(function (RouteCollector $router) {
-        // Middleware-like Authentication Handling
-        function requireAuth() {
-            require_once BASE_PATH . '/App/Helpers/SecurityHelper.php';
-            if (!isUserLoggedIn()) {
-                http_response_code(403);
-                echo json_encode(["error" => "Unauthorized"]);
-                exit();
-            }
-        }
-    
-        // Home Page
-        $router->get('/', function () {
-            require BASE_PATH . '/public/index.php';
-        });
-    
-        // Dynamic View Routing
-        $router->get('/{view}', function ($vars) {
-            $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
-            $view = $vars['view'];
-    
-            if (in_array($view, $allowedViews)) {
-                require BASE_PATH . "/public/views/user/$view.php";
-            } else {
-                http_response_code(404);
-                require BASE_PATH . "/public/views/errors/404.php";
-            }
-        });
-    
-        // Dynamic API Routing with Authentication Check
-        $router->get('/api/{endpoint}', function ($vars) {
-            requireAuth(); // Ensure user is logged in
-            $endpoint = $vars['endpoint'];
-            $apiPath = BASE_PATH . "/public/api/$endpoint.php";
-    
-            if (file_exists($apiPath)) {
-                require $apiPath;
-            } else {
-                http_response_code(404);
-                echo json_encode(["error" => "API endpoint not found"]);
-            }
-        });
-    });
-    
+
     // Notifications API Routes
     $router->get('/notifications', [NotificationController::class, 'getUserNotifications']);
     $router->post('/notifications/mark-as-read', [NotificationController::class, 'markNotificationAsRead']);
@@ -120,9 +106,9 @@ return simpleDispatcher(function (RouteCollector $router) {
 
     // Admin Dynamic Routing
     $router->get('/admin/{section}', function ($vars) {
+        logRoute('/admin/' . $vars['section']);
         $allowedSections = ['dashboard', 'reports', 'audit-logs', 'users'];
         $section = $vars['section'];
-
         if (in_array($section, $allowedSections)) {
             require BASE_PATH . "/public/views/admin/$section.php";
         } else {
@@ -144,4 +130,44 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->post('/documents/upload-terms', [DocumentController::class, 'uploadTerms']);
     $router->post('/documents/generate-invoice/{bookingId}', [DocumentController::class, 'generateInvoice']);
     $router->delete('/documents/{documentId}', [DocumentController::class, 'deleteDocument']);
+
+    // --- Dynamic routes (placed after static routes to avoid conflicts) ---
+
+    // Dynamic View Routing for User Dashboard (/dashboard, /profile, etc.)
+    $router->get('/{view}', function ($vars) use ($routes) {
+        logRoute('/' . $vars['view']);
+        $view = $vars['view'];
+        if (array_key_exists($view, $routes)) {
+            require BASE_PATH . "/public/views/" . $routes[$view];
+        } else {
+            http_response_code(404);
+            require BASE_PATH . "/public/views/errors/404.php";
+        }
+    });
+
+    // Dynamic API Routing with Authentication Check (/api/{endpoint})
+    $router->get('/api/{endpoint}', function ($vars) {
+        logRoute('/api/' . $vars['endpoint'] . ' - start processing');
+        requireAuth(); // Ensure user is logged in
+        $endpoint = $vars['endpoint'];
+        // Additional logging for security and clarity
+        logRoute('Processing API endpoint: ' . $endpoint);
+        $apiPath = BASE_PATH . "/public/api/$endpoint.php";
+        if (file_exists($apiPath)) {
+            require $apiPath;
+        } else {
+            http_response_code(404);
+            echo json_encode(["error" => "API endpoint not found"]);
+        }
+        logRoute('/api/' . $vars['endpoint'] . ' - finished processing');
+    });
+
+    // Log unmatched routes
+    $router->addRoute('*', '/{route:.+}', function ($vars) use ($routeLogFile) {
+        $route = $vars['route'];
+        file_put_contents($routeLogFile, date('Y-m-d H:i:s') . " - Unmatched route: $route\n", FILE_APPEND);
+        http_response_code(404);
+        echo json_encode(["error" => "Route not found"]);
+    });
+
 });
