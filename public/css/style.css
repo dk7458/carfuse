@@ -1,0 +1,191 @@
+/* Dark Minimal Theme */
+
+/* Added CSS Variables for consistency */
+:root {
+    --primary-bg: #121212;
+    --secondary-bg: #181818;
+    --accent-color: #FFD700;
+    --hover-color: #FFC107;
+    --button-bg: #007bff;
+    --button-hover-bg: #0056b3;
+    --success-bg: #28a745;
+    --error-color: #FF4C4C;
+    --font-family: Arial, sans-serif;
+    --base-font-size: 16px;
+}
+
+body {
+    background-color: var(--primary-bg);
+    color: #fff;
+    font-family: var(--font-family);
+    margin: 0;
+    padding: 0;
+}
+header {
+    background-color: var(--secondary-bg);
+    text-align: center;
+    padding: 15px 0;
+}
+.logo img {
+    max-height: 104px;
+    margin: 15px 0;
+}
+nav {
+    display: flex;
+    justify-content: center;
+    padding: 15px 0;
+}
+nav a {
+    color: #fff;
+    text-decoration: none;
+    margin: 0 15px;
+    font-size: 1rem;
+    transition: color 0.3s ease;
+}
+nav a:hover {
+    color: var(--accent-color);
+}
+
+/* Hero Section */
+.hero {
+    text-align: center;
+    padding: 100px 20px;
+    background: url('/public/images/hero-bg.jpg') no-repeat center center/cover;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+}
+.hero h1 {
+    font-size: 48px;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+}
+.hero p {
+    font-size: 20px;
+    opacity: 0.8;
+    margin-bottom: 30px;
+}
+.hero-title {
+    font-size: 2.5rem;
+    font-weight: bold;
+}
+.hero-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.8;
+}
+
+/* Search Form */
+.search-form {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+.search-form input, .search-form button {
+    padding: 12px;
+    font-size: var(--base-font-size);
+    border-radius: 5px;
+    border: none;
+}
+.search-form button {
+    background: var(--accent-color);
+    color: var(--primary-bg);
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+.search-form button:hover {
+    background: var(--hover-color);
+}
+
+/* Features Section */
+.features {
+    text-align: center;
+    padding: 60px 20px;
+}
+.features h2 {
+    font-size: 36px;
+    margin-bottom: 20px;
+}
+.feature-list {
+    display: flex;
+    justify-content: center;
+    gap: 50px;
+}
+.feature {
+    font-size: 18px;
+    background: #181818;
+    padding: 20px;
+    border-radius: 5px;
+}
+.features-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+.feature-box {
+    background: #1a1a1a;
+    padding: 20px;
+    border-radius: 8px;
+    transition: transform 0.3s ease;
+}
+.feature-box:hover {
+    transform: scale(1.05);
+}
+
+/* CTA Section */
+.cta {
+    margin-top: 40px;
+    background: var(--success-bg);
+    padding: 20px;
+    border-radius: 8px;
+}
+.btn {
+    display: inline-block;
+    background: var(--button-bg);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: background 0.3s ease;
+}
+.btn:hover {
+    background: var(--button-hover-bg);
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    padding: 20px;
+    background: #181818;
+    opacity: 0.8;
+}
+
+/* Error Message */
+.error-message {
+    color: var(--error-color);
+    display: none;
+}
+
+/* Responsive Media Queries */
+@media (max-width: 768px) {
+    nav {
+        flex-direction: column;
+    }
+    .hero {
+        padding: 80px 10px;
+    }
+    .feature-list, .features-container {
+        flex-direction: column;
+        gap: 20px;
+    }
+}
+@media (max-width: 480px) {
+    nav a {
+        margin: 5px 0;
+        font-size: 0.9rem;
+    }
+    .hero h1 {
+        font-size: 2.5rem;
+    }
+    .hero p {
+        font-size: 1rem;
+    }
+}

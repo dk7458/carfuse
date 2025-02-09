@@ -40,10 +40,10 @@ return simpleDispatcher(function (RouteCollector $router) {
         echo 'Test route working';
     });
 
-    // Home Page (Always Loads Index)
+    // Home Page route updated to use home.php to prevent recursion.
     $router->get('/', function () {
         logRoute('/');
-        require BASE_PATH . '/public/index.php';
+        require BASE_PATH . '/public/home.php';
     });
 
     // Authentication Routes (using controller callbacks remain unchanged)
@@ -54,6 +54,12 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->post('/profile/update', [UserController::class, 'updateProfile']);
     $router->post('/password/reset/request', [UserController::class, 'requestPasswordReset']);
     $router->post('/password/reset', [UserController::class, 'resetPassword']);
+
+    // --- Added static /dashboard route to prevent wildcard conflict ---
+    $router->get('/dashboard', function () {
+        logRoute('/dashboard');
+        require BASE_PATH . '/public/views/user/dashboard.php';
+    });
 
     // Payment Routes
     $router->post('/payments/process', [PaymentController::class, 'processPayment']);
@@ -106,7 +112,7 @@ return simpleDispatcher(function (RouteCollector $router) {
     // Dynamic View Routing for User Dashboard (/dashboard, /profile, etc.)
     $router->get('/{view}', function ($vars) {
         logRoute('/' . $vars['view']);
-        $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
+        $allowedViews = ['bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
         $view = $vars['view'];
         if (in_array($view, $allowedViews)) {
             require BASE_PATH . "/public/views/user/$view.php";
@@ -116,11 +122,13 @@ return simpleDispatcher(function (RouteCollector $router) {
         }
     });
 
-    // Dynamic API Routing with Authentication Check (/api/test, etc.)
+    // Dynamic API Routing with Authentication Check (/api/{endpoint})
     $router->get('/api/{endpoint}', function ($vars) {
-        logRoute('/api/' . $vars['endpoint']);
+        logRoute('/api/' . $vars['endpoint'] . ' - start processing');
         requireAuth(); // Ensure user is logged in
         $endpoint = $vars['endpoint'];
+        // Additional logging for security and clarity
+        logRoute('Processing API endpoint: ' . $endpoint);
         $apiPath = BASE_PATH . "/public/api/$endpoint.php";
         if (file_exists($apiPath)) {
             require $apiPath;
@@ -128,6 +136,7 @@ return simpleDispatcher(function (RouteCollector $router) {
             http_response_code(404);
             echo json_encode(["error" => "API endpoint not found"]);
         }
+        logRoute('/api/' . $vars['endpoint'] . ' - finished processing');
     });
 
 });

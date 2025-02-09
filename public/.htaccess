@@ -1,13 +1,23 @@
 RewriteEngine On
+DirectoryIndex index.php
 
-# Allow direct access if the file or directory exists (e.g. index.php)
+AddHandler application/x-httpd-php .php
+
+# Block direct execution of PHP files in /api
+RewriteRule ^api/.*\.php$ - [F,L]
+
+# Allow direct access to static files (CSS, JS, images)
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Deny direct access to API PHP files
-RewriteCond %{REQUEST_URI} ^/api/.*\.php$
-RewriteRule .* - [F,L]
+# Explicitly rewrite '/' to index.php
+RewriteRule ^$ index.php [QSA,L]
 
-# Forward all other requests to index.php for FastRoute routing
-RewriteRule ^ index.php [QSA,L]
+# Forward all non-static requests to index.php
+RewriteRule . index.php [QSA,L]
+
+# PHP session configuration
+php_flag session.auto_start on
+php_value session.use_cookies 1
+php_value session.use_only_cookies 1

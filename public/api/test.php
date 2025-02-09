@@ -1,32 +1,40 @@
 <?php
-// Log the receipt of the request
-file_put_contents('debug.log', date('Y-m-d H:i:s') . " - Received API /test request\n", FILE_APPEND);
+// Helper function for logging
+function logMessage($msg) {
+    file_put_contents('debug.log', date('Y-m-d H:i:s') . " - $msg\n", FILE_APPEND);
+}
+
+// Log the API request at the very start, including requested URI
+logMessage("API request received for " . ($_SERVER['REQUEST_URI'] ?? 'unknown'));
 
 // Optional authentication check flag
 $requiresAuth = false;
 
-// Define authentication function
+// Define authentication function with improved error handling
 function requireAuth() {
-	// Check for 'Authorization' header (adjust condition per requirements)
-	if (!isset($_SERVER['HTTP_AUTHORIZATION'])) {
-		file_put_contents('debug.log', date('Y-m-d H:i:s') . " - Authentication failed\n", FILE_APPEND);
-		http_response_code(401);
-		header("Content-Type: application/json");
-		echo json_encode(["error" => "Unauthorized"]);
-		exit();
-	}
-	file_put_contents('debug.log', date('Y-m-d H:i:s') . " - Authentication succeeded\n", FILE_APPEND);
+    if (!isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        logMessage("Authentication failed: Missing Authorization header");
+        http_response_code(401);
+        header("Content-Type: application/json");
+        echo json_encode(["error" => "Unauthorized access: Authorization header missing"]);
+        exit();
+    }
+    logMessage("Authentication succeeded with header: " . $_SERVER['HTTP_AUTHORIZATION']);
 }
 
 // Perform authentication if required
 if ($requiresAuth) {
-	requireAuth();
+    requireAuth();
 }
+
+// Confirm FastRoute processing by logging the matched route
+// (Assuming FastRoute routing passes control here)
+logMessage("FastRoute processed endpoint: " . ($_SERVER['REQUEST_URI'] ?? 'unknown'));
 
 // Set header always for valid JSON
 header("Content-Type: application/json");
 
-// Explicit success status
+// Explicit success status ensures HTTP 200 OK for curl -I /api/test
 http_response_code(200);
 
 // ...existing code...
@@ -34,5 +42,5 @@ echo json_encode(["status" => "API working"]);
 // ...existing code...
 
 // Log completion of API handling
-file_put_contents('debug.log', date('Y-m-d H:i:s') . " - /test API processed successfully\n", FILE_APPEND);
+logMessage("/test API processed successfully");
 ?>

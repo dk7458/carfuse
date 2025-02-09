@@ -1,8 +1,56 @@
-document.addEventListener("DOMContentLoaded", function () {
-    console.log("Minimal JavaScript Loaded");
+import { apiFetch } from './api.js';
 
-    fetch("/api/test")
-        .then(response => response.json())
-        .then(data => console.log("API Response:", data))
-        .catch(error => console.error("API Error:", error));
+document.addEventListener("DOMContentLoaded", function () {
+    if (window.sharedJsInitialized) return;
+    window.sharedJsInitialized = true;
+    console.log("Shared.js: homepage initialization started.");
+
+    // Utility function for checking elements
+    function getElement(selector, context = document) {
+        const element = context.querySelector(selector);
+        if (!element) {
+            console.warn(`Element not found: ${selector}`);
+            return null;
+        }
+        return element;
+    }
+
+    // Session-based initialization
+    apiFetch("/api/shared/initSession.php", {
+        credentials: "include",
+        headers: { "Accept": "application/json" }
+    })
+    .then(response => {
+        if (!response.ok) {
+            console.error("Session init failed:", response.status);
+        } else {
+            console.log("Session initialized successfully for homepage.");
+        }
+    })
+    .catch(error => console.error("Session init error:", error));
+
+    // Navbar toggle & CTA scrolling
+    document.addEventListener("click", function(e) {
+        // Navbar toggle handling
+        if (e.target.matches('#navbarToggle, #navbarToggle *')) {
+            const navbar = getElement('#navbarSupportedContent');
+            if (navbar) {
+                navbar.classList.toggle('show');
+                console.log('Navbar toggled successfully');
+            }
+        }
+
+        // Register button handling
+        if (e.target.matches('#register-btn')) {
+            e.preventDefault();
+            const href = e.target.getAttribute('href');
+            const target = href ? getElement(href) : null;
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth' });
+                console.log("Smooth scroll triggered on homepage CTA.");
+            }
+        }
+    });
+
+    console.log("Shared.js: homepage initialization completed.");
 });

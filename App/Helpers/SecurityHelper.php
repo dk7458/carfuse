@@ -39,11 +39,11 @@ function securityLog($message, $level = 'info') {
 }
 
 function startSecureSession() {
-    if (session_status() !== PHP_SESSION_NONE) {
+    // Avoid duplicate initializations
+    if (session_status() === PHP_SESSION_ACTIVE) {
         return true;
     }
 
-    // Configure PHP settings before session start
     if (headers_sent()) {
         securityLog('Headers already sent, cannot modify session settings', 'warning');
     } else {
@@ -62,17 +62,18 @@ function startSecureSession() {
     }
 
     try {
-        if (!session_start()) {
+        if (!session_start()) { // will only be called if not already active
             throw new Exception('Session start failed');
         }
 
+        // Initialize session only once
         if (empty($_SESSION['initiated'])) {
             session_regenerate_id(true);
             $_SESSION['initiated'] = time();
             $_SESSION['client_ip'] = hash('sha256', $_SERVER['REMOTE_ADDR']);
             $_SESSION['user_agent'] = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
             $_SESSION['last_activity'] = time();
-            $_SESSION['guest'] = true; // Mark as guest by default
+            $_SESSION['guest'] = true; // Default guest initialization
             securityLog('New guest session initiated');
         }
 

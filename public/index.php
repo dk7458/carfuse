@@ -2,92 +2,72 @@
 declare(strict_types=1);
 header("Content-Type: text/html; charset=UTF-8");
 
-// Debugging - Log Execution
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-file_put_contents(__DIR__ . "/debug.log", "index.php started\n", FILE_APPEND);
+// Ensure SecurityHelper is loaded early to initialize sessions correctly.
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+
+// Write debug log entry.
+file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: index.php started\n", FILE_APPEND);
 
 require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
-// Debug - Log Route Processing
-file_put_contents(__DIR__ . "/debug.log", "Routes loading\n", FILE_APPEND);
-
-// Load Routes
-$dispatcher = require __DIR__ . '/config/routes.php';
-
-// Get the Requested URL Path
-$httpMethod = $_SERVER['REQUEST_METHOD'];
-$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$uri = rtrim($uri, '/');
-
-// Extra logging for direct access to index.php for testing
-if ($uri === '/index.php') {
-    file_put_contents(__DIR__ . "/debug.log", "Direct access to index.php\n", FILE_APPEND);
-}
-
-// Debug - Log Requested URL
-file_put_contents(__DIR__ . "/debug.log", "Request: $uri\n", FILE_APPEND);
-
-// Dispatch the Request inside try-catch for error logging
-try {
-    $routeInfo = $dispatcher->dispatch($httpMethod, $uri);
-    file_put_contents(__DIR__ . "/debug.log", "Dispatcher returned successfully\n", FILE_APPEND);
-} catch (Exception $e) {
-    file_put_contents(__DIR__ . "/debug.log", "Dispatcher Exception: " . $e->getMessage() . "\n", FILE_APPEND);
-    http_response_code(500);
-    echo "Internal Server Error";
-    exit;
-}
-
-// Debug - Log Route Status
-file_put_contents(__DIR__ . "/debug.log", "Route Info: " . print_r($routeInfo, true) . "\n", FILE_APPEND);
-
-switch ($routeInfo[0]) {
-    case FastRoute\Dispatcher::NOT_FOUND:
-        http_response_code(404);
-        require __DIR__ . "/views/errors/404.php";
-        file_put_contents(__DIR__ . "/debug.log", "404 Triggered\n", FILE_APPEND);
-        break;
-
-    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-        http_response_code(405);
-        echo "Method Not Allowed";
-        file_put_contents(__DIR__ . "/debug.log", "405 Triggered\n", FILE_APPEND);
-        break;
-
-    case FastRoute\Dispatcher::FOUND:
-        $handler = $routeInfo[1];
-        $vars = $routeInfo[2];
-
-        if (is_callable($handler)) {
-            file_put_contents(__DIR__ . "/debug.log", "Executing Handler directly\n", FILE_APPEND);
-            try {
-                call_user_func($handler, $vars);
-            } catch (Exception $e) {
-                file_put_contents(__DIR__ . "/debug.log", "Handler Exception: " . $e->getMessage() . "\n", FILE_APPEND);
-                http_response_code(500);
-                echo "Internal Server Error";
-            }
-        } elseif (is_array($handler) && class_exists($handler[0]) && method_exists($handler[0], $handler[1])) {
-            file_put_contents(__DIR__ . "/debug.log", "Instantiating controller: " . $handler[0] . "\n", FILE_APPEND);
-            $controller = new $handler[0]();
-            try {
-                call_user_func([$controller, $handler[1]], $vars);
-            } catch (Exception $e) {
-                file_put_contents(__DIR__ . "/debug.log", "Handler Exception: " . $e->getMessage() . "\n", FILE_APPEND);
-                http_response_code(500);
-                echo "Internal Server Error";
-            }
+// Prevent redundant dispatcher executions.
+if (!isset($GLOBALS['dispatcher_executed'])) {
+    $GLOBALS['dispatcher_executed'] = true;
+    
+    // Determine request URI.
+    $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Routing request for URI: $uri\n", FILE_APPEND);
+    
+    try {
+        // Basic routing: if URI is "/" load home.php, otherwise use FastRoute dispatcher.
+        if ($uri === '/' || $uri === '/index.php') {
+            $route = 'home';
         } else {
-            http_response_code(500);
-            echo "Invalid Route Handler";
-            file_put_contents(__DIR__ . "/debug.log", "500 Error: Invalid Handler\n", FILE_APPEND);
+            // Example: extract route from URI e.g., "/about" becomes "about"
+            $route = trim($uri, '/');
         }
-        break;
+        
+        // Dispatch based on route.
+        switch ($route) {
+            case 'home':
+                file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Dispatching to home view\n", FILE_APPEND);
+                $viewFile = __DIR__ . '/views/home.php';
+                break;
+            // ...existing cases for other routes...
+            default:
+                file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Error: No route found for URI: $uri\n", FILE_APPEND);
+                throw new Exception("Page not found");
+        }
+    } catch (Exception $e) {
+        file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Error: Dispatcher failed: " . $e->getMessage() . "\n", FILE_APPEND);
+        echo "<h1>Error:</h1><p>" . htmlspecialchars($e->getMessage()) . "</p>";
+        exit;
+    }
 }
-
-// Debug - Log End of Execution
-file_put_contents(__DIR__ . "/debug.log", "index.php execution complete\n", FILE_APPEND);
 ?>
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carfuse - Wynajmij auto szybko i łatwo</title>
+    <link rel="stylesheet" href="/public/css/style.css">
+    <script src="/public/js/shared.js" defer></script>
+</head>
+<body>
+
+<?php include __DIR__ . '/layouts/header.php'; ?>
+
+<!-- Debugging: Log main content rendering -->
+<?php
+    file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Loading main content from: $viewFile\n", FILE_APPEND);
+    include $viewFile;
+    file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Content loaded successfully\n", FILE_APPEND);
+?>
+
+<?php include __DIR__ . '/layouts/footer.php'; ?>
+
+</body>
+</html>
