@@ -18,6 +18,7 @@ $logger->info("Requested URI: $requestUri");
 if (strpos($requestUri, '/api/') === 0) {
     $apiPath = __DIR__ . $requestUri . '.php';
     if (file_exists($apiPath)) {
+        $logger->info("API Request: $requestUri");
         require $apiPath;
         exit;
     }
@@ -33,13 +34,13 @@ $routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], $requestUri);
 
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::FOUND:
-        $logger->info("Route Found: " . $routeInfo[1]);
+        $logger->info("VIEW Request: " . $routeInfo[1]);
         require __DIR__ . "/views/" . $routeInfo[1];
         exit;
 
     case FastRoute\Dispatcher::NOT_FOUND:
         http_response_code(404);
-        $logger->error("404 Not Found: $requestUri");
+        $logger->error("404 ERROR: $requestUri");
         require __DIR__ . "/views/errors/404.php";
         exit;
 }
