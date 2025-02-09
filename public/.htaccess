@@ -1,0 +1,9 @@
+RewriteEngine On
+
+# Allow direct access if the file or directory exists (e.g. index.php)
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Forward all other requests to index.php for FastRoute routing
+RewriteRule ^ index.php [QSA,L]
