@@ -14,7 +14,7 @@ startSecureSession();
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $logger->info("Requested URI: $requestUri");
 
-// ✅ API REQUEST HANDLING
+// ✅ PRIORITIZE API REQUEST HANDLING
 if (strpos($requestUri, '/api/') === 0) {
     $apiPath = $_SERVER['DOCUMENT_ROOT'] . $requestUri . '.php';
 
@@ -30,14 +30,22 @@ if (strpos($requestUri, '/api/') === 0) {
     }
 }
 
-// ✅ FastRoute Dispatching
+// ✅ FastRoute Dispatching for Views
 $dispatcher = require __DIR__ . '/../config/routes.php';
 $routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], $requestUri);
 
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::FOUND:
-        $logger->info("Route Found: " . $routeInfo[1]);
-        require __DIR__ . "/views/" . $routeInfo[1];
+        $viewPath = __DIR__ . "/views/" . $routeInfo[1];
+        
+        if (file_exists($viewPath)) {
+            $logger->info("Rendering View: " . $routeInfo[1]);
+            require $viewPath;
+        } else {
+            http_response_code(404);
+            $logger->error("View Not Found: " . $routeInfo[1]);
+            require __DIR__ . "/views/errors/404.php";
+        }
         exit;
 
     case FastRoute\Dispatcher::NOT_FOUND:

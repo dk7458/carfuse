@@ -15,12 +15,20 @@ RewriteCond %{REQUEST_URI} ^/(css|js|images|api)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images|api)/(.*)$ /public/$1/$2 [L]
 
-# ✅ Protect backend files while allowing frontend access to specific backend components
+# ✅ Prevent direct access to backend files, except allowed frontend-accessible services
 RewriteCond %{REQUEST_URI} ^/App/(.*)$
 RewriteCond %{REQUEST_URI} !^/App/Services/PublicAccess/
 RewriteRule ^ - [F,L]
 
-# ✅ Forward all non-API, non-static requests to FastRoute in `/public/index.php`
+# ✅ Ensure `/dashboard`, `/profile`, `/auth/login` load without `/views/`
+RewriteCond %{REQUEST_URI} ^/(dashboard|profile|auth/login|auth/register)$
+RewriteRule ^(.*)$ /views/$1.php [L]
+
+# ✅ Prevent direct access to `/views/` directory via browser
+RewriteCond %{REQUEST_URI} ^/views/
+RewriteRule ^ - [F,L]
+
+# ✅ Forward all other requests to `/public/index.php` for FastRoute
 RewriteCond %{REQUEST_URI} !^/api/.*$
 RewriteCond %{REQUEST_URI} !^/(css|js|images|public)/.*$
 RewriteRule ^ public/index.php [QSA,L]
