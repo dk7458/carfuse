@@ -1,0 +1,21 @@
+RewriteEngine On
+
+# ✅ Rewrite `/` requests to load `views/home.php`
+RewriteCond %{REQUEST_URI} ^/$
+RewriteRule ^$ views/home.php [L,QSA]
+
+# ✅ Allow direct access to API files while preventing directory browsing
+RewriteCond %{REQUEST_URI} ^/api/.*\.php$
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# 🔒 Protect sensitive backend files (Prevent direct access to config & helper files)
+RewriteRule ^(App/|config/|helpers/|private/).* - [F,L]
+
+# ✅ Allow direct access to static files (CSS, JS, images)
+RewriteCond %{REQUEST_URI} ^/(css|js|images)/(.*)$
+RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
+RewriteRule ^(css|js|images)/(.*)$ /public/$1/$2 [L]
+
+# 🚀 Forward all other requests to FastRoute in index.php
+RewriteRule ^ index.php [QSA,L]
