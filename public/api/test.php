@@ -6,7 +6,7 @@ file_put_contents('debug.log', date('Y-m-d H:i:s') . " - Received API /test requ
 $requiresAuth = false;
 
 // Define authentication function
-function requireAuth() {
+function requireAuthTest() {
 	// Check for 'Authorization' header (adjust condition per requirements)
 	if (!isset($_SERVER['HTTP_AUTHORIZATION'])) {
 		file_put_contents('debug.log', date('Y-m-d H:i:s') . " - Authentication failed\n", FILE_APPEND);
@@ -20,7 +20,7 @@ function requireAuth() {
 
 // Perform authentication if required
 if ($requiresAuth) {
-	requireAuth();
+	requireAuthTest();
 }
 
 // Set header always for valid JSON
