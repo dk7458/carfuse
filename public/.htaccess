@@ -1,26 +1,27 @@
 RewriteEngine On
 RewriteBase /
-DirectoryIndex index.php
 
+# Ensure PHP files are executed
 AddHandler application/x-httpd-php .php
 
 # Block direct access to API PHP files
 RewriteCond %{REQUEST_URI} ^/api/.*\.php$
 RewriteRule ^ - [F,L]
 
-# Allow direct access to static files (CSS, JS, images)
+# Redirect requests for static files (CSS, JS, images) from root to the public directory
+RewriteCond %{REQUEST_URI} !^/public/
 RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
+RewriteRule ^(css|js|images)/(.*)$ public/$1/$2 [L]
 
-# Fix issues where /dashboard, /profile, and /login do not load correctly
+# Ensure /dashboard, /profile, and /login load correctly through index.php
 RewriteRule ^(dashboard|profile|login)$ index.php [L]
 
-# Ensure .htaccess rules do not interfere with FastRoute processing
+# Ensure FastRoute processes non-static requests
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.php [QSA,L]
 
-# PHP session configuration
+# PHP session configuration (ensure proper session handling)
 php_flag session.auto_start on
 php_value session.use_cookies 1
 php_value session.use_only_cookies 1
