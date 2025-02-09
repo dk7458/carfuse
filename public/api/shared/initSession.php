@@ -1,8 +1,50 @@
 <?php
-require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
 
-// Start a secure session
+$apiLogFile = __DIR__ . '/../../logs/api.log';
+
+function logApiError($message) {
+    global $apiLogFile;
+    file_put_contents($apiLogFile, date('Y-m-d H:i:s') . " - $message\n", FILE_APPEND);
+}
+
+function isProtectedRoute($route) {
+    $protectedRoutes = [
+        '/profile/update',
+        '/password/reset/request',
+        '/password/reset',
+        '/payments/process',
+        '/payments/refund',
+        '/bookings',
+        '/notifications',
+        '/admin',
+        '/documents',
+        '/api'
+    ];
+    foreach ($protectedRoutes as $protectedRoute) {
+        if (strpos($route, $protectedRoute) === 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 session_start();
+
+$requestUri = $_SERVER['REQUEST_URI'];
+
+if (isProtectedRoute($requestUri)) {
+    if (!isset($_SESSION['user_id'])) {
+        logApiError("Unauthorized access attempt to $requestUri");
+        http_response_code(403);
+        echo json_encode(["error" => "Unauthorized"]);
+        exit();
+    }
+}
+
+// Allow guest users to access the homepage without authentication
+if ($requestUri === '/' || $requestUri === '/home') {
+    return;
+}
 
 // Set the response header to JSON
 header('Content-Type: application/json');

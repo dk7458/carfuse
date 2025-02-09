@@ -16,6 +16,7 @@ use DocumentManager\Controllers\SignatureController;
 use App\Controllers\UserController;
 
 $logFile = __DIR__ . '/../logs/debug.log';
+$routeLogFile = __DIR__ . '/../logs/routes.log';
 
 // Log the execution of the route dispatcher
 file_put_contents($logFile, "[ROUTES] Initializing routes" . PHP_EOL, FILE_APPEND);
@@ -30,7 +31,7 @@ $routes = [
     // Add more routes as needed
 ];
 
-return simpleDispatcher(function (RouteCollector $router) use ($routes) {
+return simpleDispatcher(function (RouteCollector $router) use ($routes, $routeLogFile) {
 
     // Logging helper for route execution
     function logRoute($route) {
@@ -159,6 +160,14 @@ return simpleDispatcher(function (RouteCollector $router) use ($routes) {
             echo json_encode(["error" => "API endpoint not found"]);
         }
         logRoute('/api/' . $vars['endpoint'] . ' - finished processing');
+    });
+
+    // Log unmatched routes
+    $router->addRoute('*', '/{route:.+}', function ($vars) use ($routeLogFile) {
+        $route = $vars['route'];
+        file_put_contents($routeLogFile, date('Y-m-d H:i:s') . " - Unmatched route: $route\n", FILE_APPEND);
+        http_response_code(404);
+        echo json_encode(["error" => "Route not found"]);
     });
 
 });
