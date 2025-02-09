@@ -17,12 +17,14 @@ use App\Controllers\UserController;
 
 return simpleDispatcher(function (RouteCollector $router) {
     // Middleware-like Authentication Handling
-    function requireAuth() {
-        require_once BASE_PATH . '/App/Helpers/SecurityHelper.php';
-        if (!isUserLoggedIn()) {
-            http_response_code(403);
-            echo json_encode(["error" => "Unauthorized"]);
-            exit();
+    if (!function_exists('requireAuth')) {
+        function requireAuth() {
+            require_once BASE_PATH . '/App/Helpers/SecurityHelper.php';
+            if (!isUserLoggedIn()) {
+                http_response_code(403);
+                echo json_encode(["error" => "Unauthorized"]);
+                exit();
+            }
         }
     }
 
