@@ -26,12 +26,39 @@ return simpleDispatcher(function (RouteCollector $router) {
         }
     }
 
-    // Home Page (Loads Index)
+    // Home Page (Always Loads Index)
     $router->get('/', function () {
         require BASE_PATH . '/public/index.php';
     });
 
-    // Authentication Routes (Static First)
+    // Dynamic View Routing for User Dashboard
+    $router->get('/{view}', function ($vars) {
+        $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
+        $view = $vars['view'];
+
+        if (in_array($view, $allowedViews)) {
+            require BASE_PATH . "/public/views/user/$view.php";
+        } else {
+            http_response_code(404);
+            require BASE_PATH . "/public/views/errors/404.php";
+        }
+    });
+
+    // Dynamic API Routing with Authentication Check
+    $router->get('/api/{endpoint}', function ($vars) {
+        requireAuth(); // Ensure user is logged in
+        $endpoint = $vars['endpoint'];
+        $apiPath = BASE_PATH . "/public/api/$endpoint.php";
+
+        if (file_exists($apiPath)) {
+            require $apiPath;
+        } else {
+            http_response_code(404);
+            echo json_encode(["error" => "API endpoint not found"]);
+        }
+    });
+
+    // Authentication Routes
     $router->get('/login', [AuthController::class, 'loginView']);
     $router->get('/register', [AuthController::class, 'registerView']);
     $router->post('/register', [UserController::class, 'register']);
@@ -40,17 +67,13 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->post('/password/reset/request', [UserController::class, 'requestPasswordReset']);
     $router->post('/password/reset', [UserController::class, 'resetPassword']);
 
-    // Dashboard & Profile (Static First)
-    $router->get('/dashboard', [DashboardController::class, 'userDashboard']);
-    $router->get('/profile', function () { require BASE_PATH . "/public/views/user/profile.php"; });
-
-    // Payments (Static First)
-    $router->get('/payments/history', [PaymentController::class, 'viewPaymentHistory']);
-    $router->get('/payments/installments', [PaymentController::class, 'viewInstallments']);
+    // Payment Routes
     $router->post('/payments/process', [PaymentController::class, 'processPayment']);
     $router->post('/payments/refund', [PaymentController::class, 'refundPayment']);
+    $router->get('/payments/history', [PaymentController::class, 'viewPaymentHistory']);
+    $router->get('/payments/installments', [PaymentController::class, 'viewInstallments']);
 
-    // Bookings (Static First)
+    // Bookings Routes
     $router->get('/bookings', [DashboardController::class, 'getUserBookings']);
     $router->get('/bookings/{id}', [BookingController::class, 'viewBooking']);
     $router->post('/bookings/{id}/reschedule', [BookingController::class, 'rescheduleBooking']);
@@ -63,27 +86,24 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->post('/notifications/send', [NotificationController::class, 'sendNotification']);
     $router->post('/notifications/process-queue', [NotificationQueueController::class, 'processQueue']);
 
-    // Dynamic API Routing (Auth Required)
-    $router->get('/api/{endpoint}', function ($vars) {
-        requireAuth();
-        $endpoint = $vars['endpoint'];
-        $apiPath = BASE_PATH . "/public/api/$endpoint.php";
+    // Admin Dynamic Routing
+    $router->get('/admin/{section}', function ($vars) {
+        $allowedSections = ['dashboard', 'reports', 'audit-logs', 'users'];
+        $section = $vars['section'];
 
-        if (file_exists($apiPath)) {
-            require $apiPath;
+        if (in_array($section, $allowedSections)) {
+            require BASE_PATH . "/public/views/admin/$section.php";
         } else {
             http_response_code(404);
-            echo json_encode(["error" => "API endpoint not found"]);
+            require BASE_PATH . "/public/views/errors/404.php";
         }
     });
 
-    // Admin Routes (Static First)
-    $router->get('/admin/dashboard', [AdminDashboardController::class, 'index']);
-    $router->get('/admin/reports', [ReportController::class, 'index']);
+    // Admin Report Routes
     $router->post('/admin/reports/generate', [ReportController::class, 'generateReport']);
     $router->post('/user/reports/generate', [ReportController::class, 'generateUserReport']);
 
-    // Audit Logs
+    // Audit Log Routes
     $router->post('/admin/audit-logs/fetch', [AuditController::class, 'fetchLogs']);
 
     // Document Manager Routes
@@ -92,17 +112,4 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->post('/documents/upload-terms', [DocumentController::class, 'uploadTerms']);
     $router->post('/documents/generate-invoice/{bookingId}', [DocumentController::class, 'generateInvoice']);
     $router->delete('/documents/{documentId}', [DocumentController::class, 'deleteDocument']);
-
-    // Dynamic View Routing (Must be Last)
-    $router->get('/{view}', function ($vars) {
-        $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
-        $view = $vars['view'];
-
-        if (in_array($view, $allowedViews)) {
-            require BASE_PATH . "/public/views/user/$view.php";
-        } else {
-            http_response_code(404);
-            require BASE_PATH . "/public/views/errors/404.php";
-        }
-    });
 });
