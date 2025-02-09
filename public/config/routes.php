@@ -30,8 +30,10 @@ return simpleDispatcher(function (RouteCollector $router) {
 
     // Home Page (Loads Index)
     $router->get('/', function () {
-        require BASE_PATH . '/public/index.php';
+        file_put_contents(__DIR__ . "/../debug.log", "Home Route Hit\n", FILE_APPEND);
+        require __DIR__ . '/../index.php';
     });
+    
 
     // Authentication Routes (Static First)
     $router->get('/login', [AuthController::class, 'loginView']);
