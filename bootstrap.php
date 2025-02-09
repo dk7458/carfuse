@@ -22,6 +22,7 @@ use App\Services\EncryptionService;
 require_once __DIR__ . '/vendor/autoload.php';
 $container = require __DIR__ . '/config/dependencies.php';
 define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html'); // Set absolute path
+require_once __DIR__ . '/config/api.php';
 
 // ✅ Logging Function with Timestamps
 function logBootstrapEvent($message)
