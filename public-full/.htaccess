@@ -5,9 +5,7 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Deny direct access to API PHP files
-RewriteCond %{REQUEST_URI} ^/api/.*\.php$
-RewriteRule .* - [F,L]
+
 
 # Forward all other requests to index.php for FastRoute routing
 RewriteRule ^ index.php [QSA,L]
