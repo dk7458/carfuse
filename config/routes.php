@@ -11,6 +11,7 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) {
     $router->get('/dashboard', 'dashboard.php');
     $router->get('/profile', '/user/profile.php');
     $router->get('/vehicles', 'vehicles.php');
+    $router->get('/login', '/auth/login.php');
 
     // ✅ Ensure `/test` works
     $router->get('/test', function () {
