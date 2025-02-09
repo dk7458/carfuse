@@ -337,7 +337,7 @@ function validateJWT($token) {
 /**
  * Enforce authentication for protected pages.
  */
-function requireAuth() {
+function requireUserAuth() {
     if (!isUserLoggedIn()) {
         logSecurityEvent('Unauthorized access attempt to ' . $_SERVER['REQUEST_URI'], 'warning');
         header('Location: /auth/login.php');
