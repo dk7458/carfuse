@@ -25,11 +25,19 @@ $uri = rtrim($uri, '/');
 // Debug - Log Requested URL
 file_put_contents(__DIR__ . "/debug.log", "Request: $uri\n", FILE_APPEND);
 
-// Dispatch the Request
-$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
+// Dispatch the Request inside try-catch for error logging
+try {
+    $routeInfo = $dispatcher->dispatch($httpMethod, $uri);
+    file_put_contents(__DIR__ . "/debug.log", "Dispatcher returned successfully\n", FILE_APPEND);
+} catch (Exception $e) {
+    file_put_contents(__DIR__ . "/debug.log", "Dispatcher Exception: " . $e->getMessage() . "\n", FILE_APPEND);
+    http_response_code(500);
+    echo "Internal Server Error";
+    exit;
+}
 
 // Debug - Log Route Status
-file_put_contents(__DIR__ . "/debug.log", "Route Status: " . print_r($routeInfo, true) . "\n", FILE_APPEND);
+file_put_contents(__DIR__ . "/debug.log", "Route Info: " . print_r($routeInfo, true) . "\n", FILE_APPEND);
 
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::NOT_FOUND:
@@ -50,7 +58,13 @@ switch ($routeInfo[0]) {
 
         if (is_callable($handler)) {
             file_put_contents(__DIR__ . "/debug.log", "Executing Handler\n", FILE_APPEND);
-            call_user_func($handler, $vars);
+            try {
+                call_user_func($handler, $vars);
+            } catch (Exception $e) {
+                file_put_contents(__DIR__ . "/debug.log", "Handler Exception: " . $e->getMessage() . "\n", FILE_APPEND);
+                http_response_code(500);
+                echo "Internal Server Error";
+            }
         } else {
             http_response_code(500);
             echo "Invalid Route Handler";

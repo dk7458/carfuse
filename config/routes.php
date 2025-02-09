@@ -16,6 +16,12 @@ use DocumentManager\Controllers\SignatureController;
 use App\Controllers\UserController;
 
 return simpleDispatcher(function (RouteCollector $router) {
+
+    // Logging helper for route execution
+    function logRoute($route) {
+        file_put_contents(BASE_PATH . '/debug.log', date('Y-m-d H:i:s') . " - Executing route: $route\n", FILE_APPEND);
+    }
+
     // Middleware-like Authentication Handling
     function requireAuth() {
         require_once BASE_PATH . '/App/Helpers/SecurityHelper.php';
@@ -26,39 +32,21 @@ return simpleDispatcher(function (RouteCollector $router) {
         }
     }
 
+    // --- New and static routes (placed prior to dynamic routes) ---
+
+    // Static test route to verify routing works correctly
+    $router->get('/test', function () {
+        logRoute('/test');
+        echo 'Test route working';
+    });
+
     // Home Page (Always Loads Index)
     $router->get('/', function () {
+        logRoute('/');
         require BASE_PATH . '/public/index.php';
     });
 
-    // Dynamic View Routing for User Dashboard
-    $router->get('/{view}', function ($vars) {
-        $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
-        $view = $vars['view'];
-
-        if (in_array($view, $allowedViews)) {
-            require BASE_PATH . "/public/views/user/$view.php";
-        } else {
-            http_response_code(404);
-            require BASE_PATH . "/public/views/errors/404.php";
-        }
-    });
-
-    // Dynamic API Routing with Authentication Check
-    $router->get('/api/{endpoint}', function ($vars) {
-        requireAuth(); // Ensure user is logged in
-        $endpoint = $vars['endpoint'];
-        $apiPath = BASE_PATH . "/public/api/$endpoint.php";
-
-        if (file_exists($apiPath)) {
-            require $apiPath;
-        } else {
-            http_response_code(404);
-            echo json_encode(["error" => "API endpoint not found"]);
-        }
-    });
-
-    // Authentication Routes
+    // Authentication Routes (using controller callbacks remain unchanged)
     $router->get('/login', [AuthController::class, 'loginView']);
     $router->get('/register', [AuthController::class, 'registerView']);
     $router->post('/register', [UserController::class, 'register']);
@@ -88,9 +76,9 @@ return simpleDispatcher(function (RouteCollector $router) {
 
     // Admin Dynamic Routing
     $router->get('/admin/{section}', function ($vars) {
+        logRoute('/admin/' . $vars['section']);
         $allowedSections = ['dashboard', 'reports', 'audit-logs', 'users'];
         $section = $vars['section'];
-
         if (in_array($section, $allowedSections)) {
             require BASE_PATH . "/public/views/admin/$section.php";
         } else {
@@ -112,4 +100,34 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->post('/documents/upload-terms', [DocumentController::class, 'uploadTerms']);
     $router->post('/documents/generate-invoice/{bookingId}', [DocumentController::class, 'generateInvoice']);
     $router->delete('/documents/{documentId}', [DocumentController::class, 'deleteDocument']);
+
+    // --- Dynamic routes (placed after static routes to avoid conflicts) ---
+
+    // Dynamic View Routing for User Dashboard (/dashboard, /profile, etc.)
+    $router->get('/{view}', function ($vars) {
+        logRoute('/' . $vars['view']);
+        $allowedViews = ['dashboard', 'bookings', 'payments', 'documents', 'notifications', 'profile', 'settings'];
+        $view = $vars['view'];
+        if (in_array($view, $allowedViews)) {
+            require BASE_PATH . "/public/views/user/$view.php";
+        } else {
+            http_response_code(404);
+            require BASE_PATH . "/public/views/errors/404.php";
+        }
+    });
+
+    // Dynamic API Routing with Authentication Check (/api/test, etc.)
+    $router->get('/api/{endpoint}', function ($vars) {
+        logRoute('/api/' . $vars['endpoint']);
+        requireAuth(); // Ensure user is logged in
+        $endpoint = $vars['endpoint'];
+        $apiPath = BASE_PATH . "/public/api/$endpoint.php";
+        if (file_exists($apiPath)) {
+            require $apiPath;
+        } else {
+            http_response_code(404);
+            echo json_encode(["error" => "API endpoint not found"]);
+        }
+    });
+
 });

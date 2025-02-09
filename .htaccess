@@ -1,8 +1,8 @@
 RewriteEngine On
 
-# Redirect all requests to /public/
-RewriteCond %{REQUEST_URI} !^/public/
-RewriteRule ^(.*)$ /public/$1 [L,QSA]
+# Deny direct access to API PHP files
+RewriteCond %{REQUEST_URI} ^/api/.*\.php$
+RewriteRule .* - [F,L]
 
 # Ensure PHP files are executed
 AddHandler application/x-httpd-php .php
@@ -12,5 +12,5 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Redirect all other requests to /public/index.php
+# Forward all other requests to index.php for FastRoute routing
 RewriteRule ^ /public/index.php [QSA,L]
