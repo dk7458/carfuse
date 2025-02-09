@@ -1,17 +1,26 @@
 RewriteEngine On
 
-# ✅ Ensure requests to `/public/` are handled by the internal `.htaccess`
-RewriteRule ^public/ - [L]
+# ✅ Automatically map requests to `/public/` without requiring `/public/` in the URL
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteCond %{DOCUMENT_ROOT}/public/%{REQUEST_URI} -f
+RewriteRule ^(.*)$ public/$1 [L]
 
-# ✅ Allow direct access to public files
-RewriteCond %{REQUEST_URI} ^/(public|css|js|images|api)/(.*)$
-RewriteCond %{DOCUMENT_ROOT}/%{REQUEST_URI} -f
-RewriteRule ^(.*)$ $1 [L]
+# ✅ Allow direct access to API files
+RewriteCond %{REQUEST_URI} ^/api/.*\.php$
+RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
+RewriteRule ^ - [L]
 
-# ✅ Prevent direct access to backend files while allowing necessary access
+# ✅ Allow direct access to static files (CSS, JS, images)
+RewriteCond %{REQUEST_URI} ^/(css|js|images|api)/(.*)$
+RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
+RewriteRule ^(css|js|images|api)/(.*)$ /public/$1/$2 [L]
+
+# ✅ Protect backend files while allowing frontend access to specific backend components
 RewriteCond %{REQUEST_URI} ^/App/(.*)$
 RewriteCond %{REQUEST_URI} !^/App/Services/PublicAccess/
 RewriteRule ^ - [F,L]
 
-# ✅ Forward all other requests to public/index.php
-RewriteRule ^(.*)$ public/index.php [QSA,L]
+# ✅ Forward all non-API, non-static requests to FastRoute in `/public/index.php`
+RewriteCond %{REQUEST_URI} !^/api/.*$
+RewriteCond %{REQUEST_URI} !^/(css|js|images|public)/.*$
+RewriteRule ^ public/index.php [QSA,L]
