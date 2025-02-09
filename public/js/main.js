@@ -1,6 +1,7 @@
 import { apiFetch } from './api.js';
 
 document.addEventListener("DOMContentLoaded", function () {
+    console.log("Main.js Loaded");
     // Ensure this runs only once
     if (window.mainJsInitialized) return;
     window.mainJsInitialized = true;

@@ -11,7 +11,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 $logFile = __DIR__ . '/../logs/debug.log';
-file_put_contents($logFile, "[Index] Request: " . $_SERVER['REQUEST_URI'] . PHP_EOL, FILE_APPEND);
+file_put_contents($logFile, "[INDEX] Request URI: " . $_SERVER['REQUEST_URI'] . PHP_EOL, FILE_APPEND);
 
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 if ($requestUri === '/') {
@@ -26,49 +26,38 @@ $dispatcher = FastRoute\simpleDispatcher(function(FastRoute\RouteCollector $r) u
 });
 
 $httpMethod = $_SERVER['REQUEST_METHOD'];
-$routeInfo = $dispatcher->dispatch($httpMethod, $requestUri);
+$uri = $_SERVER['REQUEST_URI'];
+
+// Strip query string (?foo=bar) and decode URI
+if (false !== $pos = strpos($uri, '?')) {
+    $uri = substr($uri, 0, $pos);
+}
+$uri = rawurldecode($uri);
+
+$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
+
+// Log route dispatch information
+file_put_contents($logFile, "[INDEX] Route Info: " . print_r($routeInfo, true) . PHP_EOL, FILE_APPEND);
 
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::NOT_FOUND:
         http_response_code(404);
-        echo json_encode(["error" => "Not Found"]);
-        file_put_contents($logFile, "[Index] 404 Not Found: $requestUri" . PHP_EOL, FILE_APPEND);
+        echo '404 Not Found';
+        file_put_contents($logFile, "[INDEX] 404 Not Found" . PHP_EOL, FILE_APPEND);
         break;
     case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
         http_response_code(405);
-        echo json_encode(["error" => "Method Not Allowed"]);
-        file_put_contents($logFile, "[Index] 405 Method Not Allowed: $requestUri" . PHP_EOL, FILE_APPEND);
+        echo '405 Method Not Allowed';
+        file_put_contents($logFile, "[INDEX] 405 Method Not Allowed" . PHP_EOL, FILE_APPEND);
         break;
     case FastRoute\Dispatcher::FOUND:
         $handler = $routeInfo[1];
+        $vars = $routeInfo[2];
+        // Log the handler and variables
+        file_put_contents($logFile, "[INDEX] Handler: $handler, Vars: " . print_r($vars, true) . PHP_EOL, FILE_APPEND);
         require __DIR__ . "/../views/$handler";
-        file_put_contents($logFile, "[Index] 200 OK: $requestUri" . PHP_EOL, FILE_APPEND);
+        file_put_contents($logFile, "[INDEX] 200 OK: $requestUri" . PHP_EOL, FILE_APPEND);
         break;
 }
 exit();
 ?>
-
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carfuse - Wynajmij auto szybko i łatwo</title>
-    <link rel="stylesheet" href="/public/css/style.css">
-    <script src="/public/js/shared.js" defer></script>
-</head>
-<body>
-
-<?php include __DIR__ . '/layouts/header.php'; ?>
-
-<!-- Debugging: Log main content rendering -->
-<?php
-    file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Loading main content from: $viewFile\n", FILE_APPEND);
-    include $viewFile;
-    file_put_contents(__DIR__ . '/../debug.log', "[" . date('Y-m-d H:i:s') . "] Debug: Content loaded successfully\n", FILE_APPEND);
-?>
-
-<?php include __DIR__ . '/layouts/footer.php'; ?>
-
-</body>
-</html>

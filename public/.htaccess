@@ -1,19 +1,24 @@
 RewriteEngine On
+RewriteBase /
 DirectoryIndex index.php
 
 AddHandler application/x-httpd-php .php
 
-# Block direct access to /api/*.php
-RewriteCond %{REQUEST_URI} ^/api/.*\.php
+# Block direct access to API PHP files
+RewriteCond %{REQUEST_URI} ^/api/.*\.php$
 RewriteRule ^ - [F,L]
 
-# Allow accesses to existing files
-RewriteCond %{REQUEST_FILENAME} -f [OR]
-RewriteCond %{REQUEST_FILENAME} -d
+# Allow direct access to static files (CSS, JS, images)
+RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^ - [L]
 
-# Route everything else to index.php
-RewriteRule ^ index.php [L]
+# Fix issues where /dashboard, /profile, and /login do not load correctly
+RewriteRule ^(dashboard|profile|login)$ index.php [L]
+
+# Ensure .htaccess rules do not interfere with FastRoute processing
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]
 
 # PHP session configuration
 php_flag session.auto_start on

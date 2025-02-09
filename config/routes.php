@@ -15,6 +15,11 @@ use DocumentManager\Controllers\DocumentController;
 use DocumentManager\Controllers\SignatureController;
 use App\Controllers\UserController;
 
+$logFile = __DIR__ . '/../logs/debug.log';
+
+// Log the execution of the route dispatcher
+file_put_contents($logFile, "[ROUTES] Initializing routes" . PHP_EOL, FILE_APPEND);
+
 $routes = [
     'home' => 'home.php',
     'dashboard' => 'dashboard.php',
@@ -26,12 +31,12 @@ return simpleDispatcher(function (RouteCollector $router) use ($routes) {
 
     // Logging helper for route execution
     function logRoute($route) {
-        file_put_contents(BASE_PATH . '/debug.log', date('Y-m-d H:i:s') . " - Executing route: $route\n", FILE_APPEND);
+        file_put_contents(BASE_PATH . '/logs/debug.log', date('Y-m-d H:i:s') . " - Executing route: $route\n", FILE_APPEND);
     }
 
     // Middleware-like Authentication Handling
     function requireAuth() {
-        require_once BASE_PATH . '/App/Helpers/SecurityHelper.php';
+        require_once BASE_PATH . '/app/helpers/SecurityHelper.php';
         if (!isUserLoggedIn()) {
             http_response_code(403);
             echo json_encode(["error" => "Unauthorized"]);
@@ -50,7 +55,7 @@ return simpleDispatcher(function (RouteCollector $router) use ($routes) {
     // Home Page route updated to use home.php to prevent recursion.
     $router->get('/', function () {
         logRoute('/');
-        require BASE_PATH . '/public/home.php';
+        require BASE_PATH . '/public/views/home.php';
     });
 
     // Authentication Routes (using controller callbacks remain unchanged)
@@ -65,7 +70,7 @@ return simpleDispatcher(function (RouteCollector $router) use ($routes) {
     // --- Added static /dashboard route to prevent wildcard conflict ---
     $router->get('/dashboard', function () {
         logRoute('/dashboard');
-        require BASE_PATH . '/public/views/user/dashboard.php';
+        require BASE_PATH . '/public/views/dashboard.php';
     });
 
     // Payment Routes
@@ -121,7 +126,7 @@ return simpleDispatcher(function (RouteCollector $router) use ($routes) {
         logRoute('/' . $vars['view']);
         $view = $vars['view'];
         if (array_key_exists($view, $routes)) {
-            require BASE_PATH . "/public/views/user/" . $routes[$view];
+            require BASE_PATH . "/public/views/" . $routes[$view];
         } else {
             http_response_code(404);
             require BASE_PATH . "/public/views/errors/404.php";

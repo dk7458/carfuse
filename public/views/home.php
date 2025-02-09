@@ -5,6 +5,11 @@ require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
+$logFile = __DIR__ . '/../../logs/debug.log';
+
+// Log the inclusion of the home view
+file_put_contents($logFile, "[VIEW] Including home.php" . PHP_EOL, FILE_APPEND);
 ?>
 <?php $page = 'home'; ?>
 

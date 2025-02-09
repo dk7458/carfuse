@@ -17,18 +17,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Improved API call with proper authentication and logging
     async function apiCall(endpoint, options = {}) {
+        const token = localStorage.getItem('authToken');
+        options.headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        };
         try {
-            const response = await fetch(endpoint, {
-                ...options,
-                headers: {
-                    ...options.headers,
-                    'Authorization': `Bearer ${localStorage.getItem('apiToken')}`,
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include'
-            });
+            const response = await fetch(endpoint, options);
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const error = await response.json();
+                console.error("API Error", error);
+                throw error;
             }
             const data = await response.json();
             return data;

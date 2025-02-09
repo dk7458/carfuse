@@ -37,6 +37,9 @@ function requireAuth() {
 $requestedEndpoint = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
 $endpointFile = __DIR__ . '/../public/api/' . $requestedEndpoint . '.php';
 
+// Log the requested endpoint
+error_log("[API] Requested Endpoint: $requestedEndpoint" . PHP_EOL, 3, $logFile);
+
 if (file_exists($endpointFile)) {
     // Check if the endpoint requires authentication
     $protectedEndpoints = ['secureEndpoint']; // Add more protected endpoints as needed

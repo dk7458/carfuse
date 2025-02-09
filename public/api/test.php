@@ -3,27 +3,30 @@ require_once __DIR__ . '/../../../vendor/autoload.php';
 require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
 require_once __DIR__ . '/../../config/api.php';
 
-// Helper function for logging
-function logMessage($msg) {
-    file_put_contents(__DIR__ . '/../../logs/debug.log', date('Y-m-d H:i:s') . " - $msg\n", FILE_APPEND);
-}
+// Log the inclusion of the test API
+$logFile = __DIR__ . '/../../../logs/debug.log';
+file_put_contents($logFile, "[API] Including test.php" . PHP_EOL, FILE_APPEND);
 
 // Log the API request at the very start, including requested URI
-logMessage("API request received for " . ($_SERVER['REQUEST_URI'] ?? 'unknown'));
+file_put_contents($logFile, "[API] Request received for " . ($_SERVER['REQUEST_URI'] ?? 'unknown') . PHP_EOL, FILE_APPEND);
+
+// Ensure response is JSON
+header("Content-Type: application/json");
 
 // Optional authentication check flag
 $requiresAuth = true;
 
 // Define authentication function with improved error handling
 function requireAuth() {
-    if (!isset($_SERVER['HTTP_AUTHORIZATION'])) {
-        logMessage("Authentication failed: Missing Authorization header");
+    global $logFile;
+    $headers = getallheaders();
+    if (!isset($headers['Authorization'])) {
+        file_put_contents($logFile, "[API] Authentication failed: Missing Authorization header" . PHP_EOL, FILE_APPEND);
         http_response_code(401);
-        header("Content-Type: application/json");
         echo json_encode(["error" => "Unauthorized access: Authorization header missing"]);
         exit();
     }
-    logMessage("Authentication succeeded with header: " . $_SERVER['HTTP_AUTHORIZATION']);
+    file_put_contents($logFile, "[API] Authentication succeeded with header: " . $headers['Authorization'] . PHP_EOL, FILE_APPEND);
 }
 
 // Perform authentication if required
@@ -32,19 +35,9 @@ if ($requiresAuth) {
 }
 
 // Confirm FastRoute processing by logging the matched route
-// (Assuming FastRoute routing passes control here)
-logMessage("FastRoute processed endpoint: " . ($_SERVER['REQUEST_URI'] ?? 'unknown'));
-
-// Set header always for valid JSON
-header("Content-Type: application/json");
-
-if (!isUserLoggedIn()) {
-    http_response_code(403);
-    echo json_encode(["error" => "Access denied"]);
-    exit();
-}
+file_put_contents($logFile, "[API] FastRoute processed endpoint: " . ($_SERVER['REQUEST_URI'] ?? 'unknown') . PHP_EOL, FILE_APPEND);
 
 // Example response for test endpoint
 echo json_encode(["message" => "Test endpoint accessed successfully"]);
-logMessage("/test API processed successfully");
+file_put_contents($logFile, "[API] /test API processed successfully" . PHP_EOL, FILE_APPEND);
 ?>
