@@ -4,15 +4,21 @@ RewriteEngine On
 RewriteCond %{REQUEST_URI} ^/$
 RewriteRule ^$ /public/index.php [L,QSA]
 
-# Deny direct access to API PHP files
+# ✅ Allow access to API files while preventing direct browsing
+RewriteCond %{REQUEST_URI} ^/api/.*\.php$
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# 🔒 Protect sensitive backend files (Prevent direct access to config & helper files)
+RewriteRule ^(App/|config/|helpers/|private/).* - [F,L]
 
 # Ensure PHP files are executed
 AddHandler application/x-httpd-php .php
 
-# Allow direct access to static files
+# ✅ Allow direct access to static files (CSS, JS, images)
 RewriteCond %{REQUEST_URI} ^/(css|js|images)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images)/(.*)$ /public/$1/$2 [L]
 
-# Forward all other requests to index.php for FastRoute routing
+# 🚀 Forward all other requests to FastRoute in index.php
 RewriteRule ^ /public/index.php [QSA,L]
