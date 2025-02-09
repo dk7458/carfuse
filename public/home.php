@@ -12,7 +12,7 @@ require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 </head>
 <body>
 
-<?php include __DIR__ . '/layouts/navbar.php'; ?>
+<?php include __DIR__ . '/views/layouts/navbar.php'; ?>
 
 <section class="hero-section">
     <div class="container text-center">

@@ -34,12 +34,12 @@ return simpleDispatcher(function (RouteCollector $router) use ($routes) {
 
     // Logging helper for route execution
     function logRoute($route) {
-        file_put_contents(BASE_PATH . '/logs/debug.log', date('Y-m-d H:i:s') . " - Executing route: $route\n", FILE_APPEND);
+        file_put_contents(__DIR__ . '/../logs/debug.log', date('Y-m-d H:i:s') . " - Executing route: $route\n", FILE_APPEND);
     }
 
     // Middleware-like Authentication Handling
     function requireAuth() {
-        require_once BASE_PATH . '/app/helpers/SecurityHelper.php';
+        require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
         if (!isUserLoggedIn()) {
             http_response_code(403);
             echo json_encode(["error" => "Unauthorized"]);
