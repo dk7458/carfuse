@@ -2,8 +2,8 @@
 declare(strict_types=1);
 header("Content-Type: text/html; charset=UTF-8");
 
-require_once __DIR__ . '/../../vendor/autoload.php';
-require_once __DIR__ . '/../app/helpers/SecurityHelper.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../config/routes.php';
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -15,7 +15,7 @@ file_put_contents($logFile, "[INDEX] Request URI: " . $_SERVER['REQUEST_URI'] . 
 
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 if ($requestUri === '/') {
-    require __DIR__ . '/../views/home.php';
+    require __DIR__ . '/views/home.php';
     exit();
 }
 

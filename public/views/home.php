@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '/../../../vendor/autoload.php';
-require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

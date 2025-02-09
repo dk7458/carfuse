@@ -1,10 +1,10 @@
 <?php
-require_once __DIR__ . '/../../../vendor/autoload.php';
-require_once __DIR__ . '/../../app/helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../../config/api.php';
 
 // Log the inclusion of the index API
-$logFile = __DIR__ . '/../../../logs/debug.log';
+$logFile = __DIR__ . '/../logs/debug.log';
 file_put_contents($logFile, "[API] Including index.php" . PHP_EOL, FILE_APPEND);
 
 // Log the API request at the very start, including requested URI
