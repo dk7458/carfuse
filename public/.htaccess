@@ -8,9 +8,10 @@ AddHandler application/x-httpd-php .php
 RewriteCond %{REQUEST_URI} ^/api/.*\.php$
 RewriteRule ^ - [F,L]
 
-# Redirect requests for static files (CSS, JS, images) from root to the public directory
-RewriteCond %{REQUEST_URI} !^/public/
-RewriteCond %{REQUEST_FILENAME} -f
+# Rewrite static files (CSS, JS, Images) to load correctly without "public/"
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} ^/(css|js|images)/(.*)$
 RewriteRule ^(css|js|images)/(.*)$ public/$1/$2 [L]
 
 # Ensure /dashboard, /profile, and /login load correctly through index.php
