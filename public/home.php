@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../App/helpers/SecurityHelper.php';
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 ?>
 
 <!DOCTYPE html>
@@ -8,7 +8,7 @@ require_once __DIR__ . '/../App/helpers/SecurityHelper.php';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CarFuse - Strona Główna</title>
-    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
 
@@ -18,8 +18,8 @@ require_once __DIR__ . '/../App/helpers/SecurityHelper.php';
     <div class="container text-center">
         <h1>Witaj w CarFuse!</h1>
         <p>Najlepszy sposób na wynajem i zarządzanie pojazdami.</p>
-        <a href="/auth/register.php" class="btn btn-primary">Zarejestruj się</a>
-        <a href="/auth/login.php" class="btn btn-secondary">Zaloguj się</a>
+        <a href="auth/register.php" class="btn btn-primary">Zarejestruj się</a>
+        <a href="auth/login.php" class="btn btn-secondary">Zaloguj się</a>
     </div>
 </section>
 
@@ -68,6 +68,6 @@ require_once __DIR__ . '/../App/helpers/SecurityHelper.php';
 
 <?php include __DIR__ . '/layouts/footer.php'; ?>
 
-<script type="module" src="/js/shared.js"></script>
+<script type="module" src="js/shared.js"></script>
 </body>
 </html>
