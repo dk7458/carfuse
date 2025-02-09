@@ -1,20 +1,21 @@
 RewriteEngine On
 
-# ✅ Debugging: Log all rewrite rules
-RewriteLogLevel 3
-RewriteLog "/logs/htaccess_debug.log"
-
 # ✅ Allow direct access to API files
 RewriteCond %{REQUEST_URI} ^/api/.*\.php$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^ - [L]
 
 # ✅ Allow direct access to static files (CSS, JS, images)
-RewriteCond %{REQUEST_URI} ^/(css|js|images)/(.*)$
+RewriteCond %{REQUEST_URI} ^/(css|js|images|api)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
-RewriteRule ^(css|js|images)/(.*)$ /public/$1/$2 [L]
+RewriteRule ^(css|js|images|api)/(.*)$ /public/$1/$2 [L]
 
-# ✅ Redirect all other requests to `index.php` for FastRoute
+# ✅ Protect backend files while allowing frontend access to specific backend components
+RewriteCond %{REQUEST_URI} ^/App/(.*)$
+RewriteCond %{REQUEST_URI} !^/App/Services/PublicAccess/
+RewriteRule ^ - [F,L]
+
+# ✅ Forward all non-API, non-static requests to FastRoute in index.php
 RewriteCond %{REQUEST_URI} !^/api/.*$
-RewriteCond %{REQUEST_URI} !^/(css|js|images)/.*$
+RewriteCond %{REQUEST_URI} !^/(css|js|images|public)/.*$
 RewriteRule ^ index.php [QSA,L]
