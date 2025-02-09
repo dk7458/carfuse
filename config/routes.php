@@ -9,7 +9,7 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) {
     // ✅ Define Routes
     $router->get('/', 'home.php');
     $router->get('/dashboard', 'dashboard.php');
-    $router->get('/profile', 'views/user/profile.php');
+    $router->get('/profile', '/user/profile.php');
     $router->get('/vehicles', 'vehicles.php');
 
     // ✅ Ensure `/test` works
