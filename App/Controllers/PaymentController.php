@@ -53,7 +53,9 @@ class PaymentController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -78,11 +80,15 @@ class PaymentController
                 ['email' => $transaction['email']]
             );
 
-            return ['status' => 'success', 'transaction' => $transaction];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Payment processed','data' => ['transaction' => $transaction]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Payment processing failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Payment processing failed'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Payment processing failed','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -96,7 +102,9 @@ class PaymentController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -120,11 +128,15 @@ class PaymentController
                 ['email' => $refund['email']]
             );
 
-            return ['status' => 'success', 'refund' => $refund];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Refund processed','data' => ['refund' => $refund]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Refund processing failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Refund processing failed'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Refund processing failed','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -140,7 +152,9 @@ class PaymentController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -166,11 +180,15 @@ class PaymentController
                 ['email' => $installmentPlan['email']]
             );
 
-            return ['status' => 'success', 'installment_plan' => $installmentPlan];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Installment plan created','data' => ['installment_plan' => $installmentPlan]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Installment plan setup failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Installment plan setup failed'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Installment plan setup failed','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -180,11 +198,15 @@ class PaymentController
     {
         try {
             $transactions = $this->paymentService->getUserTransactions($userId);
-            return ['status' => 'success', 'transactions' => $transactions];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Transactions fetched','data' => ['transactions' => $transactions]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to fetch user transactions', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to fetch user transactions'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to fetch user transactions','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -194,10 +216,14 @@ class PaymentController
     {
         try {
             $details = $this->paymentService->getPaymentDetails($transactionId);
-            return ['status' => 'success', 'details' => $details];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Payment details fetched','data' => ['details' => $details]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to fetch payment details', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to fetch payment details'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to fetch payment details','data' => []]);
         }
+        exit;
     }
 }

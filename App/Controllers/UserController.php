@@ -57,19 +57,21 @@ class UserController
      */
     public function register(array $data): array
     {
-        $rules = [
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|string|min:8|regex:/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/',
-            'phone' => 'required|string|max:20',
-            'address' => 'required|string|max:255',
-        ];
-
-        if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
-        }
-
         try {
+            $rules = [
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|unique:users',
+                'password' => 'required|string|min:8|regex:/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/',
+                'phone' => 'required|string|max:20',
+                'address' => 'required|string|max:255',
+            ];
+
+            if (!$this->validator->validate($data, $rules)) {
+                http_response_code(400);
+                echo json_encode(['status' => 'error','message' => 'Validation failed','data' => []]);
+                exit;
+            }
+
             // Store user in secure database
             $stmt = $this->secureDb->prepare("
                 INSERT INTO users (name, email, password_hash, phone, address, role, created_at)
@@ -102,11 +104,14 @@ class UserController
                 ['email' => $data['email']]
             );
 
-            return ['status' => 'success', 'message' => 'Registration successful'];
-        } catch (\PDOException $e) {
-            $this->logger->error('Registration failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Registration failed'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Registration successful','data' => []]);
+        } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Internal Server Error','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -114,112 +119,151 @@ class UserController
      */
     public function login(string $email, string $password, string $ip): array
     {
-        if ($this->rateLimiter->isRateLimited($ip)) {
-            return ['status' => 'error', 'message' => 'Too many attempts'];
-        }
+        try {
+            if ($this->rateLimiter->isRateLimited($ip)) {
+                http_response_code(401);
+                echo json_encode(['status' => 'error','message' => 'Too many requests','data' => []]);
+                exit;
+            }
 
-        // Fetch user from secure database
-        $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
-        $stmt->execute([$email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Fetch user from secure database
+            $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$user || !password_verify($password, $user['password_hash'])) {
+            if (!$user || !password_verify($password, $user['password_hash'])) {
+                $this->auditService->log(
+                    'failed_login_attempt',
+                    'Failed login attempt.',
+                    null,
+                    null,
+                    $ip
+                );
+                http_response_code(401);
+                echo json_encode(['status' => 'error','message' => 'Invalid credentials','data' => []]);
+                exit;
+            }
+
+            $token = $this->generateJWT($user);
+
             $this->auditService->log(
-                'failed_login_attempt',
-                'Failed login attempt.',
-                null,
+                'user_logged_in',
+                'User logged in successfully.',
+                $user['id'],
                 null,
                 $ip
             );
-            return ['status' => 'error', 'message' => 'Invalid credentials'];
+
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Login successful','data' => ['token' => $token]]);
+        } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Internal Server Error','data' => []]);
         }
-
-        $token = $this->generateJWT($user);
-
-        $this->auditService->log(
-            'user_logged_in',
-            'User logged in successfully.',
-            $user['id'],
-            null,
-            $ip
-        );
-
-        return ['status' => 'success', 'token' => $token];
+        exit;
     }
 
-    /**
-     * Update user profile
-     */
-    public function updateProfile(int $userId, array $data): array
-    {
+/**
+ * Update user profile (API version)
+ */
+public function updateProfile($request) {
+    header('Content-Type: application/json');
+
+    try {
+        requireAuth(); // Ensure the user is authenticated
+        $userId = getSessionData('user_id'); // Retrieve authenticated user ID
+
+        $data = $request->getParsedBody();
+
+        // ✅ Input Validation (Ensure valid name, email, and phone)
         $rules = [
-            'name' => 'string|max:255',
+            'name' => 'required|string|max:255',
+            'email' => 'required|email',
             'phone' => 'string|max:20',
             'address' => 'string|max:255',
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            throw new \Exception("Validation failed: Invalid input.");
         }
 
-        try {
-            $allowedFields = array_keys($rules);
-            $updates = array_intersect_key($data, array_flip($allowedFields));
-            $sql = "UPDATE users SET " . implode(', ', array_map(fn($k) => "$k = :$k", array_keys($updates))) . " WHERE id = :id";
+        // ✅ Delegate profile update to UserService
+        $result = $this->userService->updateProfile($userId, $data);
 
-            $stmt = $this->secureDb->prepare($sql);
-            $stmt->execute([...$updates, 'id' => $userId]);
-
-            $this->auditService->log(
-                'user_profile_updated',
-                'User profile updated.',
-                $userId,
-                null,
-                $_SERVER['REMOTE_ADDR'] ?? null
-            );
-
-            return ['status' => 'success', 'message' => 'Profile updated'];
-        } catch (\PDOException $e) {
-            $this->logger->error('Profile update failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Update failed'];
+        if (!$result) {
+            throw new \Exception("Profile update failed.");
         }
+
+        // ✅ Log the profile update
+        $logMessage = sprintf("[%s] User ID %s: Profile updated\n", date('Y-m-d H:i:s'), $userId);
+        file_put_contents(BASE_PATH . '/logs/user.log', $logMessage, FILE_APPEND);
+
+        // ✅ Return JSON response
+        http_response_code(200);
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Profile updated successfully',
+            'data' => []
+        ]);
+    } catch (\Exception $e) {
+        error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+
+        http_response_code(400);
+        echo json_encode([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'data' => []
+        ]);
     }
+}
+
 
     /**
      * Generate password reset token
      */
     public function requestPasswordReset(string $email): array
     {
-        $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
-        $stmt->execute([$email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$user) {
-            return ['status' => 'error', 'message' => 'Email not found'];
+            if (!$user) {
+                http_response_code(404);
+                echo json_encode(['status' => 'error','message' => 'User not found','data' => []]);
+                exit;
+            }
+
+            $token = bin2hex(random_bytes(32));
+            $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
+
+            $stmt = $this->secureDb->prepare("
+                INSERT INTO password_resets (email, token, expires_at) 
+                VALUES (:email, :token, :expires)
+            ");
+            $stmt->execute([
+                'email' => $email,
+                'token' => $token,
+                'expires' => $expires,
+            ]);
+
+            // Send password reset notification
+            $this->notificationService->sendNotification(
+                $user['id'],
+                'email',
+                "Use this link to reset your password: {$this->config['reset_url']}?token=$token",
+                ['email' => $email]
+            );
+
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Password reset token generated','data' => []]);
+        } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Internal Server Error','data' => []]);
         }
-
-        $token = bin2hex(random_bytes(32));
-        $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
-
-        $stmt = $this->secureDb->prepare("
-            INSERT INTO password_resets (email, token, expires_at) 
-            VALUES (:email, :token, :expires)
-        ");
-        $stmt->execute([
-            'email' => $email,
-            'token' => $token,
-            'expires' => $expires,
-        ]);
-
-        // Send password reset notification
-        $this->notificationService->sendNotification(
-            $user['id'],
-            'email',
-            "Use this link to reset your password: {$this->config['reset_url']}?token=$token",
-            ['email' => $email]
-        );
-
-        return ['status' => 'success', 'message' => 'Reset instructions sent'];
+        exit;
     }
 
     private function generateJWT(array $user): string
@@ -243,7 +287,7 @@ class UserController
         } catch (\Exception $e) {
             $this->logger->error('Failed to load user profile', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'Failed to load user profile.';
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load user profile', 'data' => []]);
         }
     }
 
@@ -255,68 +299,42 @@ class UserController
         } catch (\Exception $e) {
             $this->logger->error('Failed to load edit profile view', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'Failed to load edit profile view.';
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load edit profile view', 'data' => []]);
         }
     }
 
     public function userDashboard()
     {
-        view('dashboard/user_dashboard');
+        try {
+            view('dashboard/user_dashboard');
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Dashboard loaded', 'data' => []]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load user dashboard', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load user dashboard', 'data' => []]);
+        }
     }
 
     // Retrieve user profile and return JSON response
     public function getProfile($request) {
         header('Content-Type: application/json');
-        requireAuth();
-        $userId = requireAuth(); // obtain authenticated user id
         try {
+            requireAuth();
+            $userId = requireAuth(); // obtain authenticated user id
             $profile = $this->userService->getProfileById($userId);
+            http_response_code(200);
             echo json_encode([
                 'status' => 'success',
                 'data' => $profile
             ]);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             http_response_code(400);
             echo json_encode([
                 'status' => 'error',
-                'message' => $e->getMessage()
-            ]);
-        }
-    }
-
-    // Update user profile with validation and log updates (API version)
-    public function updateProfile($request) {
-        header('Content-Type: application/json');
-        requireAuth(); // ensure the user is authenticated
-        $userId = requireAuth(); // get authenticated user id
-        try {
-            $data = $request->getParsedBody(); // ...existing code...
-            // Basic validation
-            if (empty($data['email']) || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-                throw new Exception("Invalid email address");
-            }
-            if (empty($data['name'])) {
-                throw new Exception("Name is required");
-            }
-            // ...additional validation as needed...
-
-            $result = $this->userService->updateProfile($userId, $data);
-            if (!$result) {
-                throw new Exception("Profile update failed");
-            }
-            // Log the profile update
-            $logMessage = sprintf("[%s] User ID %s: Profile updated\n", date('Y-m-d H:i:s'), $userId);
-            file_put_contents(__DIR__ . '/../../logs/user.log', $logMessage, FILE_APPEND);
-
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'Profile updated successfully'
-            ]);
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
+                'data' => []
             ]);
         }
     }

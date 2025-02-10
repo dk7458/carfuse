@@ -61,12 +61,13 @@ class BookingController
 
             echo json_encode([
                 'status' => 'success',
+                'message' => 'Booking details fetched',
                 'data' => ['booking' => $booking, 'logs' => $logs]
             ]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch booking details', ['error' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             http_response_code(404);
-            echo json_encode(['status' => 'error', 'message' => 'Booking not found.']);
+            echo json_encode(['status' => 'error', 'message' => 'Booking not found', 'data' => []]);
         }
     }
 
@@ -75,17 +76,17 @@ class BookingController
      */
     public function rescheduleBooking(int $id, array $data): array
     {
-        AuthMiddleware::validateSession();
-        $rules = [
-            'pickup_date' => 'required|date|after_or_equal:today',
-            'dropoff_date' => 'required|date|after:pickup_date',
-        ];
-
-        if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
-        }
-
         try {
+            AuthMiddleware::validateSession();
+            $rules = [
+                'pickup_date' => 'required|date|after_or_equal:today',
+                'dropoff_date' => 'required|date|after:pickup_date',
+            ];
+
+            if (!$this->validator->validate($data, $rules)) {
+                return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors(), 'data' => []];
+            }
+
             $this->bookingService->rescheduleBooking($id, $data['pickup_date'], $data['dropoff_date']);
             $this->auditService->log(
                 'booking_rescheduled',
@@ -101,10 +102,12 @@ class BookingController
                 []
             );
 
-            return ['status' => 'success', 'message' => 'Booking rescheduled successfully'];
+            http_response_code(200);
+            return ['status' => 'success', 'message' => 'Booking rescheduled successfully', 'data' => []];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to reschedule booking', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to reschedule booking'];
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            return ['status' => 'error', 'message' => 'Failed to reschedule booking', 'data' => []];
         }
     }
 
@@ -113,8 +116,8 @@ class BookingController
      */
     public function cancelBooking(int $id): array
     {
-        AuthMiddleware::validateSession();
         try {
+            AuthMiddleware::validateSession();
             $refundAmount = $this->bookingService->cancelBooking($id);
 
             if ($refundAmount > 0) {
@@ -135,10 +138,12 @@ class BookingController
                 []
             );
 
-            return ['status' => 'success', 'message' => 'Booking canceled successfully'];
+            http_response_code(200);
+            return ['status' => 'success', 'message' => 'Booking canceled successfully', 'data' => []];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to cancel booking', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to cancel booking'];
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            return ['status' => 'error', 'message' => 'Failed to cancel booking', 'data' => []];
         }
     }
 
@@ -147,13 +152,15 @@ class BookingController
      */
     public function getBookingLogs(int $bookingId): array
     {
-        AuthMiddleware::validateSession();
         try {
+            AuthMiddleware::validateSession();
             $logs = $this->bookingService->getBookingLogs($bookingId);
-            return ['status' => 'success', 'logs' => $logs];
+            http_response_code(200);
+            return ['status' => 'success', 'message' => 'Booking logs fetched successfully', 'data' => ['logs' => $logs]];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch booking logs', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to fetch booking logs'];
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            return ['status' => 'error', 'message' => 'Failed to fetch booking logs', 'data' => []];
         }
     }
 
@@ -162,13 +169,15 @@ class BookingController
      */
     public function getUserBookings(int $userId): array
     {
-        AuthMiddleware::validateSession();
         try {
+            AuthMiddleware::validateSession();
             $bookings = $this->bookingService->getUserBookings($userId);
-            return ['status' => 'success', 'bookings' => $bookings];
+            http_response_code(200);
+            return ['status' => 'success', 'message' => 'User bookings fetched successfully', 'data' => ['bookings' => $bookings]];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch user bookings', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to fetch user bookings'];
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            return ['status' => 'error', 'message' => 'Failed to fetch user bookings', 'data' => []];
         }
     }
 
@@ -192,11 +201,11 @@ class BookingController
             ];
 
             if (!$this->validator->validate($data, $rules)) {
-                return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+                return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors(), 'data' => []];
             }
 
             if (!$this->bookingService->isVehicleAvailable($data['vehicle_id'], $data['pickup_date'], $data['dropoff_date'])) {
-                return ['status' => 'error', 'message' => 'Vehicle is not available for the selected dates'];
+                return ['status' => 'error', 'message' => 'Vehicle is not available for the selected dates', 'data' => []];
             }
 
             $bookingId = $this->bookingService->createBooking($data);
@@ -215,10 +224,12 @@ class BookingController
                 []
             );
 
-            return ['status' => 'success', 'message' => 'Booking created successfully', 'booking_id' => $bookingId];
+            http_response_code(201);
+            return ['status' => 'success', 'message' => 'Booking created successfully', 'data' => ['booking_id' => $bookingId]];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to create booking', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to create booking'];
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            return ['status' => 'error', 'message' => 'Failed to create booking', 'data' => []];
         }
     }
 }

@@ -34,13 +34,16 @@ class ReportController
     public function index()
     {
         try {
-            // Render admin report dashboard
-            view('admin/reports');
+            $data = ['view' => 'admin/reports'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Report dashboard loaded','data' => $data]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to load admin report dashboard', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'Failed to load report dashboard.';
+            echo json_encode(['status' => 'error','message' => 'Failed to load report dashboard','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -58,7 +61,9 @@ class ReportController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -68,12 +73,15 @@ class ReportController
                 $data['filters'] ?? [],
                 $data['format']
             );
-
-            return ['status' => 'success', 'report' => $report];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Report generated','data' => ['report' => $report]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to generate report', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to generate report'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to generate report','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -82,13 +90,16 @@ class ReportController
     public function userReports()
     {
         try {
-            // Render user report dashboard
-            view('user/reports');
+            $data = ['view' => 'user/reports'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'User report dashboard loaded','data' => $data]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to load user report dashboard', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'Failed to load report dashboard.';
+            echo json_encode(['status' => 'error','message' => 'Failed to load report dashboard','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -106,7 +117,9 @@ class ReportController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -116,12 +129,15 @@ class ReportController
                 $data['date_range'],
                 $data['format']
             );
-
-            return ['status' => 'success', 'report' => $report];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'User report generated','data' => ['report' => $report]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to generate user report', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to generate report'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to generate report','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -132,7 +148,7 @@ class ReportController
         try {
             if (!file_exists($filePath)) {
                 http_response_code(404);
-                echo 'Report not found.';
+                echo json_encode(['status' => 'error','message' => 'Report not found','data' => []]);
                 return;
             }
 
@@ -146,9 +162,10 @@ class ReportController
             readfile($filePath);
             exit;
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to download report', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'Failed to download report.';
+            echo json_encode(['status' => 'error','message' => 'Failed to download report','data' => []]);
         }
     }
 }

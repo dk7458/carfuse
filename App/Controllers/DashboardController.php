@@ -41,13 +41,17 @@ class DashboardController
      */
     public function getUserBookings(): void
     {
-        $userId = requireAuth(); // get authenticated user id
         try {
+            $userId = requireAuth(); // get authenticated user id
             $bookings = $this->bookingService->getUserBookings($userId);
-            echo json_encode(['status' => 'success', 'bookings' => $bookings]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Bookings fetched', 'data' => ['bookings' => $bookings]]);
         } catch (\Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch bookings', 'data' => []]);
         }
+        exit;
     }
 
     /**
@@ -57,10 +61,14 @@ class DashboardController
     {
         try {
             $statistics = $this->statisticsService->getDashboardStatistics();
-            echo json_encode(['status' => 'success', 'data' => $statistics]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Statistics fetched', 'data' => $statistics]);
         } catch (\Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch statistics', 'data' => []]);
         }
+        exit;
     }
 
     /**
@@ -68,13 +76,17 @@ class DashboardController
      */
     public function fetchNotifications(): void
     {
-        $userId = requireAuth(); // get authenticated user id
         try {
+            $userId = requireAuth(); // get authenticated user id
             $notifications = $this->notificationService->getUserNotifications($userId);
-            echo json_encode(['status' => 'success', 'notifications' => $notifications]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Notifications fetched', 'data' => ['notifications' => $notifications]]);
         } catch (\Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch notifications', 'data' => []]);
         }
+        exit;
     }
 
     /**
@@ -82,12 +94,16 @@ class DashboardController
      */
     public function fetchUserProfile(): void
     {
-        $userId = requireAuth(); // get authenticated user id
         try {
+            $userId = requireAuth(); // get authenticated user id
             $profile = $this->userService->getUserProfile($userId);
-            echo json_encode(['status' => 'success', 'profile' => $profile]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'User profile fetched', 'data' => ['profile' => $profile]]);
         } catch (\Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch user profile', 'data' => []]);
         }
+        exit;
     }
 }

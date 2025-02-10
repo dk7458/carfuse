@@ -82,15 +82,16 @@ class AdminDashboardController
                 'revenue_trends' => $this->paymentService->getMonthlyRevenueTrends(),
             ];
 
+            http_response_code(200);
             echo json_encode([
                 'status' => 'success',
-                'metrics' => $metrics,
-                'graph_data' => $graphData,
+                'message' => 'Dashboard data fetched',
+                'data' => ['metrics' => $metrics, 'graph_data' => $graphData]
             ]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch admin dashboard data', ['error' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch dashboard data']);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch dashboard data', 'data' => []]);
         }
     }
 }

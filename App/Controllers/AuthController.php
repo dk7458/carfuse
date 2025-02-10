@@ -8,15 +8,19 @@ use Exception;
 
 require_once __DIR__ . '/../Helpers/ViewHelper.php';
 require_once __DIR__ . '/../Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../Services/Auth/AuthService.php';
 
 class AuthController
 {
-    protected TokenService $tokenService;
+    protected $authService;
     protected PDO $pdo;
 
     public function __construct()
     {
         startSecureSession();
+        // Use AuthService for authentication logic
+        $this->authService = new \App\Services\Auth\AuthService();
+
         // Load the encryption configuration
         $configPath = __DIR__ . '/../../config/encryption.php';
         if (!file_exists($configPath)) {
@@ -69,55 +73,35 @@ class AuthController
     /**
      * Handle user login (POST /auth/login)
      */
-    public function login()
+    public function login($request)
     {
         header('Content-Type: application/json');
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['error' => 'Method Not Allowed']);
-            return;
-        }
-
-        if (!validateSessionIntegrity()) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized']);
-            $this->logAuthAttempt('failure', 'Unauthorized access attempt');
-            return;
-        }
-
-        $email = $_POST['email'] ?? null;
-        $password = $_POST['password'] ?? null;
-
-        if (!$email || !$password) {
+        try {
+            // Assume request body is already parsed
+            $data = $request->getParsedBody(); // ...existing code...
+            $username = $data['username'] ?? '';
+            $password = $data['password'] ?? '';
+            $result = $this->authService->login($username, $password);
+            
+            // Validate token before returning user details
+            if (!$this->authService->validateToken($result['token'])) {
+                throw new \Exception('Token validation failed.');
+            }
+            
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'User logged in',
+                'data' => ['token' => $result['token']]
+            ]);
+        } catch (\Exception $e) {
             http_response_code(400);
-            echo json_encode(['error' => 'Email and password are required']);
-            return;
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'data' => []
+            ]);
         }
-
-        // Fetch user from the database
-        $stmt = $this->pdo->prepare("SELECT * FROM users WHERE email = :email LIMIT 1");
-        $stmt->execute(['email' => $email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$user || !password_verify($password, $user['password'])) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Invalid credentials']);
-            $this->logAuthAttempt('failure', 'Invalid credentials');
-            return;
-        }
-
-        $token = $this->tokenService->generateToken((object) ['id' => $user['id']]);
-        $refreshToken = $this->tokenService->generateRefreshToken((object) ['id' => $user['id']]);
-
-        echo json_encode([
-            'access_token' => $token,
-            'refresh_token' => $refreshToken
-        ]);
-
-        $this->refreshToken();
-        $this->updateSessionActivity();
-        $this->logAuthAttempt('success', 'User logged in');
     }
 
     /**
@@ -126,60 +110,93 @@ class AuthController
     public function refresh()
     {
         header('Content-Type: application/json');
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                throw new \Exception('Method Not Allowed');
+            }
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['error' => 'Method Not Allowed']);
-            return;
-        }
+            $refreshToken = $_POST['refresh_token'] ?? null;
 
-        $refreshToken = $_POST['refresh_token'] ?? null;
+            if (!$refreshToken) {
+                throw new \Exception('Refresh token is required');
+            }
 
-        if (!$refreshToken) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Refresh token is required']);
-            return;
-        }
+            $newToken = $this->tokenService->refreshAccessToken($refreshToken);
 
-        $newToken = $this->tokenService->refreshAccessToken($refreshToken);
-
-        if ($newToken) {
-            echo json_encode(['access_token' => $newToken]);
-        } else {
+            if ($newToken) {
+                http_response_code(200);
+                echo json_encode([
+                    'status' => 'success',
+                    'message' => 'Token refreshed',
+                    'data' => ['access_token' => $newToken]
+                ]);
+            } else {
+                throw new \Exception('Invalid refresh token');
+            }
+        } catch (\Exception $e) {
             http_response_code(401);
-            echo json_encode(['error' => 'Invalid refresh token']);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'data' => []
+            ]);
         }
     }
 
     /**
      * Handle user logout (POST /auth/logout)
      */
-    public function logout()
+    public function logout($request)
     {
         header('Content-Type: application/json');
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['error' => 'Method Not Allowed']);
-            return;
+        try {
+            $this->authService->logout();
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'User logged out',
+                'data' => []
+            ]);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'data' => []
+            ]);
         }
+    }
 
-        if (!validateSessionIntegrity()) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized']);
-            $this->logAuthAttempt('failure', 'Unauthorized access attempt');
-            return;
+    /**
+     * Get user details endpoint, ensuring token is valid
+     */
+    public function userDetails($request)
+    {
+        header('Content-Type: application/json');
+        try {
+            $authHeader = $request->getHeader('Authorization');
+            $token = str_replace('Bearer ', '', $authHeader);
+            
+            // Validate token before processing
+            if (!$this->authService->validateToken($token)) {
+                throw new \Exception('Invalid token.');
+            }
+            
+            $userData = $this->authService->getUserFromToken($token);
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'User details fetched',
+                'data' => $userData
+            ]);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'data' => []
+            ]);
         }
-
-        $refreshToken = $_POST['refresh_token'] ?? null;
-
-        if ($refreshToken) {
-            $this->tokenService->revokeToken($refreshToken);
-        }
-
-        session_destroy();
-        echo json_encode(['message' => 'Logged out successfully']);
-        $this->logAuthAttempt('success', 'User logged out');
     }
 
     private function refreshToken()

@@ -42,12 +42,15 @@ class NotificationController
     {
         try {
             $notifications = $this->notificationService->getUserNotifications($userId);
-            view('user/notifications', ['notifications' => $notifications]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notifications loaded','data' => ['notifications' => $notifications]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to load notifications view', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'An error occurred while fetching notifications.';
+            echo json_encode(['status' => 'error','message' => 'An error occurred while fetching notifications','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -57,11 +60,15 @@ class NotificationController
     {
         try {
             $notifications = $this->notificationService->getUserNotifications($userId);
-            return ['status' => 'success', 'notifications' => $notifications];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notifications fetched','data' => ['notifications' => $notifications]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to fetch user notifications', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to fetch user notifications'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to fetch user notifications','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -71,11 +78,15 @@ class NotificationController
     {
         try {
             $notifications = $this->notificationService->getUserNotifications($userId);
-            echo json_encode(['status' => 'success', 'notifications' => $notifications]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notifications fetched','data' => ['notifications' => $notifications]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to fetch user notifications via AJAX', ['error' => $e->getMessage()]);
-            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch user notifications']);
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to fetch user notifications','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -86,12 +97,15 @@ class NotificationController
         try {
             $this->notificationService->markAsRead($notificationId);
             $this->logger->info("Notification marked as read", ['notification_id' => $notificationId]);
-
-            return ['status' => 'success', 'message' => 'Notification marked as read'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notification marked as read','data' => []]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to mark notification as read', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to mark notification as read'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to mark notification as read','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -102,18 +116,23 @@ class NotificationController
         $notificationId = $_POST['notification_id'] ?? null;
 
         if (!$notificationId) {
-            echo json_encode(['status' => 'error', 'message' => 'Notification ID is required']);
-            return;
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Notification ID is required','data' => []]);
+            exit;
         }
 
         try {
             $this->notificationService->markAsRead((int)$notificationId);
             $this->logger->info("Notification marked as read", ['notification_id' => $notificationId]);
-            echo json_encode(['status' => 'success', 'message' => 'Notification marked as read']);
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notification marked as read','data' => []]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to mark notification as read', ['error' => $e->getMessage()]);
-            echo json_encode(['status' => 'error', 'message' => 'Failed to mark notification as read']);
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to mark notification as read','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -124,12 +143,15 @@ class NotificationController
         try {
             $this->notificationService->deleteNotification($notificationId);
             $this->logger->info("Notification deleted", ['notification_id' => $notificationId]);
-
-            return ['status' => 'success', 'message' => 'Notification deleted'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notification deleted','data' => []]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to delete notification', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to delete notification'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to delete notification','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -146,7 +168,9 @@ class NotificationController
 
         if (!$this->validator->validate($data, $rules)) {
             $this->logger->warning('Notification validation failed', ['data' => $data]);
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -160,14 +184,19 @@ class NotificationController
             if ($success) {
                 $this->logger->info('Notification sent successfully', ['data' => $data]);
                 $this->notificationQueue->queueNotification($data);
-                return ['status' => 'success', 'message' => 'Notification sent successfully'];
+                http_response_code(200);
+                echo json_encode(['status' => 'success','message' => 'Notification sent successfully','data' => []]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['status' => 'error','message' => 'Notification delivery failed','data' => []]);
             }
-
-            return ['status' => 'error', 'message' => 'Notification delivery failed'];
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to send notification', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to send notification'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to send notification','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -184,7 +213,9 @@ class NotificationController
 
         if (!$this->validator->validate($data, $rules)) {
             $this->logger->warning('Retry validation failed', ['data' => $data]);
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -197,11 +228,14 @@ class NotificationController
 
             if ($success) {
                 $this->logger->info('Notification retry succeeded', ['data' => $data]);
-                return ['status' => 'success', 'message' => 'Notification sent successfully after retries'];
+                http_response_code(200);
+                echo json_encode(['status' => 'success','message' => 'Notification sent successfully after retries','data' => []]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['status' => 'error','message' => 'Notification delivery failed after retries','data' => []]);
             }
-
-            return ['status' => 'error', 'message' => 'Notification delivery failed after retries'];
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Retry failed', ['error' => $e->getMessage()]);
             return ['status' => 'error', 'message' => 'Retry failed'];
         }
