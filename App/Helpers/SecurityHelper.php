@@ -170,12 +170,6 @@ function refreshSession() {
 
 // ...existing code...
 
-// Add session timeout definition
-if (!defined('SESSION_TIMEOUT')) {
-    define('SESSION_TIMEOUT', 1800); // 30 minutes
-}
-
-// Modify validateSessionIntegrity() to use SESSION_TIMEOUT
 function validateSessionIntegrity() {
     if (!isset($_SESSION['initiated'])) {
         logSecurityEvent('Session integrity check failed: not initiated', 'warning');
@@ -185,25 +179,31 @@ function validateSessionIntegrity() {
     $currentIp = hash('sha256', $_SERVER['REMOTE_ADDR']);
     $currentAgent = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
     
+    // Flexible validation for guest sessions
     if (isset($_SESSION['user_id'])) {
-        if ($_SESSION['client_ip'] !== $currentIp || $_SESSION['user_agent'] !== $currentAgent) {
+        // Strict validation for authenticated users
+        if ($_SESSION['client_ip'] !== $currentIp || 
+            $_SESSION['user_agent'] !== $currentAgent) {
             logSecurityEvent('Session integrity check failed: authenticated user mismatch', 'warning');
             destroySession();
             return false;
         }
     } else {
+        // Update fingerprint for guest sessions
         $_SESSION['client_ip'] = $currentIp;
         $_SESSION['user_agent'] = $currentAgent;
         $_SESSION['guest'] = true;
     }
 
-    if (time() - $_SESSION['last_activity'] > SESSION_TIMEOUT) {
+    // Check for session timeout (30 minutes)
+    if (time() - $_SESSION['last_activity'] > 1800) {
         logSecurityEvent('Session expired due to inactivity', 'info');
         destroySession();
         return false;
     }
 
-    if (time() - $_SESSION['last_activity'] > (SESSION_TIMEOUT - 300)) { // refresh if within 5 minutes of expiry
+    // Refresh session if about to expire (within 5 minutes)
+    if (time() - $_SESSION['last_activity'] > 1500) {
         refreshSession();
     }
 
@@ -373,15 +373,9 @@ function requireUserAuth() {
     requireAuth();
 }
 
-// New function to enforce global JWT validation
-if (!function_exists('validateToken')) {
-    function validateToken($token) {
-        return validateJWT($token);
-    }
-}
-
-// Modify requireAuth() to enforce CSRF token on API POST requests
+// New function to enforce authentication dynamically
 function requireAuth($allowGuest = false) {
+    // Check if API request: require valid JWT in header or valid session authentication
     $apiRequest = defined('API_ENTRY');
     $authValid = false;
 
@@ -389,27 +383,18 @@ function requireAuth($allowGuest = false) {
         $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
         if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
             $token = $matches[1];
-            if (validateToken($token) !== false) {
+            if (validateJWT($token) !== false) {
                 $authValid = true;
-            }
-        }
-        // Enforce CSRF validation on API POST requests
-        if ($apiRequest && $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? '');
-            if (!validateCsrfToken($csrf)) {
-                logAuthFailure('API CSRF validation failed for request to ' . ($_SERVER['REQUEST_URI'] ?? 'unknown'));
-                header('Content-Type: application/json');
-                header('HTTP/1.1 403 Forbidden');
-                echo json_encode(['error' => 'CSRF token invalid']);
-                exit();
             }
         }
     }
     
+    // Fallback to web session authentication
     if (!$authValid && isUserLoggedIn()) {
         $authValid = true;
     }
     
+    // Allow guest access if flagged
     if (!$authValid && $allowGuest) {
         $authValid = true;
     }
