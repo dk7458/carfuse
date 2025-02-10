@@ -374,8 +374,10 @@ function requireUserAuth() {
 }
 
 // New function to enforce global JWT validation
-function validateToken($token) {
-    return validateJWT($token);
+if (!function_exists('validateToken')) {
+    function validateToken($token) {
+        return validateJWT($token);
+    }
 }
 
 // Modify requireAuth() to enforce CSRF token on API POST requests
