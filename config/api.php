@@ -35,15 +35,6 @@ function validateToken()
     }
 }
 
-function requireAuth() {
-    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-    if (!$authHeader || !isset($_SESSION['user_id'])) {
-        error_log("[API] Unauthorized access attempt\n", 3, __DIR__ . '/../logs/debug.log');
-        http_response_code(401);
-        exit('Unauthorized');
-    }
-}
-
 // Handle CORS preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');

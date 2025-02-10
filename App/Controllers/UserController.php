@@ -267,11 +267,9 @@ class UserController
     // Retrieve user profile and return JSON response
     public function getProfile($request) {
         header('Content-Type: application/json');
+        requireAuth();
+        $userId = requireAuth(); // obtain authenticated user id
         try {
-            $userId = $_SESSION['user_id'] ?? null;
-            if (!$userId) {
-                throw new Exception("User not authenticated");
-            }
             $profile = $this->userService->getProfileById($userId);
             echo json_encode([
                 'status' => 'success',
@@ -286,15 +284,13 @@ class UserController
         }
     }
 
-    // Update user profile with validation and log updates
+    // Update user profile with validation and log updates (API version)
     public function updateProfile($request) {
         header('Content-Type: application/json');
+        requireAuth(); // ensure the user is authenticated
+        $userId = requireAuth(); // get authenticated user id
         try {
             $data = $request->getParsedBody(); // ...existing code...
-            $userId = $_SESSION['user_id'] ?? null;
-            if (!$userId) {
-                throw new Exception("User not authenticated");
-            }
             // Basic validation
             if (empty($data['email']) || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
                 throw new Exception("Invalid email address");

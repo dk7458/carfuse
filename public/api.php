@@ -15,20 +15,39 @@ function logApiEvent($message) {
     file_put_contents($logFile, "{$timestamp} - {$message}\n", FILE_APPEND);
 }
 
+// New helper function to send standardized JSON responses
+function sendJsonResponse($status, $data, $httpCode = 200) {
+    http_response_code($httpCode);
+    header('Content-Type: application/json');
+    echo json_encode(['status' => $status, 'data' => $data]);
+    exit();
+}
+
 $method = $_SERVER['REQUEST_METHOD'];
 $requestUri = $_SERVER['REQUEST_URI'];
 logApiEvent("Request: {$method} {$requestUri}");
 
-// Enforce global authentication and CSRF protection
-enforceAuthentication();
+// Determine the route path and public routes
+$publicRoutes = ['/auth/login', '/auth/register'];
+$path = parse_url($requestUri, PHP_URL_PATH);
+
+// Enforce authentication for protected routes
+if (!in_array($path, $publicRoutes)) {
+    // Assuming isAuthenticated() is defined in SecurityHelper.php
+    if (!isAuthenticated()) {
+        $authLogFile = __DIR__ . '/../logs/auth.log';
+        file_put_contents($authLogFile, date('Y-m-d H:i:s') . " - Authentication failure for {$path}\n", FILE_APPEND);
+        sendJsonResponse('error', ['message' => 'Authentication required'], 401);
+    }
+}
+
+// Global CSRF check for POST requests
 if ($method === 'POST') {
     $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? '');
     if (!validateCsrfToken($csrf)) {
-        http_response_code(403);
-        header('Content-Type: application/json');
-        echo json_encode(['error' => 'Invalid CSRF token']);
-        logApiEvent("Failure: Invalid CSRF token");
-        exit();
+        $authLogFile = __DIR__ . '/../logs/auth.log';
+        file_put_contents($authLogFile, date('Y-m-d H:i:s') . " - CSRF token validation failed for {$path}\n", FILE_APPEND);
+        sendJsonResponse('error', ['message' => 'Invalid CSRF token'], 403);
     }
 }
 
@@ -63,16 +82,10 @@ $routeInfo = $dispatcher->dispatch($method, $uri);
 
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::NOT_FOUND:
-        http_response_code(404);
-        header('Content-Type: application/json');
-        echo json_encode(['error' => 'API route not found']);
-        logApiEvent("Failure: API route not found for '{$uri}'");
+        sendJsonResponse('error', ['message' => 'API route not found'], 404);
         break;
     case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-        http_response_code(405);
-        header('Content-Type: application/json');
-        echo json_encode(['error' => 'Method not allowed']);
-        logApiEvent("Failure: Method not allowed for '{$uri}'");
+        sendJsonResponse('error', ['message' => 'Method not allowed'], 405);
         break;
     case FastRoute\Dispatcher::FOUND:
         $handler = $routeInfo[1];
@@ -80,9 +93,8 @@ switch ($routeInfo[0]) {
         ob_start();
         include $handler;
         $output = ob_get_clean();
-        header('Content-Type: application/json');
-        echo json_encode(['data' => $output]);
-        logApiEvent("Success: Routed to " . basename($handler));
+        // Wrap output in JSON response, ensuring success status and HTTP 200
+        sendJsonResponse('success', ['data' => $output], 200);
         break;
 }
 ?>

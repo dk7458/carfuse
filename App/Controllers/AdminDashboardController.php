@@ -64,6 +64,7 @@ class AdminDashboardController
      */
     public function getDashboardData(): void
     {
+        requireAuth(); // ensure admin authentication is in place
         try {
             $metrics = [
                 'total_users' => $this->userService->getTotalUsers(),

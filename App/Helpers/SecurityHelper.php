@@ -375,41 +375,46 @@ function requireUserAuth() {
 
 // New function to enforce authentication dynamically
 function requireAuth($allowGuest = false) {
-    // Check if API request: require valid JWT in header or valid session authentication
-    $apiRequest = defined('API_ENTRY');
-    $authValid = false;
+    // Get HTTP headers if available
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    $authHeader = $headers['Authorization'] ?? '';
 
-    if ($apiRequest) {
-        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-        if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            $token = $matches[1];
-            if (validateJWT($token) !== false) {
-                $authValid = true;
-            }
-        }
-    }
-    
-    // Fallback to web session authentication
-    if (!$authValid && isUserLoggedIn()) {
-        $authValid = true;
-    }
-    
-    // Allow guest access if flagged
-    if (!$authValid && $allowGuest) {
-        $authValid = true;
-    }
-    
-    if (!$authValid) {
-        $message = 'Unauthorized access attempt to ' . ($_SERVER['REQUEST_URI'] ?? 'unknown');
-        logAuthFailure($message);
-        if ($apiRequest) {
+    if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+        // API authentication using JWT Bearer
+        $config = require __DIR__ . '/../../config/encryption.php';
+        $jwtSecret = $config['jwt_secret'] ?? '';
+        $token = substr($authHeader, 7);
+        try {
+            return (array) Firebase\JWT\JWT::decode($token, new Firebase\JWT\Key($jwtSecret, 'HS256'));
+        } catch (Exception $e) {
+            error_log("[AUTH] API authentication failure: " . $e->getMessage() . "\n", 3, __DIR__ . '/../../logs/auth.log');
             header('Content-Type: application/json');
-            header('HTTP/1.1 401 Unauthorized');
+            http_response_code(401);
             echo json_encode(['error' => 'Unauthorized']);
-        } else {
-            header('Location: /auth/login.php');
+            exit;
         }
-        exit();
+    } else {
+        // Web authentication using session
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+        if (isset($_SESSION['user_id'])) {
+            return $_SESSION['user_id'];
+        } elseif ($allowGuest) {
+            return null;
+        } else {
+            error_log("[AUTH] Web authentication failure: No session user_id\n", 3, __DIR__ . '/../../logs/auth.log');
+            // If the request expects JSON, return JSON response
+            if (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false) {
+                header('Content-Type: application/json');
+                http_response_code(401);
+                echo json_encode(['error' => 'Unauthorized']);
+            } else {
+                http_response_code(401);
+                echo 'Unauthorized';
+            }
+            exit;
+        }
     }
 }
 

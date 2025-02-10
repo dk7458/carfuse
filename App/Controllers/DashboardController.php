@@ -41,13 +41,7 @@ class DashboardController
      */
     public function getUserBookings(): void
     {
-        $userId = $_SESSION['user_id'] ?? null;
-        
-        if (!$userId) {
-            echo json_encode(['status' => 'error', 'message' => 'User not authenticated']);
-            return;
-        }
-        
+        $userId = requireAuth(); // get authenticated user id
         try {
             $bookings = $this->bookingService->getUserBookings($userId);
             echo json_encode(['status' => 'success', 'bookings' => $bookings]);
@@ -74,13 +68,7 @@ class DashboardController
      */
     public function fetchNotifications(): void
     {
-        $userId = $_SESSION['user_id'] ?? null;
-        
-        if (!$userId) {
-            echo json_encode(['status' => 'error', 'message' => 'User not authenticated']);
-            return;
-        }
-        
+        $userId = requireAuth(); // get authenticated user id
         try {
             $notifications = $this->notificationService->getUserNotifications($userId);
             echo json_encode(['status' => 'success', 'notifications' => $notifications]);
@@ -94,13 +82,7 @@ class DashboardController
      */
     public function fetchUserProfile(): void
     {
-        $userId = $_SESSION['user_id'] ?? null;
-        
-        if (!$userId) {
-            echo json_encode(['status' => 'error', 'message' => 'User not authenticated']);
-            return;
-        }
-        
+        $userId = requireAuth(); // get authenticated user id
         try {
             $profile = $this->userService->getUserProfile($userId);
             echo json_encode(['status' => 'success', 'profile' => $profile]);
