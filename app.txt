@@ -10,6 +10,7 @@ use AuditManager\Services\AuditService;
 use PDO;
 use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
+use App\Services\UserService;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -29,6 +30,7 @@ class UserController
     private RateLimiter $rateLimiter;
     private AuditService $auditService;
     private NotificationService $notificationService;
+    protected $userService;
 
     public function __construct(
         PDO $appDb,
@@ -48,6 +50,7 @@ class UserController
         $this->rateLimiter = $rateLimiter;
         $this->auditService = $auditService;
         $this->notificationService = $notificationService;
+        $this->userService = new UserService();
     }
 
     /**
@@ -261,6 +264,67 @@ class UserController
     {
         view('dashboard/user_dashboard');
     }
+
+    // Retrieve user profile and return JSON response
+    public function getProfile($request) {
+        header('Content-Type: application/json');
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception("User not authenticated");
+            }
+            $profile = $this->userService->getProfileById($userId);
+            echo json_encode([
+                'status' => 'success',
+                'data' => $profile
+            ]);
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    // Update user profile with validation and log updates
+    public function updateProfile($request) {
+        header('Content-Type: application/json');
+        try {
+            $data = $request->getParsedBody(); // ...existing code...
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception("User not authenticated");
+            }
+            // Basic validation
+            if (empty($data['email']) || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+                throw new Exception("Invalid email address");
+            }
+            if (empty($data['name'])) {
+                throw new Exception("Name is required");
+            }
+            // ...additional validation as needed...
+
+            $result = $this->userService->updateProfile($userId, $data);
+            if (!$result) {
+                throw new Exception("Profile update failed");
+            }
+            // Log the profile update
+            $logMessage = sprintf("[%s] User ID %s: Profile updated\n", date('Y-m-d H:i:s'), $userId);
+            file_put_contents(__DIR__ . '/../../logs/user.log', $logMessage, FILE_APPEND);
+
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Profile updated successfully'
+            ]);
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
 }
 === App/Controllers/BookingController.php ===
 <?php
@@ -274,6 +338,7 @@ use AuditManager\Services\AuditService;
 use App\Services\NotificationService;
 use Psr\Log\LoggerInterface;
 use App\Middleware\AuthMiddleware;
+use Exception;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -313,6 +378,7 @@ class BookingController
      */
     public function viewBooking(int $id)
     {
+        header('Content-Type: application/json');
         try {
             AuthMiddleware::validateSession();
             $booking = $this->bookingService->getBookingById($id);
@@ -322,7 +388,10 @@ class BookingController
                 throw new \Exception("Booking not found.");
             }
 
-            view('bookings/view', ['booking' => $booking, 'logs' => $logs]);
+            echo json_encode([
+                'status' => 'success',
+                'data' => ['booking' => $booking, 'logs' => $logs]
+            ]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to fetch booking details', ['error' => $e->getMessage()]);
             http_response_code(404);
@@ -437,19 +506,24 @@ class BookingController
      */
     public function createBooking(array $data): array
     {
-        AuthMiddleware::validateSession();
-        $rules = [
-            'user_id' => 'required|integer',
-            'vehicle_id' => 'required|integer',
-            'pickup_date' => 'required|date|after_or_equal:today',
-            'dropoff_date' => 'required|date|after:pickup_date',
-        ];
-
-        if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
-        }
-
+        header('Content-Type: application/json');
         try {
+            AuthMiddleware::validateSession();
+            $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? '');
+            if (!validateCsrfToken($csrf)) {
+                throw new Exception("Invalid CSRF token");
+            }
+            $rules = [
+                'user_id' => 'required|integer',
+                'vehicle_id' => 'required|integer',
+                'pickup_date' => 'required|date|after_or_equal:today',
+                'dropoff_date' => 'required|date|after:pickup_date',
+            ];
+
+            if (!$this->validator->validate($data, $rules)) {
+                return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            }
+
             if (!$this->bookingService->isVehicleAvailable($data['vehicle_id'], $data['pickup_date'], $data['dropoff_date'])) {
                 return ['status' => 'error', 'message' => 'Vehicle is not available for the selected dates'];
             }
@@ -1456,416 +1530,6 @@ class ReportController
         }
     }
 }
-=== App/Views/layouts/header.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Header - Dynamiczny Nagłówek dla Wszystkich Widoków
-|--------------------------------------------------------------------------
-| Plik przełącza się dynamicznie pomiędzy stroną główną, pulpitem użytkownika
-| oraz pulpitem administratora. Wyświetla odpowiednie skróty i powitanie.
-|
-| Ścieżka: public/layouts/header.php
-*/
-
-if (!isset($_SESSION)) {
-    session_start();
-}
-
-// Ensure the header is included only once
-if (!empty($_SESSION['layout_loaded'])) {
-    return;
-}
-$_SESSION['layout_loaded'] = true;
-
-$isLoggedIn = isset($_SESSION['user_id']);
-$isAdmin = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
-$username = $isLoggedIn ? $_SESSION['username'] : "Gość";
-
-// Pobranie losowego modelu auta z bazy, jeśli są dostępne
-$availableCars = ["Toyota Corolla", "Ford Mustang", "BMW X5", "Audi A6", "Mercedes C-Class"];
-$randomCar = $availableCars[array_rand($availableCars)];
-
-// Lista powitań dynamicznych
-$greetings = [
-    "Hej, $username! $randomCar już czeka na przygodę! 🚗💨",
-    "Witaj, $username! Może dziś przejażdżka $randomCar? 🌍",
-    "$username, świat stoi przed Tobą otworem! $randomCar już grzeje silnik! 🏎️",
-    "Gotowy na podróż, $username? $randomCar nie chce stać w miejscu! 📅",
-    "$username, może czas na spontaniczny wypad? $randomCar jest gotowy! 🎒",
-    "Nie czekaj, $username – $randomCar znika szybciej niż hot dogi na stacji! ⏳",
-    "Witaj, $username! Może dziś coś sportowego? $randomCar czeka na rozgrzanie! 🏁",
-    "Nie musisz mieć własnego auta, $username! $randomCar już czeka, by Ci służyć! 🚗",
-    "Hej, $username! $randomCar to klucz do niezapomnianej podróży! 💰",
-    "$username, weekend bez planu? $randomCar to zawsze dobry pomysł! 🏕️",
-    "Dłuższy wyjazd? Krótki city-break? $randomCar nie pyta – jedzie! 🛣️",
-    "Nie czekaj do ostatniej chwili, $username! $randomCar chce ruszać! 🔥",
-    "Dziś dobry dzień na podróż, $username! $randomCar jest na to gotowy! 🏖️",
-    "Niech nic Cię nie zatrzyma, $username! $randomCar tylko czeka na Twój ruch! 🚙",
-    "$username, wiesz co robi różnicę? Wybór auta. Może $randomCar? 🏜️",
-    "Każda podróż zaczyna się od decyzji – a $randomCar to świetny wybór! 🛤️",
-    "Twój plan na dziś: rezerwacja, kluczyki, $randomCar i w drogę! 🚦",
-    "$username, czas na nową trasę! $randomCar już gotowy do jazdy! 🚘",
-    "Nie odkładaj marzeń na później, $username – wynajmij $randomCar i jedź! 🎯",
-    "Najlepsze podróże zaczynają się od rezerwacji! Może $randomCar? 📌",
-    "$randomCar mówi, że masz jeszcze czas na rezerwację… ale nie za długo! 🏁",
-    "Masz misję, $username! Wsiadaj do $randomCar i ruszaj na wyprawę! 🎯",
-    "Nie masz planów na weekend? $randomCar ma je za Ciebie! 🚀",
-    "Czyżbyś szukał przygody, $username? $randomCar już pali się do jazdy! 🔥",
-    "Twój dzień zapowiada się ciekawie, jeśli wsiądziesz do $randomCar! 🎉",
-    "$username, za godzinę w mieście jest koncert. $randomCar to Twoja wejściówka! 🎶",
-    "Niespodzianka! Twój $randomCar ma bagażnik pełen optymizmu! 📦😁",
-    "$username, w $randomCar radio puszcza tylko najlepsze kawałki do jazdy! 🎧",
-    "$randomCar mówi, że potrzebuje wakacji. Zawieź go gdzieś! 🌴",
-];
-
-$greeting = $isLoggedIn ? $greetings[array_rand($greetings)] : "Witaj w CarFuse! Wynajmij auto i ruszaj w drogę!";
-?>
-
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carfuse - Wynajem Aut</title>
-    <link rel="stylesheet" href="/public/css/style.css">
-    <script src="/public/js/main.js" defer></script>
-</head>
-<body>
-
-<header>
-    <nav class="navbar">
-        <div class="container">
-            <a href="/" class="logo">🚗 CarFuse</a>
-            <ul class="nav-links">
-                <?php if (!$isLoggedIn): ?>
-                    <li><a href="/auth/login">🔑 Zaloguj się</a></li>
-                    <li><a href="/auth/register">📝 Zarejestruj się</a></li>
-                <?php else: ?>
-                    <li class="greeting"><?= $greeting ?></li>
-                    <?php if ($isAdmin): ?>
-                        <li><a href="/dashboard">⚙️ Panel Admina</a></li>
-                    <?php else: ?>
-                        <li><a href="/dashboard">📊 Panel Użytkownika</a></li>
-                    <?php endif; ?>
-                    <li><a href="/logout">🚪 Wyloguj się</a></li>
-                <?php endif; ?>
-            </ul>
-        </div>
-    </nav>
-</header>
-=== App/Views/layouts/footer.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Footer - Stopka dla Stron Publicznych
-|--------------------------------------------------------------------------
-| Plik zawiera stopkę strony oraz ładuje globalne zasoby JavaScript.
-|
-| Ścieżka: App/Views/layouts/footer.php
-*/
-?>
-
-    </div> <!-- Koniec kontenera -->
-
-    <footer class="footer">
-        <div class="container text-center">
-            <p>&copy; <?= date("Y"); ?> CarFuse. Wszelkie prawa zastrzeżone.</p>
-        </div>
-    </footer>
-</body>
-</html>
-=== App/Views/dashboard.php ===
-<?php
-/*
-|--------------------------------------------------------------------------
-| Dashboard - Centralny Panel dla Użytkownika i Administratora
-|--------------------------------------------------------------------------
-| Ten plik obsługuje zarówno użytkowników, jak i administratorów.
-| Na podstawie roli zmienia dostępne opcje w nawigacji bocznej.
-|
-| Ścieżka: App/Views/dashboard.php
-*/
-require_once __DIR__ . '/../layouts/header.php';
-
-// Sprawdzenie roli użytkownika (przykładowa implementacja)
-$isAdmin = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
-?>
-
-<aside class="sidebar">
-    <nav class="sidebar-menu">
-        <ul>
-            <li><a href="#user/dashboard" class="dashboard-link">📊 Panel</a></li>
-            <li><a href="#bookings/view" class="dashboard-link">📅 Moje rezerwacje</a></li>
-            <li><a href="#payments/history" class="dashboard-link">💳 Historia płatności</a></li>
-            <li><a href="#documents/user_documents" class="dashboard-link">📄 Moje dokumenty</a></li>
-            <li><a href="#user/notifications" class="dashboard-link">🔔 Powiadomienia</a></li>
-            <li><a href="#user/profile" class="dashboard-link">👤 Profil</a></li>
-
-            <?php if ($isAdmin): ?>
-                <li><a href="#admin/users" class="dashboard-link">👥 Zarządzanie użytkownikami</a></li>
-                <li><a href="#admin/audit_logs" class="dashboard-link">📜 Logi audytowe</a></li>
-                <li><a href="#admin/logs" class="dashboard-link">📂 Logi systemowe</a></li>
-                <li><a href="#admin/reports" class="dashboard-link">📑 Raporty</a></li>
-                <li><a href="#admin/settings" class="dashboard-link">⚙️ Ustawienia</a></li>
-                <li><a href="#admin/payments/dashboard" class="dashboard-link">💳 Płatności</a></li>
-                <li><a href="#admin/documents/documents" class="dashboard-link">📄 Dokumenty</a></li>
-            <?php endif; ?>
-
-            <li><a href="/logout">🚪 Wyloguj</a></li>
-        </ul>
-    </nav>
-</aside>
-
-<div id="dashboard-content">
-    <h1 class="text-center">Panel <?= $isAdmin ? 'Administratora' : 'Użytkownika' ?></h1>
-    <div id="dashboard-view">
-        <?php require_once __DIR__ . '/' . ($isAdmin ? 'admin/dashboard-home.php' : 'user/dashboard-home.php'); ?>
-    </div>
-</div>
-
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        document.querySelectorAll(".dashboard-link").forEach(link => {
-            link.addEventListener("click", function(e) {
-                e.preventDefault();
-                let targetView = this.getAttribute("href").substring(1);
-                fetch(`/App/Views/${targetView}.php`).then(response => response.text()).then(data => {
-                    document.getElementById("dashboard-view").innerHTML = data;
-                });
-            });
-        });
-    });
-</script>
-
-<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
-=== App/Views/error.php ===
-/*
-|--------------------------------------------------------------------------
-| Strona Błędów - Obsługa 404, 500 i innych problemów
-|--------------------------------------------------------------------------
-| Strona wyświetla kreatywny komunikat błędu z tłem przedstawiającym
-| autobus komunikacji miejskiej. Obsługuje różne kody błędów.
-|
-| Ścieżka: App/Views/error.php
-*/
-
-<?php
-
-
-// Pobranie kodu błędu, jeśli nie przekazano, ustaw na 404
-$errorCode = isset($_GET['code']) ? intval($_GET['code']) : 404;
-
-// Lista domyślnych komunikatów dla kodów błędów
-$errorMessages = [
-    403 => "Nie masz uprawnień do tej strony. Może jednak lepiej zostać pasażerem?",
-    404 => "Nie udało nam się odnaleźć tej strony. Może została zabrana na pętlę?",
-    500 => "Coś poszło nie tak po naszej stronie. Pracujemy nad tym jak kierowca przy zmianie trasy.",
-    503 => "System chwilowo niedostępny. Autobus wróci do trasy niebawem!",
-];
-
-// Pobranie komunikatu lub ustawienie domyślnego
-$errorMessage = $errorMessages[$errorCode] ?? "Wystąpił nieznany błąd. Może to znak, by zrobić sobie przerwę? ☕";
-?>
-
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zamiast jazdy mamy zjazd</title>
-    <link rel="stylesheet" href="/css/main.min.css">
-    <style>
-        body {
-            background: url('/images/bus-error.jpg') no-repeat center center fixed;
-            background-size: cover;
-            text-align: center;
-            color: white;
-            font-family: Arial, sans-serif;
-        }
-        .error-container {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.7);
-            padding: 30px;
-            border-radius: 10px;
-            max-width: 600px;
-            width: 90%;
-        }
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-        p {
-            font-size: 1.2rem;
-            margin-bottom: 20px;
-        }
-        .error-code {
-            font-size: 1rem;
-            color: #ffcc00;
-        }
-        .btn {
-            display: inline-block;
-            padding: 10px 20px;
-            background: #ffcc00;
-            color: black;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-        .btn:hover {
-            background: #e6b800;
-        }
-    </style>
-</head>
-<body>
-
-<div class="error-container">
-    <h1>Zamiast jazdy mamy zjazd.</h1>
-    <p><?= $errorMessage ?></p>
-    <p class="error-code">Kod błędu: <?= $errorCode ?></p>
-    <a href="/" class="btn">Powrót na stronę główną</a>
-</div>
-
-</body>
-</html>
-=== App/Views/landing.php ===
-<?php
-// Path: App/Views/landing.php
-include __DIR__ . '/../layouts/header.php';
-?>
-
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carfuse - Wynajmij auto szybko i łatwo</title>
-    <link rel="stylesheet" href="/assets/css/style.css">
-    <style>
-        /* Dark Minimal Theme */
-        body {
-            background-color: #121212;
-            color: #fff;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        header {
-            background-color: #181818;
-            text-align: center;
-            padding: 15px 0;
-        }
-        .logo img {
-            max-height: 104px;
-            margin: 15px 0;
-        }
-        nav {
-            display: flex;
-            justify-content: center;
-            padding: 15px 0;
-        }
-        nav a {
-            color: #fff;
-            text-decoration: none;
-            margin: 0 15px;
-            font-size: 18px;
-        }
-        nav a:hover {
-            color: #FFD700;
-        }
-        .hero {
-            text-align: center;
-            padding: 100px 20px;
-            background: url('/assets/images/hero-bg.jpg') no-repeat center center/cover;
-        }
-        .hero h1 {
-            font-size: 48px;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
-        }
-        .hero p {
-            font-size: 20px;
-            opacity: 0.8;
-            margin-bottom: 30px;
-        }
-        .search-form {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-        }
-        .search-form input, .search-form button {
-            padding: 12px;
-            font-size: 16px;
-            border-radius: 5px;
-            border: none;
-        }
-        .search-form button {
-            background: #FFD700;
-            color: #121212;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .search-form button:hover {
-            background: #FFC107;
-        }
-        .features {
-            text-align: center;
-            padding: 60px 20px;
-        }
-        .features h2 {
-            font-size: 36px;
-            margin-bottom: 20px;
-        }
-        .feature-list {
-            display: flex;
-            justify-content: center;
-            gap: 50px;
-        }
-        .feature {
-            font-size: 18px;
-            background: #181818;
-            padding: 20px;
-            border-radius: 5px;
-        }
-        .footer {
-            text-align: center;
-            padding: 20px;
-            background: #181818;
-            opacity: 0.8;
-        }
-    </style>
-</head>
-<body>
-
-<?php include __DIR__ . '/layouts/header.php'; ?>
-
-<section class="hero">
-    <h1>Znajdź idealne auto na swoją podróż</h1>
-    <p>Elastyczny wynajem, najlepsze ceny i wsparcie 24/7.</p>
-    <form class="search-form" action="/search" method="GET">
-        <input type="text" name="location" placeholder="Wpisz lokalizację odbioru">
-        <input type="date" name="pickup_date">
-        <input type="date" name="return_date">
-        <button type="submit">Szukaj aut</button>
-    </form>
-</section>
-
-<section class="features">
-    <h2>Dlaczego warto wybrać Carfuse?</h2>
-    <div class="feature-list">
-        <div class="feature">✔ Gwarancja najlepszych cen</div>
-        <div class="feature">✔ Wsparcie klienta 24/7</div>
-        <div class="feature">✔ Elastyczne warunki wynajmu</div>
-    </div>
-</section>
-
-<?php include __DIR__ . '/layouts/footer.php'; ?>
-
-</body>
-</html>
 === App/Models/Booking.php ===
 <?php
 
@@ -3339,22 +3003,33 @@ class UserService
      */
     public function updateUser(int $id, array $data): array
     {
-        $allowedFields = ['name', 'phone', 'address'];
+        // Allowed update fields including password
+        $allowedFields = ['name', 'phone', 'address', 'password'];
         $updates = array_intersect_key($data, array_flip($allowedFields));
 
+        // Input validation: ensure there's at least one field to update
         if (empty($updates)) {
             return ['status' => 'error', 'message' => 'No valid fields to update'];
         }
 
-        try {
-            $sql = "UPDATE users SET " . implode(', ', array_map(fn($k) => "$k = :$k", array_keys($updates))) . " WHERE id = :id";
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([...$updates, 'id' => $id]);
+        // Process password: hash if provided and non-empty, otherwise remove it
+        if (isset($updates['password'])) {
+            if (!empty($updates['password'])) {
+                $updates['password'] = password_hash($updates['password'], PASSWORD_BCRYPT);
+            } else {
+                unset($updates['password']);
+            }
+        }
 
+        // Use UserModel for DB update
+        $userModel = new \App\Models\UserModel($this->db);
+        $result = $userModel->update($id, $updates);
+
+        if ($result) {
             $this->logAction($id, 'user_updated', $updates);
             return ['status' => 'success', 'message' => 'User updated successfully'];
-        } catch (PDOException $e) {
-            $this->logger->error('User update failed', ['error' => $e->getMessage()]);
+        } else {
+            $this->logger->error('User update failed');
             return ['status' => 'error', 'message' => 'User update failed'];
         }
     }
@@ -3798,6 +3473,22 @@ class TokenService
         }
     }
 
+    // New method: validateToken() to reject expired tokens and log failures
+    public function validateToken(string $token): ?array
+    {
+        try {
+            $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
+            if ($decoded->exp < time()) {
+                \logAuthFailure("Expired token for user id: " . ($decoded->sub ?? 'unknown'));
+                return null;
+            }
+            return (array)$decoded;
+        } catch (\Exception $e) {
+            \logAuthFailure("Token validation failed: " . $e->getMessage());
+            return null;
+        }
+    }
+
     public function generateRefreshToken($user): string
     {
         $payload = [
@@ -3825,11 +3516,71 @@ class TokenService
         return null;
     }
 
+    // New method: refreshToken() to securely generate a new access token using a valid refresh token
+    public function refreshToken(string $refreshToken): ?string
+    {
+        try {
+            $decoded = JWT::decode($refreshToken, new Key($this->refreshSecretKey, 'HS256'));
+            if ($decoded->exp < time()) {
+                \logAuthFailure("Expired refresh token for user id: " . ($decoded->sub ?? 'unknown'));
+                return null;
+            }
+            if (\Illuminate\Support\Facades\Cache::has("revoked_refresh_token_$refreshToken")) {
+                \logAuthFailure("Revoked refresh token attempted for user id: " . ($decoded->sub ?? 'unknown'));
+                return null;
+            }
+            return $this->generateToken((object)['id' => $decoded->sub]);
+        } catch (\Exception $e) {
+            \logAuthFailure("Refresh token validation failed: " . $e->getMessage());
+            return null;
+        }
+    }
+
     public function revokeToken(string $token): void
     {
         Cache::put("revoked_refresh_token_$token", true, 604800);
     }
 }
+=== App/Services/Auth/AuthService.php ===
+<?php
+// ...existing code...
+use App\Models\UserModel; // New dependency for database queries
+
+class AuthService {
+
+    // ...existing properties and methods...
+
+    public function login($email, $password) {
+        // Use UserModel to fetch the user instead of raw SQL
+        $user = UserModel::findUserByEmail($email);
+        if (!$user || !password_verify($password, $user->password_hash)) {
+            logAuthFailure("Failed login attempt for email: " . $email);
+            // ...existing error handling...
+            throw new \Exception("Invalid credentials");
+        }
+        // ...existing login logic (e.g., token generation)...
+        return [
+            'user' => $user,
+            'token' => $this->generateToken($user)
+        ];
+    }
+
+    public function registerUser(array $data) {
+        // Ensure the password is hashed with bcrypt
+        $data['password_hash'] = password_hash($data['password'], PASSWORD_BCRYPT);
+        unset($data['password']);
+        
+        // Use UserModel to create the new user
+        $newUser = UserModel::createUser($data);
+        if (!$newUser) {
+            throw new \Exception("User registration failed");
+        }
+        return $newUser;
+    }
+
+    // ...existing code...
+}
+?>
 === App/Services/NotificationService.php ===
 <?php
 
@@ -4558,21 +4309,35 @@ class PaymentService
         $this->payuApiSecret = $payuApiSecret;
     }
 
-    public function processPayment(int $bookingId, float $amount, string $paymentMethod): bool
+    public function processPayment($user, array $paymentData)
     {
+        // Verify user authentication
+        if (empty($user) || empty($user['authenticated']) || !$user['authenticated']) {
+            $this->logger->error('Unauthenticated payment attempt', ['user' => $user]);
+            return ['status' => 'error', 'message' => 'User not authenticated'];
+        }
+
+        // Role-based access control for admin-only transactions
+        if (!empty($paymentData['adminOnly']) && $paymentData['adminOnly'] === true) {
+            if ($user['role'] !== 'admin') {
+                $this->logger->error('Unauthorized admin transaction', ['user' => $user]);
+                return ['status' => 'error', 'message' => 'Admin privileges required'];
+            }
+        }
+
         try {
-            $this->paymentModel->createPayment($bookingId, $amount, $paymentMethod);
+            $this->paymentModel->createPayment($paymentData['bookingId'], $paymentData['amount'], $paymentData['paymentMethod']);
 
             $booking = new Booking($this->db);
-            $booking->updateStatus($bookingId, 'paid');
+            $booking->updateStatus($paymentData['bookingId'], 'paid');
 
-            $this->logTransaction($bookingId, $amount, 'payment');
+            $this->logTransaction($paymentData['bookingId'], $paymentData['amount'], 'payment');
 
-            $this->logger->info("Payment processed for booking $bookingId");
-            return true;
+            $this->logger->info("Payment processed for booking {$paymentData['bookingId']}");
+            return ['status' => 'success', 'message' => 'Payment processed successfully'];
         } catch (\Exception $e) {
-            $this->logger->error('Payment processing failed', ['error' => $e->getMessage()]);
-            return false;
+            $this->logger->error('Payment processing failed', ['error' => $e->getMessage(), 'user' => $user]);
+            return ['status' => 'error', 'message' => 'Payment processing failed'];
         }
     }
 
@@ -4879,6 +4644,8 @@ require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
 class AuthMiddleware
 {
     protected TokenService $tokenService;
+    private int $maxAttempts = 5;
+    private int $blockDuration = 300; // 5 minutes
 
     public function __construct()
     {
@@ -4899,34 +4666,89 @@ class AuthMiddleware
         );
     }
 
+    // New private method for rate limiting
+    private function checkRateLimit(string $ip): bool
+    {
+        if (!isset($_SESSION['failed_attempts'])) {
+            $_SESSION['failed_attempts'] = [];
+        }
+        if (!isset($_SESSION['failed_attempts'][$ip])) {
+            $_SESSION['failed_attempts'][$ip] = ['count' => 0, 'start' => time()];
+        }
+        $attempt = $_SESSION['failed_attempts'][$ip];
+        // Reset count if block duration has passed
+        if (time() - $attempt['start'] > $this->blockDuration) {
+            $_SESSION['failed_attempts'][$ip] = ['count' => 0, 'start' => time()];
+            return true;
+        }
+        return $attempt['count'] < $this->maxAttempts;
+    }
+
+    // New private method to record a failed attempt
+    private function recordFailedAttempt(string $ip): void
+    {
+        if (!isset($_SESSION['failed_attempts'])) {
+            $_SESSION['failed_attempts'] = [];
+        }
+        if (!isset($_SESSION['failed_attempts'][$ip])) {
+            $_SESSION['failed_attempts'][$ip] = ['count' => 0, 'start' => time()];
+        }
+        $_SESSION['failed_attempts'][$ip]['count']++;
+        $_SESSION['failed_attempts'][$ip]['start'] = time();
+    }
+
     public function handle($request, $next)
     {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        // Enforce rate limiting for failed attempts
+        if (!$this->checkRateLimit($ip)) {
+            http_response_code(429);
+            echo json_encode(['error' => 'Too many failed login attempts. Please try again later.']);
+            exit;
+        }
+
         $publicRoutes = ['/public', '/api/public']; // Define public routes
 
         if (in_array($request->getPathInfo(), $publicRoutes)) {
             return $next($request); // Allow guest access for public routes
         }
 
-        if (!validateSessionIntegrity()) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Session expired']);
-            $this->logAuthAttempt('failure', 'Session expired');
-            return;
-        }
-
+        // Enforce global JWT authentication for API requests
+        // (Assuming all API requests have Authorization header)
         $authHeader = $request->getHeader('Authorization');
         if (!$authHeader) {
             http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized']);
-            $this->logAuthAttempt('failure', 'Missing Authorization header');
+            echo json_encode(['error' => 'Unauthorized: Missing Authorization header']);
+            $this->recordFailedAttempt($ip);
             return;
         }
 
         $token = str_replace('Bearer ', '', $authHeader);
-        if (!$this->tokenService->validateToken($token)) {
+        $tokenData = $this->tokenService->validateToken($token);
+        if (!$tokenData) {
             http_response_code(401);
-            echo json_encode(['error' => 'Invalid token']);
-            $this->logAuthAttempt('failure', 'Invalid token');
+            echo json_encode(['error' => 'Unauthorized: Invalid token']);
+            $this->recordFailedAttempt($ip);
+            return;
+        }
+
+        // Enforce admin-only routes for paths beginning with '/admin'
+        if (strpos($request->getPathInfo(), '/admin') === 0) {
+            // Assume the token or session holds a 'role' claim
+            $role = $tokenData['role'] ?? ($_SESSION['user_role'] ?? 'user');
+            if ($role !== 'admin') {
+                http_response_code(403);
+                echo json_encode(['error' => 'Forbidden: Admins only']);
+                $this->recordFailedAttempt($ip);
+                return;
+            }
+        }
+
+        // Optional: Validate session integrity for web requests
+        if (!validateSessionIntegrity()) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Session expired']);
+            $this->recordFailedAttempt($ip);
             return;
         }
 
@@ -4981,6 +4803,7 @@ const SESSION_CONFIG = [
 function securityLog($message, $level = 'info') {
     $logFile = __DIR__ . '/../../logs/security.log';
     $timestamp = date('Y-m-d H:i:s');
+    $userId = $_SESSION['user_id'] ?? 'guest';
     
     // Sanitize sensitive data
     $patterns = [
@@ -4991,17 +4814,74 @@ function securityLog($message, $level = 'info') {
     $message = preg_replace($patterns, '[REDACTED]', $message);
     $sanitizedMessage = str_replace(["\n", "\r"], '', $message);
     
-    error_log("[$timestamp][$level] $sanitizedMessage\n", 3, $logFile);
+    error_log("[$timestamp][$level][user_id: $userId] $sanitizedMessage\n", 3, $logFile);
 }
 
+/**
+ * Log security events consistently.
+ */
+function logSecurityEvent($message, $level = 'info') {
+    $logFile = __DIR__ . '/../../logs/security.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $userId = $_SESSION['user_id'] ?? 'guest';
+
+    // Sanitize sensitive data
+    $patterns = [
+        '/user_id[\s]?[=:][\s]?["\']?\w+["\']?/i',
+        '/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/',
+        '/Mozilla\/[^\s]+/'
+    ];
+    $message = preg_replace($patterns, '[REDACTED]', $message);
+    $sanitizedMessage = str_replace(["\n", "\r"], '', $message);
+
+    error_log("[$timestamp][$level][user_id: $userId] $sanitizedMessage\n", 3, $logFile);
+}
+
+/**
+ * Log authentication events.
+ */
+function logAuthEvent($message, $level = 'info') {
+    // Changed to security.log
+    $logFile = __DIR__ . '/../../logs/security.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $userId = $_SESSION['user_id'] ?? 'guest';
+
+    error_log("[$timestamp][$level][user_id: $userId] $message\n", 3, $logFile);
+}
+
+// Helper to log authentication failures to auth.log
+function logAuthFailure($message) {
+    $logFile = __DIR__ . '/../../logs/auth.log';
+    $timestamp = date('Y-m-d H:i:s');
+    error_log("[$timestamp][auth_failure] $message\n", 3, $logFile);
+}
+
+// Improved startSecureSession to support API requests via JWT
 function startSecureSession() {
-    // Avoid duplicate initializations
+    // If API request and JWT provided, attempt JWT validation and setup session
+    if (defined('API_ENTRY')) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            $token = $matches[1];
+            $decoded = validateJWT($token);
+            if ($decoded !== false) {
+                if (session_status() !== PHP_SESSION_ACTIVE) {
+                    session_start();
+                }
+                $_SESSION['api_authenticated'] = true;
+                $_SESSION['user_id'] = $decoded->sub ?? 'api_user';
+                // Optionally store more token data in session
+            }
+        }
+    }
+
+    // Proceed with standard session initialization if not active
     if (session_status() === PHP_SESSION_ACTIVE) {
         return true;
     }
 
     if (headers_sent()) {
-        securityLog('Headers already sent, cannot modify session settings', 'warning');
+        logSecurityEvent('Headers already sent, cannot modify session settings', 'warning');
     } else {
         foreach (SESSION_CONFIG as $key => $value) {
             @ini_set("session.$key", $value);
@@ -5030,7 +4910,7 @@ function startSecureSession() {
             $_SESSION['user_agent'] = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
             $_SESSION['last_activity'] = time();
             $_SESSION['guest'] = true; // Default guest initialization
-            securityLog('New guest session initiated');
+            logSecurityEvent('New guest session initiated');
         }
 
         // CSRF protection
@@ -5040,46 +4920,76 @@ function startSecureSession() {
 
         return validateSessionIntegrity();
     } catch (Exception $e) {
-        securityLog('Session initialization failed: ' . $e->getMessage(), 'critical');
+        logSecurityEvent('Session initialization failed: ' . $e->getMessage(), 'critical');
         return false;
     }
 }
 
+// ...existing code...
+
+/**
+ * Refresh session to extend its duration.
+ */
+function refreshSession() {
+    // Changed to security.log
+    $logFile = __DIR__ . '/../../logs/security.log';
+    $timestamp = date('Y-m-d H:i:s');
+
+    try {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['last_activity'] = time();
+            session_regenerate_id(true);
+            error_log("[$timestamp][info] Session refreshed\n", 3, $logFile);
+        }
+    } catch (Exception $e) {
+        error_log("[$timestamp][error] Session refresh failed: " . $e->getMessage() . "\n", 3, $logFile);
+    }
+}
+
+// ...existing code...
+
+// Add session timeout definition
+if (!defined('SESSION_TIMEOUT')) {
+    define('SESSION_TIMEOUT', 1800); // 30 minutes
+}
+
+// Modify validateSessionIntegrity() to use SESSION_TIMEOUT
 function validateSessionIntegrity() {
     if (!isset($_SESSION['initiated'])) {
-        securityLog('Session integrity check failed: not initiated', 'warning');
+        logSecurityEvent('Session integrity check failed: not initiated', 'warning');
         return false;
     }
 
     $currentIp = hash('sha256', $_SERVER['REMOTE_ADDR']);
     $currentAgent = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
     
-    // Flexible validation for guest sessions
     if (isset($_SESSION['user_id'])) {
-        // Strict validation for authenticated users
-        if ($_SESSION['client_ip'] !== $currentIp || 
-            $_SESSION['user_agent'] !== $currentAgent) {
-            securityLog('Session integrity check failed: authenticated user mismatch', 'warning');
+        if ($_SESSION['client_ip'] !== $currentIp || $_SESSION['user_agent'] !== $currentAgent) {
+            logSecurityEvent('Session integrity check failed: authenticated user mismatch', 'warning');
             destroySession();
             return false;
         }
     } else {
-        // Update fingerprint for guest sessions
         $_SESSION['client_ip'] = $currentIp;
         $_SESSION['user_agent'] = $currentAgent;
         $_SESSION['guest'] = true;
     }
 
-    // Check for session timeout (30 minutes)
-    if (time() - $_SESSION['last_activity'] > 1800) {
-        securityLog('Session expired due to inactivity', 'info');
+    if (time() - $_SESSION['last_activity'] > SESSION_TIMEOUT) {
+        logSecurityEvent('Session expired due to inactivity', 'info');
         destroySession();
         return false;
+    }
+
+    if (time() - $_SESSION['last_activity'] > (SESSION_TIMEOUT - 300)) { // refresh if within 5 minutes of expiry
+        refreshSession();
     }
 
     $_SESSION['last_activity'] = time();
     return true;
 }
+
+// ...existing code...
 
 function generateCsrfToken() {
     try {
@@ -5093,7 +5003,7 @@ function generateCsrfToken() {
         }
         return $_SESSION['csrf_token'];
     } catch (Exception $e) {
-        securityLog('CSRF token generation failed: ' . $e->getMessage(), 'error');
+        logSecurityEvent('CSRF token generation failed: ' . $e->getMessage(), 'error');
         // Fallback to a less secure but functional token
         return hash('sha256', uniqid(mt_rand(), true));
     }
@@ -5104,7 +5014,11 @@ function generateCsrfToken() {
  */
 function validateCsrfToken($token)
 {
-    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+    if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+        logSecurityEvent('CSRF validation failed for token: ' . ($token ?? 'null'), 'warning');
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -5139,7 +5053,7 @@ function destroySession() {
 
     try {
         $wasGuest = $_SESSION['guest'] ?? false;
-        securityLog('Initiating session destruction: ' . ($wasGuest ? 'guest' : 'user') . ' session');
+        logSecurityEvent('Initiating session destruction: ' . ($wasGuest ? 'guest' : 'user') . ' session');
         
         // Clear session data
         $_SESSION = [];
@@ -5161,10 +5075,10 @@ function destroySession() {
             throw new Exception('Session destruction failed');
         }
         
-        securityLog('Session destroyed successfully');
+        logSecurityEvent('Session destroyed successfully');
         return true;
     } catch (Exception $e) {
-        securityLog('Session destruction error: ' . $e->getMessage(), 'error');
+        logSecurityEvent('Session destruction error: ' . $e->getMessage(), 'error');
         return false;
     }
 }
@@ -5204,9 +5118,95 @@ function setSessionData($key, $value)
     $_SESSION[$key] = $value;
 }
 
+/**
+ * Validate JWT token.
+ */
+function validateJWT($token) {
+    // Changed to use security.log for logging all security events.
+    $logFile = __DIR__ . '/../../logs/security.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $userId = $_SESSION['user_id'] ?? 'guest';
+
+    try {
+        // Decode the token (assuming using Firebase JWT library)
+        $decoded = \Firebase\JWT\JWT::decode($token, new \Firebase\JWT\Key('your-secret-key', 'HS256'));
+
+        // Check if the token is expired
+        if ($decoded->exp < time()) {
+            logSecurityEvent("JWT expired for token: $token", 'warning');
+            return false;
+        }
+
+        return $decoded;
+    } catch (Exception $e) {
+        logSecurityEvent("JWT validation failed: " . $e->getMessage(), 'error');
+        return false;
+    }
+} // <-- Added missing closing brace
+
+/**
+ * Enforce authentication for protected pages.
+ */
+function requireUserAuth() {
+    requireAuth();
+}
+
+// New function to enforce global JWT validation
+function validateToken($token) {
+    return validateJWT($token);
+}
+
+// Modify requireAuth() to enforce CSRF token on API POST requests
+function requireAuth($allowGuest = false) {
+    $apiRequest = defined('API_ENTRY');
+    $authValid = false;
+
+    if ($apiRequest) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            $token = $matches[1];
+            if (validateToken($token) !== false) {
+                $authValid = true;
+            }
+        }
+        // Enforce CSRF validation on API POST requests
+        if ($apiRequest && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? '');
+            if (!validateCsrfToken($csrf)) {
+                logAuthFailure('API CSRF validation failed for request to ' . ($_SERVER['REQUEST_URI'] ?? 'unknown'));
+                header('Content-Type: application/json');
+                header('HTTP/1.1 403 Forbidden');
+                echo json_encode(['error' => 'CSRF token invalid']);
+                exit();
+            }
+        }
+    }
+    
+    if (!$authValid && isUserLoggedIn()) {
+        $authValid = true;
+    }
+    
+    if (!$authValid && $allowGuest) {
+        $authValid = true;
+    }
+    
+    if (!$authValid) {
+        $message = 'Unauthorized access attempt to ' . ($_SERVER['REQUEST_URI'] ?? 'unknown');
+        logAuthFailure($message);
+        if ($apiRequest) {
+            header('Content-Type: application/json');
+            header('HTTP/1.1 401 Unauthorized');
+            echo json_encode(['error' => 'Unauthorized']);
+        } else {
+            header('Location: /auth/login.php');
+        }
+        exit();
+    }
+}
+
 // Initialize secure session when the file is included
 if (!startSecureSession()) {
-    securityLog('Critical: Failed to initialize secure session', 'critical');
+    logSecurityEvent('Critical: Failed to initialize secure session', 'critical');
 }
 ?>
 === App/Helpers/dateHelper.php ===

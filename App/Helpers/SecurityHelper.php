@@ -63,15 +63,41 @@ function logSecurityEvent($message, $level = 'info') {
  * Log authentication events.
  */
 function logAuthEvent($message, $level = 'info') {
-    $logFile = __DIR__ . '/../../logs/auth.log';
+    // Changed to security.log
+    $logFile = __DIR__ . '/../../logs/security.log';
     $timestamp = date('Y-m-d H:i:s');
     $userId = $_SESSION['user_id'] ?? 'guest';
 
     error_log("[$timestamp][$level][user_id: $userId] $message\n", 3, $logFile);
 }
 
+// Helper to log authentication failures to auth.log
+function logAuthFailure($message) {
+    $logFile = __DIR__ . '/../../logs/auth.log';
+    $timestamp = date('Y-m-d H:i:s');
+    error_log("[$timestamp][auth_failure] $message\n", 3, $logFile);
+}
+
+// Improved startSecureSession to support API requests via JWT
 function startSecureSession() {
-    // Avoid duplicate initializations
+    // If API request and JWT provided, attempt JWT validation and setup session
+    if (defined('API_ENTRY')) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            $token = $matches[1];
+            $decoded = validateJWT($token);
+            if ($decoded !== false) {
+                if (session_status() !== PHP_SESSION_ACTIVE) {
+                    session_start();
+                }
+                $_SESSION['api_authenticated'] = true;
+                $_SESSION['user_id'] = $decoded->sub ?? 'api_user';
+                // Optionally store more token data in session
+            }
+        }
+    }
+
+    // Proceed with standard session initialization if not active
     if (session_status() === PHP_SESSION_ACTIVE) {
         return true;
     }
@@ -127,7 +153,8 @@ function startSecureSession() {
  * Refresh session to extend its duration.
  */
 function refreshSession() {
-    $logFile = __DIR__ . '/../../logs/session.log';
+    // Changed to security.log
+    $logFile = __DIR__ . '/../../logs/security.log';
     $timestamp = date('Y-m-d H:i:s');
 
     try {
@@ -143,6 +170,12 @@ function refreshSession() {
 
 // ...existing code...
 
+// Add session timeout definition
+if (!defined('SESSION_TIMEOUT')) {
+    define('SESSION_TIMEOUT', 1800); // 30 minutes
+}
+
+// Modify validateSessionIntegrity() to use SESSION_TIMEOUT
 function validateSessionIntegrity() {
     if (!isset($_SESSION['initiated'])) {
         logSecurityEvent('Session integrity check failed: not initiated', 'warning');
@@ -152,31 +185,25 @@ function validateSessionIntegrity() {
     $currentIp = hash('sha256', $_SERVER['REMOTE_ADDR']);
     $currentAgent = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
     
-    // Flexible validation for guest sessions
     if (isset($_SESSION['user_id'])) {
-        // Strict validation for authenticated users
-        if ($_SESSION['client_ip'] !== $currentIp || 
-            $_SESSION['user_agent'] !== $currentAgent) {
+        if ($_SESSION['client_ip'] !== $currentIp || $_SESSION['user_agent'] !== $currentAgent) {
             logSecurityEvent('Session integrity check failed: authenticated user mismatch', 'warning');
             destroySession();
             return false;
         }
     } else {
-        // Update fingerprint for guest sessions
         $_SESSION['client_ip'] = $currentIp;
         $_SESSION['user_agent'] = $currentAgent;
         $_SESSION['guest'] = true;
     }
 
-    // Check for session timeout (30 minutes)
-    if (time() - $_SESSION['last_activity'] > 1800) {
+    if (time() - $_SESSION['last_activity'] > SESSION_TIMEOUT) {
         logSecurityEvent('Session expired due to inactivity', 'info');
         destroySession();
         return false;
     }
 
-    // Refresh session if about to expire (within 5 minutes)
-    if (time() - $_SESSION['last_activity'] > 1500) {
+    if (time() - $_SESSION['last_activity'] > (SESSION_TIMEOUT - 300)) { // refresh if within 5 minutes of expiry
         refreshSession();
     }
 
@@ -209,7 +236,11 @@ function generateCsrfToken() {
  */
 function validateCsrfToken($token)
 {
-    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+    if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+        logSecurityEvent('CSRF validation failed for token: ' . ($token ?? 'null'), 'warning');
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -313,7 +344,8 @@ function setSessionData($key, $value)
  * Validate JWT token.
  */
 function validateJWT($token) {
-    $logFile = __DIR__ . '/../../logs/auth.log';
+    // Changed to use security.log for logging all security events.
+    $logFile = __DIR__ . '/../../logs/security.log';
     $timestamp = date('Y-m-d H:i:s');
     $userId = $_SESSION['user_id'] ?? 'guest';
 
@@ -323,24 +355,73 @@ function validateJWT($token) {
 
         // Check if the token is expired
         if ($decoded->exp < time()) {
-            error_log("[$timestamp][warning][user_id: $userId] JWT expired: $token\n", 3, $logFile);
+            logSecurityEvent("JWT expired for token: $token", 'warning');
             return false;
         }
 
         return $decoded;
     } catch (Exception $e) {
-        error_log("[$timestamp][error][user_id: $userId] JWT validation failed: " . $e->getMessage() . "\n", 3, $logFile);
+        logSecurityEvent("JWT validation failed: " . $e->getMessage(), 'error');
         return false;
     }
-}
+} // <-- Added missing closing brace
 
 /**
  * Enforce authentication for protected pages.
  */
 function requireUserAuth() {
-    if (!isUserLoggedIn()) {
-        logSecurityEvent('Unauthorized access attempt to ' . $_SERVER['REQUEST_URI'], 'warning');
-        header('Location: /auth/login.php');
+    requireAuth();
+}
+
+// New function to enforce global JWT validation
+function validateToken($token) {
+    return validateJWT($token);
+}
+
+// Modify requireAuth() to enforce CSRF token on API POST requests
+function requireAuth($allowGuest = false) {
+    $apiRequest = defined('API_ENTRY');
+    $authValid = false;
+
+    if ($apiRequest) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            $token = $matches[1];
+            if (validateToken($token) !== false) {
+                $authValid = true;
+            }
+        }
+        // Enforce CSRF validation on API POST requests
+        if ($apiRequest && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? '');
+            if (!validateCsrfToken($csrf)) {
+                logAuthFailure('API CSRF validation failed for request to ' . ($_SERVER['REQUEST_URI'] ?? 'unknown'));
+                header('Content-Type: application/json');
+                header('HTTP/1.1 403 Forbidden');
+                echo json_encode(['error' => 'CSRF token invalid']);
+                exit();
+            }
+        }
+    }
+    
+    if (!$authValid && isUserLoggedIn()) {
+        $authValid = true;
+    }
+    
+    if (!$authValid && $allowGuest) {
+        $authValid = true;
+    }
+    
+    if (!$authValid) {
+        $message = 'Unauthorized access attempt to ' . ($_SERVER['REQUEST_URI'] ?? 'unknown');
+        logAuthFailure($message);
+        if ($apiRequest) {
+            header('Content-Type: application/json');
+            header('HTTP/1.1 401 Unauthorized');
+            echo json_encode(['error' => 'Unauthorized']);
+        } else {
+            header('Location: /auth/login.php');
+        }
         exit();
     }
 }

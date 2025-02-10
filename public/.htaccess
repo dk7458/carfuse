@@ -1,21 +1,18 @@
 RewriteEngine On
 
-# ✅ Allow direct access to API files
-RewriteCond %{REQUEST_URI} ^/api/.*\.php$
+# Block direct execution of API PHP files and route all API requests via api.php
+RewriteRule ^api/(.*)$ api.php?route=$1 [QSA,L]
+
+# Route specific endpoints to views
+RewriteRule ^(dashboard|auth/login|profile)$ views/$1.php [L]
+
+# Prevent access to backend directories
+RewriteRule ^(App/Controllers|App/Services) - [F,L]
+
+# Allow direct access to static files and views
+RewriteCond %{REQUEST_URI} ^/(css|js|images|views)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
-RewriteRule ^ - [L]
+RewriteRule ^(css|js|images|views)/(.*)$ /public/$1/$2 [L]
 
-# ✅ Allow direct access to static files (CSS, JS, images)
-RewriteCond %{REQUEST_URI} ^/(css|js|images|api)/(.*)$
-RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
-RewriteRule ^(css|js|images|api)/(.*)$ /public/$1/$2 [L]
-
-# ✅ Protect backend files while allowing frontend access to specific backend components
-RewriteCond %{REQUEST_URI} ^/App/(.*)$
-RewriteCond %{REQUEST_URI} !^/App/Services/PublicAccess/
-RewriteRule ^ - [F,L]
-
-# ✅ Forward all non-API, non-static requests to FastRoute in index.php
-RewriteCond %{REQUEST_URI} !^/api/.*$
-RewriteCond %{REQUEST_URI} !^/(css|js|images|public)/.*$
+# Forward all remaining requests to FastRoute in index.php
 RewriteRule ^ index.php [QSA,L]

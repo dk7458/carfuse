@@ -1,35 +1,20 @@
 RewriteEngine On
 
-# ✅ Automatically map requests to `/public/` without requiring `/public/` in the URL
+# Automatically map requests to /public/ if they exist there
 RewriteCond %{REQUEST_URI} !^/public/
 RewriteCond %{DOCUMENT_ROOT}/public/%{REQUEST_URI} -f
 RewriteRule ^(.*)$ public/$1 [L]
 
-# ✅ Allow direct access to API files
-RewriteCond %{REQUEST_URI} ^/api/.*\.php$
+# Route API requests to public/api.php
+RewriteRule ^api/(.*)$ public/api.php?route=$1 [QSA,L]
+
+# Prevent direct access to backend directories
+RewriteRule ^(App/Controllers|App/Services) - [F,L]
+
+# Allow direct access to static files and views in public
+RewriteCond %{REQUEST_URI} ^/(css|js|images|views)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
-RewriteRule ^ - [L]
+RewriteRule ^(css|js|images|views)/(.*)$ /public/$1/$2 [L]
 
-# ✅ Allow direct access to static files (CSS, JS, images)
-RewriteCond %{REQUEST_URI} ^/(css|js|images|api)/(.*)$
-RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
-RewriteRule ^(css|js|images|api)/(.*)$ /public/$1/$2 [L]
-
-# ✅ Prevent direct access to backend files, except allowed frontend-accessible services
-RewriteCond %{REQUEST_URI} ^/App/(.*)$
-RewriteCond %{REQUEST_URI} !^/App/Services/PublicAccess/
-RewriteRule ^ - [F,L]
-
-# ✅ Ensure `/dashboard`, `/profile`, `/auth/login` load without `/views/`
-RewriteCond %{REQUEST_URI} ^/(dashboard|profile|auth/login|auth/register)$
-RewriteRule ^(.*)$ /views/$1.php [L]
-
-# ✅ Allow access to `/views/` directory for dynamic routing
-RewriteCond %{REQUEST_URI} ^/views/(.*)$
-RewriteCond %{DOCUMENT_ROOT}/public/views/%1 -f
-RewriteRule ^views/(.*)$ /public/views/$1 [L]
-
-# ✅ Forward all other requests to `/public/index.php` for FastRoute
-RewriteCond %{REQUEST_URI} !^/api/.*$
-RewriteCond %{REQUEST_URI} !^/(css|js|images|public)/.*$
+# Forward remaining requests to public/index.php for FastRoute
 RewriteRule ^ public/index.php [QSA,L]

@@ -10,13 +10,16 @@ $logger = $bootstrap['logger'];
 // ✅ Start Secure Session
 startSecureSession();
 
-// ✅ Get Requested URI
+// ✅ Get Requested URI & Log Request
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $logger->info("Requested URI: $requestUri");
 
+// ✅ Ensure URL is properly formatted (prevent double slashes)
+$requestUri = trim($requestUri, '/');
+
 // ✅ API REQUEST HANDLING
-if (strpos($requestUri, '/api/') === 0) {
-    $apiPath = $_SERVER['DOCUMENT_ROOT'] . $requestUri . '.php';
+if (strpos($requestUri, 'api/') === 0) {
+    $apiPath = __DIR__ . "/$requestUri.php"; // Adjust for correct path resolution
 
     if (file_exists($apiPath)) {
         $logger->info("API Request Served: $requestUri");
@@ -32,11 +35,11 @@ if (strpos($requestUri, '/api/') === 0) {
 
 // ✅ FastRoute Dispatching for Views
 $dispatcher = require __DIR__ . '/../config/routes.php';
-$routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], $requestUri);
+$routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], "/$requestUri");
 
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::FOUND:
-        // ✅ Handle Views in Subfolders
+        // ✅ Ensure views from subfolders load correctly
         $viewPath = __DIR__ . "/views/" . $routeInfo[1];
 
         if (file_exists($viewPath)) {

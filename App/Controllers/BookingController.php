@@ -9,6 +9,7 @@ use AuditManager\Services\AuditService;
 use App\Services\NotificationService;
 use Psr\Log\LoggerInterface;
 use App\Middleware\AuthMiddleware;
+use Exception;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -48,6 +49,7 @@ class BookingController
      */
     public function viewBooking(int $id)
     {
+        header('Content-Type: application/json');
         try {
             AuthMiddleware::validateSession();
             $booking = $this->bookingService->getBookingById($id);
@@ -57,7 +59,10 @@ class BookingController
                 throw new \Exception("Booking not found.");
             }
 
-            view('bookings/view', ['booking' => $booking, 'logs' => $logs]);
+            echo json_encode([
+                'status' => 'success',
+                'data' => ['booking' => $booking, 'logs' => $logs]
+            ]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to fetch booking details', ['error' => $e->getMessage()]);
             http_response_code(404);
@@ -172,19 +177,24 @@ class BookingController
      */
     public function createBooking(array $data): array
     {
-        AuthMiddleware::validateSession();
-        $rules = [
-            'user_id' => 'required|integer',
-            'vehicle_id' => 'required|integer',
-            'pickup_date' => 'required|date|after_or_equal:today',
-            'dropoff_date' => 'required|date|after:pickup_date',
-        ];
-
-        if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
-        }
-
+        header('Content-Type: application/json');
         try {
+            AuthMiddleware::validateSession();
+            $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? '');
+            if (!validateCsrfToken($csrf)) {
+                throw new Exception("Invalid CSRF token");
+            }
+            $rules = [
+                'user_id' => 'required|integer',
+                'vehicle_id' => 'required|integer',
+                'pickup_date' => 'required|date|after_or_equal:today',
+                'dropoff_date' => 'required|date|after:pickup_date',
+            ];
+
+            if (!$this->validator->validate($data, $rules)) {
+                return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            }
+
             if (!$this->bookingService->isVehicleAvailable($data['vehicle_id'], $data['pickup_date'], $data['dropoff_date'])) {
                 return ['status' => 'error', 'message' => 'Vehicle is not available for the selected dates'];
             }

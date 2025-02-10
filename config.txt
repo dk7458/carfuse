@@ -1,12 +1,48 @@
 === config/encryption.php ===
 <?php
 
-return [
-    'encryption_key' => 'otxOolI5XGT3+Sd6d7RhSaoSIwH2uKr2y676KU+Zm3/dYHggqrqOFUbxoO4XnL7amEppppfP6jiThGvXnf9cFXqkwbPkQ1mPgfZuXtr0ylHWJYkim3zFzig=',
-    'cipher' => 'AES-256-CBC',
-    'jwt_secret' => 'your-secure-jwt-secret',
-    'jwt_refresh_secret' => 'your-secure-refresh-jwt-secret',
-];
+$logFile = __DIR__ . '/../logs/errors.log';
+
+try {
+    // ✅ Load Environment Variables (If `.env` Exists)
+    if (file_exists(__DIR__ . '/../.env')) {
+        $env = parse_ini_file(__DIR__ . '/../.env');
+    } else {
+        $env = [];
+    }
+
+    // ✅ Retrieve Secure Keys from `.env` or Use Safe Fallbacks
+    $jwtSecret = $env['JWT_SECRET'] ?? getenv('JWT_SECRET') ?: 'default_secure_fallback_key_32_characters_long';
+    $jwtRefreshSecret = $env['JWT_REFRESH_SECRET'] ?? getenv('JWT_REFRESH_SECRET') ?: 'your-secure-refresh-jwt-secret';
+    $encryptionKey = $env['ENCRYPTION_KEY'] ?? getenv('ENCRYPTION_KEY') ?: 'default_fallback_encryption_key_32+characters_long';
+
+    // ✅ Validate JWT & Encryption Key Lengths
+    if (strlen($jwtSecret) < 32) {
+        throw new Exception('JWT secret key must be at least 32 characters long.');
+    }
+    if (strlen($jwtRefreshSecret) < 32) {
+        throw new Exception('JWT refresh secret key must be at least 32 characters long.');
+    }
+    if (strlen($encryptionKey) < 32) {
+        throw new Exception('Encryption key must be at least 32 characters long.');
+    }
+
+    // ✅ Return Secure Configuration
+    return [
+        'encryption_key' => $encryptionKey,
+        'cipher' => 'AES-256-CBC',
+        'jwt_secret' => $jwtSecret,
+        'jwt_refresh_secret' => $jwtRefreshSecret,
+    ];
+} catch (Exception $e) {
+    $timestamp = date('Y-m-d H:i:s');
+    error_log("[$timestamp][error] Encryption configuration error: " . $e->getMessage() . "\n", 3, $logFile);
+    
+    // ✅ Prevent Information Leakage
+    http_response_code(500);
+    exit('Internal Server Error');
+}
+?>
 === config/app.php ===
 <?php
 
@@ -272,190 +308,51 @@ return [
     'from_name' => 'CarFuse Notifications',
     'fcm_api_key' => 'YOUR_FCM_API_KEY_HERE'
 ];
-=== config/keymanager.php ===
-<?php
-
-return [
-    'keys' => [
-        'encryption_key_main' => 'your-main-encryption-key',
-        'encryption_key_backup' => 'your-backup-encryption-key',
-        'encryption_key_signatures' => 'your-signature-encryption-key',
-    ]
-];
 === config/routes.php ===
 <?php
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
-use App\Controllers\AuthController;
-use App\Controllers\PaymentController;
-use App\Controllers\DashboardController;
-use App\Controllers\BookingController;
-use App\Controllers\NotificationController;
-use App\Controllers\NotificationQueueController;
-use App\Controllers\AdminDashboardController;
-use App\Controllers\ReportController;
-use AuditManager\Controllers\AuditController;
-use DocumentManager\Controllers\DocumentController;
-use DocumentManager\Controllers\SignatureController;
-use App\Controllers\UserController;
 
 $logFile = __DIR__ . '/../logs/debug.log';
-$routeLogFile = __DIR__ . '/../logs/routes.log';
+$timestamp = date('Y-m-d H:i:s');
 
-// Log the execution of the route dispatcher
-file_put_contents($logFile, "[ROUTES] Initializing routes" . PHP_EOL, FILE_APPEND);
-
-$routes = [
-    'home' => 'home.php',
-    'dashboard' => 'views/dashboard/dashboard.php',
-    'profile' => 'views/user/profile.php',
-    'login' => 'views/auth/login.php',
-    'register' => 'views/auth/register.php',
-
-    // Add more routes as needed
-];
-
-return simpleDispatcher(function (RouteCollector $router) use ($routes, $routeLogFile) {
-
-    // Logging helper for route execution
-    function logRoute($route) {
-        file_put_contents(__DIR__ . '/../logs/debug.log', date('Y-m-d H:i:s') . " - Executing route: $route\n", FILE_APPEND);
-    }
-
-    // Middleware-like Authentication Handling
-    function requireAuth() {
-        require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
-        if (!isUserLoggedIn()) {
-            http_response_code(403);
-            echo json_encode(["error" => "Unauthorized"]);
-            exit();
-        }
-    }
-
-    // --- New and static routes (placed prior to dynamic routes) ---
-
-    // Static test route to verify routing works correctly
-    $router->get('/test', function () {
-        logRoute('/test');
-        echo 'Test route working';
-    });
-
-    // Home Page route updated to use home.php to prevent recursion.
-    $router->get('/', function () {
-        logRoute('/');
-        require BASE_PATH . '/public/views/home.php';
-    });
-
-    // Authentication Routes (using controller callbacks remain unchanged)
-    $router->get('/login', [AuthController::class, 'loginView']);
-    $router->get('/register', [AuthController::class, 'registerView']);
-    $router->post('/register', [UserController::class, 'register']);
-    $router->post('/login', [UserController::class, 'login']);
-    $router->post('/profile/update', [UserController::class, 'updateProfile']);
-    $router->post('/password/reset/request', [UserController::class, 'requestPasswordReset']);
-    $router->post('/password/reset', [UserController::class, 'resetPassword']);
-
-    // --- Added static /dashboard route to prevent wildcard conflict ---
-    $router->get('/dashboard', function () {
-        logRoute('/dashboard');
-        require BASE_PATH . '/public/views/dashboard.php';
-    });
-
-    // Logout route to destroy session and redirect to login
-    $router->get('/logout', function () {
-        session_start();
-        session_destroy();
-        header('Location: /login');
-        exit();
-    });
-
-    // Payment Routes
-    $router->post('/payments/process', [PaymentController::class, 'processPayment']);
-    $router->post('/payments/refund', [PaymentController::class, 'refundPayment']);
-    $router->get('/payments/history', [PaymentController::class, 'viewPaymentHistory']);
-    $router->get('/payments/installments', [PaymentController::class, 'viewInstallments']);
-
-    // Bookings Routes
-    $router->get('/bookings', [DashboardController::class, 'getUserBookings']);
-    $router->get('/bookings/{id}', [BookingController::class, 'viewBooking']);
-    $router->post('/bookings/{id}/reschedule', [BookingController::class, 'rescheduleBooking']);
-    $router->post('/bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
-
-    // Notifications API Routes
-    $router->get('/notifications', [NotificationController::class, 'getUserNotifications']);
-    $router->post('/notifications/mark-as-read', [NotificationController::class, 'markNotificationAsRead']);
-    $router->post('/notifications/delete', [NotificationController::class, 'deleteNotification']);
-    $router->post('/notifications/send', [NotificationController::class, 'sendNotification']);
-    $router->post('/notifications/process-queue', [NotificationQueueController::class, 'processQueue']);
-
-    // Admin Dynamic Routing
-    $router->get('/admin/{section}', function ($vars) {
-        logRoute('/admin/' . $vars['section']);
-        $allowedSections = ['dashboard', 'reports', 'audit-logs', 'users'];
-        $section = $vars['section'];
-        if (in_array($section, $allowedSections)) {
-            require BASE_PATH . "/public/views/admin/$section.php";
-        } else {
-            http_response_code(404);
-            require BASE_PATH . "/public/views/errors/404.php";
-        }
-    });
-
-    // Admin Report Routes
-    $router->post('/admin/reports/generate', [ReportController::class, 'generateReport']);
-    $router->post('/user/reports/generate', [ReportController::class, 'generateUserReport']);
-
-    // Audit Log Routes
-    $router->post('/admin/audit-logs/fetch', [AuditController::class, 'fetchLogs']);
-
-    // Document Manager Routes
-    $router->post('/documents/upload-template', [DocumentController::class, 'uploadTemplate']);
-    $router->post('/documents/generate-contract/{bookingId}/{userId}', [DocumentController::class, 'generateContract']);
-    $router->post('/documents/upload-terms', [DocumentController::class, 'uploadTerms']);
-    $router->post('/documents/generate-invoice/{bookingId}', [DocumentController::class, 'generateInvoice']);
-    $router->delete('/documents/{documentId}', [DocumentController::class, 'deleteDocument']);
-
-    // --- Dynamic routes (placed after static routes to avoid conflicts) ---
-
-    // Dynamic View Routing for User Dashboard (/dashboard, /profile, etc.)
-    $router->get('/{view}', function ($vars) use ($routes) {
-        logRoute('/' . $vars['view']);
-        $view = $vars['view'];
-        if (array_key_exists($view, $routes)) {
-            require BASE_PATH . "/public/views/" . $routes[$view];
-        } else {
-            http_response_code(404);
-            require BASE_PATH . "/public/views/errors/404.php";
-        }
-    });
-
-    // Dynamic API Routing with Authentication Check (/api/{endpoint})
-    $router->get('/api/{endpoint}', function ($vars) {
-        logRoute('/api/' . $vars['endpoint'] . ' - start processing');
-        requireAuth(); // Ensure user is logged in
-        $endpoint = $vars['endpoint'];
-        // Additional logging for security and clarity
-        logRoute('Processing API endpoint: ' . $endpoint);
-        $apiPath = BASE_PATH . "/public/api/$endpoint.php";
-        if (file_exists($apiPath)) {
-            require $apiPath;
-        } else {
-            http_response_code(404);
-            echo json_encode(["error" => "API endpoint not found"]);
-        }
-        logRoute('/api/' . $vars['endpoint'] . ' - finished processing');
-    });
-
-    // Log unmatched routes
-    $router->addRoute('*', '/{route:.+}', function ($vars) use ($routeLogFile) {
-        $route = $vars['route'];
-        file_put_contents($routeLogFile, date('Y-m-d H:i:s') . " - Unmatched route: $route\n", FILE_APPEND);
-        http_response_code(404);
-        echo json_encode(["error" => "Route not found"]);
-    });
-
+$dispatcher = simpleDispatcher(function (RouteCollector $router) {
+    // Register routes in the correct order
+    $router->addRoute('GET', '/test', 'test.php');
+    $router->addRoute('GET', '/dashboard', '/dashboard/dashboard.php');
+    $router->addRoute('GET', '/', '/home.php');
+    $router->addRoute('GET', '/profile', 'user/profile.php');
+    $router->addRoute('GET', '/user/profile', '/user/profile.php');
+    $router->addRoute('GET', '/vehicles', 'vehicles.php');
+    $router->addRoute('GET', '/login', '/views/auth/login.php');
+    $router->addRoute('GET', '/register', '/views/auth/register.php');
+    // Remove restriction to top-level views
+    $router->addRoute('GET', '/{view:.+}', 'default.php'); // Dynamic view route
 });
+
+$logger = function($routeInfo) use ($logFile, $timestamp) {
+    switch ($routeInfo[0]) {
+        case FastRoute\Dispatcher::FOUND:
+            error_log("[$timestamp][info] Route matched: " . $routeInfo[1] . "\n", 3, $logFile);
+            break;
+        case FastRoute\Dispatcher::NOT_FOUND:
+            error_log("[$timestamp][error] Route not found\n", 3, $logFile);
+            break;
+        case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+            error_log("[$timestamp][error] Method not allowed\n", 3, $logFile);
+            break;
+    }
+};
+
+return function($method, $uri) use ($dispatcher, $logger) {
+    $routeInfo = $dispatcher->dispatch($method, $uri);
+    $logger($routeInfo);
+    return $routeInfo;
+};
+?>
 === config/document.php ===
 <?php
 
@@ -471,57 +368,77 @@ return [
 ];
 === config/api.php ===
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+// Load encryption keys
+$config = require __DIR__ . '/encryption.php';
+$jwtSecret = $config['jwt_secret'] ?? '';
+
+header('Content-Type: application/json');
+
+function validateToken()
+{
+    global $jwtSecret;
+
+    $headers = getallheaders();
+    $authHeader = $headers['Authorization'] ?? '';
+
+    if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+        http_response_code(401);
+        echo json_encode(["error" => "Unauthorized: Missing or invalid token"]);
+        exit;
+    }
+
+    $token = substr($authHeader, 7);
+    try {
+        return (array) JWT::decode($token, new Key($jwtSecret, 'HS256'));
+    } catch (Exception $e) {
+        http_response_code(401);
+        echo json_encode(["error" => "Unauthorized: Invalid token"]);
+        exit;
+    }
 }
-
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Content-Type: application/json");
-
-define('API_TOKEN_EXPIRATION', 3600);
-
-function refreshTokenIfExpired($token) {
-    // ...check if token is expired...
-    // ...refresh logic...
-    return $token; 
-}
-
-$logFile = __DIR__ . '/../logs/debug.log';
-
-// Log request details
-error_log("[API] Request: " . $_SERVER['REQUEST_URI'] . PHP_EOL, 3, $logFile);
 
 function requireAuth() {
-    global $logFile;
-    if (!isUserLoggedIn()) {
-        http_response_code(403);
-        echo json_encode(["error" => "Access denied"]);
-        error_log("[API] Unauthorized request" . PHP_EOL, 3, $logFile);
-        exit();
+    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if (!$authHeader || !isset($_SESSION['user_id'])) {
+        error_log("[API] Unauthorized access attempt\n", 3, __DIR__ . '/../logs/debug.log');
+        http_response_code(401);
+        exit('Unauthorized');
     }
 }
 
-$requestedEndpoint = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
-$endpointFile = __DIR__ . '/../public/api/' . $requestedEndpoint . '.php';
+// Handle CORS preflight requests
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    exit;
+}
 
-// Log the requested endpoint
-error_log("[API] Requested Endpoint: $requestedEndpoint" . PHP_EOL, 3, $logFile);
+// Parse API request
+$requestUri = $_SERVER['REQUEST_URI'];
+$requestMethod = $_SERVER['REQUEST_METHOD'];
+$apiPath = str_replace('/api/', '', $requestUri);
 
-if (file_exists($endpointFile)) {
-    // Check if the endpoint requires authentication
-    $protectedEndpoints = ['secureEndpoint']; // Add more protected endpoints as needed
-    if (in_array($requestedEndpoint, $protectedEndpoints)) {
-        requireAuth();
-    }
-    require $endpointFile;
+// Protect all API routes (except login/register)
+if (!in_array($apiPath, ['auth/login', 'auth/register'])) {
+    validateToken();
+}
+
+// Route API calls
+$endpoint = $_GET['endpoint'] ?? '';
+$apiFile = __DIR__ . '/' . $endpoint . '.php';
+if (file_exists($apiFile)) {
+    error_log("[API] Processing endpoint: $endpoint\n", 3, __DIR__ . '/../logs/debug.log');
+    requireAuth();
+    require_once $apiFile;
 } else {
+    error_log("[API] Endpoint not found: $endpoint\n", 3, __DIR__ . '/../logs/debug.log');
     http_response_code(404);
-    echo json_encode(["error" => "API not found"]);
-    error_log("[API] 404 - Endpoint not found: $requestedEndpoint" . PHP_EOL, 3, $logFile);
+    echo json_encode(['error' => 'API not found']);
 }
-exit();

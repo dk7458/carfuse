@@ -43,6 +43,22 @@ class TokenService
         }
     }
 
+    // New method: validateToken() to reject expired tokens and log failures
+    public function validateToken(string $token): ?array
+    {
+        try {
+            $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
+            if ($decoded->exp < time()) {
+                \logAuthFailure("Expired token for user id: " . ($decoded->sub ?? 'unknown'));
+                return null;
+            }
+            return (array)$decoded;
+        } catch (\Exception $e) {
+            \logAuthFailure("Token validation failed: " . $e->getMessage());
+            return null;
+        }
+    }
+
     public function generateRefreshToken($user): string
     {
         $payload = [
@@ -68,6 +84,26 @@ class TokenService
             return $this->generateToken((object) ['id' => $userId]);
         }
         return null;
+    }
+
+    // New method: refreshToken() to securely generate a new access token using a valid refresh token
+    public function refreshToken(string $refreshToken): ?string
+    {
+        try {
+            $decoded = JWT::decode($refreshToken, new Key($this->refreshSecretKey, 'HS256'));
+            if ($decoded->exp < time()) {
+                \logAuthFailure("Expired refresh token for user id: " . ($decoded->sub ?? 'unknown'));
+                return null;
+            }
+            if (\Illuminate\Support\Facades\Cache::has("revoked_refresh_token_$refreshToken")) {
+                \logAuthFailure("Revoked refresh token attempted for user id: " . ($decoded->sub ?? 'unknown'));
+                return null;
+            }
+            return $this->generateToken((object)['id' => $decoded->sub]);
+        } catch (\Exception $e) {
+            \logAuthFailure("Refresh token validation failed: " . $e->getMessage());
+            return null;
+        }
     }
 
     public function revokeToken(string $token): void

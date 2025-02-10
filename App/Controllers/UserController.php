@@ -9,6 +9,7 @@ use AuditManager\Services\AuditService;
 use PDO;
 use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
+use App\Services\UserService;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -28,6 +29,7 @@ class UserController
     private RateLimiter $rateLimiter;
     private AuditService $auditService;
     private NotificationService $notificationService;
+    protected $userService;
 
     public function __construct(
         PDO $appDb,
@@ -47,6 +49,7 @@ class UserController
         $this->rateLimiter = $rateLimiter;
         $this->auditService = $auditService;
         $this->notificationService = $notificationService;
+        $this->userService = new UserService();
     }
 
     /**
@@ -259,5 +262,66 @@ class UserController
     public function userDashboard()
     {
         view('dashboard/user_dashboard');
+    }
+
+    // Retrieve user profile and return JSON response
+    public function getProfile($request) {
+        header('Content-Type: application/json');
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception("User not authenticated");
+            }
+            $profile = $this->userService->getProfileById($userId);
+            echo json_encode([
+                'status' => 'success',
+                'data' => $profile
+            ]);
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    // Update user profile with validation and log updates
+    public function updateProfile($request) {
+        header('Content-Type: application/json');
+        try {
+            $data = $request->getParsedBody(); // ...existing code...
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception("User not authenticated");
+            }
+            // Basic validation
+            if (empty($data['email']) || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+                throw new Exception("Invalid email address");
+            }
+            if (empty($data['name'])) {
+                throw new Exception("Name is required");
+            }
+            // ...additional validation as needed...
+
+            $result = $this->userService->updateProfile($userId, $data);
+            if (!$result) {
+                throw new Exception("Profile update failed");
+            }
+            // Log the profile update
+            $logMessage = sprintf("[%s] User ID %s: Profile updated\n", date('Y-m-d H:i:s'), $userId);
+            file_put_contents(__DIR__ . '/../../logs/user.log', $logMessage, FILE_APPEND);
+
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Profile updated successfully'
+            ]);
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ]);
+        }
     }
 }

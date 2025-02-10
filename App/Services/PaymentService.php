@@ -25,21 +25,35 @@ class PaymentService
         $this->payuApiSecret = $payuApiSecret;
     }
 
-    public function processPayment(int $bookingId, float $amount, string $paymentMethod): bool
+    public function processPayment($user, array $paymentData)
     {
+        // Verify user authentication
+        if (empty($user) || empty($user['authenticated']) || !$user['authenticated']) {
+            $this->logger->error('Unauthenticated payment attempt', ['user' => $user]);
+            return ['status' => 'error', 'message' => 'User not authenticated'];
+        }
+
+        // Role-based access control for admin-only transactions
+        if (!empty($paymentData['adminOnly']) && $paymentData['adminOnly'] === true) {
+            if ($user['role'] !== 'admin') {
+                $this->logger->error('Unauthorized admin transaction', ['user' => $user]);
+                return ['status' => 'error', 'message' => 'Admin privileges required'];
+            }
+        }
+
         try {
-            $this->paymentModel->createPayment($bookingId, $amount, $paymentMethod);
+            $this->paymentModel->createPayment($paymentData['bookingId'], $paymentData['amount'], $paymentData['paymentMethod']);
 
             $booking = new Booking($this->db);
-            $booking->updateStatus($bookingId, 'paid');
+            $booking->updateStatus($paymentData['bookingId'], 'paid');
 
-            $this->logTransaction($bookingId, $amount, 'payment');
+            $this->logTransaction($paymentData['bookingId'], $paymentData['amount'], 'payment');
 
-            $this->logger->info("Payment processed for booking $bookingId");
-            return true;
+            $this->logger->info("Payment processed for booking {$paymentData['bookingId']}");
+            return ['status' => 'success', 'message' => 'Payment processed successfully'];
         } catch (\Exception $e) {
-            $this->logger->error('Payment processing failed', ['error' => $e->getMessage()]);
-            return false;
+            $this->logger->error('Payment processing failed', ['error' => $e->getMessage(), 'user' => $user]);
+            return ['status' => 'error', 'message' => 'Payment processing failed'];
         }
     }
 

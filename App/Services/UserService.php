@@ -72,22 +72,33 @@ class UserService
      */
     public function updateUser(int $id, array $data): array
     {
-        $allowedFields = ['name', 'phone', 'address'];
+        // Allowed update fields including password
+        $allowedFields = ['name', 'phone', 'address', 'password'];
         $updates = array_intersect_key($data, array_flip($allowedFields));
 
+        // Input validation: ensure there's at least one field to update
         if (empty($updates)) {
             return ['status' => 'error', 'message' => 'No valid fields to update'];
         }
 
-        try {
-            $sql = "UPDATE users SET " . implode(', ', array_map(fn($k) => "$k = :$k", array_keys($updates))) . " WHERE id = :id";
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([...$updates, 'id' => $id]);
+        // Process password: hash if provided and non-empty, otherwise remove it
+        if (isset($updates['password'])) {
+            if (!empty($updates['password'])) {
+                $updates['password'] = password_hash($updates['password'], PASSWORD_BCRYPT);
+            } else {
+                unset($updates['password']);
+            }
+        }
 
+        // Use UserModel for DB update
+        $userModel = new \App\Models\UserModel($this->db);
+        $result = $userModel->update($id, $updates);
+
+        if ($result) {
             $this->logAction($id, 'user_updated', $updates);
             return ['status' => 'success', 'message' => 'User updated successfully'];
-        } catch (PDOException $e) {
-            $this->logger->error('User update failed', ['error' => $e->getMessage()]);
+        } else {
+            $this->logger->error('User update failed');
             return ['status' => 'error', 'message' => 'User update failed'];
         }
     }
