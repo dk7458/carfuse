@@ -11,13 +11,17 @@ $loggerClosure = $bootstrap['logger'];
 class LoggerWrapper {
     private $logger;
     public function __construct($logger) {
-        $this->logger = $logger;
+        if (is_callable($logger)) {
+            $this->logger = $logger;
+        } else {
+            throw new InvalidArgumentException("Logger must be a callable.");
+        }
     }
     public function info($message) {
-        call_user_func($this->logger, ['level' => 'info', 'message' => $message]);
+        call_user_func($this->logger, 'info', $message);
     }
     public function error($message) {
-        call_user_func($this->logger, ['level' => 'error', 'message' => $message]);
+        call_user_func($this->logger, 'error', $message);
     }
 }
 $logger = new LoggerWrapper($loggerClosure);
