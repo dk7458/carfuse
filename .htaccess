@@ -21,4 +21,4 @@ RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images|views|uploads)/(.*)$ /public/$1/$2 [L]
 
 # ✅ Forward remaining requests to public/index.php for FastRoute
-RewriteRule ^ index.php [QSA,L]
+RewriteRule ^ public/index.php [QSA,L]
