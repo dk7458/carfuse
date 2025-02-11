@@ -1,18 +1,18 @@
 RewriteEngine On
 
-# Block direct execution of API PHP files and route all API requests via api.php
-RewriteRule ^api/(.*)$ api.php?route=$1 [QSA,L]
+# ✅ Allow guest access for public views (extension-less support)
+RewriteRule ^(home|auth/login|vehicles|auth/register)$ views/$1.php [L]
 
-# Route specific endpoints to views
-RewriteRule ^(dashboard|auth/login|profile)$ views/$1.php [L]
+# ✅ Prevent duplicate API rule (Already handled in root /.htaccess)
+# REMOVE: RewriteRule ^api/(.*)$ api.php?route=$1 [QSA,L]
 
-# Prevent access to backend directories
+# ✅ Prevent access to backend directories
 RewriteRule ^(App/Controllers|App/Services) - [F,L]
 
-# Allow direct access to static files and views
+# ✅ Allow direct access to static files and views
 RewriteCond %{REQUEST_URI} ^/(css|js|images|views)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images|views)/(.*)$ /public/$1/$2 [L]
 
-# Forward all remaining requests to FastRoute in index.php
+# ✅ Forward all remaining requests to FastRoute in index.php
 RewriteRule ^ index.php [QSA,L]

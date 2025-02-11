@@ -313,6 +313,7 @@ return [
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
+use App\Middleware\AuthMiddleware;
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
 
@@ -320,10 +321,45 @@ use function FastRoute\simpleDispatcher;
 $logFile = __DIR__ . '/../logs/debug.log';
 $timestamp = date('Y-m-d H:i:s');
 
-$dispatcher = simpleDispatcher(function (RouteCollector $router) {
-    // Register non-view routes
-    $router->addRoute('GET', '/test', 'test.php');
-    $router->addRoute('GET', '/', '/home.php');
+// Define public and protected routes arrays
+$publicRoutes = [
+    '/',
+    '/auth/login.php',
+    '/auth/register.php',
+    '/vehicles.php'
+];
+
+$protectedRoutes = [
+    '/dashboard.php',
+    '/profile.php',
+    '/reports.php'
+];
+
+$dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRoutes, $protectedRoutes) {
+    // Register public routes without middleware enforcement
+    foreach ($publicRoutes as $route) {
+        $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
+            // ...existing route handling for public routes...
+            include BASE_PATH . "/public{$route}";
+        });
+    }
+    // Register protected routes with middleware wrapper
+    foreach ($protectedRoutes as $route) {
+        $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
+            $middleware = new AuthMiddleware();
+            // Enforce authentication on protected routes
+            $middleware->handle(new class {
+                function getPathInfo() {
+                    return $_SERVER['REQUEST_URI'];
+                }
+                function getHeader($name) {
+                    return $_SERVER[$name] ?? null;
+                }
+            }, function() use ($route) {
+                include BASE_PATH . "/public{$route}";
+            }, true);
+        });
+    }
 
     // Dynamically register all view files in /public/views
     $viewsDir = __DIR__ . '/../public/views';
