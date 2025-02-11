@@ -41,8 +41,8 @@ if (!is_callable($dispatcher)) {
     throw new Exception("FastRoute dispatcher is not valid.");
 }
 
-$routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], "/$requestUri");
-
+// Correctly invoke the closure with method and URI
+$routeInfo = $dispatcher($_SERVER['REQUEST_METHOD'], "/$requestUri");
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::FOUND:
         $viewPath = __DIR__ . "/../public/" . ltrim($routeInfo[1], '/');
