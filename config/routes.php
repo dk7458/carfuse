@@ -33,7 +33,7 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRou
     // ✅ Register public routes
     foreach ($publicRoutes as $route) {
         if (!isset($registeredRoutes[$route])) {
-            $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
+            $router->addRoute(['GET', 'POST'], $route, function($logger) use ($route) {
                 include __DIR__ . "/../public{$route}.php";
             });
             $registeredRoutes[$route] = true;
@@ -43,7 +43,7 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRou
     // ✅ Register protected routes with JWT validation
     foreach ($protectedRoutes as $route) {
         if (!isset($registeredRoutes[$route])) {
-            $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
+            $router->addRoute(['GET', 'POST'], $route, function($logger) use ($route) {
                 AuthMiddleware::validateJWT(true);
                 include __DIR__ . "/../public{$route}.php";
             });
@@ -58,7 +58,7 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRou
             if (is_file("$viewsDir/$file") && pathinfo($file, PATHINFO_EXTENSION) === 'php') {
                 $route = '/' . str_replace('.php', '', $file);
                 if (!isset($registeredRoutes[$route])) {
-                    $router->addRoute('GET', $route, function() use ($viewsDir, $file) {
+                    $router->addRoute('GET', $route, function($logger) use ($viewsDir, $file) {
                         include "$viewsDir/$file";
                     });
                     $registeredRoutes[$route] = true;
@@ -68,8 +68,9 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRou
     }
 
     // ✅ Default route for unmatched requests
-    $router->addRoute('GET', '/{any:.+}', function() {
+    $router->addRoute('GET', '/{any:.+}', function($logger) {
         http_response_code(404);
+        $logger->error("404 Not Found: " . $_SERVER['REQUEST_URI']);
         echo json_encode(["error" => "Page not found"]);
     });
 });

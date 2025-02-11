@@ -50,7 +50,8 @@ switch ($routeInfo[0]) {
 
         if (is_callable($handler)) {
             $logger->info("Executing handler for route: /$requestUri");
-            $handler(...$vars);
+            // Pass the logger to the handler
+            $handler($logger, ...$vars);
         } else {
             http_response_code(500);
             $logger->error("Handler not callable for route: /$requestUri");
