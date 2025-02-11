@@ -1,15 +1,15 @@
 RewriteEngine On
 
-# ✅ Allow guest access for public views (extension-less support)
+# ✅ Ensure public views are routed correctly
 RewriteRule ^(home|auth/login|vehicles|auth/register)$ views/$1.php [L]
 
-# ✅ Prevent duplicate API rule (Already handled in root /.htaccess)
-# REMOVE: RewriteRule ^api/(.*)$ api.php?route=$1 [QSA,L]
+# ✅ Prevent forcing API authentication on public pages
+# RewriteRule ^api/(.*)$ api.php?route=$1 [QSA,L]
 
 # ✅ Prevent access to backend directories
 RewriteRule ^(App/Controllers|App/Services) - [F,L]
 
-# ✅ Allow direct access to static files and views
+# ✅ Ensure static assets (css, js, images, views) load correctly
 RewriteCond %{REQUEST_URI} ^/(css|js|images|views)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images|views)/(.*)$ /public/$1/$2 [L]

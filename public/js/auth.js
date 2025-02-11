@@ -100,7 +100,7 @@ async function refreshSession() {
         if (now >= expiration) {
             await logout();
         } else {
-            const response = await ajax.get('/session/refresh');
+            const response = await ajax.get('/session/refresh', null, { 'X-Auth-Token': token });
             if (response.success) {
                 ajax.setToken(response.token);
             } else {

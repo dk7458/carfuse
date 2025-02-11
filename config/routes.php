@@ -12,41 +12,38 @@ $timestamp = date('Y-m-d H:i:s');
 
 // Define public and protected routes arrays
 $publicRoutes = [
-    '/',
-    '/auth/login.php',
-    '/auth/register.php',
+    '/', 
+    '/home', 
+    '/auth/login', 
+    '/auth/register', 
     '/vehicles.php'
 ];
 
 $protectedRoutes = [
-    '/dashboard.php',
-    '/profile.php',
+    '/dashboard.php', 
+    '/profile.php', 
     '/reports.php'
 ];
 
 $dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRoutes, $protectedRoutes) {
-    // Register public routes without middleware enforcement
+    // Register public routes without JWT authentication
     foreach ($publicRoutes as $route) {
         $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
-            // ...existing route handling for public routes...
-            include BASE_PATH . "/public{$route}";
+            // Load correct file for public routes
+            if ($route === '/') {
+                include BASE_PATH . "/public/index.php";
+            } elseif (strpos($route, '.php') === false) {
+                include BASE_PATH . "/public{$route}.php";
+            } else {
+                include BASE_PATH . "/public{$route}";
+            }
         });
     }
-    // Register protected routes with middleware wrapper
+    // Register protected routes with JWT validation
     foreach ($protectedRoutes as $route) {
         $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
-            $middleware = new AuthMiddleware();
-            // Enforce authentication on protected routes
-            $middleware->handle(new class {
-                function getPathInfo() {
-                    return $_SERVER['REQUEST_URI'];
-                }
-                function getHeader($name) {
-                    return $_SERVER[$name] ?? null;
-                }
-            }, function() use ($route) {
-                include BASE_PATH . "/public{$route}";
-            }, true);
+            AuthMiddleware::validateJWT(true);
+            include BASE_PATH . "/public{$route}";
         });
     }
 

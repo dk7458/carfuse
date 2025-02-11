@@ -12,11 +12,11 @@ $jwtSecret = $config['jwt_secret'] ?? '';
 
 header('Content-Type: application/json');
 
-// --- New code: Log incoming headers and cookies ---
+// --- Modified code: Log incoming headers and cookies using X-Auth-Token ---
 $tmpHeaders = getallheaders();
-if (isset($tmpHeaders['Authorization'])) {
+if (isset($tmpHeaders['X-Auth-Token'])) {
     // Redact the JWT token value
-    $tmpHeaders['Authorization'] = 'Bearer <redacted>';
+    $tmpHeaders['X-Auth-Token'] = 'Bearer <redacted>';
 }
 $tmpCookies = $_COOKIE;
 if (isset($tmpCookies['jwt'])) {
@@ -24,12 +24,12 @@ if (isset($tmpCookies['jwt'])) {
 }
 error_log("[API DEBUG] " . date('Y-m-d H:i:s') . " - Headers: " . json_encode($tmpHeaders) . "\n", 3, __DIR__ . '/../logs/debug.log');
 error_log("[API DEBUG] " . date('Y-m-d H:i:s') . " - Cookies: " . json_encode($tmpCookies) . "\n", 3, __DIR__ . '/../logs/debug.log');
-// --- End new code ---
+// --- End modified code ---
 
-// ✅ Extract JWT from Authorization Header or Cookie
+// ✅ Extract JWT from X-Auth-Token Header or Cookie
 function getJWT() {
     $headers = getallheaders();
-    if (isset($headers['Authorization']) && preg_match('/Bearer\s+(\S+)/', $headers['Authorization'], $matches)) {
+    if (isset($headers['X-Auth-Token']) && preg_match('/Bearer\s+(\S+)/', $headers['X-Auth-Token'], $matches)) {
         return trim($matches[1]);
     }
     return isset($_COOKIE['jwt']) ? trim($_COOKIE['jwt']) : null;
@@ -65,7 +65,7 @@ function logApiError($message) {
 // ✅ CORS Handling (Apply to All Requests)
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, X-Auth-Token');
 
 // ✅ Handle CORS Preflight Requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -77,9 +77,12 @@ $requestUri = $_SERVER['REQUEST_URI'];
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 $apiPath = str_replace('/api/', '', parse_url($requestUri, PHP_URL_PATH));
 
-// ✅ Allow Public Access to Login/Register APIs
-$publicRoutes = ['auth/login', 'auth/register'];
-if (!in_array($apiPath, $publicRoutes)) {
+// ✅ Define Public and Protected Routes
+$publicRoutes = ['auth/login', 'auth/register', 'home', 'vehicles', 'auth/password_reset'];
+$protectedRoutes = ['dashboard', 'profile', 'reports'];
+
+// ✅ Enforce JWT Authentication for Protected Routes
+if (in_array($apiPath, $protectedRoutes)) {
     validateToken();
 }
 
