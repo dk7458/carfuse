@@ -7,7 +7,7 @@ error_reporting(E_ALL);
 $bootstrap = require_once __DIR__ . '/../bootstrap.php';
 $logger = $bootstrap['logger'];
 
-// ✅ Define public pages that can be accessed freely.
+// ✅ Define public pages that do not require authentication
 $publicPages = ['/', '/index.php', '/home', '/auth/login', '/auth/register', '/vehicles'];
 
 // ✅ Get Requested URI & Log Request
@@ -19,19 +19,10 @@ $requestUri = trim($requestUri, '/');
 
 // ✅ If request is to an API endpoint, route it to public/api.php
 if (strpos($requestUri, 'api/') === 0) {
-    $apiPath = __DIR__ . "/../public/api.php"; // Ensure correct API path
-
-    if (file_exists($apiPath)) {
-        $_GET['route'] = str_replace('api/', '', $requestUri); // Pass route to api.php
-        $logger->info("Routing API Request: $requestUri to api.php");
-        require $apiPath;
-        exit;
-    } else {
-        http_response_code(404);
-        $logger->error("API Not Found: $requestUri");
-        echo json_encode(["error" => "API Not Found"]);
-        exit;
-    }
+    $_GET['route'] = str_replace('api/', '', $requestUri);
+    $logger->info("Routing API Request: $requestUri to api.php");
+    require __DIR__ . "/../public/api.php";
+    exit;
 }
 
 // ✅ Ensure authentication for protected pages
@@ -46,11 +37,14 @@ if (in_array('/' . $requestUri, $protectedPages)) {
 
 // ✅ FastRoute Dispatching for Views
 $dispatcher = require __DIR__ . '/../config/routes.php';
+if (!is_callable($dispatcher)) {
+    throw new Exception("FastRoute dispatcher is not valid.");
+}
+
 $routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], "/$requestUri");
 
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::FOUND:
-        // ✅ Ensure views from subfolders load correctly
         $viewPath = __DIR__ . "/../public/" . ltrim($routeInfo[1], '/');
 
         if (file_exists($viewPath)) {
@@ -75,4 +69,3 @@ switch ($routeInfo[0]) {
         echo json_encode(["error" => "Method Not Allowed"]);
         exit;
 }
-?>

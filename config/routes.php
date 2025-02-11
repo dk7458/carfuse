@@ -10,19 +10,19 @@ use function FastRoute\simpleDispatcher;
 $logFile = __DIR__ . '/../logs/debug.log';
 $timestamp = date('Y-m-d H:i:s');
 
-// ✅ Define public and protected routes arrays
+// ✅ Define public and protected routes
 $publicRoutes = [
     '/', 
     '/home', 
     '/auth/login', 
     '/auth/register', 
-    '/vehicles.php'
+    '/vehicles'
 ];
 
 $protectedRoutes = [
-    '/dashboard.php', 
-    '/profile.php', 
-    '/reports.php'
+    '/dashboard', 
+    '/profile', 
+    '/reports'
 ];
 
 // ✅ Track registered routes to prevent duplicates
@@ -32,28 +32,22 @@ $registeredRoutes = [];
 $dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRoutes, $protectedRoutes, &$registeredRoutes) {
     // ✅ Register public routes
     foreach ($publicRoutes as $route) {
-        if (!in_array($route, $registeredRoutes)) {
+        if (!isset($registeredRoutes[$route])) {
             $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
-                if ($route === '/') {
-                    include BASE_PATH . "/public/index.php";
-                } elseif (strpos($route, '.php') === false) {
-                    include BASE_PATH . "/public{$route}.php";
-                } else {
-                    include BASE_PATH . "/public{$route}";
-                }
+                include __DIR__ . "/../public{$route}.php";
             });
-            $registeredRoutes[] = $route;
+            $registeredRoutes[$route] = true;
         }
     }
 
     // ✅ Register protected routes with JWT validation
     foreach ($protectedRoutes as $route) {
-        if (!in_array($route, $registeredRoutes)) {
+        if (!isset($registeredRoutes[$route])) {
             $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
                 AuthMiddleware::validateJWT(true);
-                include BASE_PATH . "/public{$route}";
+                include __DIR__ . "/../public{$route}.php";
             });
-            $registeredRoutes[] = $route;
+            $registeredRoutes[$route] = true;
         }
     }
 
@@ -61,19 +55,19 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRou
     $viewsDir = __DIR__ . '/../public/views';
     if (is_dir($viewsDir)) {
         foreach (scandir($viewsDir) as $file) {
-            if (is_file($viewsDir . '/' . $file) && pathinfo($file, PATHINFO_EXTENSION) === 'php') {
+            if (is_file("$viewsDir/$file") && pathinfo($file, PATHINFO_EXTENSION) === 'php') {
                 $route = '/' . str_replace('.php', '', $file);
-                if (!in_array($route, $registeredRoutes)) {
+                if (!isset($registeredRoutes[$route])) {
                     $router->addRoute('GET', $route, function() use ($viewsDir, $file) {
-                        include $viewsDir . '/' . $file;
+                        include "$viewsDir/$file";
                     });
-                    $registeredRoutes[] = $route;
+                    $registeredRoutes[$route] = true;
                 }
             }
         }
     }
 
-    // ✅ Default route for truly unmatched requests
+    // ✅ Default route for unmatched requests
     $router->addRoute('GET', '/{any:.+}', function() {
         http_response_code(404);
         echo json_encode(["error" => "Page not found"]);
