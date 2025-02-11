@@ -1,8 +1,15 @@
 <?php
-// Log the receipt of the request
-file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - Received API /views/home request\n", FILE_APPEND);
+// Enforce GET requests only:
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    http_response_code(405);
+    echo json_encode(["error" => "Method Not Allowed"]);
+    exit();
+}
 
-// Set header for valid JSON
+// Log public request
+file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - Public API request to /views/home\n", FILE_APPEND);
+
+// Allow public API access without authentication
 header("Content-Type: application/json");
 
 // Explicit success status

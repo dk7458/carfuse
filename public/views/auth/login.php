@@ -24,12 +24,7 @@ require_once BASE_PATH . '/App/Helpers/SecurityHelper.php'; // Ensure CSRF funct
 include __DIR__ . '/../layouts/header.php';
 
 if (session_status() === PHP_SESSION_NONE) {
-    require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
-}
-
-if (isset($_SESSION['user_id'])) {
-    header("Location: /dashboard");
-    exit;
+    require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
 }
 ?>
 

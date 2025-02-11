@@ -26,6 +26,14 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
     }
 
+    const isProtectedPage = ["/dashboard", "/profile"].includes(window.location.pathname);
+    if (isProtectedPage) {
+        const jwt = document.cookie.split('; ').find(row => row.startsWith('jwt='));
+        if (!jwt) {
+            window.location.href = "/auth/login.php";
+        }
+    }
+
     async function fetchData(endpoint) {
         try {
             const response = await fetch(endpoint, {

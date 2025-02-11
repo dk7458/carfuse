@@ -3,6 +3,8 @@
 namespace App\Middleware;
 
 use App\Services\Auth\TokenService;
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 use Exception;
 
 require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
@@ -83,25 +85,23 @@ class AuthMiddleware
         // (Assuming all API requests have Authorization header)
         $authHeader = $request->getHeader('Authorization');
         if (!$authHeader) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized: Missing Authorization header']);
-            $this->recordFailedAttempt($ip);
-            return;
+            return $this->unauthorizedResponse('Missing Authorization header');
         }
 
         $token = str_replace('Bearer ', '', $authHeader);
-        $tokenData = $this->tokenService->validateToken($token);
-        if (!$tokenData) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized: Invalid token']);
-            $this->recordFailedAttempt($ip);
-            return;
+        try {
+            $decoded = JWT::decode($token, new Key($this->tokenService->getSecretKey(), 'HS256'));
+            if ($decoded->exp < time()) {
+                return $this->unauthorizedResponse('Token has expired');
+            }
+        } catch (\Exception $e) {
+            return $this->unauthorizedResponse('Invalid token: ' . $e->getMessage());
         }
 
         // Enforce admin-only routes for paths beginning with '/admin'
         if (strpos($request->getPathInfo(), '/admin') === 0) {
             // Assume the token or session holds a 'role' claim
-            $role = $tokenData['role'] ?? ($_SESSION['user_role'] ?? 'user');
+            $role = $decoded->role ?? ($_SESSION['user_role'] ?? 'user');
             if ($role !== 'admin') {
                 http_response_code(403);
                 echo json_encode(['error' => 'Forbidden: Admins only']);
@@ -119,6 +119,14 @@ class AuthMiddleware
         }
 
         return $next($request);
+    }
+
+    private function unauthorizedResponse($message)
+    {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'error', 'message' => $message, 'data' => []]);
+        exit();
     }
 
     private function logAuthAttempt($status, $message)
