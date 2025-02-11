@@ -76,6 +76,7 @@ $container->set(EncryptionService::class, fn() => $encryptionService);
 // ✅ Initialize File Storage Before Using It Anywhere
 $fileStorage = new FileStorage($fileStorageConfig, $logger, $encryptionService);
 $container->set(FileStorage::class, fn() => $fileStorage);
+$config['keymanager'] = require __DIR__ . '/keymanager.php';
 
 // ✅ Initialize PDO Instances
 try {
