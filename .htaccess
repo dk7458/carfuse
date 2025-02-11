@@ -1,6 +1,6 @@
 RewriteEngine On
 
-# Forward Authorization header to PHP
+# ✅ Forward Authorization header to PHP
 SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
 
 # ✅ Automatically map requests to /public/ if they exist there (EXCEPT api/)
@@ -13,12 +13,12 @@ RewriteRule ^(.*)$ public/$1 [L]
 RewriteRule ^api/(.*)$ public/api.php?route=$1 [QSA,L]
 
 # ✅ Prevent direct access to backend directories
-RewriteRule ^(App/Controllers|App/Services) - [F,L]
+RewriteRule ^(App/Controllers|App/Services|config|vendor) - [F,L]
 
-# ✅ Allow direct access to static files and views in public
-RewriteCond %{REQUEST_URI} ^/(css|js|images|views)/(.*)$
+# ✅ Allow direct access to static files in public
+RewriteCond %{REQUEST_URI} ^/(css|js|images|views|uploads)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
-RewriteRule ^(css|js|images|views)/(.*)$ /public/$1/$2 [L]
+RewriteRule ^(css|js|images|views|uploads)/(.*)$ /public/$1/$2 [L]
 
 # ✅ Forward remaining requests to public/index.php for FastRoute
-RewriteRule ^ public/index.php [QSA,L]
+RewriteRule ^ index.php [QSA,L]

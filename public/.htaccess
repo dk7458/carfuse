@@ -4,15 +4,15 @@ RewriteEngine On
 RewriteRule ^(home|auth/login|vehicles|auth/register)$ views/$1.php [L]
 
 # ✅ Prevent forcing API authentication on public pages
-# RewriteRule ^api/(.*)$ api.php?route=$1 [QSA,L]
+RewriteRule ^api/(.*)$ api.php?route=$1 [QSA,L]
 
 # ✅ Prevent access to backend directories
-RewriteRule ^(App/Controllers|App/Services) - [F,L]
+RewriteRule ^(App/Controllers|App/Services|config|vendor) - [F,L]
 
-# ✅ Ensure static assets (css, js, images, views) load correctly
-RewriteCond %{REQUEST_URI} ^/(css|js|images|views)/(.*)$
+# ✅ Ensure static assets load correctly
+RewriteCond %{REQUEST_URI} ^/(css|js|images|views|uploads)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
-RewriteRule ^(css|js|images|views)/(.*)$ /public/$1/$2 [L]
+RewriteRule ^(css|js|images|views|uploads)/(.*)$ /public/$1/$2 [L]
 
 # ✅ Forward all remaining requests to FastRoute in index.php
 RewriteRule ^ index.php [QSA,L]
