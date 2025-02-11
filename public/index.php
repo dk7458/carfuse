@@ -45,15 +45,16 @@ if (!is_callable($dispatcher)) {
 $routeInfo = $dispatcher($_SERVER['REQUEST_METHOD'], "/$requestUri");
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::FOUND:
-        $viewPath = __DIR__ . "/../public/" . ltrim($routeInfo[1], '/');
+        $handler = $routeInfo[1];
+        $vars = $routeInfo[2];
 
-        if (file_exists($viewPath)) {
-            $logger->info("Rendering View: " . $routeInfo[1]);
-            require $viewPath;
+        if (is_callable($handler)) {
+            $logger->info("Executing handler for route: /$requestUri");
+            $handler(...$vars);
         } else {
-            http_response_code(404);
-            $logger->error("View Not Found: " . $routeInfo[1]);
-            require __DIR__ . "/../public/views/errors/404.php";
+            http_response_code(500);
+            $logger->error("Handler not callable for route: /$requestUri");
+            require __DIR__ . "/../public/views/errors/500.php";
         }
         exit;
 
