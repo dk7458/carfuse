@@ -79,6 +79,10 @@ class AuthController
         try {
             // Assume request body is already parsed
             $data = $request->getParsedBody(); // ...existing code...
+            
+            // --- CSRF check placeholder (enforce CSRF protection) ---
+            // validateCsrfToken($data['csrf_token'] ?? '');
+
             $username = $data['username'] ?? '';
             $password = $data['password'] ?? '';
             $result = $this->authService->login($username, $password);
@@ -88,7 +92,7 @@ class AuthController
                 throw new \Exception('Token validation failed.');
             }
 
-            // Set access token in HTTP-only secure cookie
+            // Securely store JWT and refresh token in HTTP-only cookies
             setcookie("jwt", $result['token'], [
                 "expires" => time() + 3600,
                 "path" => "/",
@@ -96,8 +100,6 @@ class AuthController
                 "httponly" => true,
                 "samesite" => "Strict"
             ]);
-
-            // Set refresh token in HTTP-only secure cookie
             setcookie("refresh_token", $result['refresh_token'], [
                 "expires" => time() + 604800,
                 "path" => "/",
@@ -110,7 +112,7 @@ class AuthController
             echo json_encode([
                 'status' => 'success',
                 'message' => 'User logged in',
-                'data' => [] // Do not include token info in response
+                'data' => [] // JWT not exposed in response
             ]);
         } catch (\Exception $e) {
             http_response_code(400);
@@ -179,6 +181,8 @@ class AuthController
         header('Content-Type: application/json');
         try {
             $this->authService->logout();
+            
+            // --- CSRF check placeholder (enforce CSRF protection) ---
 
             // Clear the JWT and refresh token cookies
             setcookie("jwt", "", [

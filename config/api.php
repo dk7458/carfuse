@@ -12,13 +12,27 @@ $jwtSecret = $config['jwt_secret'] ?? '';
 
 header('Content-Type: application/json');
 
+// --- New code: Log incoming headers and cookies ---
+$tmpHeaders = getallheaders();
+if (isset($tmpHeaders['Authorization'])) {
+    // Redact the JWT token value
+    $tmpHeaders['Authorization'] = 'Bearer <redacted>';
+}
+$tmpCookies = $_COOKIE;
+if (isset($tmpCookies['jwt'])) {
+    $tmpCookies['jwt'] = '<redacted>';
+}
+error_log("[API DEBUG] " . date('Y-m-d H:i:s') . " - Headers: " . json_encode($tmpHeaders) . "\n", 3, __DIR__ . '/../logs/debug.log');
+error_log("[API DEBUG] " . date('Y-m-d H:i:s') . " - Cookies: " . json_encode($tmpCookies) . "\n", 3, __DIR__ . '/../logs/debug.log');
+// --- End new code ---
+
 // ✅ Extract JWT from Authorization Header or Cookie
 function getJWT() {
     $headers = getallheaders();
-    if (isset($headers['Authorization']) && preg_match('/Bearer\s(\S+)/', $headers['Authorization'], $matches)) {
-        return $matches[1];
+    if (isset($headers['Authorization']) && preg_match('/Bearer\s+(\S+)/', $headers['Authorization'], $matches)) {
+        return trim($matches[1]);
     }
-    return $_COOKIE['jwt'] ?? null;
+    return isset($_COOKIE['jwt']) ? trim($_COOKIE['jwt']) : null;
 }
 
 // ✅ Validate JWT and Decode User Info
