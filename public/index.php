@@ -5,7 +5,22 @@ error_reporting(E_ALL);
 
 // ✅ Load Bootstrap & Services
 $bootstrap = require_once __DIR__ . '/../bootstrap.php';
-$logger = $bootstrap['logger'];
+$loggerClosure = $bootstrap['logger'];
+
+// Add minimal LoggerWrapper to wrap the closure
+class LoggerWrapper {
+    private $logger;
+    public function __construct($logger) {
+        $this->logger = $logger;
+    }
+    public function info($message) {
+        call_user_func($this->logger, ['level' => 'info', 'message' => $message]);
+    }
+    public function error($message) {
+        call_user_func($this->logger, ['level' => 'error', 'message' => $message]);
+    }
+}
+$logger = new LoggerWrapper($loggerClosure);
 
 // ✅ Define public pages that do not require authentication
 $publicPages = ['/', '/index.php', '/home', '/auth/login', '/auth/register', '/vehicles'];
