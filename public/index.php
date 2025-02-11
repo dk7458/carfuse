@@ -7,15 +7,16 @@ error_reporting(E_ALL);
 $bootstrap = require_once __DIR__ . '/../bootstrap.php';
 $loggerClosure = $bootstrap['logger'];
 
+// Ensure the logger is a valid callable
+if (!is_callable($loggerClosure)) {
+    throw new InvalidArgumentException("Logger must be a callable.");
+}
+
 // Add minimal LoggerWrapper to wrap the closure
 class LoggerWrapper {
     private $logger;
     public function __construct($logger) {
-        if (is_callable($logger)) {
-            $this->logger = $logger;
-        } else {
-            throw new InvalidArgumentException("Logger must be a callable.");
-        }
+        $this->logger = $logger;
     }
     public function info($message) {
         call_user_func($this->logger, 'info', $message);
