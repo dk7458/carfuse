@@ -40,9 +40,9 @@ async function fetchAdminStatistics() {
     try {
         showLoadingIndicators();
         const [totalUsers, totalBookings, totalRevenue] = await Promise.all([
-            ajax.get('/statistics/totalUsers'),
-            ajax.get('/statistics/totalBookings'),
-            ajax.get('/statistics/totalRevenue')
+            secureFetch('/statistics/totalUsers'),
+            secureFetch('/statistics/totalBookings'),
+            secureFetch('/statistics/totalRevenue')
         ]);
         updateWidgets({
             totalUsers: totalUsers.data,
@@ -63,7 +63,7 @@ async function fetchAdminStatistics() {
 async function fetchUserStatistics() {
     try {
         showLoadingIndicators();
-        const response = await ajax.get('/statistics/user');
+        const response = await secureFetch('/statistics/user');
         updateWidgets(response.data);
     } catch (error) {
         showErrorToast('Nie udało się pobrać statystyk użytkownika.');
@@ -181,6 +181,43 @@ function checkJwtExpiration() {
         }
     }
 }
+
+/**
+ * Checks if the JWT token is expired.
+ * @param {string} token 
+ * @return {boolean}
+ */
+function isTokenExpired(token) {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c =>
+            '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+        ).join(''));
+        const payload = JSON.parse(jsonPayload);
+        return Date.now() >= payload.exp * 1000;
+    } catch (e) {
+        console.error("Error decoding token:", e);
+        return true;
+    }
+}
+
+/**
+ * Checks token existence and expiration on protected pages.
+ */
+function checkTokenAndRedirect() {
+    const token = getCookie('jwt');
+    if (!token || isTokenExpired(token)) {
+        deleteCookie('jwt');
+        deleteCookie('refresh_token');
+        window.location.href = '/auth/login.php';
+    }
+}
+
+// Run the check on page load
+checkTokenAndRedirect();
+// Periodically check every 30 seconds
+setInterval(checkTokenAndRedirect, 30000);
 
 // Run the expiration check on page load
 checkJwtExpiration();

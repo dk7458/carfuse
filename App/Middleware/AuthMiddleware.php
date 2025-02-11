@@ -14,6 +14,7 @@ class AuthMiddleware
     protected TokenService $tokenService;
     private int $maxAttempts = 5;
     private int $blockDuration = 300; // 5 minutes
+    private string $jwtSecret;
 
     public function __construct()
     {
@@ -32,6 +33,11 @@ class AuthMiddleware
             $encryptionConfig['jwt_secret'],
             $encryptionConfig['jwt_refresh_secret']
         );
+
+        if (!isset($encryptionConfig['jwt_secret'])) {
+            throw new Exception("JWT secret missing in encryption configuration.");
+        }
+        $this->jwtSecret = $encryptionConfig['jwt_secret'];
     }
 
     // New private method for rate limiting
@@ -67,6 +73,20 @@ class AuthMiddleware
 
     public function handle($request, $next)
     {
+        // ✅ Allow public pages without authentication
+        $publicRoutes = [
+            "/",
+            "/index.php",
+            "/auth/login.php",
+            "/auth/register.php",
+            "/auth/password_reset.php",
+            "/auth/reset_request.php",
+            "/api/views/home.php"
+        ];
+        if (in_array($_SERVER['REQUEST_URI'], $publicRoutes)) {
+            return $next($request);
+        }
+
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
         // Enforce rate limiting for failed attempts
         if (!$this->checkRateLimit($ip)) {
@@ -81,21 +101,47 @@ class AuthMiddleware
             return $next($request); // Allow guest access for public routes
         }
 
-        // Enforce global JWT authentication for API requests
-        // (Assuming all API requests have Authorization header)
-        $authHeader = $request->getHeader('Authorization');
-        if (!$authHeader) {
-            return $this->unauthorizedResponse('Missing Authorization header');
+        // Define protected routes
+        $protectedRoutes = [
+            '/views/dashboard.php',
+            '/views/user/profile.php'
+        ];
+        
+        $currentPath = $request->getPathInfo();
+        // Apply middleware to protected views and admin pages
+        if (!in_array($currentPath, $protectedRoutes) && strpos($currentPath, '/admin') !== 0) {
+            return $next($request);
         }
-
-        $token = str_replace('Bearer ', '', $authHeader);
+        
+        $token = '';
+        // Extract token from Authorization header if available
+        $authHeader = $request->getHeader('Authorization');
+        if ($authHeader && strpos($authHeader, 'Bearer ') === 0) {
+            $token = str_replace('Bearer ', '', $authHeader);
+        } elseif (isset($_COOKIE['jwt'])) {
+            $token = $_COOKIE['jwt'];
+        }
+        
+        if (empty($token)) {
+            $this->logUnauthorized("Missing token");
+            http_response_code(403);
+            echo json_encode(['error' => 'Unauthorized: Missing token.']);
+            exit();
+        }
+        
         try {
-            $decoded = JWT::decode($token, new Key($this->tokenService->getSecretKey(), 'HS256'));
+            $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
             if ($decoded->exp < time()) {
-                return $this->unauthorizedResponse('Token has expired');
+                $this->logUnauthorized("Token expired");
+                http_response_code(403);
+                echo json_encode(['error' => 'Unauthorized: Token expired.']);
+                exit();
             }
-        } catch (\Exception $e) {
-            return $this->unauthorizedResponse('Invalid token: ' . $e->getMessage());
+        } catch (Exception $e) {
+            $this->logUnauthorized("Token invalid: " . $e->getMessage());
+            http_response_code(403);
+            echo json_encode(['error' => 'Unauthorized: ' . $e->getMessage()]);
+            exit();
         }
 
         // Enforce admin-only routes for paths beginning with '/admin'
@@ -133,5 +179,15 @@ class AuthMiddleware
     {
         $logMessage = sprintf("[%s] %s: %s from IP: %s\n", date('Y-m-d H:i:s'), ucfirst($status), $message, $_SERVER['REMOTE_ADDR']);
         file_put_contents(__DIR__ . '/../../logs/auth.log', $logMessage, FILE_APPEND);
+    }
+
+    private function logUnauthorized(string $message): void
+    {
+        $logMessage = sprintf("[%s] Unauthorized access: %s from IP: %s\n", 
+            date('Y-m-d H:i:s'), 
+            $message, 
+            $_SERVER['REMOTE_ADDR'] ?? 'unknown'
+        );
+        file_put_contents(BASE_PATH . '/logs/auth.log', $logMessage, FILE_APPEND);
     }
 }

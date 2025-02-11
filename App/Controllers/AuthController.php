@@ -87,12 +87,30 @@ class AuthController
             if (!$this->authService->validateToken($result['token'])) {
                 throw new \Exception('Token validation failed.');
             }
-            
+
+            // Set access token in HTTP-only secure cookie
+            setcookie("jwt", $result['token'], [
+                "expires" => time() + 3600,
+                "path" => "/",
+                "secure" => true,
+                "httponly" => true,
+                "samesite" => "Strict"
+            ]);
+
+            // Set refresh token in HTTP-only secure cookie
+            setcookie("refresh_token", $result['refresh_token'], [
+                "expires" => time() + 604800,
+                "path" => "/",
+                "secure" => true,
+                "httponly" => true,
+                "samesite" => "Strict"
+            ]);
+
             http_response_code(200);
             echo json_encode([
                 'status' => 'success',
                 'message' => 'User logged in',
-                'data' => ['token' => $result['token']]
+                'data' => []
             ]);
         } catch (\Exception $e) {
             http_response_code(400);
@@ -115,7 +133,7 @@ class AuthController
                 throw new \Exception('Method Not Allowed');
             }
 
-            $refreshToken = $_POST['refresh_token'] ?? null;
+            $refreshToken = $_COOKIE['refresh_token'] ?? null;
 
             if (!$refreshToken) {
                 throw new \Exception('Refresh token is required');
@@ -124,11 +142,20 @@ class AuthController
             $newToken = $this->tokenService->refreshAccessToken($refreshToken);
 
             if ($newToken) {
+                // Set new access token in HTTP-only secure cookie
+                setcookie("jwt", $newToken, [
+                    "expires" => time() + 3600,
+                    "path" => "/",
+                    "secure" => true,
+                    "httponly" => true,
+                    "samesite" => "Strict"
+                ]);
+
                 http_response_code(200);
                 echo json_encode([
                     'status' => 'success',
                     'message' => 'Token refreshed',
-                    'data' => ['access_token' => $newToken]
+                    'data' => []
                 ]);
             } else {
                 throw new \Exception('Invalid refresh token');
@@ -151,6 +178,23 @@ class AuthController
         header('Content-Type: application/json');
         try {
             $this->authService->logout();
+
+            // Clear the JWT and refresh token cookies
+            setcookie("jwt", "", [
+                "expires" => time() - 3600,
+                "path" => "/",
+                "secure" => true,
+                "httponly" => true,
+                "samesite" => "Strict"
+            ]);
+            setcookie("refresh_token", "", [
+                "expires" => time() - 3600,
+                "path" => "/",
+                "secure" => true,
+                "httponly" => true,
+                "samesite" => "Strict"
+            ]);
+
             http_response_code(200);
             echo json_encode([
                 'status' => 'success',
@@ -174,8 +218,7 @@ class AuthController
     {
         header('Content-Type: application/json');
         try {
-            $authHeader = $request->getHeader('Authorization');
-            $token = str_replace('Bearer ', '', $authHeader);
+            $token = $_COOKIE['jwt'] ?? '';
             
             // Validate token before processing
             if (!$this->authService->validateToken($token)) {
