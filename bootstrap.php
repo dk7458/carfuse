@@ -103,6 +103,11 @@ try {
     die("❌ Logger initialization failed: " . $e->getMessage() . "\n");
 }
 
+// Ensure the logger is a valid callable
+if (!is_callable([$logger, 'info']) || !is_callable([$logger, 'error'])) {
+    throw new InvalidArgumentException("Logger must be a callable.");
+}
+
 // ✅ Ensure Encryption Configuration Exists
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
     logBootstrapEvent("❌ Encryption key missing or invalid.");
@@ -150,7 +155,9 @@ logBootstrapEvent("✅ Bootstrap process completed successfully.");
 // ✅ Return Configurations for Application Use
 return [
     'pdo' => $pdo,
-    'logger' => $logger,
+    'logger' => function($level, $message) use ($logger) {
+        $logger->$level($message);
+    },
     'auditService' => $auditService,
     'encryptionService' => $encryptionService,
 ];
