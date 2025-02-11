@@ -316,23 +316,45 @@ require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
 
+// Define debug log file for route resolution
 $logFile = __DIR__ . '/../logs/debug.log';
 $timestamp = date('Y-m-d H:i:s');
 
 $dispatcher = simpleDispatcher(function (RouteCollector $router) {
-    // Register routes in the correct order
+    // Register non-view routes
     $router->addRoute('GET', '/test', 'test.php');
-    $router->addRoute('GET', '/dashboard', '/dashboard/dashboard.php');
     $router->addRoute('GET', '/', '/home.php');
-    $router->addRoute('GET', '/profile', 'user/profile.php');
-    $router->addRoute('GET', '/user/profile', '/user/profile.php');
-    $router->addRoute('GET', '/vehicles', 'vehicles.php');
-    $router->addRoute('GET', '/login', '/views/auth/login.php');
-    $router->addRoute('GET', '/register', '/views/auth/register.php');
-    // Remove restriction to top-level views
-    $router->addRoute('GET', '/{view:.+}', 'default.php'); // Dynamic view route
+
+    // Dynamically register all view files in /public/views
+    $viewsDir = __DIR__ . '/../public/views';
+    $viewRoutes = [];
+    if (is_dir($viewsDir)) {
+        foreach (scandir($viewsDir) as $file) {
+            if (is_file($viewsDir . '/' . $file) && pathinfo($file, PATHINFO_EXTENSION) === 'php') {
+                $route = '/' . str_replace('.php', '', $file);
+                $viewRoutes[$route] = $viewsDir . '/' . $file;
+            }
+        }
+    }
+
+    // Ensure specific routes are correctly routed
+    $requiredRoutes = [
+        '/dashboard'  => $viewsDir . '/dashboard.php',
+        '/profile'    => $viewsDir . '/profile.php',
+        '/auth/login' => $viewsDir . '/auth/login.php',
+    ];
+    $viewRoutes = array_merge($viewRoutes, $requiredRoutes);
+
+    // Register routes (example using FastRoute)
+    foreach ($viewRoutes as $route => $file) {
+        $router->addRoute('GET', $route, $file);
+    }
+
+    // Default route for unmatched requests
+    $router->addRoute('GET', '/{any:.+}', 'default.php');
 });
 
+// Log all route resolutions
 $logger = function($routeInfo) use ($logFile, $timestamp) {
     switch ($routeInfo[0]) {
         case FastRoute\Dispatcher::FOUND:
@@ -352,6 +374,12 @@ return function($method, $uri) use ($dispatcher, $logger) {
     $logger($routeInfo);
     return $routeInfo;
 };
+
+// Log route resolutions
+if (isset($_SERVER['REQUEST_URI'])) {
+    $route = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    file_put_contents(__DIR__ . '/../logs/debug.log', "[" . date('Y-m-d H:i:s') . "] Route resolved: {$route}\n", FILE_APPEND);
+}
 ?>
 === config/document.php ===
 <?php
@@ -401,15 +429,6 @@ function validateToken()
         http_response_code(401);
         echo json_encode(["error" => "Unauthorized: Invalid token"]);
         exit;
-    }
-}
-
-function requireAuth() {
-    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-    if (!$authHeader || !isset($_SESSION['user_id'])) {
-        error_log("[API] Unauthorized access attempt\n", 3, __DIR__ . '/../logs/debug.log');
-        http_response_code(401);
-        exit('Unauthorized');
     }
 }
 

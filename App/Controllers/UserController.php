@@ -171,8 +171,9 @@ public function updateProfile($request) {
     header('Content-Type: application/json');
 
     try {
-        requireAuth(); // Ensure the user is authenticated
-        $userId = getSessionData('user_id'); // Retrieve authenticated user ID
+        // Replace session-based auth with JWT validation and CSRF protection
+        $userId = validateJWT(); // Decodes JWT and returns user_id
+        validateCSRFToken($request); // Validate CSRF token
 
         $data = $request->getParsedBody();
 
@@ -306,6 +307,8 @@ public function updateProfile($request) {
     public function userDashboard()
     {
         try {
+            // Enforce JWT authentication for protected endpoints
+            validateJWT();
             view('dashboard/user_dashboard');
             http_response_code(200);
             echo json_encode(['status' => 'success', 'message' => 'Dashboard loaded', 'data' => []]);
@@ -320,8 +323,8 @@ public function updateProfile($request) {
     public function getProfile($request) {
         header('Content-Type: application/json');
         try {
-            requireAuth();
-            $userId = requireAuth(); // obtain authenticated user id
+            // Replace requireAuth and session lookup with JWT validation
+            $userId = validateJWT();
             $profile = $this->userService->getProfileById($userId);
             http_response_code(200);
             echo json_encode([

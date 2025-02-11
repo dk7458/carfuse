@@ -58,19 +58,21 @@ class UserController
      */
     public function register(array $data): array
     {
-        $rules = [
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|string|min:8|regex:/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/',
-            'phone' => 'required|string|max:20',
-            'address' => 'required|string|max:255',
-        ];
-
-        if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
-        }
-
         try {
+            $rules = [
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|unique:users',
+                'password' => 'required|string|min:8|regex:/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/',
+                'phone' => 'required|string|max:20',
+                'address' => 'required|string|max:255',
+            ];
+
+            if (!$this->validator->validate($data, $rules)) {
+                http_response_code(400);
+                echo json_encode(['status' => 'error','message' => 'Validation failed','data' => []]);
+                exit;
+            }
+
             // Store user in secure database
             $stmt = $this->secureDb->prepare("
                 INSERT INTO users (name, email, password_hash, phone, address, role, created_at)
@@ -103,11 +105,14 @@ class UserController
                 ['email' => $data['email']]
             );
 
-            return ['status' => 'success', 'message' => 'Registration successful'];
-        } catch (\PDOException $e) {
-            $this->logger->error('Registration failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Registration failed'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Registration successful','data' => []]);
+        } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Internal Server Error','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -115,112 +120,151 @@ class UserController
      */
     public function login(string $email, string $password, string $ip): array
     {
-        if ($this->rateLimiter->isRateLimited($ip)) {
-            return ['status' => 'error', 'message' => 'Too many attempts'];
-        }
+        try {
+            if ($this->rateLimiter->isRateLimited($ip)) {
+                http_response_code(401);
+                echo json_encode(['status' => 'error','message' => 'Too many requests','data' => []]);
+                exit;
+            }
 
-        // Fetch user from secure database
-        $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
-        $stmt->execute([$email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Fetch user from secure database
+            $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$user || !password_verify($password, $user['password_hash'])) {
+            if (!$user || !password_verify($password, $user['password_hash'])) {
+                $this->auditService->log(
+                    'failed_login_attempt',
+                    'Failed login attempt.',
+                    null,
+                    null,
+                    $ip
+                );
+                http_response_code(401);
+                echo json_encode(['status' => 'error','message' => 'Invalid credentials','data' => []]);
+                exit;
+            }
+
+            $token = $this->generateJWT($user);
+
             $this->auditService->log(
-                'failed_login_attempt',
-                'Failed login attempt.',
-                null,
+                'user_logged_in',
+                'User logged in successfully.',
+                $user['id'],
                 null,
                 $ip
             );
-            return ['status' => 'error', 'message' => 'Invalid credentials'];
+
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Login successful','data' => ['token' => $token]]);
+        } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Internal Server Error','data' => []]);
         }
-
-        $token = $this->generateJWT($user);
-
-        $this->auditService->log(
-            'user_logged_in',
-            'User logged in successfully.',
-            $user['id'],
-            null,
-            $ip
-        );
-
-        return ['status' => 'success', 'token' => $token];
+        exit;
     }
 
-    /**
-     * Update user profile
-     */
-    public function updateProfile(int $userId, array $data): array
-    {
+/**
+ * Update user profile (API version)
+ */
+public function updateProfile($request) {
+    header('Content-Type: application/json');
+
+    try {
+        requireAuth(); // Ensure the user is authenticated
+        $userId = getSessionData('user_id'); // Retrieve authenticated user ID
+
+        $data = $request->getParsedBody();
+
+        // ✅ Input Validation (Ensure valid name, email, and phone)
         $rules = [
-            'name' => 'string|max:255',
+            'name' => 'required|string|max:255',
+            'email' => 'required|email',
             'phone' => 'string|max:20',
             'address' => 'string|max:255',
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            throw new \Exception("Validation failed: Invalid input.");
         }
 
-        try {
-            $allowedFields = array_keys($rules);
-            $updates = array_intersect_key($data, array_flip($allowedFields));
-            $sql = "UPDATE users SET " . implode(', ', array_map(fn($k) => "$k = :$k", array_keys($updates))) . " WHERE id = :id";
+        // ✅ Delegate profile update to UserService
+        $result = $this->userService->updateProfile($userId, $data);
 
-            $stmt = $this->secureDb->prepare($sql);
-            $stmt->execute([...$updates, 'id' => $userId]);
-
-            $this->auditService->log(
-                'user_profile_updated',
-                'User profile updated.',
-                $userId,
-                null,
-                $_SERVER['REMOTE_ADDR'] ?? null
-            );
-
-            return ['status' => 'success', 'message' => 'Profile updated'];
-        } catch (\PDOException $e) {
-            $this->logger->error('Profile update failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Update failed'];
+        if (!$result) {
+            throw new \Exception("Profile update failed.");
         }
+
+        // ✅ Log the profile update
+        $logMessage = sprintf("[%s] User ID %s: Profile updated\n", date('Y-m-d H:i:s'), $userId);
+        file_put_contents(BASE_PATH . '/logs/user.log', $logMessage, FILE_APPEND);
+
+        // ✅ Return JSON response
+        http_response_code(200);
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Profile updated successfully',
+            'data' => []
+        ]);
+    } catch (\Exception $e) {
+        error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+
+        http_response_code(400);
+        echo json_encode([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'data' => []
+        ]);
     }
+}
+
 
     /**
      * Generate password reset token
      */
     public function requestPasswordReset(string $email): array
     {
-        $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
-        $stmt->execute([$email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $this->secureDb->prepare("SELECT * FROM users WHERE email = ?");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$user) {
-            return ['status' => 'error', 'message' => 'Email not found'];
+            if (!$user) {
+                http_response_code(404);
+                echo json_encode(['status' => 'error','message' => 'User not found','data' => []]);
+                exit;
+            }
+
+            $token = bin2hex(random_bytes(32));
+            $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
+
+            $stmt = $this->secureDb->prepare("
+                INSERT INTO password_resets (email, token, expires_at) 
+                VALUES (:email, :token, :expires)
+            ");
+            $stmt->execute([
+                'email' => $email,
+                'token' => $token,
+                'expires' => $expires,
+            ]);
+
+            // Send password reset notification
+            $this->notificationService->sendNotification(
+                $user['id'],
+                'email',
+                "Use this link to reset your password: {$this->config['reset_url']}?token=$token",
+                ['email' => $email]
+            );
+
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Password reset token generated','data' => []]);
+        } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Internal Server Error','data' => []]);
         }
-
-        $token = bin2hex(random_bytes(32));
-        $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
-
-        $stmt = $this->secureDb->prepare("
-            INSERT INTO password_resets (email, token, expires_at) 
-            VALUES (:email, :token, :expires)
-        ");
-        $stmt->execute([
-            'email' => $email,
-            'token' => $token,
-            'expires' => $expires,
-        ]);
-
-        // Send password reset notification
-        $this->notificationService->sendNotification(
-            $user['id'],
-            'email',
-            "Use this link to reset your password: {$this->config['reset_url']}?token=$token",
-            ['email' => $email]
-        );
-
-        return ['status' => 'success', 'message' => 'Reset instructions sent'];
+        exit;
     }
 
     private function generateJWT(array $user): string
@@ -244,7 +288,7 @@ class UserController
         } catch (\Exception $e) {
             $this->logger->error('Failed to load user profile', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'Failed to load user profile.';
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load user profile', 'data' => []]);
         }
     }
 
@@ -256,72 +300,42 @@ class UserController
         } catch (\Exception $e) {
             $this->logger->error('Failed to load edit profile view', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'Failed to load edit profile view.';
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load edit profile view', 'data' => []]);
         }
     }
 
     public function userDashboard()
     {
-        view('dashboard/user_dashboard');
+        try {
+            view('dashboard/user_dashboard');
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Dashboard loaded', 'data' => []]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load user dashboard', ['error' => $e->getMessage()]);
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load user dashboard', 'data' => []]);
+        }
     }
 
     // Retrieve user profile and return JSON response
     public function getProfile($request) {
         header('Content-Type: application/json');
         try {
-            $userId = $_SESSION['user_id'] ?? null;
-            if (!$userId) {
-                throw new Exception("User not authenticated");
-            }
+            requireAuth();
+            $userId = requireAuth(); // obtain authenticated user id
             $profile = $this->userService->getProfileById($userId);
+            http_response_code(200);
             echo json_encode([
                 'status' => 'success',
                 'data' => $profile
             ]);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             http_response_code(400);
             echo json_encode([
                 'status' => 'error',
-                'message' => $e->getMessage()
-            ]);
-        }
-    }
-
-    // Update user profile with validation and log updates
-    public function updateProfile($request) {
-        header('Content-Type: application/json');
-        try {
-            $data = $request->getParsedBody(); // ...existing code...
-            $userId = $_SESSION['user_id'] ?? null;
-            if (!$userId) {
-                throw new Exception("User not authenticated");
-            }
-            // Basic validation
-            if (empty($data['email']) || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-                throw new Exception("Invalid email address");
-            }
-            if (empty($data['name'])) {
-                throw new Exception("Name is required");
-            }
-            // ...additional validation as needed...
-
-            $result = $this->userService->updateProfile($userId, $data);
-            if (!$result) {
-                throw new Exception("Profile update failed");
-            }
-            // Log the profile update
-            $logMessage = sprintf("[%s] User ID %s: Profile updated\n", date('Y-m-d H:i:s'), $userId);
-            file_put_contents(__DIR__ . '/../../logs/user.log', $logMessage, FILE_APPEND);
-
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'Profile updated successfully'
-            ]);
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
+                'data' => []
             ]);
         }
     }
@@ -390,12 +404,13 @@ class BookingController
 
             echo json_encode([
                 'status' => 'success',
+                'message' => 'Booking details fetched',
                 'data' => ['booking' => $booking, 'logs' => $logs]
             ]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch booking details', ['error' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             http_response_code(404);
-            echo json_encode(['status' => 'error', 'message' => 'Booking not found.']);
+            echo json_encode(['status' => 'error', 'message' => 'Booking not found', 'data' => []]);
         }
     }
 
@@ -404,17 +419,17 @@ class BookingController
      */
     public function rescheduleBooking(int $id, array $data): array
     {
-        AuthMiddleware::validateSession();
-        $rules = [
-            'pickup_date' => 'required|date|after_or_equal:today',
-            'dropoff_date' => 'required|date|after:pickup_date',
-        ];
-
-        if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
-        }
-
         try {
+            AuthMiddleware::validateSession();
+            $rules = [
+                'pickup_date' => 'required|date|after_or_equal:today',
+                'dropoff_date' => 'required|date|after:pickup_date',
+            ];
+
+            if (!$this->validator->validate($data, $rules)) {
+                return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors(), 'data' => []];
+            }
+
             $this->bookingService->rescheduleBooking($id, $data['pickup_date'], $data['dropoff_date']);
             $this->auditService->log(
                 'booking_rescheduled',
@@ -430,10 +445,12 @@ class BookingController
                 []
             );
 
-            return ['status' => 'success', 'message' => 'Booking rescheduled successfully'];
+            http_response_code(200);
+            return ['status' => 'success', 'message' => 'Booking rescheduled successfully', 'data' => []];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to reschedule booking', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to reschedule booking'];
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            return ['status' => 'error', 'message' => 'Failed to reschedule booking', 'data' => []];
         }
     }
 
@@ -442,8 +459,8 @@ class BookingController
      */
     public function cancelBooking(int $id): array
     {
-        AuthMiddleware::validateSession();
         try {
+            AuthMiddleware::validateSession();
             $refundAmount = $this->bookingService->cancelBooking($id);
 
             if ($refundAmount > 0) {
@@ -464,10 +481,12 @@ class BookingController
                 []
             );
 
-            return ['status' => 'success', 'message' => 'Booking canceled successfully'];
+            http_response_code(200);
+            return ['status' => 'success', 'message' => 'Booking canceled successfully', 'data' => []];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to cancel booking', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to cancel booking'];
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            return ['status' => 'error', 'message' => 'Failed to cancel booking', 'data' => []];
         }
     }
 
@@ -476,13 +495,15 @@ class BookingController
      */
     public function getBookingLogs(int $bookingId): array
     {
-        AuthMiddleware::validateSession();
         try {
+            AuthMiddleware::validateSession();
             $logs = $this->bookingService->getBookingLogs($bookingId);
-            return ['status' => 'success', 'logs' => $logs];
+            http_response_code(200);
+            return ['status' => 'success', 'message' => 'Booking logs fetched successfully', 'data' => ['logs' => $logs]];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch booking logs', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to fetch booking logs'];
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            return ['status' => 'error', 'message' => 'Failed to fetch booking logs', 'data' => []];
         }
     }
 
@@ -491,13 +512,15 @@ class BookingController
      */
     public function getUserBookings(int $userId): array
     {
-        AuthMiddleware::validateSession();
         try {
+            AuthMiddleware::validateSession();
             $bookings = $this->bookingService->getUserBookings($userId);
-            return ['status' => 'success', 'bookings' => $bookings];
+            http_response_code(200);
+            return ['status' => 'success', 'message' => 'User bookings fetched successfully', 'data' => ['bookings' => $bookings]];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch user bookings', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to fetch user bookings'];
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            return ['status' => 'error', 'message' => 'Failed to fetch user bookings', 'data' => []];
         }
     }
 
@@ -521,11 +544,11 @@ class BookingController
             ];
 
             if (!$this->validator->validate($data, $rules)) {
-                return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+                return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors(), 'data' => []];
             }
 
             if (!$this->bookingService->isVehicleAvailable($data['vehicle_id'], $data['pickup_date'], $data['dropoff_date'])) {
-                return ['status' => 'error', 'message' => 'Vehicle is not available for the selected dates'];
+                return ['status' => 'error', 'message' => 'Vehicle is not available for the selected dates', 'data' => []];
             }
 
             $bookingId = $this->bookingService->createBooking($data);
@@ -544,10 +567,12 @@ class BookingController
                 []
             );
 
-            return ['status' => 'success', 'message' => 'Booking created successfully', 'booking_id' => $bookingId];
+            http_response_code(201);
+            return ['status' => 'success', 'message' => 'Booking created successfully', 'data' => ['booking_id' => $bookingId]];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to create booking', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to create booking'];
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            return ['status' => 'error', 'message' => 'Failed to create booking', 'data' => []];
         }
     }
 }
@@ -596,12 +621,15 @@ class NotificationController
     {
         try {
             $notifications = $this->notificationService->getUserNotifications($userId);
-            view('user/notifications', ['notifications' => $notifications]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notifications loaded','data' => ['notifications' => $notifications]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to load notifications view', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'An error occurred while fetching notifications.';
+            echo json_encode(['status' => 'error','message' => 'An error occurred while fetching notifications','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -611,11 +639,15 @@ class NotificationController
     {
         try {
             $notifications = $this->notificationService->getUserNotifications($userId);
-            return ['status' => 'success', 'notifications' => $notifications];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notifications fetched','data' => ['notifications' => $notifications]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to fetch user notifications', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to fetch user notifications'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to fetch user notifications','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -625,11 +657,15 @@ class NotificationController
     {
         try {
             $notifications = $this->notificationService->getUserNotifications($userId);
-            echo json_encode(['status' => 'success', 'notifications' => $notifications]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notifications fetched','data' => ['notifications' => $notifications]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to fetch user notifications via AJAX', ['error' => $e->getMessage()]);
-            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch user notifications']);
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to fetch user notifications','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -640,12 +676,15 @@ class NotificationController
         try {
             $this->notificationService->markAsRead($notificationId);
             $this->logger->info("Notification marked as read", ['notification_id' => $notificationId]);
-
-            return ['status' => 'success', 'message' => 'Notification marked as read'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notification marked as read','data' => []]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to mark notification as read', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to mark notification as read'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to mark notification as read','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -656,18 +695,23 @@ class NotificationController
         $notificationId = $_POST['notification_id'] ?? null;
 
         if (!$notificationId) {
-            echo json_encode(['status' => 'error', 'message' => 'Notification ID is required']);
-            return;
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Notification ID is required','data' => []]);
+            exit;
         }
 
         try {
             $this->notificationService->markAsRead((int)$notificationId);
             $this->logger->info("Notification marked as read", ['notification_id' => $notificationId]);
-            echo json_encode(['status' => 'success', 'message' => 'Notification marked as read']);
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notification marked as read','data' => []]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to mark notification as read', ['error' => $e->getMessage()]);
-            echo json_encode(['status' => 'error', 'message' => 'Failed to mark notification as read']);
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to mark notification as read','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -678,12 +722,15 @@ class NotificationController
         try {
             $this->notificationService->deleteNotification($notificationId);
             $this->logger->info("Notification deleted", ['notification_id' => $notificationId]);
-
-            return ['status' => 'success', 'message' => 'Notification deleted'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Notification deleted','data' => []]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to delete notification', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to delete notification'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to delete notification','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -700,7 +747,9 @@ class NotificationController
 
         if (!$this->validator->validate($data, $rules)) {
             $this->logger->warning('Notification validation failed', ['data' => $data]);
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -714,14 +763,19 @@ class NotificationController
             if ($success) {
                 $this->logger->info('Notification sent successfully', ['data' => $data]);
                 $this->notificationQueue->queueNotification($data);
-                return ['status' => 'success', 'message' => 'Notification sent successfully'];
+                http_response_code(200);
+                echo json_encode(['status' => 'success','message' => 'Notification sent successfully','data' => []]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['status' => 'error','message' => 'Notification delivery failed','data' => []]);
             }
-
-            return ['status' => 'error', 'message' => 'Notification delivery failed'];
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to send notification', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to send notification'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to send notification','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -738,7 +792,9 @@ class NotificationController
 
         if (!$this->validator->validate($data, $rules)) {
             $this->logger->warning('Retry validation failed', ['data' => $data]);
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -751,11 +807,14 @@ class NotificationController
 
             if ($success) {
                 $this->logger->info('Notification retry succeeded', ['data' => $data]);
-                return ['status' => 'success', 'message' => 'Notification sent successfully after retries'];
+                http_response_code(200);
+                echo json_encode(['status' => 'success','message' => 'Notification sent successfully after retries','data' => []]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['status' => 'error','message' => 'Notification delivery failed after retries','data' => []]);
             }
-
-            return ['status' => 'error', 'message' => 'Notification delivery failed after retries'];
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Retry failed', ['error' => $e->getMessage()]);
             return ['status' => 'error', 'message' => 'Retry failed'];
         }
@@ -772,15 +831,19 @@ use Exception;
 
 require_once __DIR__ . '/../Helpers/ViewHelper.php';
 require_once __DIR__ . '/../Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../Services/Auth/AuthService.php';
 
 class AuthController
 {
-    protected TokenService $tokenService;
+    protected $authService;
     protected PDO $pdo;
 
     public function __construct()
     {
         startSecureSession();
+        // Use AuthService for authentication logic
+        $this->authService = new \App\Services\Auth\AuthService();
+
         // Load the encryption configuration
         $configPath = __DIR__ . '/../../config/encryption.php';
         if (!file_exists($configPath)) {
@@ -833,55 +896,53 @@ class AuthController
     /**
      * Handle user login (POST /auth/login)
      */
-    public function login()
+    public function login($request)
     {
         header('Content-Type: application/json');
+        try {
+            // Assume request body is already parsed
+            $data = $request->getParsedBody(); // ...existing code...
+            $username = $data['username'] ?? '';
+            $password = $data['password'] ?? '';
+            $result = $this->authService->login($username, $password);
+            
+            // Validate token before returning user details
+            if (!$this->authService->validateToken($result['token'])) {
+                throw new \Exception('Token validation failed.');
+            }
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['error' => 'Method Not Allowed']);
-            return;
-        }
+            // Set access token in HTTP-only secure cookie
+            setcookie("jwt", $result['token'], [
+                "expires" => time() + 3600,
+                "path" => "/",
+                "secure" => true,
+                "httponly" => true,
+                "samesite" => "Strict"
+            ]);
 
-        if (!validateSessionIntegrity()) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized']);
-            $this->logAuthAttempt('failure', 'Unauthorized access attempt');
-            return;
-        }
+            // Set refresh token in HTTP-only secure cookie
+            setcookie("refresh_token", $result['refresh_token'], [
+                "expires" => time() + 604800,
+                "path" => "/",
+                "secure" => true,
+                "httponly" => true,
+                "samesite" => "Strict"
+            ]);
 
-        $email = $_POST['email'] ?? null;
-        $password = $_POST['password'] ?? null;
-
-        if (!$email || !$password) {
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'User logged in',
+                'data' => []
+            ]);
+        } catch (\Exception $e) {
             http_response_code(400);
-            echo json_encode(['error' => 'Email and password are required']);
-            return;
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'data' => []
+            ]);
         }
-
-        // Fetch user from the database
-        $stmt = $this->pdo->prepare("SELECT * FROM users WHERE email = :email LIMIT 1");
-        $stmt->execute(['email' => $email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$user || !password_verify($password, $user['password'])) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Invalid credentials']);
-            $this->logAuthAttempt('failure', 'Invalid credentials');
-            return;
-        }
-
-        $token = $this->tokenService->generateToken((object) ['id' => $user['id']]);
-        $refreshToken = $this->tokenService->generateRefreshToken((object) ['id' => $user['id']]);
-
-        echo json_encode([
-            'access_token' => $token,
-            'refresh_token' => $refreshToken
-        ]);
-
-        $this->refreshToken();
-        $this->updateSessionActivity();
-        $this->logAuthAttempt('success', 'User logged in');
     }
 
     /**
@@ -890,60 +951,118 @@ class AuthController
     public function refresh()
     {
         header('Content-Type: application/json');
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                throw new \Exception('Method Not Allowed');
+            }
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['error' => 'Method Not Allowed']);
-            return;
-        }
+            $refreshToken = $_COOKIE['refresh_token'] ?? null;
 
-        $refreshToken = $_POST['refresh_token'] ?? null;
+            if (!$refreshToken) {
+                throw new \Exception('Refresh token is required');
+            }
 
-        if (!$refreshToken) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Refresh token is required']);
-            return;
-        }
+            $newToken = $this->tokenService->refreshAccessToken($refreshToken);
 
-        $newToken = $this->tokenService->refreshAccessToken($refreshToken);
+            if ($newToken) {
+                // Set new access token in HTTP-only secure cookie
+                setcookie("jwt", $newToken, [
+                    "expires" => time() + 3600,
+                    "path" => "/",
+                    "secure" => true,
+                    "httponly" => true,
+                    "samesite" => "Strict"
+                ]);
 
-        if ($newToken) {
-            echo json_encode(['access_token' => $newToken]);
-        } else {
+                http_response_code(200);
+                echo json_encode([
+                    'status' => 'success',
+                    'message' => 'Token refreshed',
+                    'data' => []
+                ]);
+            } else {
+                throw new \Exception('Invalid refresh token');
+            }
+        } catch (\Exception $e) {
             http_response_code(401);
-            echo json_encode(['error' => 'Invalid refresh token']);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'data' => []
+            ]);
         }
     }
 
     /**
      * Handle user logout (POST /auth/logout)
      */
-    public function logout()
+    public function logout($request)
     {
         header('Content-Type: application/json');
+        try {
+            $this->authService->logout();
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['error' => 'Method Not Allowed']);
-            return;
+            // Clear the JWT and refresh token cookies
+            setcookie("jwt", "", [
+                "expires" => time() - 3600,
+                "path" => "/",
+                "secure" => true,
+                "httponly" => true,
+                "samesite" => "Strict"
+            ]);
+            setcookie("refresh_token", "", [
+                "expires" => time() - 3600,
+                "path" => "/",
+                "secure" => true,
+                "httponly" => true,
+                "samesite" => "Strict"
+            ]);
+
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'User logged out',
+                'data' => []
+            ]);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'data' => []
+            ]);
         }
+    }
 
-        if (!validateSessionIntegrity()) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized']);
-            $this->logAuthAttempt('failure', 'Unauthorized access attempt');
-            return;
+    /**
+     * Get user details endpoint, ensuring token is valid
+     */
+    public function userDetails($request)
+    {
+        header('Content-Type: application/json');
+        try {
+            $token = $_COOKIE['jwt'] ?? '';
+            
+            // Validate token before processing
+            if (!$this->authService->validateToken($token)) {
+                throw new \Exception('Invalid token.');
+            }
+            
+            $userData = $this->authService->getUserFromToken($token);
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'User details fetched',
+                'data' => $userData
+            ]);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'data' => []
+            ]);
         }
-
-        $refreshToken = $_POST['refresh_token'] ?? null;
-
-        if ($refreshToken) {
-            $this->tokenService->revokeToken($refreshToken);
-        }
-
-        session_destroy();
-        echo json_encode(['message' => 'Logged out successfully']);
-        $this->logAuthAttempt('success', 'User logged out');
     }
 
     private function refreshToken()
@@ -1007,19 +1126,17 @@ class DashboardController
      */
     public function getUserBookings(): void
     {
-        $userId = $_SESSION['user_id'] ?? null;
-        
-        if (!$userId) {
-            echo json_encode(['status' => 'error', 'message' => 'User not authenticated']);
-            return;
-        }
-        
         try {
+            $userId = requireAuth(); // get authenticated user id
             $bookings = $this->bookingService->getUserBookings($userId);
-            echo json_encode(['status' => 'success', 'bookings' => $bookings]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Bookings fetched', 'data' => ['bookings' => $bookings]]);
         } catch (\Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch bookings', 'data' => []]);
         }
+        exit;
     }
 
     /**
@@ -1029,10 +1146,14 @@ class DashboardController
     {
         try {
             $statistics = $this->statisticsService->getDashboardStatistics();
-            echo json_encode(['status' => 'success', 'data' => $statistics]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Statistics fetched', 'data' => $statistics]);
         } catch (\Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch statistics', 'data' => []]);
         }
+        exit;
     }
 
     /**
@@ -1040,19 +1161,17 @@ class DashboardController
      */
     public function fetchNotifications(): void
     {
-        $userId = $_SESSION['user_id'] ?? null;
-        
-        if (!$userId) {
-            echo json_encode(['status' => 'error', 'message' => 'User not authenticated']);
-            return;
-        }
-        
         try {
+            $userId = requireAuth(); // get authenticated user id
             $notifications = $this->notificationService->getUserNotifications($userId);
-            echo json_encode(['status' => 'success', 'notifications' => $notifications]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Notifications fetched', 'data' => ['notifications' => $notifications]]);
         } catch (\Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch notifications', 'data' => []]);
         }
+        exit;
     }
 
     /**
@@ -1060,19 +1179,17 @@ class DashboardController
      */
     public function fetchUserProfile(): void
     {
-        $userId = $_SESSION['user_id'] ?? null;
-        
-        if (!$userId) {
-            echo json_encode(['status' => 'error', 'message' => 'User not authenticated']);
-            return;
-        }
-        
         try {
+            $userId = requireAuth(); // get authenticated user id
             $profile = $this->userService->getUserProfile($userId);
-            echo json_encode(['status' => 'success', 'profile' => $profile]);
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'User profile fetched', 'data' => ['profile' => $profile]]);
         } catch (\Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch user profile', 'data' => []]);
         }
+        exit;
     }
 }
 === App/Controllers/AdminDashboardController.php ===
@@ -1142,6 +1259,7 @@ class AdminDashboardController
      */
     public function getDashboardData(): void
     {
+        requireAuth(); // ensure admin authentication is in place
         try {
             $metrics = [
                 'total_users' => $this->userService->getTotalUsers(),
@@ -1159,15 +1277,16 @@ class AdminDashboardController
                 'revenue_trends' => $this->paymentService->getMonthlyRevenueTrends(),
             ];
 
+            http_response_code(200);
             echo json_encode([
                 'status' => 'success',
-                'metrics' => $metrics,
-                'graph_data' => $graphData,
+                'message' => 'Dashboard data fetched',
+                'data' => ['metrics' => $metrics, 'graph_data' => $graphData]
             ]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch admin dashboard data', ['error' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . " " . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch dashboard data']);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to fetch dashboard data', 'data' => []]);
         }
     }
 }
@@ -1227,7 +1346,9 @@ class PaymentController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -1252,11 +1373,15 @@ class PaymentController
                 ['email' => $transaction['email']]
             );
 
-            return ['status' => 'success', 'transaction' => $transaction];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Payment processed','data' => ['transaction' => $transaction]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Payment processing failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Payment processing failed'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Payment processing failed','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -1270,7 +1395,9 @@ class PaymentController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -1294,11 +1421,15 @@ class PaymentController
                 ['email' => $refund['email']]
             );
 
-            return ['status' => 'success', 'refund' => $refund];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Refund processed','data' => ['refund' => $refund]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Refund processing failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Refund processing failed'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Refund processing failed','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -1314,7 +1445,9 @@ class PaymentController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -1340,11 +1473,15 @@ class PaymentController
                 ['email' => $installmentPlan['email']]
             );
 
-            return ['status' => 'success', 'installment_plan' => $installmentPlan];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Installment plan created','data' => ['installment_plan' => $installmentPlan]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Installment plan setup failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Installment plan setup failed'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Installment plan setup failed','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -1354,11 +1491,15 @@ class PaymentController
     {
         try {
             $transactions = $this->paymentService->getUserTransactions($userId);
-            return ['status' => 'success', 'transactions' => $transactions];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Transactions fetched','data' => ['transactions' => $transactions]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to fetch user transactions', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to fetch user transactions'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to fetch user transactions','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -1368,11 +1509,15 @@ class PaymentController
     {
         try {
             $details = $this->paymentService->getPaymentDetails($transactionId);
-            return ['status' => 'success', 'details' => $details];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Payment details fetched','data' => ['details' => $details]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to fetch payment details', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to fetch payment details'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to fetch payment details','data' => []]);
         }
+        exit;
     }
 }
 === App/Controllers/ReportController.php ===
@@ -1412,13 +1557,16 @@ class ReportController
     public function index()
     {
         try {
-            // Render admin report dashboard
-            view('admin/reports');
+            $data = ['view' => 'admin/reports'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Report dashboard loaded','data' => $data]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to load admin report dashboard', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'Failed to load report dashboard.';
+            echo json_encode(['status' => 'error','message' => 'Failed to load report dashboard','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -1436,7 +1584,9 @@ class ReportController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -1446,12 +1596,15 @@ class ReportController
                 $data['filters'] ?? [],
                 $data['format']
             );
-
-            return ['status' => 'success', 'report' => $report];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'Report generated','data' => ['report' => $report]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to generate report', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to generate report'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to generate report','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -1460,13 +1613,16 @@ class ReportController
     public function userReports()
     {
         try {
-            // Render user report dashboard
-            view('user/reports');
+            $data = ['view' => 'user/reports'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'User report dashboard loaded','data' => $data]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to load user report dashboard', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'Failed to load report dashboard.';
+            echo json_encode(['status' => 'error','message' => 'Failed to load report dashboard','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -1484,7 +1640,9 @@ class ReportController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            http_response_code(400);
+            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
+            exit;
         }
 
         try {
@@ -1494,12 +1652,15 @@ class ReportController
                 $data['date_range'],
                 $data['format']
             );
-
-            return ['status' => 'success', 'report' => $report];
+            http_response_code(200);
+            echo json_encode(['status' => 'success','message' => 'User report generated','data' => ['report' => $report]]);
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to generate user report', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to generate report'];
+            http_response_code(500);
+            echo json_encode(['status' => 'error','message' => 'Failed to generate report','data' => []]);
         }
+        exit;
     }
 
     /**
@@ -1510,7 +1671,7 @@ class ReportController
         try {
             if (!file_exists($filePath)) {
                 http_response_code(404);
-                echo 'Report not found.';
+                echo json_encode(['status' => 'error','message' => 'Report not found','data' => []]);
                 return;
             }
 
@@ -1524,9 +1685,10 @@ class ReportController
             readfile($filePath);
             exit;
         } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
             $this->logger->error('Failed to download report', ['error' => $e->getMessage()]);
             http_response_code(500);
-            echo 'Failed to download report.';
+            echo json_encode(['status' => 'error','message' => 'Failed to download report','data' => []]);
         }
     }
 }
@@ -4637,6 +4799,8 @@ class EncryptionMiddleware
 namespace App\Middleware;
 
 use App\Services\Auth\TokenService;
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 use Exception;
 
 require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
@@ -4646,6 +4810,7 @@ class AuthMiddleware
     protected TokenService $tokenService;
     private int $maxAttempts = 5;
     private int $blockDuration = 300; // 5 minutes
+    private string $jwtSecret;
 
     public function __construct()
     {
@@ -4664,6 +4829,11 @@ class AuthMiddleware
             $encryptionConfig['jwt_secret'],
             $encryptionConfig['jwt_refresh_secret']
         );
+
+        if (!isset($encryptionConfig['jwt_secret'])) {
+            throw new Exception("JWT secret missing in encryption configuration.");
+        }
+        $this->jwtSecret = $encryptionConfig['jwt_secret'];
     }
 
     // New private method for rate limiting
@@ -4699,6 +4869,20 @@ class AuthMiddleware
 
     public function handle($request, $next)
     {
+        // ✅ Allow public pages without authentication
+        $publicRoutes = [
+            "/",
+            "/index.php",
+            "/auth/login.php",
+            "/auth/register.php",
+            "/auth/password_reset.php",
+            "/auth/reset_request.php",
+            "/api/views/home.php"
+        ];
+        if (in_array($_SERVER['REQUEST_URI'], $publicRoutes)) {
+            return $next($request);
+        }
+
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
         // Enforce rate limiting for failed attempts
         if (!$this->checkRateLimit($ip)) {
@@ -4713,29 +4897,53 @@ class AuthMiddleware
             return $next($request); // Allow guest access for public routes
         }
 
-        // Enforce global JWT authentication for API requests
-        // (Assuming all API requests have Authorization header)
-        $authHeader = $request->getHeader('Authorization');
-        if (!$authHeader) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized: Missing Authorization header']);
-            $this->recordFailedAttempt($ip);
-            return;
+        // Define protected routes
+        $protectedRoutes = [
+            '/views/dashboard.php',
+            '/views/user/profile.php'
+        ];
+        
+        $currentPath = $request->getPathInfo();
+        // Apply middleware to protected views and admin pages
+        if (!in_array($currentPath, $protectedRoutes) && strpos($currentPath, '/admin') !== 0) {
+            return $next($request);
         }
-
-        $token = str_replace('Bearer ', '', $authHeader);
-        $tokenData = $this->tokenService->validateToken($token);
-        if (!$tokenData) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized: Invalid token']);
-            $this->recordFailedAttempt($ip);
-            return;
+        
+        $token = '';
+        // Extract token from Authorization header if available
+        $authHeader = $request->getHeader('Authorization');
+        if ($authHeader && strpos($authHeader, 'Bearer ') === 0) {
+            $token = str_replace('Bearer ', '', $authHeader);
+        } elseif (isset($_COOKIE['jwt'])) {
+            $token = $_COOKIE['jwt'];
+        }
+        
+        if (empty($token)) {
+            $this->logUnauthorized("Missing token");
+            http_response_code(403);
+            echo json_encode(['error' => 'Unauthorized: Missing token.']);
+            exit();
+        }
+        
+        try {
+            $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
+            if ($decoded->exp < time()) {
+                $this->logUnauthorized("Token expired");
+                http_response_code(403);
+                echo json_encode(['error' => 'Unauthorized: Token expired.']);
+                exit();
+            }
+        } catch (Exception $e) {
+            $this->logUnauthorized("Token invalid: " . $e->getMessage());
+            http_response_code(403);
+            echo json_encode(['error' => 'Unauthorized: ' . $e->getMessage()]);
+            exit();
         }
 
         // Enforce admin-only routes for paths beginning with '/admin'
         if (strpos($request->getPathInfo(), '/admin') === 0) {
             // Assume the token or session holds a 'role' claim
-            $role = $tokenData['role'] ?? ($_SESSION['user_role'] ?? 'user');
+            $role = $decoded->role ?? ($_SESSION['user_role'] ?? 'user');
             if ($role !== 'admin') {
                 http_response_code(403);
                 echo json_encode(['error' => 'Forbidden: Admins only']);
@@ -4755,10 +4963,28 @@ class AuthMiddleware
         return $next($request);
     }
 
+    private function unauthorizedResponse($message)
+    {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'error', 'message' => $message, 'data' => []]);
+        exit();
+    }
+
     private function logAuthAttempt($status, $message)
     {
         $logMessage = sprintf("[%s] %s: %s from IP: %s\n", date('Y-m-d H:i:s'), ucfirst($status), $message, $_SERVER['REMOTE_ADDR']);
         file_put_contents(__DIR__ . '/../../logs/auth.log', $logMessage, FILE_APPEND);
+    }
+
+    private function logUnauthorized(string $message): void
+    {
+        $logMessage = sprintf("[%s] Unauthorized access: %s from IP: %s\n", 
+            date('Y-m-d H:i:s'), 
+            $message, 
+            $_SERVER['REMOTE_ADDR'] ?? 'unknown'
+        );
+        file_put_contents(BASE_PATH . '/logs/auth.log', $logMessage, FILE_APPEND);
     }
 }
 === App/Helpers/ViewHelper.php ===
@@ -4948,12 +5174,6 @@ function refreshSession() {
 
 // ...existing code...
 
-// Add session timeout definition
-if (!defined('SESSION_TIMEOUT')) {
-    define('SESSION_TIMEOUT', 1800); // 30 minutes
-}
-
-// Modify validateSessionIntegrity() to use SESSION_TIMEOUT
 function validateSessionIntegrity() {
     if (!isset($_SESSION['initiated'])) {
         logSecurityEvent('Session integrity check failed: not initiated', 'warning');
@@ -4963,25 +5183,31 @@ function validateSessionIntegrity() {
     $currentIp = hash('sha256', $_SERVER['REMOTE_ADDR']);
     $currentAgent = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
     
+    // Flexible validation for guest sessions
     if (isset($_SESSION['user_id'])) {
-        if ($_SESSION['client_ip'] !== $currentIp || $_SESSION['user_agent'] !== $currentAgent) {
+        // Strict validation for authenticated users
+        if ($_SESSION['client_ip'] !== $currentIp || 
+            $_SESSION['user_agent'] !== $currentAgent) {
             logSecurityEvent('Session integrity check failed: authenticated user mismatch', 'warning');
             destroySession();
             return false;
         }
     } else {
+        // Update fingerprint for guest sessions
         $_SESSION['client_ip'] = $currentIp;
         $_SESSION['user_agent'] = $currentAgent;
         $_SESSION['guest'] = true;
     }
 
-    if (time() - $_SESSION['last_activity'] > SESSION_TIMEOUT) {
+    // Check for session timeout (30 minutes)
+    if (time() - $_SESSION['last_activity'] > 1800) {
         logSecurityEvent('Session expired due to inactivity', 'info');
         destroySession();
         return false;
     }
 
-    if (time() - $_SESSION['last_activity'] > (SESSION_TIMEOUT - 300)) { // refresh if within 5 minutes of expiry
+    // Refresh session if about to expire (within 5 minutes)
+    if (time() - $_SESSION['last_activity'] > 1500) {
         refreshSession();
     }
 
@@ -5151,56 +5377,48 @@ function requireUserAuth() {
     requireAuth();
 }
 
-// New function to enforce global JWT validation
-function validateToken($token) {
-    return validateJWT($token);
-}
-
-// Modify requireAuth() to enforce CSRF token on API POST requests
+// New function to enforce authentication dynamically
 function requireAuth($allowGuest = false) {
-    $apiRequest = defined('API_ENTRY');
-    $authValid = false;
+    // Get HTTP headers if available
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    $authHeader = $headers['Authorization'] ?? '';
 
-    if ($apiRequest) {
-        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-        if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            $token = $matches[1];
-            if (validateToken($token) !== false) {
-                $authValid = true;
-            }
-        }
-        // Enforce CSRF validation on API POST requests
-        if ($apiRequest && $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? '');
-            if (!validateCsrfToken($csrf)) {
-                logAuthFailure('API CSRF validation failed for request to ' . ($_SERVER['REQUEST_URI'] ?? 'unknown'));
-                header('Content-Type: application/json');
-                header('HTTP/1.1 403 Forbidden');
-                echo json_encode(['error' => 'CSRF token invalid']);
-                exit();
-            }
-        }
-    }
-    
-    if (!$authValid && isUserLoggedIn()) {
-        $authValid = true;
-    }
-    
-    if (!$authValid && $allowGuest) {
-        $authValid = true;
-    }
-    
-    if (!$authValid) {
-        $message = 'Unauthorized access attempt to ' . ($_SERVER['REQUEST_URI'] ?? 'unknown');
-        logAuthFailure($message);
-        if ($apiRequest) {
+    if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+        // API authentication using JWT Bearer
+        $config = require __DIR__ . '/../../config/encryption.php';
+        $jwtSecret = $config['jwt_secret'] ?? '';
+        $token = substr($authHeader, 7);
+        try {
+            return (array) Firebase\JWT\JWT::decode($token, new Firebase\JWT\Key($jwtSecret, 'HS256'));
+        } catch (Exception $e) {
+            error_log("[AUTH] API authentication failure: " . $e->getMessage() . "\n", 3, __DIR__ . '/../../logs/auth.log');
             header('Content-Type: application/json');
-            header('HTTP/1.1 401 Unauthorized');
+            http_response_code(401);
             echo json_encode(['error' => 'Unauthorized']);
-        } else {
-            header('Location: /auth/login.php');
+            exit;
         }
-        exit();
+    } else {
+        // Web authentication using session
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+        if (isset($_SESSION['user_id'])) {
+            return $_SESSION['user_id'];
+        } elseif ($allowGuest) {
+            return null;
+        } else {
+            error_log("[AUTH] Web authentication failure: No session user_id\n", 3, __DIR__ . '/../../logs/auth.log');
+            // If the request expects JSON, return JSON response
+            if (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false) {
+                header('Content-Type: application/json');
+                http_response_code(401);
+                echo json_encode(['error' => 'Unauthorized']);
+            } else {
+                http_response_code(401);
+                echo 'Unauthorized';
+            }
+            exit;
+        }
     }
 }
 

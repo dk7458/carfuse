@@ -188,18 +188,43 @@ function checkJwtExpiration() {
  * @return {boolean}
  */
 function isTokenExpired(token) {
-    try {
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c =>
-            '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-        ).join(''));
-        const payload = JSON.parse(jsonPayload);
-        return Date.now() >= payload.exp * 1000;
-    } catch (e) {
-        console.error("Error decoding token:", e);
-        return true;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp < Date.now() / 1000;
+}
+
+/**
+ * Clears auth cookies and redirects to login.
+ */
+function autoLogout() {
+    deleteCookie('jwt');
+    deleteCookie('refresh_token');
+    window.location.href = '/auth/login.php';
+}
+
+/**
+ * Checks JWT on page load.
+ */
+(function checkJwtOnLoad() {
+    const token = getCookie('jwt');
+    if (token && isTokenExpired(token)) {
+        autoLogout();
     }
+})();
+
+/**
+ * A wrapper for fetch that adds Authorization header.
+ */
+async function secureFetch(url, options = {}) {
+    // Always send JWT if available
+    const token = getCookie('jwt');
+    if (token) {
+        if (!options.headers) options.headers = {};
+        options.headers["Authorization"] = "Bearer " + token;
+    }
+    return fetch(url, options).then(response => {
+        // Optionally implement silent re-authentication here using refresh tokens
+        return response;
+    });
 }
 
 /**

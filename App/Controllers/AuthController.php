@@ -110,7 +110,7 @@ class AuthController
             echo json_encode([
                 'status' => 'success',
                 'message' => 'User logged in',
-                'data' => []
+                'data' => [] // Do not include token info in response
             ]);
         } catch (\Exception $e) {
             http_response_code(400);
@@ -139,6 +139,7 @@ class AuthController
                 throw new \Exception('Refresh token is required');
             }
 
+            // Validate refresh token before issuing a new access token
             $newToken = $this->tokenService->refreshAccessToken($refreshToken);
 
             if ($newToken) {
