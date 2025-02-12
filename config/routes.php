@@ -4,24 +4,26 @@ use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
 use App\Middleware\AuthMiddleware;
 
-// ✅ Get All View Files Recursively
-function getViewFiles($baseDir)
-{
-    $views = [];
-    $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($baseDir, \RecursiveDirectoryIterator::SKIP_DOTS));
-    
-    foreach ($iterator as $file) {
-        if ($file->isFile() && pathinfo($file, PATHINFO_EXTENSION) === 'php') {
-            $relativePath = str_replace([$baseDir, '\\'], ['', '/'], $file->getPathname());
-            $routePath = '/' . trim(str_replace('.php', '', $relativePath), '/');
+// ✅ Prevent Function Redeclaration
+if (!function_exists('getViewFiles')) {
+    function getViewFiles($baseDir)
+    {
+        $views = [];
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($baseDir, \RecursiveDirectoryIterator::SKIP_DOTS));
 
-            // Prevent duplicate route registrations
-            if (!isset($views[$routePath])) {
-                $views[$routePath] = $file->getPathname();
+        foreach ($iterator as $file) {
+            if ($file->isFile() && pathinfo($file, PATHINFO_EXTENSION) === 'php') {
+                $relativePath = str_replace([$baseDir, '\\'], ['', '/'], $file->getPathname());
+                $routePath = '/' . trim(str_replace('.php', '', $relativePath), '/');
+
+                // ✅ Prevent duplicate route registrations
+                if (!isset($views[$routePath])) {
+                    $views[$routePath] = $file->getPathname();
+                }
             }
         }
+        return $views;
     }
-    return $views;
 }
 
 // ✅ Base Directory for Views
@@ -57,10 +59,10 @@ return simpleDispatcher(function (RouteCollector $router) use ($viewFiles) {
 
     // ✅ Dynamic API Routing (Prevent Direct Access)
     $router->addRoute(['GET', 'POST'], '/api/{endpoint:.+}', function ($vars) {
-        $apiPath = __DIR__ . "/../public/api/" . str_replace('..', '', $vars['endpoint']) . ".php"; // ✅ Security check
+        $apiFile = __DIR__ . "/../public/api/" . basename($vars['endpoint']) . ".php"; // ✅ Security check
 
-        if (file_exists($apiPath) && !isset($registeredRoutes["/api/" . $vars['endpoint']])) {
-            include $apiPath;
+        if (file_exists($apiFile) && !isset($registeredRoutes["/api/" . $vars['endpoint']])) {
+            include $apiFile;
             $registeredRoutes["/api/" . $vars['endpoint']] = true;
         } else {
             http_response_code(404);
