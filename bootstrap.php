@@ -41,20 +41,41 @@ logBootstrapEvent("✅ Log directory verified.");
 $logFilePath = __DIR__ . '/logs/application.log';
 
 try {
-    $logger = new Logger('application');
+    // Ensure the $logger variable is properly initialized
+    if (!isset($logger)) {
+        $logger = new Logger('application'); // Initialize the Monolog logger
+    }
+
+    // Create a stream handler for logging to a file
     $streamHandler = new StreamHandler($logFilePath, Logger::DEBUG);
-    $streamHandler->setFormatter(new LineFormatter(null, null, true, true));
+
+    // Set a custom formatter for the log entries
+    $streamHandler->setFormatter(new LineFormatter(
+        "[%datetime%] %channel%.%level_name%: %message% %context% %extra%\n",
+        null,
+        true,
+        true
+    ));
+
+    // Add the stream handler to the logger
     $logger->pushHandler($streamHandler);
+
+    // Log a success message
     logBootstrapEvent("✅ Logger initialized successfully.");
+    $logger->info("Logger initialized successfully.");
 } catch (Exception $e) {
+    // Log the error and terminate the script if logger initialization fails
     logBootstrapEvent("❌ Logger initialization failed: " . $e->getMessage());
     error_log("❌ Logger initialization failed: " . $e->getMessage());
     die("❌ Logger initialization failed: " . $e->getMessage() . "\n");
 }
 
-// Ensure the logger implements LoggerInterface
-if (!$logger instanceof LoggerInterface) {
+// Ensure the logger implements the Psr\Log\LoggerInterface
+if (!isset($logger) || !$logger instanceof LoggerInterface) {
+    // Debugging: Output the current state of the $logger variable
     var_dump($logger);
+
+    // Log the error and terminate the script
     logBootstrapEvent("❌ Logger must be an instance of LoggerInterface.");
     error_log("❌ Logger must be an instance of LoggerInterface.");
     die("❌ Logger must be an instance of LoggerInterface.\n");
