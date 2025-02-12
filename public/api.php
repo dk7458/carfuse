@@ -39,7 +39,7 @@ function getJWT() {
 function requireAuthIfProtected($apiPath) {
     $protectedRoutes = ['dashboard', 'profile', 'reports'];
     if (in_array($apiPath, $protectedRoutes)) {
-        AuthMiddleware::validateJWT(true);
+        SecurityHelper::validateJWT(true);
     }
 }
 
