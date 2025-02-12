@@ -135,6 +135,7 @@ $container->set(EncryptionService::class, fn() => $encryptionService);
 // ✅ Initialize File Storage Before Using It Anywhere
 $fileStorage = new FileStorage($fileStorageConfig, $logger, $encryptionService);
 $container->set(FileStorage::class, fn() => $fileStorage);
+$config['keymanager'] = require __DIR__ . '/keymanager.php';
 
 // ✅ Initialize PDO Instances
 try {
@@ -308,115 +309,95 @@ return [
     'from_name' => 'CarFuse Notifications',
     'fcm_api_key' => 'YOUR_FCM_API_KEY_HERE'
 ];
+=== config/keymanager.php ===
+<?php
+
+return [
+    'keys' => [
+        'default' => 'your-default-key-here',
+        'encryption' => getenv('ENCRYPTION_KEY') ?: 'fallback-encryption-key-32chars',
+        'jwt_signing' => getenv('JWT_SECRET') ?: 'fallback-jwt-secret-32chars',
+    ]
+];
 === config/routes.php ===
 <?php
-require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
-use App\Middleware\AuthMiddleware;
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
+use App\Middleware\AuthMiddleware;
 
-// Define debug log file for route resolution
-$logFile = __DIR__ . '/../logs/debug.log';
-$timestamp = date('Y-m-d H:i:s');
+// ✅ Prevent Function Redeclaration
+if (!function_exists('getViewFiles')) {
+    function getViewFiles($baseDir)
+    {
+        $views = [];
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($baseDir, \RecursiveDirectoryIterator::SKIP_DOTS));
 
-// Define public and protected routes arrays
-$publicRoutes = [
-    '/',
-    '/auth/login.php',
-    '/auth/register.php',
-    '/vehicles.php'
-];
+        foreach ($iterator as $file) {
+            if ($file->isFile() && pathinfo($file, PATHINFO_EXTENSION) === 'php') {
+                $relativePath = str_replace([$baseDir, '\\'], ['', '/'], $file->getPathname());
+                $routePath = '/' . trim(str_replace('.php', '', $relativePath), '/');
 
-$protectedRoutes = [
-    '/dashboard.php',
-    '/profile.php',
-    '/reports.php'
-];
-
-$dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRoutes, $protectedRoutes) {
-    // Register public routes without middleware enforcement
-    foreach ($publicRoutes as $route) {
-        $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
-            // ...existing route handling for public routes...
-            include BASE_PATH . "/public{$route}";
-        });
-    }
-    // Register protected routes with middleware wrapper
-    foreach ($protectedRoutes as $route) {
-        $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
-            $middleware = new AuthMiddleware();
-            // Enforce authentication on protected routes
-            $middleware->handle(new class {
-                function getPathInfo() {
-                    return $_SERVER['REQUEST_URI'];
+                // ✅ Prevent duplicate route registrations
+                if (!isset($views[$routePath])) {
+                    $views[$routePath] = $file->getPathname();
                 }
-                function getHeader($name) {
-                    return $_SERVER[$name] ?? null;
-                }
-            }, function() use ($route) {
-                include BASE_PATH . "/public{$route}";
-            }, true);
-        });
-    }
-
-    // Dynamically register all view files in /public/views
-    $viewsDir = __DIR__ . '/../public/views';
-    $viewRoutes = [];
-    if (is_dir($viewsDir)) {
-        foreach (scandir($viewsDir) as $file) {
-            if (is_file($viewsDir . '/' . $file) && pathinfo($file, PATHINFO_EXTENSION) === 'php') {
-                $route = '/' . str_replace('.php', '', $file);
-                $viewRoutes[$route] = $viewsDir . '/' . $file;
             }
+        }
+        return $views;
+    }
+}
+
+// ✅ Base Directory for Views
+$baseViewPath = __DIR__ . '/../public/views';
+$viewFiles = getViewFiles($baseViewPath);
+
+// ✅ Setup FastRoute Dispatcher
+return simpleDispatcher(function (RouteCollector $router) use ($viewFiles) {
+    
+    $registeredRoutes = []; // ✅ Track registered routes to prevent duplication
+
+    // ✅ Register View Routes Dynamically
+    foreach ($viewFiles as $route => $filePath) {
+        if (!isset($registeredRoutes[$route])) {
+            $router->addRoute(['GET', 'POST'], $route, function () use ($filePath) {
+                include $filePath;
+            });
+            $registeredRoutes[$route] = true;
         }
     }
 
-    // Ensure specific routes are correctly routed
-    $requiredRoutes = [
-        '/dashboard'  => $viewsDir . '/dashboard.php',
-        '/profile'    => $viewsDir . '/profile.php',
-        '/auth/login' => $viewsDir . '/auth/login.php',
-    ];
-    $viewRoutes = array_merge($viewRoutes, $requiredRoutes);
-
-    // Register routes (example using FastRoute)
-    foreach ($viewRoutes as $route => $file) {
-        $router->addRoute('GET', $route, $file);
+    // ✅ Protected Routes (Require JWT Authentication)
+    $protectedRoutes = ['/dashboard', '/profile', '/reports'];
+    foreach ($protectedRoutes as $route) {
+        if (isset($viewFiles[$route]) && !isset($registeredRoutes[$route])) {
+            $router->addRoute(['GET', 'POST'], $route, function () use ($route, $viewFiles) {
+                AuthMiddleware::validateJWT(true);
+                include $viewFiles[$route];
+            });
+            $registeredRoutes[$route] = true;
+        }
     }
 
-    // Default route for unmatched requests
-    $router->addRoute('GET', '/{any:.+}', 'default.php');
+    // ✅ Dynamic API Routing (Prevent Direct Access)
+    $router->addRoute(['GET', 'POST'], '/api/{endpoint:.+}', function ($vars) {
+        $apiFile = __DIR__ . "/../public/api/" . basename($vars['endpoint']) . ".php"; // ✅ Security check
+
+        if (file_exists($apiFile) && !isset($registeredRoutes["/api/" . $vars['endpoint']])) {
+            include $apiFile;
+            $registeredRoutes["/api/" . $vars['endpoint']] = true;
+        } else {
+            http_response_code(404);
+            echo json_encode(["error" => "API not found"]);
+        }
+    });
+
+    // ✅ Default Route for Unmatched Requests
+    $router->addRoute('GET', '/{any:.+}', function () {
+        http_response_code(404);
+        echo json_encode(["error" => "Page not found"]);
+    });
 });
-
-// Log all route resolutions
-$logger = function($routeInfo) use ($logFile, $timestamp) {
-    switch ($routeInfo[0]) {
-        case FastRoute\Dispatcher::FOUND:
-            error_log("[$timestamp][info] Route matched: " . $routeInfo[1] . "\n", 3, $logFile);
-            break;
-        case FastRoute\Dispatcher::NOT_FOUND:
-            error_log("[$timestamp][error] Route not found\n", 3, $logFile);
-            break;
-        case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-            error_log("[$timestamp][error] Method not allowed\n", 3, $logFile);
-            break;
-    }
-};
-
-return function($method, $uri) use ($dispatcher, $logger) {
-    $routeInfo = $dispatcher->dispatch($method, $uri);
-    $logger($routeInfo);
-    return $routeInfo;
-};
-
-// Log route resolutions
-if (isset($_SERVER['REQUEST_URI'])) {
-    $route = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-    file_put_contents(__DIR__ . '/../logs/debug.log', "[" . date('Y-m-d H:i:s') . "] Route resolved: {$route}\n", FILE_APPEND);
-}
-?>
 === config/document.php ===
 <?php
 
@@ -439,61 +420,93 @@ require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
-// Load encryption keys
+// ✅ Load encryption keys
 $config = require __DIR__ . '/encryption.php';
 $jwtSecret = $config['jwt_secret'] ?? '';
 
 header('Content-Type: application/json');
 
-function validateToken()
-{
+// --- Modified code: Log incoming headers and cookies using X-Auth-Token ---
+$tmpHeaders = getallheaders();
+if (isset($tmpHeaders['X-Auth-Token'])) {
+    // Redact the JWT token value
+    $tmpHeaders['X-Auth-Token'] = 'Bearer <redacted>';
+}
+$tmpCookies = $_COOKIE;
+if (isset($tmpCookies['jwt'])) {
+    $tmpCookies['jwt'] = '<redacted>';
+}
+error_log("[API DEBUG] " . date('Y-m-d H:i:s') . " - Headers: " . json_encode($tmpHeaders) . "\n", 3, __DIR__ . '/../logs/debug.log');
+error_log("[API DEBUG] " . date('Y-m-d H:i:s') . " - Cookies: " . json_encode($tmpCookies) . "\n", 3, __DIR__ . '/../logs/debug.log');
+// --- End modified code ---
+
+// ✅ Extract JWT from X-Auth-Token Header or Cookie
+function getJWT() {
+    $headers = getallheaders();
+    if (isset($headers['X-Auth-Token']) && preg_match('/Bearer\s+(\S+)/', $headers['X-Auth-Token'], $matches)) {
+        return trim($matches[1]);
+    }
+    return isset($_COOKIE['jwt']) ? trim($_COOKIE['jwt']) : null;
+}
+
+// ✅ Validate JWT and Decode User Info
+function validateToken() {
     global $jwtSecret;
 
-    $headers = getallheaders();
-    $authHeader = $headers['Authorization'] ?? '';
-
-    if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+    $jwt = getJWT();
+    if (!$jwt) {
+        logApiError("Missing JWT");
         http_response_code(401);
-        echo json_encode(["error" => "Unauthorized: Missing or invalid token"]);
+        echo json_encode(["error" => "Unauthorized: Missing token"]);
         exit;
     }
 
-    $token = substr($authHeader, 7);
     try {
-        return (array) JWT::decode($token, new Key($jwtSecret, 'HS256'));
+        return (array) JWT::decode($jwt, new Key($jwtSecret, 'HS256'));
     } catch (Exception $e) {
+        logApiError("Invalid JWT: " . $e->getMessage());
         http_response_code(401);
         echo json_encode(["error" => "Unauthorized: Invalid token"]);
         exit;
     }
 }
 
-// Handle CORS preflight requests
+// ✅ Log API Errors for Debugging
+function logApiError($message) {
+    error_log("[API] " . date('Y-m-d H:i:s') . " - {$message}\n", 3, __DIR__ . '/../logs/debug.log');
+}
+
+// ✅ CORS Handling (Apply to All Requests)
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, X-Auth-Token');
+
+// ✅ Handle CORS Preflight Requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
     exit;
 }
 
-// Parse API request
+// ✅ Parse API request
 $requestUri = $_SERVER['REQUEST_URI'];
 $requestMethod = $_SERVER['REQUEST_METHOD'];
-$apiPath = str_replace('/api/', '', $requestUri);
+$apiPath = str_replace('/api/', '', parse_url($requestUri, PHP_URL_PATH));
 
-// Protect all API routes (except login/register)
-if (!in_array($apiPath, ['auth/login', 'auth/register'])) {
+// ✅ Define Public and Protected Routes
+$publicRoutes = ['auth/login', 'auth/register', 'home', 'vehicles', 'auth/password_reset'];
+$protectedRoutes = ['user/dashboard', 'user/profile', 'user/reports'];
+
+// ✅ Enforce JWT Authentication for Protected Routes
+if (in_array($apiPath, $protectedRoutes)) {
     validateToken();
 }
 
-// Route API calls
-$endpoint = $_GET['endpoint'] ?? '';
-$apiFile = __DIR__ . '/' . $endpoint . '.php';
+// ✅ Dynamically Route API Calls
+$apiFile = __DIR__ . '/' . $apiPath . '.php';
 if (file_exists($apiFile)) {
-    error_log("[API] Processing endpoint: $endpoint\n", 3, __DIR__ . '/../logs/debug.log');
-    requireAuth();
+    logApiError("Processing API endpoint: $apiPath");
     require_once $apiFile;
 } else {
-    error_log("[API] Endpoint not found: $endpoint\n", 3, __DIR__ . '/../logs/debug.log');
+    logApiError("API Endpoint Not Found: $apiPath");
     http_response_code(404);
     echo json_encode(['error' => 'API not found']);
 }

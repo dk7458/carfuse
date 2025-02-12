@@ -12,10 +12,9 @@ $jwtSecret = $config['jwt_secret'] ?? '';
 
 header('Content-Type: application/json');
 
-// --- Modified code: Log incoming headers and cookies using X-Auth-Token ---
+// ✅ Log Incoming Headers and Cookies
 $tmpHeaders = getallheaders();
 if (isset($tmpHeaders['X-Auth-Token'])) {
-    // Redact the JWT token value
     $tmpHeaders['X-Auth-Token'] = 'Bearer <redacted>';
 }
 $tmpCookies = $_COOKIE;
@@ -24,7 +23,6 @@ if (isset($tmpCookies['jwt'])) {
 }
 error_log("[API DEBUG] " . date('Y-m-d H:i:s') . " - Headers: " . json_encode($tmpHeaders) . "\n", 3, __DIR__ . '/../logs/debug.log');
 error_log("[API DEBUG] " . date('Y-m-d H:i:s') . " - Cookies: " . json_encode($tmpCookies) . "\n", 3, __DIR__ . '/../logs/debug.log');
-// --- End modified code ---
 
 // ✅ Extract JWT from X-Auth-Token Header or Cookie
 function getJWT() {
@@ -74,25 +72,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // ✅ Parse API request
 $requestUri = $_SERVER['REQUEST_URI'];
-$requestMethod = $_SERVER['REQUEST_METHOD'];
-$apiPath = str_replace('/api/', '', parse_url($requestUri, PHP_URL_PATH));
+$apiPath = trim(str_replace('/api/', '', parse_url($requestUri, PHP_URL_PATH)), '/');
 
-// ✅ Define Public and Protected Routes
-$publicRoutes = ['auth/login', 'auth/register', 'home', 'vehicles', 'auth/password_reset'];
-$protectedRoutes = ['user/dashboard', 'user/profile', 'user/reports'];
+// ✅ Hardcoded Public API Routes
+$publicApiRoutes = [
+    'auth/login' => '/../public/api/auth/login.php',
+    'auth/register' => '/../public/api/auth/register.php',
+    'auth/password_reset' => '/../public/api/auth/password_reset.php',
+    'home' => '/../public/api/home.php',
+    'vehicles' => '/../public/api/vehicles.php',
+];
 
-// ✅ Enforce JWT Authentication for Protected Routes
-if (in_array($apiPath, $protectedRoutes)) {
+// ✅ Hardcoded Protected API Routes (Require Authentication)
+$protectedApiRoutes = [
+    'user/dashboard' => '/../public/api/user/dashboard.php',
+    'user/profile' => '/../public/api/user/profile.php',
+    'user/reports' => '/../public/api/user/reports.php',
+    'user/notifications' => '/../public/api/user/notifications.php',
+    'user/documents' => '/../public/api/user/documents.php',
+    'payments/history' => '/../public/api/payments/history.php',
+    'payments/make_payment' => '/../public/api/payments/make_payment.php',
+    'payments/methods' => '/../public/api/payments/methods.php',
+    'payments/refund' => '/../public/api/payments/refund.php',
+];
+
+// ✅ Ensure API Route Exists
+if (isset($protectedApiRoutes[$apiPath])) {
     validateToken();
-}
-
-// ✅ Dynamically Route API Calls
-$apiFile = __DIR__ . '/' . $apiPath . '.php';
-if (file_exists($apiFile)) {
-    logApiError("Processing API endpoint: $apiPath");
-    require_once $apiFile;
+    $apiFile = __DIR__ . $protectedApiRoutes[$apiPath];
+} elseif (isset($publicApiRoutes[$apiPath])) {
+    $apiFile = __DIR__ . $publicApiRoutes[$apiPath];
 } else {
     logApiError("API Endpoint Not Found: $apiPath");
     http_response_code(404);
     echo json_encode(['error' => 'API not found']);
+    exit;
+}
+
+// ✅ Include API File
+if (file_exists($apiFile)) {
+    logApiError("Processing API endpoint: $apiPath");
+    require_once $apiFile;
+} else {
+    logApiError("API File Not Found: $apiFile");
+    http_response_code(404);
+    echo json_encode(['error' => 'API file not found']);
 }

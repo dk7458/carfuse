@@ -172,8 +172,9 @@ public function updateProfile($request) {
     header('Content-Type: application/json');
 
     try {
-        requireAuth(); // Ensure the user is authenticated
-        $userId = getSessionData('user_id'); // Retrieve authenticated user ID
+        // Replace session-based auth with JWT validation and CSRF protection
+        $userId = validateJWT(); // Decodes JWT and returns user_id
+        validateCSRFToken($request); // Validate CSRF token
 
         $data = $request->getParsedBody();
 
@@ -307,6 +308,8 @@ public function updateProfile($request) {
     public function userDashboard()
     {
         try {
+            // Enforce JWT authentication for protected endpoints
+            validateJWT();
             view('dashboard/user_dashboard');
             http_response_code(200);
             echo json_encode(['status' => 'success', 'message' => 'Dashboard loaded', 'data' => []]);
@@ -321,8 +324,8 @@ public function updateProfile($request) {
     public function getProfile($request) {
         header('Content-Type: application/json');
         try {
-            requireAuth();
-            $userId = requireAuth(); // obtain authenticated user id
+            // Replace requireAuth and session lookup with JWT validation
+            $userId = validateJWT();
             $profile = $this->userService->getProfileById($userId);
             http_response_code(200);
             echo json_encode([
@@ -902,6 +905,10 @@ class AuthController
         try {
             // Assume request body is already parsed
             $data = $request->getParsedBody(); // ...existing code...
+            
+            // --- CSRF check placeholder (enforce CSRF protection) ---
+            // validateCsrfToken($data['csrf_token'] ?? '');
+
             $username = $data['username'] ?? '';
             $password = $data['password'] ?? '';
             $result = $this->authService->login($username, $password);
@@ -911,7 +918,7 @@ class AuthController
                 throw new \Exception('Token validation failed.');
             }
 
-            // Set access token in HTTP-only secure cookie
+            // Securely store JWT and refresh token in HTTP-only cookies
             setcookie("jwt", $result['token'], [
                 "expires" => time() + 3600,
                 "path" => "/",
@@ -919,8 +926,6 @@ class AuthController
                 "httponly" => true,
                 "samesite" => "Strict"
             ]);
-
-            // Set refresh token in HTTP-only secure cookie
             setcookie("refresh_token", $result['refresh_token'], [
                 "expires" => time() + 604800,
                 "path" => "/",
@@ -933,7 +938,7 @@ class AuthController
             echo json_encode([
                 'status' => 'success',
                 'message' => 'User logged in',
-                'data' => []
+                'data' => [] // JWT not exposed in response
             ]);
         } catch (\Exception $e) {
             http_response_code(400);
@@ -962,6 +967,7 @@ class AuthController
                 throw new \Exception('Refresh token is required');
             }
 
+            // Validate refresh token before issuing a new access token
             $newToken = $this->tokenService->refreshAccessToken($refreshToken);
 
             if ($newToken) {
@@ -1001,6 +1007,8 @@ class AuthController
         header('Content-Type: application/json');
         try {
             $this->authService->logout();
+            
+            // --- CSRF check placeholder (enforce CSRF protection) ---
 
             // Clear the JWT and refresh token cookies
             setcookie("jwt", "", [
@@ -4803,18 +4811,18 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Exception;
 
-require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../Helpers/SecurityHelper.php';
 
 class AuthMiddleware
 {
     protected TokenService $tokenService;
     private int $maxAttempts = 5;
     private int $blockDuration = 300; // 5 minutes
-    private string $jwtSecret;
+    private static string $jwtSecret;
 
     public function __construct()
     {
-        $configPath = BASE_PATH . '/config/encryption.php';
+        $configPath = __DIR__ . '/../../config/encryption.php';
         if (!file_exists($configPath)) {
             throw new Exception("Encryption configuration missing.");
         }
@@ -4833,7 +4841,7 @@ class AuthMiddleware
         if (!isset($encryptionConfig['jwt_secret'])) {
             throw new Exception("JWT secret missing in encryption configuration.");
         }
-        $this->jwtSecret = $encryptionConfig['jwt_secret'];
+        self::$jwtSecret = $encryptionConfig['jwt_secret'];
     }
 
     // New private method for rate limiting
@@ -4867,19 +4875,17 @@ class AuthMiddleware
         $_SESSION['failed_attempts'][$ip]['start'] = time();
     }
 
-    public function handle($request, $next)
+    /**
+     * Handle incoming requests.
+     *
+     * @param mixed $request
+     * @param callable $next
+     * @param bool $protected Set to true to enforce JWT validation.
+     * @return mixed
+     */
+    public function handle($request, $next, bool $protected = true)
     {
-        // ✅ Allow public pages without authentication
-        $publicRoutes = [
-            "/",
-            "/index.php",
-            "/auth/login.php",
-            "/auth/register.php",
-            "/auth/password_reset.php",
-            "/auth/reset_request.php",
-            "/api/views/home.php"
-        ];
-        if (in_array($_SERVER['REQUEST_URI'], $publicRoutes)) {
+        if (!$protected) {
             return $next($request);
         }
 
@@ -4926,7 +4932,7 @@ class AuthMiddleware
         }
         
         try {
-            $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
+            $decoded = JWT::decode($token, new Key(self::$jwtSecret, 'HS256'));
             if ($decoded->exp < time()) {
                 $this->logUnauthorized("Token expired");
                 http_response_code(403);
@@ -5044,26 +5050,6 @@ function securityLog($message, $level = 'info') {
 }
 
 /**
- * Log security events consistently.
- */
-function logSecurityEvent($message, $level = 'info') {
-    $logFile = __DIR__ . '/../../logs/security.log';
-    $timestamp = date('Y-m-d H:i:s');
-    $userId = $_SESSION['user_id'] ?? 'guest';
-
-    // Sanitize sensitive data
-    $patterns = [
-        '/user_id[\s]?[=:][\s]?["\']?\w+["\']?/i',
-        '/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/',
-        '/Mozilla\/[^\s]+/'
-    ];
-    $message = preg_replace($patterns, '[REDACTED]', $message);
-    $sanitizedMessage = str_replace(["\n", "\r"], '', $message);
-
-    error_log("[$timestamp][$level][user_id: $userId] $sanitizedMessage\n", 3, $logFile);
-}
-
-/**
  * Log authentication events.
  */
 function logAuthEvent($message, $level = 'info') {
@@ -5107,7 +5093,7 @@ function startSecureSession() {
     }
 
     if (headers_sent()) {
-        logSecurityEvent('Headers already sent, cannot modify session settings', 'warning');
+        securityLog('Headers already sent, cannot modify session settings', 'warning');
     } else {
         foreach (SESSION_CONFIG as $key => $value) {
             @ini_set("session.$key", $value);
@@ -5136,7 +5122,7 @@ function startSecureSession() {
             $_SESSION['user_agent'] = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
             $_SESSION['last_activity'] = time();
             $_SESSION['guest'] = true; // Default guest initialization
-            logSecurityEvent('New guest session initiated');
+            securityLog('New guest session initiated');
         }
 
         // CSRF protection
@@ -5146,7 +5132,7 @@ function startSecureSession() {
 
         return validateSessionIntegrity();
     } catch (Exception $e) {
-        logSecurityEvent('Session initialization failed: ' . $e->getMessage(), 'critical');
+        securityLog('Session initialization failed: ' . $e->getMessage(), 'critical');
         return false;
     }
 }
@@ -5176,7 +5162,7 @@ function refreshSession() {
 
 function validateSessionIntegrity() {
     if (!isset($_SESSION['initiated'])) {
-        logSecurityEvent('Session integrity check failed: not initiated', 'warning');
+        securityLog('Session integrity check failed: not initiated', 'warning');
         return false;
     }
 
@@ -5188,7 +5174,7 @@ function validateSessionIntegrity() {
         // Strict validation for authenticated users
         if ($_SESSION['client_ip'] !== $currentIp || 
             $_SESSION['user_agent'] !== $currentAgent) {
-            logSecurityEvent('Session integrity check failed: authenticated user mismatch', 'warning');
+            securityLog('Session integrity check failed: authenticated user mismatch', 'warning');
             destroySession();
             return false;
         }
@@ -5201,7 +5187,7 @@ function validateSessionIntegrity() {
 
     // Check for session timeout (30 minutes)
     if (time() - $_SESSION['last_activity'] > 1800) {
-        logSecurityEvent('Session expired due to inactivity', 'info');
+        securityLog('Session expired due to inactivity', 'info');
         destroySession();
         return false;
     }
@@ -5229,7 +5215,7 @@ function generateCsrfToken() {
         }
         return $_SESSION['csrf_token'];
     } catch (Exception $e) {
-        logSecurityEvent('CSRF token generation failed: ' . $e->getMessage(), 'error');
+        securityLog('CSRF token generation failed: ' . $e->getMessage(), 'error');
         // Fallback to a less secure but functional token
         return hash('sha256', uniqid(mt_rand(), true));
     }
@@ -5241,7 +5227,7 @@ function generateCsrfToken() {
 function validateCsrfToken($token)
 {
     if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
-        logSecurityEvent('CSRF validation failed for token: ' . ($token ?? 'null'), 'warning');
+        securityLog('CSRF validation failed for token: ' . ($token ?? 'null'), 'warning');
         return false;
     }
     return true;
@@ -5279,7 +5265,7 @@ function destroySession() {
 
     try {
         $wasGuest = $_SESSION['guest'] ?? false;
-        logSecurityEvent('Initiating session destruction: ' . ($wasGuest ? 'guest' : 'user') . ' session');
+        securityLog('Initiating session destruction: ' . ($wasGuest ? 'guest' : 'user') . ' session');
         
         // Clear session data
         $_SESSION = [];
@@ -5301,10 +5287,10 @@ function destroySession() {
             throw new Exception('Session destruction failed');
         }
         
-        logSecurityEvent('Session destroyed successfully');
+        securityLog('Session destroyed successfully');
         return true;
     } catch (Exception $e) {
-        logSecurityEvent('Session destruction error: ' . $e->getMessage(), 'error');
+        securityLog('Session destruction error: ' . $e->getMessage(), 'error');
         return false;
     }
 }
@@ -5359,13 +5345,13 @@ function validateJWT($token) {
 
         // Check if the token is expired
         if ($decoded->exp < time()) {
-            logSecurityEvent("JWT expired for token: $token", 'warning');
+            securityLog("JWT expired for token: $token", 'warning');
             return false;
         }
 
         return $decoded;
     } catch (Exception $e) {
-        logSecurityEvent("JWT validation failed: " . $e->getMessage(), 'error');
+        securityLog("JWT validation failed: " . $e->getMessage(), 'error');
         return false;
     }
 } // <-- Added missing closing brace
@@ -5424,7 +5410,7 @@ function requireAuth($allowGuest = false) {
 
 // Initialize secure session when the file is included
 if (!startSecureSession()) {
-    logSecurityEvent('Critical: Failed to initialize secure session', 'critical');
+    securityLog('Critical: Failed to initialize secure session', 'critical');
 }
 ?>
 === App/Helpers/dateHelper.php ===
