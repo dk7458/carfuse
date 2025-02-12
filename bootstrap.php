@@ -40,7 +40,6 @@ logBootstrapEvent("✅ Log directory verified.");
 
 // ✅ Initialize Logger (Monolog)
 $logFilePath = __DIR__ . '/logs/application.log';
-$logger = new Logger('application');
 
 try {
     $streamHandler = new StreamHandler($logFilePath, Logger::DEBUG);
@@ -160,7 +159,7 @@ logBootstrapEvent("✅ Bootstrap process completed successfully.");
 // ✅ Return Configurations for Application Use
 return [
     'pdo' => $pdo,
-    'logger' => $logger,  // ✅ Now returning proper Monolog Logger instance
+    'logger' => APP_LOGGER,  // ✅ Now returning proper Monolog Logger instance
     'auditService' => $auditService,
     'encryptionService' => $encryptionService,
 ];
