@@ -8,6 +8,7 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use App\Helpers\DatabaseHelper;
+
 // ✅ Set Headers
 header('Content-Type: application/json');
 
@@ -23,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $data = json_decode(file_get_contents("php://input"), true);
 
 // ✅ Validate Input
-if (!isset($data['email'], $data['password'])) {
+if (empty($data['email']) || empty($data['password'])) {
     http_response_code(400);
     logEvent('auth', "Login failed: Missing email or password.");
     echo json_encode(["error" => "Missing email or password"]);
@@ -48,7 +49,7 @@ try {
     }
 
     // ✅ Generate JWT Token
-    $jwtSecret = $_ENV['JWT_SECRET'] ?? 'default_secret_key'; // Load from .env
+    $jwtSecret = $_ENV['JWT_SECRET'] ?? 'default_secret_key';
     $issuedAt = time();
     $expirationTime = $issuedAt + 3600; // Token valid for 1 hour
     $payload = [
@@ -70,7 +71,7 @@ try {
         "token" => $jwt
     ]);
     exit;
-    
+
 } catch (Exception $e) {
     http_response_code(500);
     logEvent('errors', "Database error: " . $e->getMessage());
