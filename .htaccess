@@ -10,7 +10,7 @@ RewriteCond %{DOCUMENT_ROOT}/public/%{REQUEST_URI} -f
 RewriteRule ^(.*)$ public/$1 [L]
 
 # ✅ Route API requests to public/api.php
-RewriteRule ^api/(.*)$ public/api.php?route=$1 [QSA,L]
+#RewriteRule ^api/(.*)$ public/api.php?route=$1 [QSA,L]
 
 # ✅ Prevent direct access to backend directories
 RewriteRule ^(App/Controllers|App/Services|config|vendor) - [F,L]
