@@ -63,7 +63,7 @@ $container = require BASE_PATH . '/config/dependencies.php';
 
 try {
     $pdo = $container->get(PDO::class);
-    $auditService = $container->get(App\Services\AuditService::class);
+    $auditService = $container->get(AuditManager\Services\AuditService::class);
     $encryptionService = $container->get(App\Services\EncryptionService::class);
     $logger->info("✅ Services retrieved successfully from the container.");
 } catch (Exception $e) {
