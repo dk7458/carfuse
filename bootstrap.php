@@ -159,7 +159,7 @@ logBootstrapEvent("✅ Bootstrap process completed successfully.");
 // ✅ Return Configurations for Application Use
 return [
     'pdo' => $pdo,
-    'logger' => APP_LOGGER,  // ✅ Now returning proper Monolog Logger instance
+    'logger' => $logger,  // ✅ Now returning proper Monolog Logger instance
     'auditService' => $auditService,
     'encryptionService' => $encryptionService,
 ];
