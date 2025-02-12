@@ -19,7 +19,7 @@ return simpleDispatcher(function (RouteCollector $router) {
     $protectedRoutes = ['/dashboard', '/profile', '/reports'];
     foreach ($protectedRoutes as $route) {
         $router->addRoute(['GET', 'POST'], $route, function () use ($route) {
-            AuthMiddleware::validateJWT(true);
+            SecurityHelper::validateJWT(true);
             include __DIR__ . "/../public/views{$route}.php";
         });
     }
