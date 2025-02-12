@@ -52,6 +52,11 @@ try {
     die("❌ Logger initialization failed: " . $e->getMessage() . "\n");
 }
 
+// Ensure the logger implements LoggerInterface
+if (!$logger instanceof LoggerInterface) {
+    throw new InvalidArgumentException("Logger must be an instance of LoggerInterface.");
+}
+
 // ✅ Retrieve Services from Container
 try {
     $pdo = $container->get(PDO::class);
