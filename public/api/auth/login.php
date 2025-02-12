@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../../App/Helpers/DatabaseHelper.php';
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Database\Capsule\Manager as Capsule;
-
+use App\Helpers\DatabaseHelper;
 // ✅ Set Headers
 header('Content-Type: application/json');
 
