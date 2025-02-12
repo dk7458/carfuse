@@ -16,7 +16,7 @@ RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images|views|uploads|assets)/(.*)$ /public/$1/$2 [L]
 
 # ✅ Prevent direct access to api.php
-RewriteRule ^api.php - [F,L]
+#RewriteRule ^api.php - [F,L]
 
 # ✅ Ensure requests with no extension are forwarded correctly
 RewriteCond %{REQUEST_URI} !\.(css|js|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico|pdf|json)$ [NC]
