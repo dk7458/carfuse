@@ -1,4 +1,5 @@
 <?php
+error_log("Logger Initialization Debug: " . gettype($logger));
 
 /**
  * Centralized Bootstrap File
