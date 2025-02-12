@@ -28,12 +28,12 @@ $protectedRoutes = [
 // ✅ Track registered routes to prevent duplicates
 $registeredRoutes = [];
 
-// ✅ Setup FastRoute dispatcher
-$dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRoutes, $protectedRoutes, &$registeredRoutes) {
+// ✅ Setup FastRoute dispatcher and return it
+return simpleDispatcher(function (RouteCollector $router) use ($publicRoutes, $protectedRoutes, &$registeredRoutes) {
     // ✅ Register public routes
     foreach ($publicRoutes as $route) {
         if (!isset($registeredRoutes[$route])) {
-            $router->addRoute(['GET', 'POST'], $route, function($logger) use ($route) {
+            $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
                 include __DIR__ . "/../public{$route}.php";
             });
             $registeredRoutes[$route] = true;
@@ -43,7 +43,7 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRou
     // ✅ Register protected routes with JWT validation
     foreach ($protectedRoutes as $route) {
         if (!isset($registeredRoutes[$route])) {
-            $router->addRoute(['GET', 'POST'], $route, function($logger) use ($route) {
+            $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
                 AuthMiddleware::validateJWT(true);
                 include __DIR__ . "/../public{$route}.php";
             });
@@ -58,7 +58,7 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRou
             if (is_file("$viewsDir/$file") && pathinfo($file, PATHINFO_EXTENSION) === 'php') {
                 $route = '/' . str_replace('.php', '', $file);
                 if (!isset($registeredRoutes[$route])) {
-                    $router->addRoute('GET', $route, function($logger) use ($viewsDir, $file) {
+                    $router->addRoute('GET', $route, function() use ($viewsDir, $file) {
                         include "$viewsDir/$file";
                     });
                     $registeredRoutes[$route] = true;
@@ -68,37 +68,8 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) use ($publicRou
     }
 
     // ✅ Default route for unmatched requests
-    $router->addRoute('GET', '/{any:.+}', function($logger) {
+    $router->addRoute('GET', '/{any:.+}', function() {
         http_response_code(404);
-        $logger->error("404 Not Found: " . $_SERVER['REQUEST_URI']);
         echo json_encode(["error" => "Page not found"]);
     });
 });
-
-// ✅ Log all route resolutions
-$logger = function($routeInfo) use ($logFile, $timestamp) {
-    switch ($routeInfo[0]) {
-        case FastRoute\Dispatcher::FOUND:
-            error_log("[$timestamp][info] Route matched: " . json_encode($routeInfo[1]) . "\n", 3, $logFile);
-            break;
-        case FastRoute\Dispatcher::NOT_FOUND:
-            error_log("[$timestamp][error] Route not found\n", 3, $logFile);
-            break;
-        case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-            error_log("[$timestamp][error] Method not allowed\n", 3, $logFile);
-            break;
-    }
-};
-
-// ✅ Route Request Execution
-return function($method, $uri) use ($dispatcher, $logger) {
-    $routeInfo = $dispatcher->dispatch($method, $uri);
-    $logger($routeInfo);
-    return $routeInfo;
-};
-
-// ✅ Log route resolutions
-if (isset($_SERVER['REQUEST_URI'])) {
-    $route = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-    file_put_contents(__DIR__ . '/../logs/debug.log', "[" . date('Y-m-d H:i:s') . "] Route resolved: {$route}\n", FILE_APPEND);
-}
