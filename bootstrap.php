@@ -54,6 +54,7 @@ try {
 
 // Ensure the logger implements LoggerInterface
 if (!$logger instanceof LoggerInterface) {
+    var_dump($logger);
     logBootstrapEvent("❌ Logger must be an instance of LoggerInterface.");
     error_log("❌ Logger must be an instance of LoggerInterface.");
     die("❌ Logger must be an instance of LoggerInterface.\n");
