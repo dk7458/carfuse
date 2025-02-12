@@ -21,7 +21,7 @@ use App\Services\EncryptionService;
 // ✅ Load Dependencies
 require_once __DIR__ . '/vendor/autoload.php';
 $container = require __DIR__ . '/config/dependencies.php';
-define('BASE_PATH', '/home/u122931475/domains/carfuse.pl/public_html'); // Set absolute path
+define('BASE_PATH', __DIR__); // Set absolute path
 require_once __DIR__ . '/config/api.php';
 
 // ✅ Logging Function with Timestamps
@@ -103,11 +103,6 @@ try {
     die("❌ Logger initialization failed: " . $e->getMessage() . "\n");
 }
 
-// Ensure the logger is a valid callable
-if (!is_callable([$logger, 'info']) || !is_callable([$logger, 'error'])) {
-    throw new InvalidArgumentException("Logger must be a callable.");
-}
-
 // ✅ Ensure Encryption Configuration Exists
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
     logBootstrapEvent("❌ Encryption key missing or invalid.");
@@ -155,10 +150,7 @@ logBootstrapEvent("✅ Bootstrap process completed successfully.");
 // ✅ Return Configurations for Application Use
 return [
     'pdo' => $pdo,
-    'logger' => function($level, $message) use ($logger) {
-        $logger->$level($message);
-    },
+    'logger' => $logger,  // ✅ Now returning proper Monolog Logger instance
     'auditService' => $auditService,
     'encryptionService' => $encryptionService,
 ];
-?>

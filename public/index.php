@@ -5,27 +5,12 @@ error_reporting(E_ALL);
 
 // ✅ Load Bootstrap & Services
 $bootstrap = require_once __DIR__ . '/../bootstrap.php';
-$loggerClosure = $bootstrap['logger'];
+$logger = $bootstrap['logger'];
 
-// Ensure the logger is a valid callable
-if (!is_callable($loggerClosure)) {
-    throw new InvalidArgumentException("Logger must be a callable.");
+// ✅ Ensure the logger is a valid instance
+if (!$logger instanceof \Psr\Log\LoggerInterface) {
+    throw new InvalidArgumentException("Logger must be an instance of LoggerInterface.");
 }
-
-// Add minimal LoggerWrapper to wrap the closure
-class LoggerWrapper {
-    private $logger;
-    public function __construct($logger) {
-        $this->logger = $logger;
-    }
-    public function info($message) {
-        call_user_func($this->logger, 'info', $message);
-    }
-    public function error($message) {
-        call_user_func($this->logger, 'error', $message);
-    }
-}
-$logger = new LoggerWrapper($loggerClosure);
 
 // ✅ Define public pages that do not require authentication
 $publicPages = ['/', '/index.php', '/home', '/auth/login', '/auth/register', '/vehicles'];
@@ -61,8 +46,9 @@ if (!is_callable($dispatcher)) {
     throw new Exception("FastRoute dispatcher is not valid.");
 }
 
-// Correctly invoke the closure with method and URI
-$routeInfo = $dispatcher($_SERVER['REQUEST_METHOD'], "/$requestUri");
+// ✅ Route request
+$routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], "/$requestUri");
+
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::FOUND:
         $handler = $routeInfo[1];
@@ -70,8 +56,7 @@ switch ($routeInfo[0]) {
 
         if (is_callable($handler)) {
             $logger->info("Executing handler for route: /$requestUri");
-            // Pass the logger to the handler
-            $handler($logger, ...$vars);
+            $handler(...$vars);
         } else {
             http_response_code(500);
             $logger->error("Handler not callable for route: /$requestUri");
