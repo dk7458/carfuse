@@ -28,13 +28,20 @@ $protectedRoutes = [
 // ✅ Track registered routes to prevent duplicates
 $registeredRoutes = [];
 
-// ✅ Setup FastRoute dispatcher and return it
+// ✅ Setup FastRoute dispatcher
 return simpleDispatcher(function (RouteCollector $router) use ($publicRoutes, $protectedRoutes, &$registeredRoutes) {
     // ✅ Register public routes
     foreach ($publicRoutes as $route) {
         if (!isset($registeredRoutes[$route])) {
             $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
-                include __DIR__ . "/../public{$route}.php";
+                $filePath = __DIR__ . "/../public" . ($route === '/' ? "/index.php" : "{$route}.php");
+
+                if (file_exists($filePath)) {
+                    include $filePath;
+                } else {
+                    http_response_code(404);
+                    echo json_encode(["error" => "Page not found"]);
+                }
             });
             $registeredRoutes[$route] = true;
         }
@@ -45,7 +52,14 @@ return simpleDispatcher(function (RouteCollector $router) use ($publicRoutes, $p
         if (!isset($registeredRoutes[$route])) {
             $router->addRoute(['GET', 'POST'], $route, function() use ($route) {
                 AuthMiddleware::validateJWT(true);
-                include __DIR__ . "/../public{$route}.php";
+                $filePath = __DIR__ . "/../public" . "{$route}.php";
+
+                if (file_exists($filePath)) {
+                    include $filePath;
+                } else {
+                    http_response_code(404);
+                    echo json_encode(["error" => "Page not found"]);
+                }
             });
             $registeredRoutes[$route] = true;
         }
