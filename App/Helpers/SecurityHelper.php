@@ -40,26 +40,6 @@ function securityLog($message, $level = 'info') {
 }
 
 /**
- * Log security events consistently.
- */
-function logSecurityEvent($message, $level = 'info') {
-    $logFile = __DIR__ . '/../../logs/security.log';
-    $timestamp = date('Y-m-d H:i:s');
-    $userId = $_SESSION['user_id'] ?? 'guest';
-
-    // Sanitize sensitive data
-    $patterns = [
-        '/user_id[\s]?[=:][\s]?["\']?\w+["\']?/i',
-        '/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/',
-        '/Mozilla\/[^\s]+/'
-    ];
-    $message = preg_replace($patterns, '[REDACTED]', $message);
-    $sanitizedMessage = str_replace(["\n", "\r"], '', $message);
-
-    error_log("[$timestamp][$level][user_id: $userId] $sanitizedMessage\n", 3, $logFile);
-}
-
-/**
  * Log authentication events.
  */
 function logAuthEvent($message, $level = 'info') {
@@ -103,7 +83,7 @@ function startSecureSession() {
     }
 
     if (headers_sent()) {
-        logSecurityEvent('Headers already sent, cannot modify session settings', 'warning');
+        securityLog('Headers already sent, cannot modify session settings', 'warning');
     } else {
         foreach (SESSION_CONFIG as $key => $value) {
             @ini_set("session.$key", $value);
@@ -132,7 +112,7 @@ function startSecureSession() {
             $_SESSION['user_agent'] = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
             $_SESSION['last_activity'] = time();
             $_SESSION['guest'] = true; // Default guest initialization
-            logSecurityEvent('New guest session initiated');
+            securityLog('New guest session initiated');
         }
 
         // CSRF protection
@@ -142,7 +122,7 @@ function startSecureSession() {
 
         return validateSessionIntegrity();
     } catch (Exception $e) {
-        logSecurityEvent('Session initialization failed: ' . $e->getMessage(), 'critical');
+        securityLog('Session initialization failed: ' . $e->getMessage(), 'critical');
         return false;
     }
 }
@@ -172,7 +152,7 @@ function refreshSession() {
 
 function validateSessionIntegrity() {
     if (!isset($_SESSION['initiated'])) {
-        logSecurityEvent('Session integrity check failed: not initiated', 'warning');
+        securityLog('Session integrity check failed: not initiated', 'warning');
         return false;
     }
 
@@ -184,7 +164,7 @@ function validateSessionIntegrity() {
         // Strict validation for authenticated users
         if ($_SESSION['client_ip'] !== $currentIp || 
             $_SESSION['user_agent'] !== $currentAgent) {
-            logSecurityEvent('Session integrity check failed: authenticated user mismatch', 'warning');
+            securityLog('Session integrity check failed: authenticated user mismatch', 'warning');
             destroySession();
             return false;
         }
@@ -197,7 +177,7 @@ function validateSessionIntegrity() {
 
     // Check for session timeout (30 minutes)
     if (time() - $_SESSION['last_activity'] > 1800) {
-        logSecurityEvent('Session expired due to inactivity', 'info');
+        securityLog('Session expired due to inactivity', 'info');
         destroySession();
         return false;
     }
@@ -225,7 +205,7 @@ function generateCsrfToken() {
         }
         return $_SESSION['csrf_token'];
     } catch (Exception $e) {
-        logSecurityEvent('CSRF token generation failed: ' . $e->getMessage(), 'error');
+        securityLog('CSRF token generation failed: ' . $e->getMessage(), 'error');
         // Fallback to a less secure but functional token
         return hash('sha256', uniqid(mt_rand(), true));
     }
@@ -237,7 +217,7 @@ function generateCsrfToken() {
 function validateCsrfToken($token)
 {
     if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
-        logSecurityEvent('CSRF validation failed for token: ' . ($token ?? 'null'), 'warning');
+        securityLog('CSRF validation failed for token: ' . ($token ?? 'null'), 'warning');
         return false;
     }
     return true;
@@ -275,7 +255,7 @@ function destroySession() {
 
     try {
         $wasGuest = $_SESSION['guest'] ?? false;
-        logSecurityEvent('Initiating session destruction: ' . ($wasGuest ? 'guest' : 'user') . ' session');
+        securityLog('Initiating session destruction: ' . ($wasGuest ? 'guest' : 'user') . ' session');
         
         // Clear session data
         $_SESSION = [];
@@ -297,10 +277,10 @@ function destroySession() {
             throw new Exception('Session destruction failed');
         }
         
-        logSecurityEvent('Session destroyed successfully');
+        securityLog('Session destroyed successfully');
         return true;
     } catch (Exception $e) {
-        logSecurityEvent('Session destruction error: ' . $e->getMessage(), 'error');
+        securityLog('Session destruction error: ' . $e->getMessage(), 'error');
         return false;
     }
 }
@@ -355,13 +335,13 @@ function validateJWT($token) {
 
         // Check if the token is expired
         if ($decoded->exp < time()) {
-            logSecurityEvent("JWT expired for token: $token", 'warning');
+            securityLog("JWT expired for token: $token", 'warning');
             return false;
         }
 
         return $decoded;
     } catch (Exception $e) {
-        logSecurityEvent("JWT validation failed: " . $e->getMessage(), 'error');
+        securityLog("JWT validation failed: " . $e->getMessage(), 'error');
         return false;
     }
 } // <-- Added missing closing brace
@@ -420,6 +400,6 @@ function requireAuth($allowGuest = false) {
 
 // Initialize secure session when the file is included
 if (!startSecureSession()) {
-    logSecurityEvent('Critical: Failed to initialize secure session', 'critical');
+    securityLog('Critical: Failed to initialize secure session', 'critical');
 }
 ?>
