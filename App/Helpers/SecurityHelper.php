@@ -22,6 +22,7 @@ const SESSION_CONFIG = [
 ];
 
 // Enhanced logging with severity levels
+if (!securityLog) {
 function securityLog($message, $level = 'info') {
     $logFile = __DIR__ . '/../../logs/security.log';
     $timestamp = date('Y-m-d H:i:s');
@@ -38,7 +39,7 @@ function securityLog($message, $level = 'info') {
     
     error_log("[$timestamp][$level][user_id: $userId] $sanitizedMessage\n", 3, $logFile);
 }
-
+}
 /**
  * Log security events consistently.
  */
