@@ -5,12 +5,12 @@ error_reporting(E_ALL);
 
 // ✅ Load Bootstrap & Services
 $bootstrap = require_once __DIR__ . '/../bootstrap.php';
-$logger = $bootstrap['logger'];
 
 // ✅ Ensure logger is set
 if (!isset($bootstrap['logger']) || !$bootstrap['logger'] instanceof \Psr\Log\LoggerInterface) {
     die("❌ Fatal error: Logger must be an instance of LoggerInterface.");
 }
+$logger = $bootstrap['logger'];
 
 // ✅ Define public pages that do not require authentication
 $publicPages = ['/', '/index.php', '/home', '/auth/login', '/auth/register', '/vehicles'];
