@@ -31,15 +31,36 @@ function logBootstrapEvent($message)
     file_put_contents(__DIR__ . '/logs/bootstrap.log', "{$timestamp} - {$message}\n", FILE_APPEND);
 }
 
+// ✅ Ensure Log Directory Exists
+$logDir = __DIR__ . '/logs';
+if (!is_dir($logDir)) {
+    mkdir($logDir, 0775, true);
+}
+logBootstrapEvent("✅ Log directory verified.");
+
+// ✅ Initialize Logger (Monolog)
+$logFilePath = __DIR__ . '/logs/application.log';
+$logger = new Logger('application');
+
+try {
+    $streamHandler = new StreamHandler($logFilePath, Logger::DEBUG);
+    $streamHandler->setFormatter(new LineFormatter(null, null, true, true));
+    $logger->pushHandler($streamHandler);
+    logBootstrapEvent("✅ Logger initialized successfully.");
+} catch (Exception $e) {
+    logBootstrapEvent("❌ Logger initialization failed: " . $e->getMessage());
+    die("❌ Logger initialization failed: " . $e->getMessage() . "\n");
+}
+
 // ✅ Retrieve Services from Container
 try {
     $pdo = $container->get(PDO::class);
-    $logger = $container->get(LoggerInterface::class);
     $notificationService = $container->get(App\Services\NotificationService::class);
     $tokenService = $container->get(App\Services\Auth\TokenService::class);
     $validator = $container->get(App\Services\Validator::class);
     logBootstrapEvent("✅ Services retrieved successfully from the container.");
 } catch (Exception $e) {
+    $logger->error("❌ Service retrieval failed: " . $e->getMessage());
     die("❌ Service retrieval failed: " . $e->getMessage() . "\n");
 }
 
@@ -80,27 +101,6 @@ try {
 } catch (Exception $e) {
     logBootstrapEvent("❌ Eloquent initialization failed: " . $e->getMessage());
     die("❌ Eloquent initialization failed: " . $e->getMessage() . "\n");
-}
-
-// ✅ Ensure Log Directory Exists
-$logDir = __DIR__ . '/logs';
-if (!is_dir($logDir)) {
-    mkdir($logDir, 0775, true);
-}
-logBootstrapEvent("✅ Log directory verified.");
-
-// ✅ Initialize Logger (Monolog)
-$logFilePath = __DIR__ . '/logs/application.log';
-$logger = new Logger('application');
-
-try {
-    $streamHandler = new StreamHandler($logFilePath, Logger::DEBUG);
-    $streamHandler->setFormatter(new LineFormatter(null, null, true, true));
-    $logger->pushHandler($streamHandler);
-    logBootstrapEvent("✅ Logger initialized successfully.");
-} catch (Exception $e) {
-    logBootstrapEvent("❌ Logger initialization failed: " . $e->getMessage());
-    die("❌ Logger initialization failed: " . $e->getMessage() . "\n");
 }
 
 // ✅ Ensure Encryption Configuration Exists
@@ -154,3 +154,4 @@ return [
     'auditService' => $auditService,
     'encryptionService' => $encryptionService,
 ];
+?>
