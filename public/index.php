@@ -42,7 +42,7 @@ if (in_array('/' . $requestUri, $protectedPages)) {
 
 // ✅ FastRoute Dispatching for Views
 $dispatcher = require __DIR__ . '/../config/routes.php';
-if (!is_callable($dispatcher)) {
+if (!$dispatcher instanceof FastRoute\Dispatcher) {
     throw new Exception("FastRoute dispatcher is not valid.");
 }
 
