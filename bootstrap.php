@@ -49,12 +49,15 @@ try {
     logBootstrapEvent("✅ Logger initialized successfully.");
 } catch (Exception $e) {
     logBootstrapEvent("❌ Logger initialization failed: " . $e->getMessage());
+    error_log("❌ Logger initialization failed: " . $e->getMessage());
     die("❌ Logger initialization failed: " . $e->getMessage() . "\n");
 }
 
 // Ensure the logger implements LoggerInterface
 if (!$logger instanceof LoggerInterface) {
-    throw new InvalidArgumentException("Logger must be an instance of LoggerInterface.");
+    logBootstrapEvent("❌ Logger must be an instance of LoggerInterface.");
+    error_log("❌ Logger must be an instance of LoggerInterface.");
+    die("❌ Logger must be an instance of LoggerInterface.\n");
 }
 
 // ✅ Retrieve Services from Container
@@ -105,6 +108,7 @@ try {
     logBootstrapEvent("✅ Eloquent ORM initialized successfully.");
 } catch (Exception $e) {
     logBootstrapEvent("❌ Eloquent initialization failed: " . $e->getMessage());
+    $logger->error("❌ Eloquent initialization failed: " . $e->getMessage());
     die("❌ Eloquent initialization failed: " . $e->getMessage() . "\n");
 }
 
@@ -121,6 +125,7 @@ try {
     logBootstrapEvent("✅ Additional services retrieved successfully.");
 } catch (Exception $e) {
     logBootstrapEvent("❌ Failed to retrieve additional services: " . $e->getMessage());
+    $logger->error("❌ Failed to retrieve additional services: " . $e->getMessage());
     die("❌ Failed to retrieve additional services: " . $e->getMessage() . "\n");
 }
 
