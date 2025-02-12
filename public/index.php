@@ -6,50 +6,26 @@ error_reporting(E_ALL);
 // ✅ Load Bootstrap & Services
 $bootstrap = require_once __DIR__ . '/../bootstrap.php';
 
-// ✅ Ensure logger is set
+// ✅ Ensure Logger is Set
 if (!isset($bootstrap['logger']) || !$bootstrap['logger'] instanceof \Psr\Log\LoggerInterface) {
-    die("❌ Fatal error: Logger must be an instance of LoggerInterface.");
+    die("❌ Fatal Error: Logger must be an instance of LoggerInterface.");
 }
 $logger = $bootstrap['logger'];
 
-// ✅ Define public pages that do not require authentication
-$publicPages = ['/', '/index.php', '/home', '/auth/login', '/auth/register', '/vehicles'];
-
 // ✅ Get Requested URI & Log Request
-$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$logger->info("Requested URI: $requestUri");
-
-// ✅ Ensure URL is properly formatted (prevent double slashes and trailing slashes)
-$requestUri = trim($requestUri, '/');
-
-// ✅ If request is to an API endpoint, route it to public/api.php
-if (strpos($requestUri, 'api/') === 0) {
-    $_GET['route'] = str_replace('api/', '', $requestUri);
-    $logger->info("Routing API Request: $requestUri to api.php");
-    require __DIR__ . "/../public/api.php";
-    exit;
-}
-
-// ✅ Ensure authentication for protected pages
-$protectedPages = ['/dashboard', '/profile', '/reports'];
-if (in_array('/' . $requestUri, $protectedPages)) {
-    startSecureSession();
-    if (!isset($_SESSION['user_id'])) {
-        header("Location: /auth/login.php");
-        exit();
-    }
-}
+$requestUri = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
+$logger->info("Requested URI: /$requestUri");
 
 // ✅ Load FastRoute Dispatcher
 $dispatcher = require __DIR__ . '/../config/routes.php';
 
-// ✅ Ensure dispatcher is valid
+// ✅ Ensure Dispatcher is Valid
 if (!$dispatcher instanceof FastRoute\Dispatcher) {
     $logger->error("FastRoute dispatcher is not valid.");
     throw new Exception("FastRoute dispatcher is not valid.");
 }
 
-// ✅ Route request
+// ✅ Route Request
 $routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], "/$requestUri");
 
 switch ($routeInfo[0]) {
