@@ -41,6 +41,7 @@ logBootstrapEvent("✅ Log directory verified.");
 $logFilePath = __DIR__ . '/logs/application.log';
 
 try {
+    $logger = new Logger('application');
     $streamHandler = new StreamHandler($logFilePath, Logger::DEBUG);
     $streamHandler->setFormatter(new LineFormatter(null, null, true, true));
     $logger->pushHandler($streamHandler);
