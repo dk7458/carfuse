@@ -11,7 +11,7 @@ return simpleDispatcher(function (RouteCollector $router) {
     $publicRoutes = ['/', '/home', '/auth/login', '/auth/register', '/vehicles'];
     foreach ($publicRoutes as $route) {
         $router->addRoute(['GET', 'POST'], $route, function () use ($route) {
-            include __DIR__ . "/public/views" . ($route === '/' ? '/home.php' : "{$route}.php");
+            include __DIR__ . "/../public/views" . ($route === '/' ? '/home.php' : "{$route}.php");
         });
     }
 
@@ -20,13 +20,13 @@ return simpleDispatcher(function (RouteCollector $router) {
     foreach ($protectedRoutes as $route) {
         $router->addRoute(['GET', 'POST'], $route, function () use ($route) {
             AuthMiddleware::validateJWT(true);
-            include __DIR__ . "/public/views{$route}.php";
+            include __DIR__ . "/../public/views{$route}.php";
         });
     }
 
     // ✅ Dynamic API Routing
     $router->addRoute(['GET', 'POST'], '/api/{endpoint}', function ($vars) {
-        $apiFile = __DIR__ . "/public/api/{$vars['endpoint']}.php";
+        $apiFile = __DIR__ . "/..public/api/{$vars['endpoint']}.php";
         if (file_exists($apiFile)) {
             include $apiFile;
         } else {
