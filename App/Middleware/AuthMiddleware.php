@@ -7,18 +7,18 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Exception;
 
-require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../Helpers/SecurityHelper.php';
 
 class AuthMiddleware
 {
     protected TokenService $tokenService;
     private int $maxAttempts = 5;
     private int $blockDuration = 300; // 5 minutes
-    private string $jwtSecret;
+    private static string $jwtSecret;
 
     public function __construct()
     {
-        $configPath = BASE_PATH . '/config/encryption.php';
+        $configPath = __DIR__ . '/../../config/encryption.php';
         if (!file_exists($configPath)) {
             throw new Exception("Encryption configuration missing.");
         }
@@ -37,7 +37,7 @@ class AuthMiddleware
         if (!isset($encryptionConfig['jwt_secret'])) {
             throw new Exception("JWT secret missing in encryption configuration.");
         }
-        $this->jwtSecret = $encryptionConfig['jwt_secret'];
+        self::$jwtSecret = $encryptionConfig['jwt_secret'];
     }
 
     // New private method for rate limiting
@@ -71,19 +71,17 @@ class AuthMiddleware
         $_SESSION['failed_attempts'][$ip]['start'] = time();
     }
 
-    public function handle($request, $next)
+    /**
+     * Handle incoming requests.
+     *
+     * @param mixed $request
+     * @param callable $next
+     * @param bool $protected Set to true to enforce JWT validation.
+     * @return mixed
+     */
+    public function handle($request, $next, bool $protected = true)
     {
-        // ✅ Allow public pages without authentication
-        $publicRoutes = [
-            "/",
-            "/index.php",
-            "/auth/login.php",
-            "/auth/register.php",
-            "/auth/password_reset.php",
-            "/auth/reset_request.php",
-            "/api/views/home.php"
-        ];
-        if (in_array($_SERVER['REQUEST_URI'], $publicRoutes)) {
+        if (!$protected) {
             return $next($request);
         }
 
@@ -130,7 +128,7 @@ class AuthMiddleware
         }
         
         try {
-            $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
+            $decoded = JWT::decode($token, new Key(self::$jwtSecret, 'HS256'));
             if ($decoded->exp < time()) {
                 $this->logUnauthorized("Token expired");
                 http_response_code(403);
