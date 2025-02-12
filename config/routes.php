@@ -4,6 +4,7 @@ use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
 use App\Middleware\AuthMiddleware;
 use App\Helpers\SecurityHelper;
+
 // ✅ Setup FastRoute Dispatcher
 return simpleDispatcher(function (RouteCollector $router) {
 
@@ -19,14 +20,13 @@ return simpleDispatcher(function (RouteCollector $router) {
     $protectedRoutes = ['/dashboard', '/profile', '/reports'];
     foreach ($protectedRoutes as $route) {
         $router->addRoute(['GET', 'POST'], $route, function () use ($route) {
-            SecurityHelper::validateJWT(true);
             include __DIR__ . "/../public/views{$route}.php";
         });
     }
 
     // ✅ Dynamic API Routing
     $router->addRoute(['GET', 'POST'], '/api/{endpoint}', function ($vars) {
-        $apiFile = __DIR__ . "/..public/api/{$vars['endpoint']}.php";
+        $apiFile = __DIR__ . "/../public/api.php";
         if (file_exists($apiFile)) {
             include $apiFile;
         } else {

@@ -2,9 +2,9 @@
 define('API_ENTRY', true);
 date_default_timezone_set('UTC');
 
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../App/Middleware/AuthMiddleware.php';
-require_once __DIR__ . '/../vendor/autoload.php';
 
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
@@ -35,14 +35,6 @@ function getJWT() {
     return $_COOKIE['jwt'] ?? null;
 }
 
-// ✅ Public vs. Protected API Route Handling
-function requireAuthIfProtected($apiPath) {
-    $protectedRoutes = ['dashboard', 'profile', 'reports'];
-    if (in_array($apiPath, $protectedRoutes)) {
-        SecurityHelper::validateJWT(true);
-    }
-}
-
 // ✅ Capture Incoming API Request
 $method = $_SERVER['REQUEST_METHOD'];
 $requestUri = $_SERVER['REQUEST_URI'];
@@ -50,7 +42,16 @@ logApiEvent("Request: {$method} {$requestUri}");
 
 // ✅ Parse API Path
 $apiPath = trim(str_replace('/api/', '', parse_url($requestUri, PHP_URL_PATH)), '/');
-requireAuthIfProtected($apiPath);
+
+// ✅ Validate JWT for Protected Routes
+$protectedRoutes = ['dashboard', 'profile', 'reports'];
+if (in_array($apiPath, $protectedRoutes)) {
+    $jwt = getJWT();
+    if (!$jwt || !SecurityHelper::validateJWT($jwt)) {
+        logApiEvent("JWT validation failed: {$apiPath}");
+        sendJsonResponse('error', 'Unauthorized', [], 401);
+    }
+}
 
 // ✅ CSRF Protection for Authenticated POST Requests
 if ($method === 'POST' && getJWT()) {
