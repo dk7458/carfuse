@@ -35,7 +35,7 @@ switch ($routeInfo[0]) {
 
         if (is_callable($handler)) {
             $logger->info("Executing handler for route: /$requestUri");
-            call_user_func_array($handler, $vars);
+            call_user_func($handler, $vars); // Changed from call_user_func_array to call_user_func
         } else {
             http_response_code(500);
             $logger->error("Handler not callable for route: /$requestUri");

@@ -79,7 +79,7 @@ $apiPath = str_replace('/api/', '', parse_url($requestUri, PHP_URL_PATH));
 
 // ✅ Define Public and Protected Routes
 $publicRoutes = ['auth/login', 'auth/register', 'home', 'vehicles', 'auth/password_reset'];
-$protectedRoutes = ['dashboard', 'profile', 'reports'];
+$protectedRoutes = ['user/dashboard', 'user/profile', 'user/reports'];
 
 // ✅ Enforce JWT Authentication for Protected Routes
 if (in_array($apiPath, $protectedRoutes)) {
