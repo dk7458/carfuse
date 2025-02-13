@@ -1,3 +1,9 @@
+
+ALTER DATABASE u122931475_secure CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+
+
+
 -- Logs Table (Security & Compliance)
 CREATE TABLE IF NOT EXISTS logs (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
