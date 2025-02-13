@@ -77,8 +77,9 @@ $apiPath = trim(str_replace('/api/', '', parse_url($requestUri, PHP_URL_PATH)), 
 // ✅ Hardcoded Public API Routes
 $publicApiRoutes = [
     'auth/login' => '/../public/api/auth/login.php',
+    'auth/logout' => '/../public/api/auth/logout.php',
     'auth/register' => '/../public/api/auth/register.php',
-    'auth/password_reset' => '/../public/api/auth/password_reset.php',
+    'auth/reset_request' => '/../public/api/auth/reset_request.php',
     'home' => '/../public/api/home.php',
     'vehicles' => '/../public/api/vehicles.php',
 ];
