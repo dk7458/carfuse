@@ -4,18 +4,19 @@
  * Centralized Bootstrap File
  * Path: bootstrap.php
  *
- * Initializes database connections and registers necessary services.
+ * Initializes database connections, logging, encryption, and registers necessary services.
  */
 
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
+use DI\Container as DIContainer;
 
 // ✅ Load Dependencies
 require_once __DIR__ . '/vendor/autoload.php';
 define('BASE_PATH', __DIR__);
 
-// ✅ Load Logger Separately
+// ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
 
 // ✅ Load and Validate Configuration Files
@@ -38,10 +39,10 @@ if (!isset($config['database']['app_database'], $config['database']['secure_data
     die("❌ Error: Database configuration missing or incorrect in config/database.php\n");
 }
 
-// ✅ Initialize Database (Eloquent ORM)
+// ✅ Initialize Eloquent ORM
 try {
     $capsule = new Capsule;
-    $capsule->addConnection($config['database']['app_database']);
+    $capsule->addConnection($config['database']['app_database'], 'default');
     $capsule->addConnection($config['database']['secure_database'], 'secure');
     $capsule->setEventDispatcher(new Dispatcher(new Container));
     $capsule->setAsGlobal();
@@ -58,14 +59,14 @@ if (!isset($config['encryption']['encryption_key']) || strlen($config['encryptio
     die("❌ Error: Encryption key missing or invalid in config/encryption.php\n");
 }
 
-// ✅ Retrieve Services from Container
+// ✅ Initialize Dependency Container
 $container = require BASE_PATH . '/config/dependencies.php';
 
+// ✅ Retrieve Critical Services
 try {
-    $pdo = $container->get(PDO::class);
     $auditService = $container->get(AuditManager\Services\AuditService::class);
     $encryptionService = $container->get(App\Services\EncryptionService::class);
-    $logger->info("✅ Services retrieved successfully from the container.");
+    $logger->info("✅ Critical services retrieved successfully.");
 } catch (Exception $e) {
     $logger->error("❌ Service retrieval failed: " . $e->getMessage());
     die("❌ Service retrieval failed: " . $e->getMessage() . "\n");
@@ -93,13 +94,15 @@ if (!empty($missingDependencies)) {
     echo "⚠️ Ensure dependencies are correctly registered in config/dependencies.php.\n";
 }
 
-// ✅ Output Confirmation
+// ✅ Final Confirmation
 $logger->info("✅ Bootstrap process completed successfully.");
 
 // ✅ Return Configurations for Application Use
 return [
-    'pdo' => $pdo,
+    'db' => $capsule->getConnection(),
+    'secure_db' => $capsule->getConnection('secure'),
     'logger' => $logger,
     'auditService' => $auditService,
     'encryptionService' => $encryptionService,
+    'container' => $container,
 ];
