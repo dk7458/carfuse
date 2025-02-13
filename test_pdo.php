@@ -16,7 +16,7 @@ $dotenv = Dotenv::createImmutable(__DIR__ . '/');
 $dotenv->safeLoad();
 
 // ✅ Database Credentials (From .env or Hardcoded)
-$dbHost = $_ENV['SECURE_DB_PORT'] ?? '3306';
+$dbHost = $_ENV['DB_PORT'] ?? '3306';
 $dbName = $_ENV['SECURE_DB_DATABASE'] ?? 'app_db';
 $dbUser = $_ENV['SECURE_DB_USERNAME'] ?? 'root';
 $dbPass = $_ENV['SECURE_DB_PASSWORD'] ?? '';
