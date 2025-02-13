@@ -38,8 +38,8 @@ $tables = [
             booking_reference BIGINT UNSIGNED NULL,
             ip_address VARCHAR(45),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_reference) REFERENCES app_db.users(id) ON DELETE SET NULL,
-            FOREIGN KEY (booking_reference) REFERENCES app_db.bookings(id) ON DELETE SET NULL
+            FOREIGN KEY (user_reference) REFERENCES u122931475_carfuse.users(id) ON DELETE SET NULL,
+            FOREIGN KEY (booking_reference) REFERENCES u122931475_carfuse.bookings(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ",
     "contracts" => "
@@ -49,8 +49,8 @@ $tables = [
             user_reference BIGINT UNSIGNED NOT NULL,
             contract_pdf VARCHAR(255) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_reference) REFERENCES app_db.users(id) ON DELETE CASCADE,
-            FOREIGN KEY (booking_reference) REFERENCES app_db.bookings(id) ON DELETE CASCADE
+            FOREIGN KEY (user_reference) REFERENCES u122931475_carfuse.users(id) ON DELETE CASCADE,
+            FOREIGN KEY (booking_reference) REFERENCES u122931475_carfuse.bookings(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     "
 ];
