@@ -38,16 +38,27 @@ try {
     // ✅ Initialize Eloquent ORM
     DatabaseHelper::getInstance();
 
+    logEvent('database', "Checking user login for email: $email"); // 🔍 Debugging step
+
     // ✅ Check If User Exists Using Eloquent
     $user = Capsule::table('users')->where('email', $email)->first();
 
-    if (!$user || !password_verify($password, $user->password)) {
+    if (!$user) {
+        logEvent('security', "Failed login attempt - User not found: $email");
         http_response_code(401);
-        logEvent('security', "Failed login attempt for email: $email");
         echo json_encode(["error" => "Invalid email or password"]);
         exit;
     }
 
+    if (!password_verify($password, $user->password)) {
+        logEvent('security', "Failed login attempt - Incorrect password: $email");
+        http_response_code(401);
+        echo json_encode(["error" => "Invalid email or password"]);
+        exit;
+    }
+
+    logEvent('auth', "User ID {$user->id} logged in successfully.");
+    
     // ✅ Generate JWT Token
     $jwtSecret = $_ENV['JWT_SECRET'] ?? 'default_secret_key';
     $issuedAt = time();
@@ -61,9 +72,6 @@ try {
 
     $jwt = JWT::encode($payload, $jwtSecret, 'HS256');
 
-    // ✅ Log Successful Login
-    logEvent('auth', "User ID {$user->id} logged in successfully.");
-
     // ✅ Return Response
     echo json_encode([
         "status" => "success",
@@ -74,7 +82,7 @@ try {
 
 } catch (Exception $e) {
     http_response_code(500);
-    logEvent('errors', "Database error: " . $e->getMessage());
+    logEvent('errors', "❌ Database Query Error: " . $e->getMessage());
     echo json_encode(["error" => "Internal Server Error"]);
     exit;
 }
