@@ -6,6 +6,7 @@ use App\Services\Auth\TokenService;
 use App\Services\Auth\AuthService;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Exception;
+use App\Helpers\DatabaseHelper;
 
 require_once __DIR__ . '/../Helpers/ViewHelper.php';
 require_once __DIR__ . '/../Helpers/SecurityHelper.php';
