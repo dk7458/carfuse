@@ -41,7 +41,10 @@ try {
     logEvent('database', "Checking user login for email: $email"); // 🔍 Debugging step
 
     // ✅ Check If User Exists Using Eloquent
-    $user = Capsule::table('users')->where('email', $email)->first();
+    $user = Capsule::table('users')
+        ->select('id', 'password_hash', 'email')
+        ->where('email', $email)
+        ->first();
 
     if (!$user) {
         logEvent('security', "Failed login attempt - User not found: $email");
@@ -50,7 +53,8 @@ try {
         exit;
     }
 
-    if (!password_verify($password, $user->password)) {
+    // ✅ Fix: Use `password_hash`
+    if (!password_verify($password, $user->password_hash)) {
         logEvent('security', "Failed login attempt - Incorrect password: $email");
         http_response_code(401);
         echo json_encode(["error" => "Invalid email or password"]);
