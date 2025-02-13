@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Services\Auth\TokenService;
+use App\Services\Auth\AuthService;
 use PDO;
 use Exception;
 
