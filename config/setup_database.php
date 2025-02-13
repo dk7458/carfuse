@@ -9,8 +9,23 @@ use App\Helpers\DatabaseHelper;
 // ✅ Initialize Application Database
 DatabaseHelper::getInstance();
 
-// ✅ Define Tables
+// ✅ Define Tables (Ensuring Correct Creation Order)
 $tables = [
+
+    // ✅ Ensure `fleet` exists before any table references it
+    "fleet" => "
+        CREATE TABLE IF NOT EXISTS fleet (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            make VARCHAR(255) NOT NULL,
+            model VARCHAR(255) NOT NULL,
+            registration_number VARCHAR(20) NOT NULL UNIQUE,
+            availability TINYINT(1) DEFAULT 1,
+            last_maintenance_date DATE DEFAULT NULL,
+            next_maintenance_date DATE DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
+
     "users" => "
         CREATE TABLE IF NOT EXISTS users (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
