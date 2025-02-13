@@ -68,8 +68,8 @@ class AuthController
     {
         header('Content-Type: application/json');
         try {
-            // Assume request body is already parsed
-            $data = $request->getParsedBody(); // ...existing code...
+            // Use array as-is if provided, otherwise call getParsedBody()
+            $data = is_array($request) ? $request : $request->getParsedBody(); // changed code
 
             $email = $data['email'] ?? '';
             $password = $data['password'] ?? '';
@@ -116,8 +116,8 @@ class AuthController
     {
         header('Content-Type: application/json');
         try {
-            // Assume request body is already parsed
-            $data = $request->getParsedBody(); // ...existing code...
+            // Use array as-is if provided, otherwise call getParsedBody()
+            $data = is_array($request) ? $request : $request->getParsedBody(); // changed code
 
             $name = $data['name'] ?? '';
             $surname = $data['surname'] ?? '';
@@ -159,8 +159,8 @@ class AuthController
     {
         header('Content-Type: application/json');
         try {
-            // Assume request body is already parsed
-            $data = $request->getParsedBody(); // ...existing code...
+            // Use array as-is if provided, otherwise call getParsedBody()
+            $data = is_array($request) ? $request : $request->getParsedBody(); // changed code
 
             $email = $data['email'] ?? '';
 
