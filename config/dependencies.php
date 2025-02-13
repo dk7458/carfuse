@@ -29,6 +29,7 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
+use Illuminate\Database\Capsule\Manager as Capsule;
 
 // ✅ Initialize Dependency Container
 $container = new Container();
@@ -78,46 +79,29 @@ $fileStorage = new FileStorage($fileStorageConfig, $logger, $encryptionService);
 $container->set(FileStorage::class, fn() => $fileStorage);
 $config['keymanager'] = require __DIR__ . '/keymanager.php';
 
-// ✅ Initialize PDO Instances
-try {
-    $pdo = new PDO(
-        sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
-            $config['database']['app_database']['host'],
-            $config['database']['app_database']['database']
-        ),
-        $config['database']['app_database']['username'],
-        $config['database']['app_database']['password'],
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
-    );
+// ✅ Initialize Eloquent ORM for Database Handling
+$capsule = new Capsule;
+$capsule->addConnection($config['database']['app_database']);
+$capsule->addConnection($config['database']['secure_database'], 'secure');
+$capsule->setAsGlobal();
+$capsule->bootEloquent();
 
-    $securePdo = new PDO(
-        sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
-            $config['database']['secure_database']['host'],
-            $config['database']['secure_database']['database']
-        ),
-        $config['database']['secure_database']['username'],
-        $config['database']['secure_database']['password'],
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
-    );
-} catch (PDOException $e) {
-    throw new RuntimeException("❌ Database connection failed: " . $e->getMessage());
-}
+$container->set(Capsule::class, $capsule);
+$container->set('DB', fn() => $capsule->getConnection());
+$container->set('SecureDB', fn() => $capsule->getConnection('secure'));
 
 // ✅ Register services in the container
-$container->set(PDO::class, $pdo);
-$container->set('SecurePDO', $securePdo);
-
 $container->set(DocumentQueue::class, function () use ($fileStorage, $logger) {
     return new DocumentQueue($fileStorage, __DIR__ . '/../storage/document_queue.json', $logger);
 });
 
 $container->set(Validator::class, fn() => new Validator());
-$container->set(RateLimiter::class, fn() => new RateLimiter($pdo));
-$container->set(AuditService::class, fn() => new AuditService($securePdo));
+$container->set(RateLimiter::class, fn() => new RateLimiter($capsule->getConnection()));
+$container->set(AuditService::class, fn() => new AuditService($capsule->getConnection('secure')));
 
-$container->set(DocumentService::class, function () use ($pdo, $logger, $container) {
+$container->set(DocumentService::class, function () use ($capsule, $logger, $container) {
     return new DocumentService(
-        $pdo,
+        $capsule->getConnection(),
         $container->get(AuditService::class),
         $container->get(FileStorage::class),
         $container->get(EncryptionService::class),
@@ -127,20 +111,20 @@ $container->set(DocumentService::class, function () use ($pdo, $logger, $contain
 });
 
 $container->set(TokenService::class, fn() => new TokenService($config['encryption']['jwt_secret'], $config['encryption']['jwt_refresh_secret']));
-$container->set(NotificationService::class, fn() => new NotificationService($pdo, $logger, $config['notifications']));
+$container->set(NotificationService::class, fn() => new NotificationService($capsule->getConnection(), $logger, $config['notifications']));
 $container->set(NotificationQueue::class, fn() => new NotificationQueue($container->get(NotificationService::class), __DIR__ . '/../storage/notification_queue.json', $logger));
-$container->set(UserService::class, fn() => new UserService($securePdo, $logger, $config['encryption']['jwt_secret']));
+$container->set(UserService::class, fn() => new UserService($capsule->getConnection('secure'), $logger, $config['encryption']['jwt_secret']));
 $container->set(Payment::class, fn() => new Payment());
 
-$container->set(PaymentService::class, function () use ($pdo, $logger, $config) {
-    return new PaymentService($pdo, $logger, new Payment(), $config['payu']['api_key'], $config['payu']['api_secret']);
+$container->set(PaymentService::class, function () use ($capsule, $logger, $config) {
+    return new PaymentService($capsule->getConnection(), $logger, new Payment(), $config['payu']['api_key'], $config['payu']['api_secret']);
 });
 
 $container->set(PayUService::class, fn() => new PayUService(new Client(), $logger, $config['payu']));
-$container->set(BookingService::class, fn() => new BookingService($pdo, $logger));
-$container->set(MetricsService::class, fn() => new MetricsService($pdo));
-$container->set(ReportService::class, fn() => new ReportService($pdo));
-$container->set(RevenueService::class, fn() => new RevenueService($pdo));
+$container->set(BookingService::class, fn() => new BookingService($capsule->getConnection(), $logger));
+$container->set(MetricsService::class, fn() => new MetricsService($capsule->getConnection()));
+$container->set(ReportService::class, fn() => new ReportService($capsule->getConnection()));
+$container->set(RevenueService::class, fn() => new RevenueService($capsule->getConnection()));
 
 $container->set(SignatureService::class, function () use ($config, $container) {
     return new SignatureService(
