@@ -12,7 +12,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use Dotenv\Dotenv;
 
 // ✅ Load .env configuration
-$dotenv = Dotenv::createImmutable(__DIR__ . '/../');
+$dotenv = Dotenv::createImmutable(__DIR__ . '/');
 $dotenv->safeLoad();
 
 // ✅ Database Credentials (From .env or Hardcoded)
@@ -47,7 +47,7 @@ try {
 
 } catch (PDOException $e) {
     // ✅ Log & Return Connection Error
-    error_log("[PDO ERROR] " . $e->getMessage(), 3, __DIR__ . "/../logs/errors.log");
+    error_log("[PDO ERROR] " . $e->getMessage(), 3, __DIR__ . "/logs/errors.log");
     echo json_encode([
         "status" => "error",
         "message" => "Database connection failed",
