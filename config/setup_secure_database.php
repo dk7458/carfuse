@@ -6,8 +6,12 @@ require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 use Illuminate\Database\Capsule\Manager as Capsule;
 use App\Helpers\DatabaseHelper;
 
-// ✅ Initialize Secure Database (No Frontend Access)
+// ✅ Initialize Secure Database
 DatabaseHelper::getSecureInstance();
+
+// ✅ Log Setup
+$logFilePath = __DIR__ . '/../logs/secure_db_setup.log';
+file_put_contents($logFilePath, "🚀 Secure Database Setup Started at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
 
 // ✅ Define Secure Tables
 $tables = [
@@ -20,6 +24,7 @@ $tables = [
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ",
+
     "logs" => "
         CREATE TABLE IF NOT EXISTS logs (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -29,6 +34,7 @@ $tables = [
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ",
+
     "audit_trails" => "
         CREATE TABLE IF NOT EXISTS audit_trails (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -37,28 +43,53 @@ $tables = [
             user_reference BIGINT UNSIGNED NULL,
             booking_reference BIGINT UNSIGNED NULL,
             ip_address VARCHAR(45),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_reference) REFERENCES u122931475_carfuse.users(id) ON DELETE SET NULL,
-            FOREIGN KEY (booking_reference) REFERENCES u122931475_carfuse.bookings(id) ON DELETE SET NULL
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ",
+
     "contracts" => "
         CREATE TABLE IF NOT EXISTS contracts (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             booking_reference BIGINT UNSIGNED NOT NULL,
             user_reference BIGINT UNSIGNED NOT NULL,
             contract_pdf VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_reference) REFERENCES u122931475_carfuse.users(id) ON DELETE CASCADE,
-            FOREIGN KEY (booking_reference) REFERENCES u122931475_carfuse.bookings(id) ON DELETE CASCADE
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     "
 ];
 
-// ✅ Execute Table Creation
+// ✅ Execute Table Creation with Error Handling
 foreach ($tables as $tableName => $sql) {
-    Capsule::connection('secure')->statement($sql);
-    echo "[✅] Secure Table `{$tableName}` created successfully.\n";
+    try {
+        Capsule::connection('secure')->statement($sql);
+        file_put_contents($logFilePath, "[✅] Secure Table `{$tableName}` created successfully.\n", FILE_APPEND);
+    } catch (Exception $e) {
+        file_put_contents($logFilePath, "[❌] Error creating `{$tableName}`: " . $e->getMessage() . "\n", FILE_APPEND);
+    }
 }
 
-echo "[🚀] Secure database setup completed.\n";
+// ✅ Now Add Foreign Keys (Cross-Database Issue Fix)
+$foreignKeys = [
+    "audit_trails" => [
+        "ALTER TABLE audit_trails ADD CONSTRAINT fk_audit_user FOREIGN KEY (user_reference) REFERENCES users(id) ON DELETE SET NULL;",
+        "ALTER TABLE audit_trails ADD CONSTRAINT fk_audit_booking FOREIGN KEY (booking_reference) REFERENCES bookings(id) ON DELETE SET NULL;"
+    ],
+    "contracts" => [
+        "ALTER TABLE contracts ADD CONSTRAINT fk_contract_user FOREIGN KEY (user_reference) REFERENCES users(id) ON DELETE CASCADE;",
+        "ALTER TABLE contracts ADD CONSTRAINT fk_contract_booking FOREIGN KEY (booking_reference) REFERENCES bookings(id) ON DELETE CASCADE;"
+    ]
+];
+
+foreach ($foreignKeys as $table => $queries) {
+    foreach ($queries as $query) {
+        try {
+            Capsule::connection('secure')->statement($query);
+            file_put_contents($logFilePath, "[✅] Foreign Key added for `{$table}`\n", FILE_APPEND);
+        } catch (Exception $e) {
+            file_put_contents($logFilePath, "[⚠️] Foreign Key skipped for `{$table}`: " . $e->getMessage() . "\n", FILE_APPEND);
+        }
+    }
+}
+
+file_put_contents($logFilePath, "✅ Secure Database Setup Completed Successfully.\n", FILE_APPEND);
+echo "[🚀] Secure database setup completed. Check `logs/secure_db_setup.log` for details.\n";
