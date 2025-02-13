@@ -8,7 +8,7 @@ ini_set('display_errors', 1);
 header('Content-Type: application/json');
 
 // ✅ Load environment variables if using .env
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/vendor/autoload.php';
 use Dotenv\Dotenv;
 
 // ✅ Load .env configuration
