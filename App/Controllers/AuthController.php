@@ -9,7 +9,6 @@ use Exception;
 
 require_once __DIR__ . '/../Helpers/ViewHelper.php';
 require_once __DIR__ . '/../Helpers/SecurityHelper.php';
-require_once __DIR__ . '/../Services/Auth/AuthService.php';
 
 class AuthController
 {
@@ -74,14 +73,8 @@ class AuthController
             $email = $data['email'] ?? '';
             $password = $data['password'] ?? '';
 
-            // Check if user exists
-            $user = Capsule::table('users')->where('email', $email)->first();
-            if (!$user || !password_verify($password, $user->password_hash)) {
-                throw new Exception('Invalid email or password.');
-            }
-
-            // Generate JWT token
-            $result = $this->authService->generateToken($user->id, $user->email);
+            // Delegate login logic to AuthService
+            $result = $this->authService->login($email, $password);
 
             // Securely store JWT and refresh token in HTTP-only cookies
             setcookie("jwt", $result['token'], [
@@ -132,28 +125,15 @@ class AuthController
             $phone = $data['phone'] ?? null;
             $address = $data['address'] ?? null;
 
-            // Check if email already exists
-            $existingUser = Capsule::table('users')->where('email', $email)->first();
-            if ($existingUser) {
-                throw new Exception('Email already in use.');
-            }
-
-            // Hash password
-            $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
-
-            // Insert user into database
-            $userId = Capsule::table('users')->insertGetId([
+            // Delegate registration logic to AuthService
+            $result = $this->authService->registerUser([
                 'name' => $name,
                 'surname' => $surname,
                 'email' => $email,
+                'password' => $password,
                 'phone' => $phone,
-                'address' => $address,
-                'password_hash' => $hashedPassword,
-                'created_at' => date('Y-m-d H:i:s')
+                'address' => $address
             ]);
-
-            // Generate JWT token
-            $result = $this->authService->generateToken($userId, $email);
 
             http_response_code(201);
             echo json_encode([
@@ -183,32 +163,14 @@ class AuthController
 
             $email = $data['email'] ?? '';
 
-            // Check if user exists
-            $user = Capsule::table('users')->where('email', $email)->first();
-            if (!$user) {
-                throw new Exception('Email not found.');
-            }
-
-            // Generate secure token
-            $token = bin2hex(random_bytes(32));
-            $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
-
-            // Store reset token
-            Capsule::table('password_resets')->insert([
-                'email' => $email,
-                'token' => password_hash($token, PASSWORD_BCRYPT),
-                'expires_at' => $expiresAt,
-                'created_at' => date('Y-m-d H:i:s')
-            ]);
-
-            // Send email (mock implementation)
-            // ...existing code...
+            // Delegate password reset request logic to AuthService
+            $result = $this->authService->resetPasswordRequest($email);
 
             http_response_code(200);
             echo json_encode([
                 'status' => 'success',
                 'message' => 'Password reset request processed',
-                'data' => []
+                'data' => $result
             ]);
         } catch (Exception $e) {
             http_response_code(400);
@@ -237,8 +199,8 @@ class AuthController
                 throw new Exception('Refresh token is required');
             }
 
-            // Validate refresh token before issuing a new access token
-            $newToken = $this->tokenService->refreshAccessToken($refreshToken);
+            // Delegate token refresh logic to AuthService
+            $newToken = $this->tokenService->refreshToken($refreshToken);
 
             if ($newToken) {
                 // Set new access token in HTTP-only secure cookie
@@ -276,6 +238,7 @@ class AuthController
     {
         header('Content-Type: application/json');
         try {
+            // Delegate logout logic to AuthService
             $this->authService->logout();
 
             // Clear the JWT and refresh token cookies

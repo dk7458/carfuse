@@ -2,33 +2,33 @@
 
 namespace App\Services;
 
-use PDO;
-use PDOException;
+use App\Models\User;
+use App\Models\PasswordReset;
 use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Exception;
 
 /**
  * UserService
  * 
- * Handles user-related operations such as creation, updates, authentication, role management,
- * password management, and logging.
+ * Handles user-related operations such as registration, authentication, profile management,
+ * role management, and password resets.
  */
 class UserService
 {
-    private PDO $db;
     private LoggerInterface $logger;
     private string $jwtSecret;
 
-    public function __construct(PDO $db, LoggerInterface $logger, string $jwtSecret)
+    public function __construct(LoggerInterface $logger, string $jwtSecret)
     {
-        $this->db = $db;
         $this->logger = $logger;
         $this->jwtSecret = $jwtSecret;
     }
 
     /**
-     * Create a new user
+     * ✅ Create a new user
      */
     public function createUser(array $data): array
     {
@@ -46,156 +46,115 @@ class UserService
         }
 
         try {
-            $stmt = $this->db->prepare("
-                INSERT INTO users (name, email, password, phone, address, role, created_at)
-                VALUES (:name, :email, :password, :phone, :address, 'user', NOW())
-            ");
+            $data['password_hash'] = Hash::make($data['password']);
+            unset($data['password']); // ✅ Prevent raw password storage
 
-            $stmt->execute([
-                'name' => $data['name'],
-                'email' => $data['email'],
-                'password' => password_hash($data['password'], PASSWORD_BCRYPT),
-                'phone' => $data['phone'],
-                'address' => $data['address']
-            ]);
+            $user = User::create($data);
 
-            $this->logAction(null, 'user_created', ['email' => $data['email']]);
+            $this->logAction($user->id, 'user_created', ['email' => $data['email']]);
             return ['status' => 'success', 'message' => 'User created successfully'];
-        } catch (PDOException $e) {
+        } catch (Exception $e) {
             $this->logger->error('User creation failed', ['error' => $e->getMessage()]);
             return ['status' => 'error', 'message' => 'User creation failed'];
         }
     }
 
     /**
-     * Update an existing user's information
+     * ✅ Update an existing user
      */
     public function updateUser(int $id, array $data): array
     {
-        // Allowed update fields including password
-        $allowedFields = ['name', 'phone', 'address', 'password'];
-        $updates = array_intersect_key($data, array_flip($allowedFields));
+        try {
+            $user = User::findOrFail($id);
 
-        // Input validation: ensure there's at least one field to update
-        if (empty($updates)) {
-            return ['status' => 'error', 'message' => 'No valid fields to update'];
-        }
-
-        // Process password: hash if provided and non-empty, otherwise remove it
-        if (isset($updates['password'])) {
-            if (!empty($updates['password'])) {
-                $updates['password'] = password_hash($updates['password'], PASSWORD_BCRYPT);
-            } else {
-                unset($updates['password']);
+            // ✅ Hash new password if provided
+            if (!empty($data['password'])) {
+                $data['password_hash'] = Hash::make($data['password']);
+                unset($data['password']);
             }
-        }
 
-        // Use UserModel for DB update
-        $userModel = new \App\Models\UserModel($this->db);
-        $result = $userModel->update($id, $updates);
+            $user->update($data);
 
-        if ($result) {
-            $this->logAction($id, 'user_updated', $updates);
+            $this->logAction($id, 'user_updated', $data);
             return ['status' => 'success', 'message' => 'User updated successfully'];
-        } else {
-            $this->logger->error('User update failed');
+        } catch (ModelNotFoundException $e) {
+            return ['status' => 'error', 'message' => 'User not found'];
+        } catch (Exception $e) {
+            $this->logger->error('User update failed', ['error' => $e->getMessage()]);
             return ['status' => 'error', 'message' => 'User update failed'];
         }
     }
 
     /**
-     * Delete a user (soft delete)
-     */
-    public function deleteUser(int $id): bool
-    {
-        try {
-            $stmt = $this->db->prepare("UPDATE users SET deleted_at = NOW() WHERE id = :id");
-            $stmt->execute(['id' => $id]);
-
-            $this->logAction($id, 'user_deleted');
-            return true;
-        } catch (PDOException $e) {
-            $this->logger->error('User deletion failed', ['error' => $e->getMessage()]);
-            return false;
-        }
-    }
-
-    /**
-     * Authenticate a user
+     * ✅ Authenticate a user
      */
     public function authenticate(string $email, string $password): ?string
     {
-        $stmt = $this->db->prepare("SELECT * FROM users WHERE email = :email AND deleted_at IS NULL");
-        $stmt->execute(['email' => $email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $user = User::where('email', $email)->first();
 
-        if (!$user || !password_verify($password, $user['password'])) {
-            $this->logAction(null, 'authentication_failed', ['email' => $email]);
+            if (!$user || !Hash::check($password, $user->password_hash)) {
+                $this->logAction(null, 'authentication_failed', ['email' => $email]);
+                return null;
+            }
+
+            $this->logAction($user->id, 'authentication_successful');
+            return $this->generateJWT($user);
+        } catch (Exception $e) {
+            $this->logger->error('Authentication failed', ['error' => $e->getMessage()]);
             return null;
         }
-
-        $this->logAction($user['id'], 'authentication_successful');
-        return $this->generateJWT($user);
     }
 
     /**
-     * Change a user's password
+     * ✅ Generate a JWT token
      */
-    public function changePassword(int $id, string $newPassword): bool
-    {
-        try {
-            $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
-            $stmt = $this->db->prepare("UPDATE users SET password = :password WHERE id = :id");
-            $stmt->execute(['password' => $hashedPassword, 'id' => $id]);
-
-            $this->logAction($id, 'password_changed');
-            return true;
-        } catch (PDOException $e) {
-            $this->logger->error('Password change failed', ['error' => $e->getMessage()]);
-            return false;
-        }
-    }
-
-    /**
-     * Assign a role to a user
-     */
-    public function assignRole(int $id, string $role): bool
-    {
-        $validRoles = ['user', 'admin', 'super_admin'];
-        if (!in_array($role, $validRoles)) {
-            return false;
-        }
-
-        try {
-            $stmt = $this->db->prepare("UPDATE users SET role = :role WHERE id = :id");
-            $stmt->execute(['role' => $role, 'id' => $id]);
-
-            $this->logAction($id, 'role_assigned', ['role' => $role]);
-            return true;
-        } catch (PDOException $e) {
-            $this->logger->error('Role assignment failed', ['error' => $e->getMessage()]);
-            return false;
-        }
-    }
-
-    /**
-     * Generate a JWT token for a user
-     */
-    private function generateJWT(array $user): string
+    private function generateJWT(User $user): string
     {
         $payload = [
-            'sub' => $user['id'],
-            'email' => $user['email'],
-            'role' => $user['role'],
+            'sub' => $user->id,
+            'email' => $user->email,
+            'role' => $user->role,
             'iat' => time(),
-            'exp' => time() + 3600, // Token expires in 1 hour
+            'exp' => time() + 3600,
         ];
 
         return JWT::encode($payload, $this->jwtSecret, 'HS256');
     }
 
     /**
-     * Log an action for auditing purposes
+     * ✅ Request password reset
+     */
+    public function requestPasswordReset(string $email): bool
+    {
+        try {
+            $user = User::where('email', $email)->first();
+
+            if (!$user) {
+                return false;
+            }
+
+            $token = bin2hex(random_bytes(32));
+            $expiresAt = now()->addHour();
+
+            PasswordReset::create([
+                'email' => $email,
+                'token' => $token,
+                'expires_at' => $expiresAt
+            ]);
+
+            // ✅ Log the password reset request
+            $this->logAction($user->id, 'password_reset_requested', ['email' => $email]);
+
+            return true;
+        } catch (Exception $e) {
+            $this->logger->error('Password reset request failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * ✅ Log an action for auditing
      */
     private function logAction(?int $userId, string $action, array $details = []): void
     {

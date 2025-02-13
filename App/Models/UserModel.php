@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
-use App\Models\BaseModel;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Hash;
+use Ramsey\Uuid\Uuid;
 use App\Models\Booking;
 use App\Models\Notification;
 use App\Models\Payment;
-use App\Traits\HasUuid;
-use App\Traits\SoftDeletes;
-use App\Helpers\HashHelper;
+use App\Models\AuditTrail;
+use App\Models\Log;
+use App\Models\Contract;
 
 /**
  * User Model
@@ -27,29 +30,32 @@ use App\Helpers\HashHelper;
  * @property \DateTime $updated_at
  * @property \DateTime $deleted_at
  */
-class User extends BaseModel
+class User extends Model
 {
-    use HasUuid, SoftDeletes;
+    use SoftDeletes;
 
-    protected string $table = 'users';
+    protected $table = 'users';
+    protected $primaryKey = 'id';
+    public $incrementing = false;
+    protected $keyType = 'string';
 
-    protected array $fillable = [
+    protected $fillable = [
         'name',
         'surname',
         'email',
-        'password',
+        'password_hash',
         'role',
         'phone',
         'address',
     ];
 
-    protected array $hidden = [
+    protected $hidden = [
         'password_hash',
         'remember_token',
         'deleted_at',
     ];
 
-    protected array $dates = [
+    protected $dates = [
         'created_at',
         'updated_at',
         'deleted_at',
@@ -62,37 +68,47 @@ class User extends BaseModel
         'email' => 'required|email|unique:users,email',
         'password' => 'required|min:8|regex:/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/',
         'role' => 'required|in:user,admin,super_admin',
-        'phone' => 'required|string|max:20',
-        'address' => 'required|string|max:255',
+        'phone' => 'nullable|string|max:20',
+        'address' => 'nullable|string|max:255',
     ];
 
     /**
      * Relationships
      */
 
-    // Get user's bookings
     public function bookings()
     {
         return $this->hasMany(Booking::class, 'user_id', 'id');
     }
 
-    // Get user's payments
     public function payments()
     {
         return $this->hasMany(Payment::class, 'user_id', 'id');
     }
 
-    // Get user's notifications
     public function notifications()
     {
         return $this->hasMany(Notification::class, 'user_id', 'id');
     }
 
+    public function logs()
+    {
+        return $this->hasMany(Log::class, 'user_reference', 'id');
+    }
+
+    public function auditTrails()
+    {
+        return $this->hasMany(AuditTrail::class, 'user_reference', 'id');
+    }
+
+    public function contracts()
+    {
+        return $this->hasMany(Contract::class, 'user_reference', 'id');
+    }
+
     /**
      * Accessors
      */
-
-    // Get user's full name
     public function getFullNameAttribute(): string
     {
         return "{$this->name} {$this->surname}";
@@ -101,30 +117,24 @@ class User extends BaseModel
     /**
      * Mutators
      */
-
-    // Set password (automatically hash)
     public function setPasswordAttribute(string $value): void
     {
-        $this->attributes['password_hash'] = HashHelper::hash($value);
+        $this->attributes['password_hash'] = Hash::make($value);
     }
 
     /**
      * Helpers
      */
-
-    // Check if user is an admin
     public function isAdmin(): bool
     {
         return in_array($this->role, ['admin', 'super_admin']);
     }
 
-    // Check if user is a super admin
     public function isSuperAdmin(): bool
     {
         return $this->role === 'super_admin';
     }
 
-    // Check if user has a specific permission
     public function hasPermission(string $permission): bool
     {
         $rolePermissions = [
@@ -139,14 +149,11 @@ class User extends BaseModel
     /**
      * Scopes
      */
-
-    // Scope a query to only include active users
     public function scopeActive($query)
     {
         return $query->whereNull('deleted_at');
     }
 
-    // Scope a query to only include users with a specific role
     public function scopeWithRole($query, string $role)
     {
         return $query->where('role', $role);
@@ -155,20 +162,24 @@ class User extends BaseModel
     /**
      * Events
      */
-
-    // Actions to take after user creation
     protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($user) {
             if (empty($user->id)) {
-                $user->id = (string) \Ramsey\Uuid\Uuid::uuid4();
+                $user->id = (string) Uuid::uuid4();
+            }
+        });
+
+        static::updating(function ($user) {
+            if ($user->isDirty('email')) {
+                error_log("[SECURITY] User {$user->id} updated email to {$user->email}");
             }
         });
 
         static::deleting(function ($user) {
-            // Perform any cleanup tasks like logging the deletion
+            error_log("[SECURITY] User {$user->id} was deleted.");
         });
     }
 }
