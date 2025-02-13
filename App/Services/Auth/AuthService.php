@@ -3,6 +3,7 @@
 namespace App\Services\Auth;
 
 use App\Models\User;
+use App\Models\PasswordReset; // added import
 use App\Helpers\SecurityHelper;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -71,11 +72,11 @@ class AuthService
         $token = bin2hex(random_bytes(32));
         $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
 
-        Capsule::table('password_resets')->insert([
-            'email' => $email,
-            'token' => password_hash($token, PASSWORD_BCRYPT),
+        // Use Eloquent Model for ORM insertion instead of Capsule/PDO
+        PasswordReset::create([
+            'email'      => $email,
+            'token'      => password_hash($token, PASSWORD_BCRYPT),
             'expires_at' => $expiresAt,
-            'created_at' => date('Y-m-d H:i:s')
         ]);
 
         // Send email (mock implementation)

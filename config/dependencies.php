@@ -86,9 +86,11 @@ $capsule->addConnection($config['database']['secure_database'], 'secure');
 $capsule->setAsGlobal();
 $capsule->bootEloquent();
 
+// Removed direct PDO connection container entries
+// $container->set('DB', fn() => $capsule->getConnection());
+// $container->set('SecureDB', fn() => $capsule->getConnection('secure'));
+
 $container->set(Capsule::class, $capsule);
-$container->set('DB', fn() => $capsule->getConnection());
-$container->set('SecureDB', fn() => $capsule->getConnection('secure'));
 
 // ✅ Register services in the container
 $container->set(DocumentQueue::class, function () use ($fileStorage, $logger) {
@@ -96,12 +98,13 @@ $container->set(DocumentQueue::class, function () use ($fileStorage, $logger) {
 });
 
 $container->set(Validator::class, fn() => new Validator());
-$container->set(RateLimiter::class, fn() => new RateLimiter($capsule->getConnection()));
-$container->set(AuditService::class, fn() => new AuditService($capsule->getConnection('secure')));
+// Provide the Capsule instance directly so services can use Eloquent models.
+$container->set(RateLimiter::class, fn() => new RateLimiter($capsule));
+$container->set(AuditService::class, fn() => new AuditService($capsule)); 
 
 $container->set(DocumentService::class, function () use ($capsule, $logger, $container) {
     return new DocumentService(
-        $capsule->getConnection(),
+        $capsule, // use Capsule instance for queries via models
         $container->get(AuditService::class),
         $container->get(FileStorage::class),
         $container->get(EncryptionService::class),
@@ -111,20 +114,21 @@ $container->set(DocumentService::class, function () use ($capsule, $logger, $con
 });
 
 $container->set(TokenService::class, fn() => new TokenService($config['encryption']['jwt_secret'], $config['encryption']['jwt_refresh_secret']));
-$container->set(NotificationService::class, fn() => new NotificationService($capsule->getConnection(), $logger, $config['notifications']));
+$container->set(NotificationService::class, fn() => new NotificationService($capsule, $logger, $config['notifications']));
 $container->set(NotificationQueue::class, fn() => new NotificationQueue($container->get(NotificationService::class), __DIR__ . '/../storage/notification_queue.json', $logger));
-$container->set(UserService::class, fn() => new UserService($capsule->getConnection('secure'), $logger, $config['encryption']['jwt_secret']));
+$container->set(UserService::class, fn() => new UserService($capsule, $logger, $config['encryption']['jwt_secret']));
+
 $container->set(Payment::class, fn() => new Payment());
 
 $container->set(PaymentService::class, function () use ($capsule, $logger, $config) {
-    return new PaymentService($capsule->getConnection(), $logger, new Payment(), $config['payu']['api_key'], $config['payu']['api_secret']);
+    return new PaymentService($capsule, $logger, new Payment(), $config['payu']['api_key'], $config['payu']['api_secret']);
 });
 
 $container->set(PayUService::class, fn() => new PayUService(new Client(), $logger, $config['payu']));
-$container->set(BookingService::class, fn() => new BookingService($capsule->getConnection(), $logger));
-$container->set(MetricsService::class, fn() => new MetricsService($capsule->getConnection()));
-$container->set(ReportService::class, fn() => new ReportService($capsule->getConnection()));
-$container->set(RevenueService::class, fn() => new RevenueService($capsule->getConnection()));
+$container->set(BookingService::class, fn() => new BookingService($capsule, $logger));
+$container->set(MetricsService::class, fn() => new MetricsService($capsule));
+$container->set(ReportService::class, fn() => new ReportService($capsule));
+$container->set(RevenueService::class, fn() => new RevenueService($capsule));
 
 $container->set(SignatureService::class, function () use ($config, $container) {
     return new SignatureService(

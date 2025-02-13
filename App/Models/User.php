@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\BaseModel; // updated base model
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Hash;
 use Ramsey\Uuid\Uuid;
@@ -30,7 +30,7 @@ use App\Models\Contract;
  * @property \DateTime $updated_at
  * @property \DateTime $deleted_at
  */
-class User extends Model
+class User extends BaseModel
 {
     use SoftDeletes;
 
