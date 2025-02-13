@@ -91,10 +91,18 @@ $tables = [
     "
 ];
 
-// ✅ Execute Table Creation
+// ✅ Execute Table Creation with Error Handling
+$logFilePath = __DIR__ . '/../logs/database_setup.log';
+file_put_contents($logFilePath, "🚀 Database Setup Started at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
+
 foreach ($tables as $tableName => $sql) {
-    Capsule::statement($sql);
-    echo "[✅] Table `{$tableName}` created successfully.\n";
+    try {
+        Capsule::statement($sql);
+        file_put_contents($logFilePath, "[✅] Table `{$tableName}` created successfully.\n", FILE_APPEND);
+    } catch (Exception $e) {
+        file_put_contents($logFilePath, "[❌] Error creating `{$tableName}`: " . $e->getMessage() . "\n", FILE_APPEND);
+    }
 }
 
-echo "[🚀] Application database setup completed.\n";
+file_put_contents($logFilePath, "✅ Database setup completed successfully.\n", FILE_APPEND);
+echo "[🚀] Application database setup completed. Check `logs/database_setup.log` for details.\n";
