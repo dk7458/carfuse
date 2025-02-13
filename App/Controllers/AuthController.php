@@ -125,6 +125,68 @@ class AuthController
     }
 
     /**
+     * Handle user registration (POST /auth/register)
+     */
+    public function register($request)
+    {
+        header('Content-Type: application/json');
+        try {
+            // Assume request body is already parsed
+            $data = $request->getParsedBody(); // ...existing code...
+
+            $username = $data['username'] ?? '';
+            $password = $data['password'] ?? '';
+            $email = $data['email'] ?? '';
+
+            $result = $this->authService->register($username, $password, $email);
+
+            http_response_code(201);
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'User registered',
+                'data' => $result
+            ]);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'data' => []
+            ]);
+        }
+    }
+
+    /**
+     * Handle password reset request (POST /auth/reset-password-request)
+     */
+    public function resetPasswordRequest($request)
+    {
+        header('Content-Type: application/json');
+        try {
+            // Assume request body is already parsed
+            $data = $request->getParsedBody(); // ...existing code...
+
+            $email = $data['email'] ?? '';
+
+            $result = $this->authService->resetPasswordRequest($email);
+
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Password reset request processed',
+                'data' => $result
+            ]);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'data' => []
+            ]);
+        }
+    }
+
+    /**
      * Refresh access token (POST /auth/refresh)
      */
     public function refresh()
