@@ -18,8 +18,8 @@ $tables = [
             ip_address VARCHAR(45) NOT NULL,
             consent_given TINYINT(1) DEFAULT 0,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )   ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-",
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
     "logs" => "
         CREATE TABLE IF NOT EXISTS logs (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -29,7 +29,6 @@ $tables = [
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ",
-
     "audit_trails" => "
         CREATE TABLE IF NOT EXISTS audit_trails (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -43,7 +42,6 @@ $tables = [
             FOREIGN KEY (booking_reference) REFERENCES app_db.bookings(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ",
-
     "contracts" => "
         CREATE TABLE IF NOT EXISTS contracts (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
