@@ -13,7 +13,7 @@ DatabaseHelper::getSecureInstance();
 $logFilePath = __DIR__ . '/../logs/secure_db_setup.log';
 file_put_contents($logFilePath, "🚀 Secure Database Setup Started at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
 
-// ✅ Define Secure Tables
+// ✅ Define Secure Tables (No Cross-Database Foreign Keys)
 $tables = [
     "consent_logs" => "
         CREATE TABLE IF NOT EXISTS consent_logs (
@@ -65,29 +65,6 @@ foreach ($tables as $tableName => $sql) {
         file_put_contents($logFilePath, "[✅] Secure Table `{$tableName}` created successfully.\n", FILE_APPEND);
     } catch (Exception $e) {
         file_put_contents($logFilePath, "[❌] Error creating `{$tableName}`: " . $e->getMessage() . "\n", FILE_APPEND);
-    }
-}
-
-// ✅ Now Add Foreign Keys (Cross-Database Issue Fix)
-$foreignKeys = [
-    "audit_trails" => [
-        "ALTER TABLE audit_trails ADD CONSTRAINT fk_audit_user FOREIGN KEY (user_reference) REFERENCES users(id) ON DELETE SET NULL;",
-        "ALTER TABLE audit_trails ADD CONSTRAINT fk_audit_booking FOREIGN KEY (booking_reference) REFERENCES bookings(id) ON DELETE SET NULL;"
-    ],
-    "contracts" => [
-        "ALTER TABLE contracts ADD CONSTRAINT fk_contract_user FOREIGN KEY (user_reference) REFERENCES users(id) ON DELETE CASCADE;",
-        "ALTER TABLE contracts ADD CONSTRAINT fk_contract_booking FOREIGN KEY (booking_reference) REFERENCES bookings(id) ON DELETE CASCADE;"
-    ]
-];
-
-foreach ($foreignKeys as $table => $queries) {
-    foreach ($queries as $query) {
-        try {
-            Capsule::connection('secure')->statement($query);
-            file_put_contents($logFilePath, "[✅] Foreign Key added for `{$table}`\n", FILE_APPEND);
-        } catch (Exception $e) {
-            file_put_contents($logFilePath, "[⚠️] Foreign Key skipped for `{$table}`: " . $e->getMessage() . "\n", FILE_APPEND);
-        }
     }
 }
 
