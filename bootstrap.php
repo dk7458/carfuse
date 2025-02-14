@@ -33,11 +33,7 @@ foreach ($configFiles as $file) {
 }
 $logger->info("✅ Configuration files loaded successfully.");
 
-// ✅ Ensure Database Configuration Exists
-if (!isset($config['database']['app_database'], $config['database']['secure_database'])) {
-    $logger->error("❌ Database configuration missing or incorrect.");
-    die("❌ Error: Database configuration missing or incorrect in config/database.php\n");
-}
+
 
 // ✅ Initialize the main and secure database connections using DatabaseHelper
 try {

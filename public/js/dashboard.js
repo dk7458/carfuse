@@ -212,14 +212,14 @@ function autoLogout() {
 })();
 
 /**
- * A wrapper for fetch that adds Authorization header.
+ * A wrapper for fetch that adds X-Auth-Token header.
  */
 async function secureFetch(url, options = {}) {
     // Always send JWT if available
     const token = getCookie('jwt');
     if (token) {
         if (!options.headers) options.headers = {};
-        options.headers["Authorization"] = "Bearer " + token;
+        options.headers["X-Auth-Token"] = "Bearer " + token;
     }
     return fetch(url, options).then(response => {
         // Optionally implement silent re-authentication here using refresh tokens
