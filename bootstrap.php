@@ -10,7 +10,6 @@
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use DI\Container as DIContainer;
-use Illuminate\Database\Capsule\Manager as Capsule;
 
 // ✅ Load Dependencies
 require_once __DIR__ . '/vendor/autoload.php';
@@ -34,12 +33,8 @@ foreach ($configFiles as $file) {
 }
 $logger->info("✅ Configuration files loaded successfully.");
 
-// ✅ Initialize Eloquent ORM for Database Handling
-$capsule = new Capsule;
-$capsule->addConnection($config['database']['app_database']);
-$capsule->addConnection($config['database']['secure_database'], 'secure');
-$capsule->setAsGlobal();
-$capsule->bootEloquent();
+$database = DatabaseHelper::getInstance();
+$secure_database = DatabaseHelper::getSecureInstance();
 
 // ✅ Validate Encryption Key
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
@@ -87,8 +82,8 @@ $logger->info("✅ Bootstrap process completed successfully.");
 
 // ✅ Return Configurations for Application Use
 return [
-    'db' => $capsule,
-    'secure_db' => $capsule->getConnection('secure'),
+    'db' => $database,
+    'secure_db' => $secure_database,
     'logger' => $logger,
     'auditService' => $auditService,
     'encryptionService' => $encryptionService,
