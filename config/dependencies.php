@@ -5,13 +5,15 @@
  * 
  * This file initializes and registers all application dependencies,
  * including services, database connections, logging, encryption, and queue management.
- * 
+ *
  * Path: config/dependencies.php
  */
 
 require_once __DIR__ . '/../vendor/autoload.php'; // ✅ Ensure autoload is included
 
 use DI\Container;
+use App\Helpers\DatabaseHelper;
+use App\Helpers\SecurityHelper;
 use App\Services\Validator;
 use App\Services\RateLimiter;
 use App\Services\Auth\TokenService;
@@ -40,7 +42,6 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
-use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Session\SessionManager;
 use Illuminate\Config\Repository as Config;
 use Illuminate\Cookie\CookieJar;
@@ -62,10 +63,10 @@ foreach (glob("{$configDirectory}/*.php") as $filePath) {
 
 // ✅ Ensure necessary directories exist
 $templateDirectory = __DIR__ . '/../storage/templates';
-$fileStorageConfig = $config['filestorage'];
+$fileStorageConfig = $config['filestorage'] ?? [];
 
-foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $directory) {
-    if (!is_dir($directory)) {
+foreach ([$templateDirectory, $fileStorageConfig['base_directory'] ?? null] as $directory) {
+    if ($directory && !is_dir($directory)) {
         mkdir($directory, 0775, true);
     }
 }
@@ -86,7 +87,7 @@ $logger->pushHandler($streamHandler);
 $container->set(LoggerInterface::class, fn() => $logger);
 
 // ✅ Initialize Encryption Service
-$encryptionService = new EncryptionService($config['encryption']['encryption_key']);
+$encryptionService = new EncryptionService($config['encryption']['encryption_key'] ?? '');
 $container->set(EncryptionService::class, fn() => $encryptionService);
 
 // ✅ Initialize File Storage Before Using It Anywhere
@@ -94,13 +95,18 @@ $fileStorage = new FileStorage($fileStorageConfig, $logger, $encryptionService);
 $container->set(FileStorage::class, fn() => $fileStorage);
 $config['keymanager'] = require __DIR__ . '/keymanager.php';
 
-// ✅ Initialize Eloquent ORM for Database Handling
-$capsule = new Capsule;
-$capsule->addConnection($config['database']['app_database']);
-$capsule->addConnection($config['database']['secure_database'], 'secure');
-$capsule->setAsGlobal();
-$capsule->bootEloquent();
-$container->set(Capsule::class, fn() => $capsule);
+// ✅ Initialize Databases Using DatabaseHelper
+try {
+    $database = DatabaseHelper::getInstance();
+    $secure_database = DatabaseHelper::getSecureInstance();
+    $logger->info("✅ Both databases initialized successfully.");
+} catch (Exception $e) {
+    $logger->error("❌ Database initialization failed: " . $e->getMessage());
+    die("❌ Database initialization failed. Check logs for details.\n");
+}
+
+$container->set('db', fn() => $database);
+$container->set('secure_db', fn() => $secure_database);
 
 // ✅ Register Session Handling
 $container->set(SessionManager::class, function () use ($container) {
@@ -125,18 +131,18 @@ $container->set(SessionManager::class, function () use ($container) {
     return new SessionManager(new Config(['session' => $config]));
 });
 
-// Bind Session Facade
+// ✅ Bind Session Facade
 $container->set(Session::class, fn() => $container->get(SessionManager::class)->driver());
 
 // ✅ Register Services
 $container->set(DocumentQueue::class, fn() => new DocumentQueue($fileStorage, __DIR__ . '/../storage/document_queue.json', $logger));
 $container->set(Validator::class, fn() => new Validator());
-$container->set(RateLimiter::class, fn() => new RateLimiter($capsule));
-$container->set(AuditService::class, fn() => new AuditService($capsule));
+$container->set(RateLimiter::class, fn() => new RateLimiter($database));
+$container->set(AuditService::class, fn() => new AuditService($database));
 
-$container->set(DocumentService::class, function () use ($capsule, $logger, $container) {
+$container->set(DocumentService::class, function () use ($database, $logger, $container) {
     return new DocumentService(
-        $capsule,
+        $database,
         $container->get(AuditService::class),
         $container->get(FileStorage::class),
         $container->get(EncryptionService::class),
@@ -145,27 +151,27 @@ $container->set(DocumentService::class, function () use ($capsule, $logger, $con
     );
 });
 
-$container->set(TokenService::class, fn() => new TokenService($config['encryption']['jwt_secret'], $config['encryption']['jwt_refresh_secret']));
-$container->set(NotificationService::class, fn() => new NotificationService($capsule, $logger, $config['notifications']));
+$container->set(TokenService::class, fn() => new TokenService($config['encryption']['jwt_secret'] ?? '', $config['encryption']['jwt_refresh_secret'] ?? ''));
+$container->set(NotificationService::class, fn() => new NotificationService($database, $logger, $config['notifications'] ?? []));
 $container->set(NotificationQueue::class, fn() => new NotificationQueue($container->get(NotificationService::class), __DIR__ . '/../storage/notification_queue.json', $logger));
-$container->set(UserService::class, fn() => new UserService($capsule, $logger, $config['encryption']['jwt_secret']));
+$container->set(UserService::class, fn() => new UserService($database, $logger, $config['encryption']['jwt_secret'] ?? ''));
 
 $container->set(Payment::class, fn() => new Payment());
 
-$container->set(PaymentService::class, function () use ($capsule, $logger, $config) {
-    return new PaymentService($capsule, $logger, new Payment(), $config['payu']['api_key'], $config['payu']['api_secret']);
+$container->set(PaymentService::class, function () use ($database, $logger, $config) {
+    return new PaymentService($database, $logger, new Payment(), $config['payu']['api_key'] ?? '', $config['payu']['api_secret'] ?? '');
 });
 
-$container->set(PayUService::class, fn() => new PayUService(new Client(), $logger, $config['payu']));
-$container->set(BookingService::class, fn() => new BookingService($capsule, $logger));
-$container->set(MetricsService::class, fn() => new MetricsService($capsule));
-$container->set(ReportService::class, fn() => new ReportService($capsule));
-$container->set(RevenueService::class, fn() => new RevenueService($capsule));
+$container->set(PayUService::class, fn() => new PayUService(new Client(), $logger, $config['payu'] ?? []));
+$container->set(BookingService::class, fn() => new BookingService($database, $logger));
+$container->set(MetricsService::class, fn() => new MetricsService($database));
+$container->set(ReportService::class, fn() => new ReportService($database));
+$container->set(RevenueService::class, fn() => new RevenueService($database));
 
 $container->set(SignatureService::class, function () use ($config, $container) {
     return new SignatureService(
         new Client(),
-        $config['signature'],
+        $config['signature'] ?? [],
         $container->get(FileStorage::class),
         $container->get(EncryptionService::class),
         $container->get(LoggerInterface::class)
@@ -174,7 +180,7 @@ $container->set(SignatureService::class, function () use ($config, $container) {
 
 $container->set(TemplateService::class, fn() => new TemplateService(__DIR__ . '/../storage/templates'));
 
-$container->set(KeyManager::class, fn() => new KeyManager($config['keymanager']['keys'], $logger));
+$container->set(KeyManager::class, fn() => new KeyManager($config['keymanager']['keys'] ?? [], $logger));
 
 // ✅ Return the DI container
 return $container;

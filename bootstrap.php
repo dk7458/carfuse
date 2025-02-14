@@ -2,14 +2,13 @@
 
 /**
  * Centralized Bootstrap File
- * Path: bootstrap.php
- *
+ * 
  * Initializes database connections, logging, encryption, and registers necessary services.
+ *
+ * Path: bootstrap.php
  */
 
 use DI\Container as DIContainer;
-use Illuminate\Database\Capsule\Manager as Capsule;
-use Illuminate\Support\Facades\Facade;
 use App\Helpers\DatabaseHelper;
 
 // ✅ Load Dependencies
@@ -18,9 +17,6 @@ define('BASE_PATH', __DIR__);
 
 // ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
-
-// Remove the Illuminate Container initialization and Facade setup
-// ...existing code... (Removed Illuminate\Container\Container and Facade::setFacadeApplication)
 
 // ✅ Load Configuration Files
 $configFiles = ['encryption', 'keymanager', 'filestorage'];
@@ -36,9 +32,15 @@ foreach ($configFiles as $file) {
 }
 $logger->info("✅ Configuration files loaded successfully.");
 
-// ✅ Initialize Database Using DatabaseHelper
-$database = DatabaseHelper::getInstance();
-$secure_database = DatabaseHelper::getSecureInstance();
+// ✅ Initialize Databases Using DatabaseHelper
+try {
+    $database = DatabaseHelper::getInstance();
+    $secure_database = DatabaseHelper::getSecureInstance();
+    $logger->info("✅ Both databases initialized successfully.");
+} catch (Exception $e) {
+    $logger->error("❌ Database initialization failed: " . $e->getMessage());
+    die("❌ Database initialization failed. Check logs for details.\n");
+}
 
 // ✅ Validate Encryption Key
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
@@ -46,7 +48,7 @@ if (!isset($config['encryption']['encryption_key']) || strlen($config['encryptio
     die("❌ Error: Encryption key missing or invalid in config/encryption.php\n");
 }
 
-// ✅ Load Dependency Container from config/dependencies.php
+// ✅ Load Dependency Container from `config/dependencies.php`
 $container = require BASE_PATH . '/config/dependencies.php';
 
 // ✅ Retrieve Critical Services
@@ -74,12 +76,14 @@ foreach ($requiredServices as $service) {
     }
 }
 
+// ✅ Warn if Dependencies Are Missing
 if (!empty($missingDependencies)) {
     $logger->warning("⚠️ Missing dependencies detected: " . implode(', ', $missingDependencies));
     echo "⚠️ Missing dependencies detected: " . implode(', ', $missingDependencies) . "\n";
     echo "⚠️ Ensure dependencies are correctly registered in config/dependencies.php.\n";
 }
 
+// ✅ Final Confirmation
 $logger->info("✅ Bootstrap process completed successfully.");
 
 // ✅ Return Configurations for Application Use
