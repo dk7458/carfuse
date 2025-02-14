@@ -9,7 +9,10 @@ use Firebase\JWT\Key;
 use Illuminate\Support\Facades\Hash; // added for password checking
 use Exception;
 use Psr\Log\LoggerInterface;
+use App\Helpers\SecurityHelper; // ✅ Updated: use correct namespace
+
 require_once __DIR__ . '/../../Helpers/SecurityHelper.php';
+
 class AuthService
 {
     private $tokenService;
@@ -44,7 +47,8 @@ class AuthService
     {
         $user = User::where('email', $email)->first();
         if (!$user || !Hash::check($password, $user->password_hash)) {
-            SecurityHelper::logAuthFailure("Failed login attempt for email: " . $email);
+            // ✅ Call the helper function directly instead of using the incorrect namespace reference
+            logAuthFailure("Failed login attempt for email: " . $email);
             throw new Exception("Invalid credentials");
         }
 

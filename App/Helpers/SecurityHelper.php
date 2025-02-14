@@ -149,10 +149,21 @@ if (!function_exists('validateSessionIntegrity')) {
 
 // ...existing code...
 
-// Remove manual CSRF token functions; use Laravel's CSRF middleware and Blade @csrf directives.
-{
-    return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
+if (!function_exists('sanitizeInput')) {
+    /**
+     * Sanitize user input to prevent XSS.
+     */
+    function sanitizeInput($data)
+    {
+        if (!isset($data) || $data === null) {
+            $data = ''; // ✅ Default to empty string to prevent undefined variable errors
+        }
+        $cleanedData = trim((string) $data); // ✅ Cast to string before trim()
+        return htmlspecialchars($cleanedData, ENT_QUOTES, 'UTF-8');
+    }
 }
+
+// ...existing code...
 
 /**
  * Generate secure random string (for password resets, API keys, etc.).
