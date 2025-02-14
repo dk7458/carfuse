@@ -11,7 +11,6 @@ use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
 use Illuminate\Http\Request;
-use App\Helpers\SecurityHelper;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;

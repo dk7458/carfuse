@@ -150,171 +150,143 @@ if (!function_exists('validateSessionIntegrity')) {
 // ...existing code...
 
 // Remove manual CSRF token functions; use Laravel's CSRF middleware and Blade @csrf directives.
-// function generateCsrfToken() { ... }
-// function validateCsrfToken($token) { ... }
-// function csrf_field() { ... }
-
-if (!function_exists('sanitizeInput')) {
-    /**
-     * Sanitize user input to prevent XSS.
-     */
-    function sanitizeInput($data)
-    {
-        return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
-    }
+{
+    return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
 }
 
-if (!function_exists('generateSecureToken')) {
-    /**
-     * Generate secure random string (for password resets, API keys, etc.).
-     */
-    function generateSecureToken($length = 64)
-    {
-        return bin2hex(random_bytes($length / 2));
-    }
+/**
+ * Generate secure random string (for password resets, API keys, etc.).
+ */
+function generateSecureToken($length = 64)
+{
+    return bin2hex(random_bytes($length / 2));
 }
 
-if (!function_exists('destroySession')) {
-    function destroySession() {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            return false;
+function destroySession() {
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return false;
+    }
+
+    try {
+        $wasGuest = $_SESSION['guest'] ?? false;
+        securityLog('Initiating session destruction: ' . ($wasGuest ? 'guest' : 'user') . ' session');
+        
+        // Clear session data
+        $_SESSION = [];
+        
+        // Delete session cookie
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', [
+                'expires' => time() - 42000,
+                'path' => $params['path'],
+                'domain' => $params['domain'],
+                'secure' => $params['secure'],
+                'httponly' => $params['httponly'],
+                'samesite' => 'Lax'
+            ]);
         }
-    
-        try {
-            $wasGuest = $_SESSION['guest'] ?? false;
-            securityLog('Initiating session destruction: ' . ($wasGuest ? 'guest' : 'user') . ' session');
-            
-            // Clear session data
-            $_SESSION = [];
-            
-            // Delete session cookie
-            if (ini_get('session.use_cookies')) {
-                $params = session_get_cookie_params();
-                setcookie(session_name(), '', [
-                    'expires' => time() - 42000,
-                    'path' => $params['path'],
-                    'domain' => $params['domain'],
-                    'secure' => $params['secure'],
-                    'httponly' => $params['httponly'],
-                    'samesite' => 'Lax'
-                ]);
-            }
-            
-            if (!session_destroy()) {
-                throw new Exception('Session destruction failed');
-            }
-            
-            securityLog('Session destroyed successfully');
-            return true;
-        } catch (Exception $e) {
-            securityLog('Session destruction error: ' . $e->getMessage(), 'error');
-            return false;
+        
+        if (!session_destroy()) {
+            throw new Exception('Session destruction failed');
         }
+        
+        securityLog('Session destroyed successfully');
+        return true;
+    } catch (Exception $e) {
+        securityLog('Session destruction error: ' . $e->getMessage(), 'error');
+        return false;
     }
 }
 
-if (!function_exists('isUserLoggedIn')) {
-    /**
-     * Check if a user is logged in.
-     */
-    function isUserLoggedIn()
-    {
-        return Auth::check();
-    }
+/**
+ * Check if a user is logged in.
+ */
+function isUserLoggedIn()
+{
+    return Auth::check();
 }
 
-if (!function_exists('getUserRole')) {
-    /**
-     * Get the logged-in user's role.
-     */
-    function getUserRole()
-    {
-        return Auth::check() ? Auth::user()->role : 'guest';
-    }
+/**
+ * Get the logged-in user's role.
+ */
+function getUserRole()
+{
+    return Auth::check() ? Auth::user()->role : 'guest';
 }
 
-if (!function_exists('getSessionData')) {
-    /**
-     * Get session data safely.
-     */
-    function getSessionData($key)
-    {
-        return $_SESSION[$key] ?? null;
-    }
+/**
+ * Get session data safely.
+ */
+function getSessionData($key)
+{
+    return $_SESSION[$key] ?? null;
 }
 
-if (!function_exists('setSessionData')) {
-    /**
-     * Set session data safely.
-     */
-    function setSessionData($key, $value)
-    {
-        $_SESSION[$key] = $value;
-    }
+/**
+ * Set session data safely.
+ */
+function setSessionData($key, $value)
+{
+    $_SESSION[$key] = $value;
 }
 
-if (!function_exists('validateJWT')) {
-    /**
-     * Validate JWT token.
-     */
-    function validateJWT($token) {
-        // Instead of manual decoding, we delegate to Laravel's 'api' guard.
-        return Auth::guard('api')->user();
-    }
+/**
+ * Validate JWT token.
+ */
+function validateJWT($token) {
+    // Instead of manual decoding, we delegate to Laravel's 'api' guard.
+    return Auth::guard('api')->user();
 }
 
-if (!function_exists('requireUserAuth')) {
-    /**
-     * Enforce authentication for protected pages.
-     */
-    function requireUserAuth() {
-        requireAuth();
-    }
+/**
+ * Enforce authentication for protected pages.
+ */
+function requireUserAuth() {
+    requireAuth();
 }
 
 // New function to enforce authentication dynamically
-if (!function_exists('requireAuth')) {
-    function requireAuth($allowGuest = false) {
-        // Get HTTP headers if available
-        $headers = function_exists('getallheaders') ? getallheaders() : [];
-        $authHeader = $headers['Authorization'] ?? '';
-    
-        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
-            // API authentication using JWT Bearer
-            $config = require __DIR__ . '/../../config/encryption.php';
-            $jwtSecret = $config['jwt_secret'] ?? '';
-            $token = substr($authHeader, 7);
-            try {
-                return (array) Firebase\JWT\JWT::decode($token, new Firebase\JWT\Key($jwtSecret, 'HS256'));
-            } catch (Exception $e) {
-                error_log("[AUTH] API authentication failure: " . $e->getMessage() . "\n", 3, __DIR__ . '/../../logs/auth.log');
+function requireAuth($allowGuest = false) {
+    // Get HTTP headers if available
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    $authHeader = $headers['Authorization'] ?? '';
+
+    if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+        // API authentication using JWT Bearer
+        $config = require __DIR__ . '/../../config/encryption.php';
+        $jwtSecret = $config['jwt_secret'] ?? '';
+        $token = substr($authHeader, 7);
+        try {
+            return (array) Firebase\JWT\JWT::decode($token, new Firebase\JWT\Key($jwtSecret, 'HS256'));
+        } catch (Exception $e) {
+            error_log("[AUTH] API authentication failure: " . $e->getMessage() . "\n", 3, __DIR__ . '/../../logs/auth.log');
+            header('Content-Type: application/json');
+            http_response_code(401);
+            echo json_encode(['error' => 'Unauthorized']);
+            exit;
+        }
+    } else {
+        // Web authentication using session
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+        if (isset($_SESSION['user_id'])) {
+            return $_SESSION['user_id'];
+        } elseif ($allowGuest) {
+            return null;
+        } else {
+            error_log("[AUTH] Web authentication failure: No session user_id\n", 3, __DIR__ . '/../../logs/auth.log');
+            // If the request expects JSON, return JSON response
+            if (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false) {
                 header('Content-Type: application/json');
                 http_response_code(401);
                 echo json_encode(['error' => 'Unauthorized']);
-                exit;
-            }
-        } else {
-            // Web authentication using session
-            if (session_status() !== PHP_SESSION_ACTIVE) {
-                session_start();
-            }
-            if (isset($_SESSION['user_id'])) {
-                return $_SESSION['user_id'];
-            } elseif ($allowGuest) {
-                return null;
             } else {
-                error_log("[AUTH] Web authentication failure: No session user_id\n", 3, __DIR__ . '/../../logs/auth.log');
-                // If the request expects JSON, return JSON response
-                if (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false) {
-                    header('Content-Type: application/json');
-                    http_response_code(401);
-                    echo json_encode(['error' => 'Unauthorized']);
-                } else {
-                    http_response_code(401);
-                    echo 'Unauthorized';
-                }
-                exit;
+                http_response_code(401);
+                echo 'Unauthorized';
             }
+            exit;
         }
     }
 }

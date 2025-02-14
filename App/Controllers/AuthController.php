@@ -9,9 +9,6 @@ use Exception;
 use App\Helpers\DatabaseHelper;
 use Psr\Log\NullLogger; // added for logger
 
-require_once __DIR__ . '/../Helpers/ViewHelper.php';
-require_once __DIR__ . '/../Helpers/SecurityHelper.php';
-
 class AuthController extends Controller
 {
     protected $authService;

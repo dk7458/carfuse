@@ -13,7 +13,6 @@ require_once __DIR__ . '/../vendor/autoload.php'; // ✅ Ensure autoload is incl
 
 use DI\Container;
 use App\Helpers\DatabaseHelper;
-use App\Helpers\SecurityHelper;
 use App\Services\Validator;
 use App\Services\RateLimiter;
 use App\Services\Auth\TokenService;
@@ -46,6 +45,8 @@ use Illuminate\Session\SessionManager;
 use Illuminate\Config\Repository as Config;
 use Illuminate\Cookie\CookieJar;
 use Illuminate\Support\Facades\Session;
+
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
 // ✅ Initialize Dependency Container
 $container = new Container();

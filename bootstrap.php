@@ -11,19 +11,20 @@
 use DI\Container as DIContainer;
 use App\Helpers\DatabaseHelper;
 use Dotenv\Dotenv;
+
 require_once __DIR__ . '/vendor/autoload.php';
+
 define('BASE_PATH', __DIR__);
 
 // ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
+
 // ✅ Load `.env` First Before Anything Else
 $dotenv = Dotenv::createImmutable(__DIR__ . '/');
 $dotenv->load(); // Load .env variables
 
-// ✅ Load Dependencies
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
-
-// ✅ Load Configuration Files
 $configFiles = ['encryption', 'keymanager', 'filestorage'];
 $config = [];
 

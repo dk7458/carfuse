@@ -4,13 +4,12 @@ namespace App\Services\Auth;
 
 use App\Models\User;
 use App\Helpers\DatabaseHelper; // added for database operations
-use App\Helpers\SecurityHelper;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Support\Facades\Hash; // added for password checking
 use Exception;
 use Psr\Log\LoggerInterface;
-
+require_once __DIR__ . '/../../Helpers/SecurityHelper.php';
 class AuthService
 {
     private $tokenService;
