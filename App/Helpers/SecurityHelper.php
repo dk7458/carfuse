@@ -55,16 +55,17 @@ function logAuthFailure($message) {
     Log::channel('auth')->error($message);
 }
 
-// Improved startSecureSession to support API requests via JWT
+// Replace startSecureSession() to use native PHP sessions instead of Laravel's Session facade.
 function startSecureSession() {
-    // Use Laravel's session management instead of raw session_start()
-    Session::start();
-    session()->put('initiated', time());
-    session()->put('client_ip', hash('sha256', request()->ip()));
-    session()->put('user_agent', request()->header('User-Agent'));
-    session()->put('last_activity', time());
-    session()->put('guest', true);
-    Log::channel('security')->info('New guest session initiated via Laravel session');
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+    $_SESSION['initiated'] = time();
+    $_SESSION['client_ip'] = hash('sha256', $_SERVER['REMOTE_ADDR'] ?? '');
+    $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    $_SESSION['last_activity'] = time();
+    $_SESSION['guest'] = true;
+    error_log('New guest session initiated.');
     return true;
 }
 
