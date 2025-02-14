@@ -11,7 +11,7 @@ use App\Helpers\DatabaseHelper;
 require_once __DIR__ . '/../Helpers/ViewHelper.php';
 require_once __DIR__ . '/../Helpers/SecurityHelper.php';
 
-class AuthController
+class AuthController extends Controller
 {
     protected $authService;
     protected $tokenService;

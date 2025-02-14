@@ -2,37 +2,39 @@
 
 namespace App\Services;
 
-use PDO;
+use App\Models\Payment;
+use App\Models\TransactionLog;
 
 class RevenueService
 {
-    private PDO $db;
-
-    public function __construct(PDO $db)
-    {
-        $this->db = $db;
-    }
-
-    /**
-     * Fetch monthly revenue trends
-     */
     public function getMonthlyRevenueTrends(): array
     {
-        $stmt = $this->db->query("
-            SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, SUM(amount) AS revenue
-            FROM transaction_logs
-            WHERE type = 'payment' AND status = 'completed'
-            GROUP BY month
-            ORDER BY month
-        ");
-
-        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $labels = array_column($data, 'month');
-        $amounts = array_column($data, 'revenue');
+        $data = Payment::where('status', 'completed')
+            ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, SUM(amount) as revenue')
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
+        $labels = $data->pluck('month')->toArray();
+        $amounts = $data->pluck('revenue')->toArray();
 
         return [
             'labels' => $labels,
-            'data' => $amounts,
+            'data'   => $amounts,
         ];
+    }
+
+    public function getTotalRevenue(): float
+    {
+        return (float) TransactionLog::where('type', 'payment')->sum('amount');
+    }
+
+    public function getTotalRefunds(): float
+    {
+        return (float) TransactionLog::where('type', 'refund')->sum('amount');
+    }
+
+    public function getNetRevenue(): float
+    {
+        return $this->getTotalRevenue() - $this->getTotalRefunds();
     }
 }

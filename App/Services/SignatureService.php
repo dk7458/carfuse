@@ -3,10 +3,11 @@
 namespace DocumentManager\Services;
 
 use Exception;
-use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Http;
 use Psr\Log\LoggerInterface;
 use DocumentManager\Services\FileStorage;
 use App\Services\EncryptionService;
+use App\Models\Signature;
 
 /**
  * Signature Service
@@ -15,7 +16,6 @@ use App\Services\EncryptionService;
  */
 class SignatureService
 {
-    private Client $httpClient;
     private string $apiEndpoint;
     private string $apiKey;
     private FileStorage $fileStorage;
@@ -23,7 +23,6 @@ class SignatureService
     private LoggerInterface $logger;
 
     public function __construct(
-        Client $httpClient,
         array $config,
         FileStorage $fileStorage,
         EncryptionService $encryptionService,
@@ -33,7 +32,6 @@ class SignatureService
             throw new Exception('AES API configuration is incomplete.');
         }
 
-        $this->httpClient = $httpClient;
         $this->apiEndpoint = $config['api_endpoint'];
         $this->apiKey = $config['api_key'];
         $this->fileStorage = $fileStorage;
@@ -42,7 +40,7 @@ class SignatureService
     }
 
     /**
-     * Upload a local signature.
+     * Upload a local signature securely.
      */
     public function uploadSignature(string $filePath, int $userId): string
     {
@@ -51,6 +49,14 @@ class SignatureService
         $encryptedContent = $this->encryptionService->encrypt(file_get_contents($filePath));
         $fileName = uniqid() . '.' . pathinfo($filePath, PATHINFO_EXTENSION);
         $storagePath = $this->fileStorage->storeFile("signatures/{$userId}", $fileName, $encryptedContent, false);
+
+        // Create signature record via Eloquent ORM
+        Signature::create([
+            'user_id'   => $userId,
+            'file_path' => $storagePath,
+            'encrypted' => true,
+            'created_at'=> now(),
+        ]);
 
         $this->logger->info("Signature uploaded", ['user_id' => $userId, 'path' => $storagePath]);
         return $storagePath;
@@ -64,39 +70,43 @@ class SignatureService
         try {
             $documentHash = hash_file('sha256', $filePath);
 
-            $response = $this->httpClient->post("{$this->apiEndpoint}/sign-aes", [
-                'headers' => $this->getAuthHeaders(),
-                'multipart' => [
-                    ['name' => 'file', 'contents' => fopen($filePath, 'r')],
-                    ['name' => 'user_id', 'contents' => $userId],
-                    ['name' => 'document_hash', 'contents' => $documentHash],
-                    ['name' => 'callback_url', 'contents' => $callbackUrl],
-                ],
-            ]);
+            $response = Http::withHeaders($this->getAuthHeaders())
+                ->post("{$this->apiEndpoint}/sign-aes", [
+                    'multipart' => [
+                        ['name' => 'file', 'contents' => fopen($filePath, 'r')],
+                        ['name' => 'user_id', 'contents' => $userId],
+                        ['name' => 'document_hash', 'contents' => $documentHash],
+                        ['name' => 'callback_url', 'contents' => $callbackUrl],
+                    ],
+                ]);
 
-            return json_decode($response->getBody(), true);
+            return $response->json();
         } catch (Exception $e) {
             $this->logAndThrow("Failed to send document for AES signing", $e);
         }
     }
 
     /**
-     * Verify an AES signature.
+     * Verify an AES signature using Laravel HTTP client.
      */
-    public function verifyAdvancedSignature(string $signedFilePath, string $originalFilePath): bool
+    public function verifySignature(string $signedFilePath, string $originalFilePath): bool
     {
         try {
-            $response = $this->httpClient->post("{$this->apiEndpoint}/verify-aes", [
-                'headers' => $this->getAuthHeaders(),
-                'json' => [
-                    'original_hash' => hash_file('sha256', $originalFilePath),
-                    'signed_hash' => hash_file('sha256', $signedFilePath),
-                ],
-            ]);
+            $originalHash = hash_file('sha256', $originalFilePath);
+            $signedHash = hash_file('sha256', $signedFilePath);
+            
+            $response = Http::withHeaders($this->getAuthHeaders())
+                ->post("{$this->apiEndpoint}/verify-aes", [
+                    'original_hash' => $originalHash,
+                    'signed_hash'   => $signedHash,
+                ]);
 
-            return json_decode($response->getBody(), true)['verified'] ?? false;
+            $result = $response->json();
+            $this->logger->info("Signature verification", ['result' => $result]);
+            return $result['verified'] ?? false;
         } catch (Exception $e) {
-            $this->logAndThrow("Failed to verify AES signature", $e);
+            $this->logger->error("Failed to verify signature", ['error' => $e->getMessage()]);
+            throw new Exception("Failed to verify signature: " . $e->getMessage());
         }
     }
 
@@ -120,11 +130,10 @@ class SignatureService
     public function checkAdvancedSignatureStatus(string $requestId): array
     {
         try {
-            $response = $this->httpClient->get("{$this->apiEndpoint}/status/{$requestId}", [
-                'headers' => $this->getAuthHeaders(),
-            ]);
+            $response = Http::withHeaders($this->getAuthHeaders())
+                ->get("{$this->apiEndpoint}/status/{$requestId}");
 
-            return json_decode($response->getBody(), true);
+            return $response->json();
         } catch (Exception $e) {
             $this->logAndThrow("Failed to check AES signature status", $e);
         }
@@ -136,12 +145,12 @@ class SignatureService
     public function downloadSignedDocument(string $requestId, string $outputPath): bool
     {
         try {
-            $response = $this->httpClient->get("{$this->apiEndpoint}/download/{$requestId}", [
-                'headers' => $this->getAuthHeaders(),
-                'sink' => $outputPath,
-            ]);
+            $response = Http::withHeaders($this->getAuthHeaders())
+                ->get("{$this->apiEndpoint}/download/{$requestId}", [
+                    'sink' => $outputPath,
+                ]);
 
-            return $response->getStatusCode() === 200;
+            return $response->status() === 200;
         } catch (Exception $e) {
             $this->logAndThrow("Failed to download AES signed document", $e);
         }

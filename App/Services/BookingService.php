@@ -2,17 +2,16 @@
 
 namespace App\Services;
 
-use PDO;
+use App\Models\Booking;
+use Exception;
 use Psr\Log\LoggerInterface;
 
 class BookingService
 {
-    private PDO $db;
     private LoggerInterface $logger;
 
-    public function __construct(PDO $db, LoggerInterface $logger)
+    public function __construct(LoggerInterface $logger)
     {
-        $this->db = $db;
         $this->logger = $logger;
     }
 
@@ -21,20 +20,7 @@ class BookingService
      */
     public function getBookingById(int $id): array
     {
-        $stmt = $this->db->prepare("
-            SELECT b.*, CONCAT(f.make, ' ', f.model) AS vehicle
-            FROM bookings b
-            JOIN fleet f ON b.vehicle_id = f.id
-            WHERE b.id = :id
-        ");
-        $stmt->execute(['id' => $id]);
-        $booking = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$booking) {
-            throw new \Exception('Booking not found');
-        }
-
-        return $booking;
+        return Booking::with('vehicle')->findOrFail($id)->toArray();
     }
 
     /**
@@ -42,15 +28,11 @@ class BookingService
      */
     public function rescheduleBooking(int $id, string $pickupDate, string $dropoffDate): void
     {
-        $stmt = $this->db->prepare("
-            UPDATE bookings
-            SET pickup_date = :pickup_date, dropoff_date = :dropoff_date, status = 'rescheduled'
-            WHERE id = :id
-        ");
-        $stmt->execute([
-            'id' => $id,
+        $booking = Booking::findOrFail($id);
+        $booking->update([
             'pickup_date' => $pickupDate,
             'dropoff_date' => $dropoffDate,
+            'status' => 'rescheduled'
         ]);
     }
 
@@ -59,23 +41,9 @@ class BookingService
      */
     public function cancelBooking(int $id): float
     {
-        $stmt = $this->db->prepare("
-            UPDATE bookings
-            SET status = 'canceled'
-            WHERE id = :id
-        ");
-        $stmt->execute(['id' => $id]);
-
-        // Calculate refund amount (example: 80% of total price if canceled)
-        $refundStmt = $this->db->prepare("
-            SELECT total_price * 0.8 AS refund_amount
-            FROM bookings
-            WHERE id = :id
-        ");
-        $refundStmt->execute(['id' => $id]);
-        $result = $refundStmt->fetch(PDO::FETCH_ASSOC);
-
-        return $result['refund_amount'] ?? 0.0;
+        $booking = Booking::findOrFail($id);
+        $booking->update(['status' => 'canceled']);
+        return $booking->calculateRefundAmount();
     }
 
     /**
@@ -83,13 +51,7 @@ class BookingService
      */
     public function getUserIdByBooking(int $id): int
     {
-        $stmt = $this->db->prepare("
-            SELECT user_id 
-            FROM bookings 
-            WHERE id = :id
-        ");
-        $stmt->execute(['id' => $id]);
-        return (int) $stmt->fetchColumn();
+        return Booking::where('id', $id)->value('user_id');
     }
 
     /**
@@ -97,17 +59,10 @@ class BookingService
      */
     public function getMonthlyBookingTrends(): array
     {
-        $stmt = $this->db->prepare("
-            SELECT 
-                MONTH(created_at) AS month, 
-                COUNT(*) AS total
-            FROM bookings
-            WHERE YEAR(created_at) = YEAR(CURRENT_DATE)
-            GROUP BY MONTH(created_at)
-            ORDER BY MONTH(created_at)
-        ");
-        $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return Booking::selectRaw('MONTH(created_at) AS month, COUNT(*) AS total')
+                      ->groupBy('month')
+                      ->get()
+                      ->toArray();
     }
 
     /**
@@ -115,9 +70,7 @@ class BookingService
      */
     public function getTotalBookings(): int
     {
-        $stmt = $this->db->prepare("SELECT COUNT(*) FROM bookings");
-        $stmt->execute();
-        return (int) $stmt->fetchColumn();
+        return Booking::count();
     }
 
     /**
@@ -125,9 +78,7 @@ class BookingService
      */
     public function getCompletedBookings(): int
     {
-        $stmt = $this->db->prepare("SELECT COUNT(*) FROM bookings WHERE status = 'completed'");
-        $stmt->execute();
-        return (int) $stmt->fetchColumn();
+        return Booking::where('status', 'completed')->count();
     }
 
     /**
@@ -135,9 +86,7 @@ class BookingService
      */
     public function getCanceledBookings(): int
     {
-        $stmt = $this->db->prepare("SELECT COUNT(*) FROM bookings WHERE status = 'canceled'");
-        $stmt->execute();
-        return (int) $stmt->fetchColumn();
+        return Booking::where('status', 'canceled')->count();
     }
 
     /**
@@ -145,17 +94,7 @@ class BookingService
      */
     public function getBookingLogs(int $bookingId): array
     {
-        $stmt = $this->db->prepare("
-            SELECT 
-                action, 
-                details, 
-                created_at 
-            FROM booking_logs
-            WHERE booking_id = :booking_id
-            ORDER BY created_at DESC
-        ");
-        $stmt->execute(['booking_id' => $bookingId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return Booking::findOrFail($bookingId)->logs()->orderBy('created_at', 'desc')->get()->toArray();
     }
 
     /**
@@ -163,24 +102,7 @@ class BookingService
      */
     private function isBookingAvailable(int $vehicleId, string $pickupDate, string $dropoffDate): bool
     {
-        $stmt = $this->db->prepare("
-            SELECT COUNT(*) 
-            FROM bookings 
-            WHERE vehicle_id = :vehicle_id 
-              AND status NOT IN ('canceled', 'completed')
-              AND (
-                  (pickup_date BETWEEN :pickup_date AND :dropoff_date) OR
-                  (dropoff_date BETWEEN :pickup_date AND :dropoff_date) OR
-                  (:pickup_date BETWEEN pickup_date AND dropoff_date) OR
-                  (:dropoff_date BETWEEN pickup_date AND dropoff_date)
-              )
-        ");
-        $stmt->execute([
-            'vehicle_id' => $vehicleId,
-            'pickup_date' => $pickupDate,
-            'dropoff_date' => $dropoffDate,
-        ]);
-        return (int)$stmt->fetchColumn() === 0;
+        return Booking::isAvailable($vehicleId, $pickupDate, $dropoffDate);
     }
 
     /**
@@ -199,15 +121,12 @@ class BookingService
         }
 
         try {
-            $stmt = $this->db->prepare("
-                INSERT INTO bookings (user_id, vehicle_id, pickup_date, dropoff_date, status)
-                VALUES (:user_id, :vehicle_id, :pickup_date, :dropoff_date, 'booked')
-            ");
-            $stmt->execute([
+            $booking = Booking::create([
                 'user_id' => $userId,
                 'vehicle_id' => $vehicleId,
                 'pickup_date' => $pickupDate,
                 'dropoff_date' => $dropoffDate,
+                'status' => 'booked'
             ]);
 
             $this->logger->info('Booking created successfully', [
@@ -218,7 +137,7 @@ class BookingService
             ]);
 
             return ['status' => 'success', 'message' => 'Booking created successfully'];
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $this->logger->error('Failed to create booking', [
                 'error' => $e->getMessage(),
                 'user_id' => $userId,

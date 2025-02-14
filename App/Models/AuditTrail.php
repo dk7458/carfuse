@@ -1,6 +1,6 @@
 <?php
 
-namespace AuditManager\Models;
+namespace App\Models;
 
 use PDO;
 

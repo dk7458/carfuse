@@ -2,14 +2,16 @@
 
 namespace App\Controllers;
 
-use App\Services\ReportService;
-use App\Services\Validator;
-use App\Services\NotificationService;
-use Psr\Log\LoggerInterface;
+use App\Models\Booking;
+use App\Models\Payment;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
+use PDF;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
-class ReportController
+class ReportController extends Controller
 {
     private ReportService $reportService;
     private Validator $validator;
@@ -47,41 +49,54 @@ class ReportController
     }
 
     /**
-     * Generate Report for Admin
+     * Generate Report for Admin using Eloquent ORM.
      */
-    public function generateReport(array $data): array
+    public function generateReport(Request $request)
     {
-        $rules = [
-            'report_type' => 'required|in:bookings,payments,users',
-            'date_range' => 'required|array',
-            'date_range.start' => 'required|date',
-            'date_range.end' => 'required|date',
-            'filters' => 'array',
-            'format' => 'required|in:csv,pdf',
-        ];
+        $validated = $request->validate([
+            'report_type'          => 'required|in:bookings,payments,users',
+            'date_range.start'     => 'required|date',
+            'date_range.end'       => 'required|date',
+            'filters'              => 'array',
+            'format'               => 'required|in:csv,pdf',
+        ]);
 
-        if (!$this->validator->validate($data, $rules)) {
-            http_response_code(400);
-            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
-            exit;
+        $start = $validated['date_range']['start'];
+        $end = $validated['date_range']['end'];
+        $format = $validated['format'];
+        $reportType = $validated['report_type'];
+
+        switch ($reportType) {
+            case 'bookings':
+                $data = Booking::with(['user', 'vehicle'])
+                    ->whereBetween('created_at', [$start, $end])
+                    ->get()
+                    ->toArray();
+                break;
+            case 'payments':
+                $data = Payment::whereBetween('created_at', [$start, $end])
+                    ->get()
+                    ->toArray();
+                break;
+            case 'users':
+                $data = User::whereBetween('created_at', [$start, $end])
+                    ->get()
+                    ->toArray();
+                break;
+            default:
+                return response()->json(['status' => 'error', 'message' => 'Invalid report type'], 400);
         }
 
-        try {
-            $report = $this->reportService->generateReport(
-                $data['report_type'],
-                $data['date_range'],
-                $data['filters'] ?? [],
-                $data['format']
-            );
-            http_response_code(200);
-            echo json_encode(['status' => 'success','message' => 'Report generated','data' => ['report' => $report]]);
-        } catch (\Exception $e) {
-            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
-            $this->logger->error('Failed to generate report', ['error' => $e->getMessage()]);
-            http_response_code(500);
-            echo json_encode(['status' => 'error','message' => 'Failed to generate report','data' => []]);
+        $filename = "{$reportType}_report_" . date('YmdHis');
+        if ($format === 'csv') {
+            // Assumes ReportExport implements necessary interfaces (e.g., FromArray)
+            return Excel::download(new \App\Exports\ReportExport($data), $filename . ".csv");
+        } elseif ($format === 'pdf') {
+            $pdf = PDF::loadView('reports.template', ['data' => $data]);
+            return $pdf->download($filename . ".pdf");
+        } else {
+            return response()->json(['status' => 'error', 'message' => 'Unsupported format'], 400);
         }
-        exit;
     }
 
     /**
@@ -103,41 +118,51 @@ class ReportController
     }
 
     /**
-     * Generate Report for Users
+     * Generate Report for a User using Eloquent ORM.
      */
-    public function generateUserReport(array $data): array
+    public function generateUserReport(Request $request)
     {
-        $rules = [
-            'user_id' => 'required|integer',
-            'report_type' => 'required|in:bookings,payments',
-            'date_range' => 'required|array',
-            'date_range.start' => 'required|date',
-            'date_range.end' => 'required|date',
-            'format' => 'required|in:csv,pdf',
-        ];
+        $validated = $request->validate([
+            'user_id'              => 'required|integer',
+            'report_type'          => 'required|in:bookings,payments',
+            'date_range.start'     => 'required|date',
+            'date_range.end'       => 'required|date',
+            'format'               => 'required|in:csv,pdf',
+        ]);
 
-        if (!$this->validator->validate($data, $rules)) {
-            http_response_code(400);
-            echo json_encode(['status' => 'error','message' => 'Validation failed','data' => $this->validator->errors()]);
-            exit;
+        $userId = $validated['user_id'];
+        $start  = $validated['date_range']['start'];
+        $end    = $validated['date_range']['end'];
+        $format = $validated['format'];
+        $reportType = $validated['report_type'];
+
+        switch ($reportType) {
+            case 'bookings':
+                $data = Booking::with(['user', 'vehicle'])
+                    ->where('user_reference', $userId)
+                    ->whereBetween('created_at', [$start, $end])
+                    ->get()
+                    ->toArray();
+                break;
+            case 'payments':
+                $data = Payment::where('user_id', $userId)
+                    ->whereBetween('created_at', [$start, $end])
+                    ->get()
+                    ->toArray();
+                break;
+            default:
+                return response()->json(['status' => 'error', 'message' => 'Invalid report type'], 400);
         }
 
-        try {
-            $report = $this->reportService->generateUserReport(
-                $data['user_id'],
-                $data['report_type'],
-                $data['date_range'],
-                $data['format']
-            );
-            http_response_code(200);
-            echo json_encode(['status' => 'success','message' => 'User report generated','data' => ['report' => $report]]);
-        } catch (\Exception $e) {
-            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
-            $this->logger->error('Failed to generate user report', ['error' => $e->getMessage()]);
-            http_response_code(500);
-            echo json_encode(['status' => 'error','message' => 'Failed to generate report','data' => []]);
+        $filename = "user_{$userId}_{$reportType}_report_" . date('YmdHis');
+        if ($format === 'csv') {
+            return Excel::download(new \App\Exports\ReportExport($data), $filename . ".csv");
+        } elseif ($format === 'pdf') {
+            $pdf = PDF::loadView('reports.template', ['data' => $data]);
+            return $pdf->download($filename . ".pdf");
+        } else {
+            return response()->json(['status' => 'error', 'message' => 'Unsupported format'], 400);
         }
-        exit;
     }
 
     /**

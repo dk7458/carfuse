@@ -1,8 +1,8 @@
 <?php
 
-namespace DocumentManager\Controllers;
+namespace App\Controllers;
 
-use DocumentManager\Services\SignatureService;
+use App\Services\SignatureService;
 use App\Services\Validator;
 use Psr\Log\LoggerInterface;
 
@@ -14,7 +14,7 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
  * Handles the management of user signatures, including uploading,
  * verifying, and retrieving signatures for documents.
  */
-class SignatureController
+class SignatureController extends Controller
 {
     private SignatureService $signatureService;
     private Validator $validator;

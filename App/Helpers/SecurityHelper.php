@@ -9,6 +9,10 @@
 | Path: App/Helpers/SecurityHelper.php
 */
 
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
+
 // Security Configuration
 const SESSION_CONFIG = [
     'use_only_cookies' => 1,
@@ -43,88 +47,25 @@ function securityLog($message, $level = 'info') {
  * Log authentication events.
  */
 function logAuthEvent($message, $level = 'info') {
-    // Changed to security.log
-    $logFile = __DIR__ . '/../../logs/security.log';
-    $timestamp = date('Y-m-d H:i:s');
-    $userId = $_SESSION['user_id'] ?? 'guest';
-
-    error_log("[$timestamp][$level][user_id: $userId] $message\n", 3, $logFile);
+    Log::channel('auth')->info($message);
 }
 
 // Helper to log authentication failures to auth.log
 function logAuthFailure($message) {
-    $logFile = __DIR__ . '/../../logs/auth.log';
-    $timestamp = date('Y-m-d H:i:s');
-    error_log("[$timestamp][auth_failure] $message\n", 3, $logFile);
+    Log::channel('auth')->error($message);
 }
 
 // Improved startSecureSession to support API requests via JWT
 function startSecureSession() {
-    // If API request and JWT provided, attempt JWT validation and setup session
-    if (defined('API_ENTRY')) {
-        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-        if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            $token = $matches[1];
-            $decoded = validateJWT($token);
-            if ($decoded !== false) {
-                if (session_status() !== PHP_SESSION_ACTIVE) {
-                    session_start();
-                }
-                $_SESSION['api_authenticated'] = true;
-                $_SESSION['user_id'] = $decoded->sub ?? 'api_user';
-                // Optionally store more token data in session
-            }
-        }
-    }
-
-    // Proceed with standard session initialization if not active
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        return true;
-    }
-
-    if (headers_sent()) {
-        securityLog('Headers already sent, cannot modify session settings', 'warning');
-    } else {
-        foreach (SESSION_CONFIG as $key => $value) {
-            @ini_set("session.$key", $value);
-        }
-
-        session_set_cookie_params([
-            'lifetime' => 0,
-            'path' => '/',
-            'domain' => $_SERVER['HTTP_HOST'] ?? '',
-            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
-            'httponly' => true,
-            'samesite' => 'Lax'
-        ]);
-    }
-
-    try {
-        if (!session_start()) { // will only be called if not already active
-            throw new Exception('Session start failed');
-        }
-
-        // Initialize session only once
-        if (empty($_SESSION['initiated'])) {
-            session_regenerate_id(true);
-            $_SESSION['initiated'] = time();
-            $_SESSION['client_ip'] = hash('sha256', $_SERVER['REMOTE_ADDR']);
-            $_SESSION['user_agent'] = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
-            $_SESSION['last_activity'] = time();
-            $_SESSION['guest'] = true; // Default guest initialization
-            securityLog('New guest session initiated');
-        }
-
-        // CSRF protection
-        if (empty($_SESSION['csrf_token'])) {
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-        }
-
-        return validateSessionIntegrity();
-    } catch (Exception $e) {
-        securityLog('Session initialization failed: ' . $e->getMessage(), 'critical');
-        return false;
-    }
+    // Use Laravel's session management instead of raw session_start()
+    Session::start();
+    session()->put('initiated', time());
+    session()->put('client_ip', hash('sha256', request()->ip()));
+    session()->put('user_agent', request()->header('User-Agent'));
+    session()->put('last_activity', time());
+    session()->put('guest', true);
+    Log::channel('security')->info('New guest session initiated via Laravel session');
+    return true;
 }
 
 // ...existing code...
@@ -193,44 +134,10 @@ function validateSessionIntegrity() {
 
 // ...existing code...
 
-function generateCsrfToken() {
-    try {
-        // Ensure we have a token and it's not expired
-        if (empty($_SESSION['csrf_token']) || 
-            !isset($_SESSION['csrf_time']) || 
-            (time() - $_SESSION['csrf_time'] > 1800)) {
-            
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-            $_SESSION['csrf_time'] = time();
-        }
-        return $_SESSION['csrf_token'];
-    } catch (Exception $e) {
-        securityLog('CSRF token generation failed: ' . $e->getMessage(), 'error');
-        // Fallback to a less secure but functional token
-        return hash('sha256', uniqid(mt_rand(), true));
-    }
-}
-
-/**
- * Validate CSRF token from user input.
- */
-function validateCsrfToken($token)
-{
-    if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
-        securityLog('CSRF validation failed for token: ' . ($token ?? 'null'), 'warning');
-        return false;
-    }
-    return true;
-}
-
-/**
- * Return CSRF hidden input field for forms.
- */
-function csrf_field()
-{
-    $token = generateCsrfToken();
-    return '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">';
-}
+// Remove manual CSRF token functions; use Laravel's CSRF middleware and Blade @csrf directives.
+// function generateCsrfToken() { ... }
+// function validateCsrfToken($token) { ... }
+// function csrf_field() { ... }
 
 /**
  * Sanitize user input to prevent XSS.
@@ -290,10 +197,7 @@ function destroySession() {
  */
 function isUserLoggedIn()
 {
-    return session_status() === PHP_SESSION_ACTIVE && 
-           isset($_SESSION['user_id']) && 
-           !($_SESSION['guest'] ?? true) && 
-           validateSessionIntegrity();
+    return Auth::check();
 }
 
 /**
@@ -301,7 +205,7 @@ function isUserLoggedIn()
  */
 function getUserRole()
 {
-    return $_SESSION['user_role'] ?? 'guest';
+    return Auth::check() ? Auth::user()->role : 'guest';
 }
 
 /**
@@ -324,27 +228,9 @@ function setSessionData($key, $value)
  * Validate JWT token.
  */
 function validateJWT($token) {
-    // Changed to use security.log for logging all security events.
-    $logFile = __DIR__ . '/../../logs/security.log';
-    $timestamp = date('Y-m-d H:i:s');
-    $userId = $_SESSION['user_id'] ?? 'guest';
-
-    try {
-        // Decode the token (assuming using Firebase JWT library)
-        $decoded = \Firebase\JWT\JWT::decode($token, new \Firebase\JWT\Key('your-secret-key', 'HS256'));
-
-        // Check if the token is expired
-        if ($decoded->exp < time()) {
-            securityLog("JWT expired for token: $token", 'warning');
-            return false;
-        }
-
-        return $decoded;
-    } catch (Exception $e) {
-        securityLog("JWT validation failed: " . $e->getMessage(), 'error');
-        return false;
-    }
-} // <-- Added missing closing brace
+    // Instead of manual decoding, we delegate to Laravel's 'api' guard.
+    return Auth::guard('api')->user();
+}
 
 /**
  * Enforce authentication for protected pages.

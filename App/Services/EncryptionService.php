@@ -2,142 +2,79 @@
 
 namespace App\Services;
 
-use Exception;
-use RuntimeException;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 
-/**
- * EncryptionService
- *
- * Provides functionality for encrypting/decrypting strings and files securely.
- */
 class EncryptionService
 {
-    private string $encryptionKey;
-    private string $cipher = 'AES-256-CBC';
-    private int $ivLength;
-
-    public function __construct(string $encryptionKey)
+    // Remove manual $encryptionKey, $cipher, and $ivLength properties.
+    
+    public function __construct()
     {
-        if (empty($encryptionKey) || strlen($encryptionKey) < 32) {
-            throw new RuntimeException('❌ Encryption key is missing or too short. It must be at least 32 characters long.');
-        }
-
-        $this->encryptionKey = $encryptionKey;
-        $this->ivLength = openssl_cipher_iv_length($this->cipher);
-
-        if ($this->ivLength === false) {
-            throw new RuntimeException('❌ Unable to determine IV length for the cipher.');
-        }
+        // ...existing constructor code removed; Laravel handles key management via config('app.key')...
     }
 
     public function encrypt(string $data): string
     {
-        $iv = random_bytes($this->ivLength);
-        $encrypted = openssl_encrypt($data, $this->cipher, $this->encryptionKey, 0, $iv);
-
-        if ($encrypted === false) {
-            throw new RuntimeException('❌ Encryption failed.');
+        try {
+            return Crypt::encryptString($data);
+        } catch (\Exception $e) {
+            Log::error('Encryption failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
-
-        return base64_encode($iv . $encrypted);
     }
 
     public function decrypt(string $encryptedData): ?string
     {
-        $decoded = base64_decode($encryptedData, true);
-        if ($decoded === false) {
-            Log::error('❌ Decryption failed: Invalid base64 input.');
+        try {
+            return Crypt::decryptString($encryptedData);
+        } catch (\Exception $e) {
+            Log::error('Decryption failed', ['error' => $e->getMessage()]);
             return null;
         }
-
-        $iv = substr($decoded, 0, $this->ivLength);
-        $cipherText = substr($decoded, $this->ivLength);
-
-        if (strlen($iv) !== $this->ivLength) {
-            throw new RuntimeException('❌ Invalid IV length.');
-        }
-
-        $decrypted = openssl_decrypt($cipherText, $this->cipher, $this->encryptionKey, 0, $iv);
-
-        if ($decrypted === false) {
-            Log::error('❌ Decryption failed: Data may have been tampered with.');
-            return null;
-        }
-
-        return $decrypted;
     }
 
-    /**
-     * Encrypt a file.
-     */
     public function encryptFile(string $inputFile, string $outputFile): bool
     {
-        $this->validateFile($inputFile);
-        $data = file_get_contents($inputFile);
-
-        if ($data === false) {
-            throw new \RuntimeException("Failed to read file: $inputFile");
+        // Use Storage facade and Crypt for file encryption.
+        try {
+            $data = file_get_contents($inputFile); // retain manual file reading
+            if ($data === false) {
+                throw new \RuntimeException("Failed to read file: $inputFile");
+            }
+            $encrypted = Crypt::encryptString($data);
+            Storage::put($outputFile, $encrypted);
+            return true;
+        } catch (\Exception $e) {
+            Log::error('File encryption failed', ['error' => $e->getMessage()]);
+            return false;
         }
-
-        return $this->writeFile($outputFile, $this->encrypt($data));
     }
 
-    /**
-     * Decrypt a file.
-     */
     public function decryptFile(string $inputFile, string $outputFile): bool
     {
-        $this->validateFile($inputFile);
-        $encryptedData = file_get_contents($inputFile);
-
-        if ($encryptedData === false) {
-            throw new \RuntimeException("Failed to read encrypted file: $inputFile");
+        try {
+            $encryptedData = Storage::get($inputFile);
+            $decrypted = Crypt::decryptString($encryptedData);
+            Storage::put($outputFile, $decrypted);
+            return true;
+        } catch (\Exception $e) {
+            Log::error('File decryption failed', ['error' => $e->getMessage()]);
+            return false;
         }
-
-        $decryptedData = $this->decrypt($encryptedData);
-        if ($decryptedData === null) {
-            throw new \RuntimeException("Failed to decrypt file: $inputFile");
-        }
-
-        return $this->writeFile($outputFile, $decryptedData);
     }
 
-    /**
-     * Sign data using HMAC SHA-256.
-     */
     public function sign(string $data): string
     {
-        return hash_hmac('sha256', $data, $this->encryptionKey);
+        // Use Laravel's app key for HMAC signing.
+        return hash_hmac('sha256', $data, config('app.key'));
     }
 
-    /**
-     * Verify the integrity of signed data.
-     */
     public function verify(string $data, string $signature): bool
     {
         return hash_equals($this->sign($data), $signature);
     }
 
-    /**
-     * Validate if a file exists and is readable.
-     */
-    private function validateFile(string $filePath): void
-    {
-        if (!file_exists($filePath) || !is_readable($filePath)) {
-            throw new \InvalidArgumentException("File not found or not readable: $filePath");
-        }
-    }
-
-    /**
-     * Write data to a file.
-     */
-    private function writeFile(string $filePath, string $data): bool
-    {
-        if (file_put_contents($filePath, $data) === false) {
-            throw new \RuntimeException("Failed to write to file: $filePath");
-        }
-
-        return true;
-    }
+    // ...existing code...
 }

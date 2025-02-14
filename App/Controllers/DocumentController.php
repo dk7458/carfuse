@@ -1,17 +1,19 @@
 <?php
 
-namespace DocumentManager\Controllers;
+namespace App\Controllers;
 
-use DocumentManager\Services\DocumentService;
+use App\Services\DocumentService;
 use App\Services\EncryptionService;
-use DocumentManager\Services\FileStorage;
+use App\Services\FileStorage;
 use App\Services\Validator;
-use AuditManager\Services\AuditService;
+use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
+use App\Models\DocumentTemplate;
+use App\Models\AuditLog;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
-class DocumentController
+class DocumentController extends Controller
 {
     private DocumentService $documentService;
     private Validator $validator;
@@ -41,23 +43,27 @@ class DocumentController
         ];
 
         if (!$this->validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()]);
         }
 
         try {
-            $templateId = $this->documentService->uploadTemplate($data['name'], $data['file']);
-            $this->auditService->log(
-                'template_uploaded',
-                'Template uploaded successfully.',
-                null,
-                null,
-                $_SERVER['REMOTE_ADDR'] ?? null
-            );
-
-            return ['status' => 'success', 'message' => 'Template uploaded successfully', 'template_id' => $templateId];
+            // Store file using FileStorage service
+            $filePath = FileStorage::store($data['file']);
+            // Create a new template using Eloquent ORM
+            $template = DocumentTemplate::create([
+                'name' => $data['name'],
+                'file_path' => $filePath,
+            ]);
+            // Log document creation using AuditLog model
+            AuditLog::create([
+                'action' => 'template_uploaded',
+                'message' => 'Template uploaded successfully.',
+                'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null,
+            ]);
+            return $this->jsonResponse(['status' => 'success', 'message' => 'Template uploaded successfully', 'template_id' => $template->id]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to upload template', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to upload template'];
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to upload template']);
         }
     }
 
@@ -67,19 +73,18 @@ class DocumentController
     public function generateContract(int $bookingId, int $userId): array
     {
         try {
-            $contractPath = $this->documentService->generateContract($bookingId, $userId);
-            $this->auditService->log(
-                'contract_generated',
-                'Contract generated successfully.',
-                $userId,
-                $bookingId,
-                $_SERVER['REMOTE_ADDR'] ?? null
-            );
-
-            return ['status' => 'success', 'message' => 'Contract generated successfully', 'contract_path' => $contractPath];
+            // Use a secure contract generation method ensuring encryption is applied
+            $contractPath = $this->documentService->generateContractSecure($bookingId, $userId);
+            // Log the contract generation using AuditLog model
+            AuditLog::create([
+                'action' => 'contract_generated',
+                'message' => 'Contract generated successfully.',
+                'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null,
+            ]);
+            return $this->jsonResponse(['status' => 'success', 'message' => 'Contract generated successfully', 'contract_path' => $contractPath]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to generate contract', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to generate contract'];
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to generate contract']);
         }
     }
 

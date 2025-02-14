@@ -7,18 +7,23 @@ use App\Services\UserService;
 use App\Services\NotificationService;
 use App\Services\Validator;
 use App\Services\RateLimiter;
-use AuditManager\Services\AuditService;
+use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
 use Illuminate\Http\Request;
 use App\Helpers\SecurityHelper;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
+use Illuminate\Routing\Controller;
 
 /**
  * User Management Controller
  *
  * Handles profile management, password resets, and dashboard access.
  */
-class UserController
+class UserController extends Controller
 {
     private UserService $userService;
     private LoggerInterface $logger;
@@ -45,116 +50,49 @@ class UserController
     /**
      * 🔹 Update user profile
      */
-    public function updateProfile(Request $request)
+    public function updateProfile()
     {
-        header('Content-Type: application/json');
-
-        try {
-            $userId = validateJWT(); // 🔒 Validate token & get user ID
-            validateCSRFToken($request); // 🔒 Validate CSRF token
-
-            $data = $request->getParsedBody();
-
-            // ✅ Input Validation
-            $rules = [
-                'name' => 'required|string|max:255',
-                'email' => 'required|email',
-                'phone' => 'string|max:20',
-                'address' => 'string|max:255',
-            ];
-
-            if (!$this->validator->validate($data, $rules)) {
-                throw new \Exception("Validation failed: Invalid input.");
-            }
-
-            // ✅ Delegate profile update to UserService
-            $result = $this->userService->updateProfile($userId, $data);
-
-            if (!$result) {
-                throw new \Exception("Profile update failed.");
-            }
-
-            // ✅ Log the profile update
-            $this->auditService->log(
-                'profile_updated',
-                'User updated their profile.',
-                $userId
-            );
-
-            http_response_code(200);
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'Profile updated successfully',
-                'data' => []
-            ]);
-        } catch (\Exception $e) {
-            $this->logger->error('Profile Update Failed', ['error' => $e->getMessage()]);
-            http_response_code(400);
-            echo json_encode([
-                'status' => 'error',
-                'message' => $e->getMessage(),
-                'data' => []
-            ]);
-        }
+        $user = Auth::user();
+        $data = request()->validate([
+            'name'    => 'required|string|max:255',
+            'surname' => 'required|string|max:255',
+            'email'   => 'required|email',
+            'phone'   => 'nullable|string|max:15',
+            'address' => 'nullable|string|max:255',
+        ]);
+        
+        $user->update($data);
+        Log::channel('audit')->info('User profile updated', ['user_id' => $user->id]);
+        
+        return response()->json(['status' => 'success', 'message' => 'Profile updated successfully'], 200);
     }
 
     /**
      * 🔹 Get user profile
      */
-    public function getProfile(Request $request)
+    public function getProfile()
     {
-        header('Content-Type: application/json');
-
-        try {
-            $userId = validateJWT(); // 🔒 Validate JWT token
-
-            // ✅ Fetch profile data
-            $profile = $this->userService->getProfileById($userId);
-
-            http_response_code(200);
-            echo json_encode([
-                'status' => 'success',
-                'data' => $profile
-            ]);
-        } catch (\Exception $e) {
-            $this->logger->error('Failed to retrieve user profile', ['error' => $e->getMessage()]);
-            http_response_code(400);
-            echo json_encode([
-                'status' => 'error',
-                'message' => $e->getMessage(),
-                'data' => []
-            ]);
-        }
+        return response()->json(Auth::user(), 200);
     }
 
     /**
      * 🔹 Request password reset
      */
-    public function requestPasswordReset(Request $request)
+    public function requestPasswordReset()
     {
-        header('Content-Type: application/json');
-
-        try {
-            $data = $request->getParsedBody();
-            $email = $data['email'] ?? '';
-
-            $result = $this->userService->requestPasswordReset($email);
-
-            http_response_code(200);
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'Password reset request processed',
-                'data' => $result
-            ]);
-        } catch (\Exception $e) {
-            $this->logger->error('Password Reset Request Failed', ['error' => $e->getMessage()]);
-            http_response_code(400);
-            echo json_encode([
-                'status' => 'error',
-                'message' => $e->getMessage(),
-                'data' => []
-            ]);
+        $email = request('email');
+        if (!$email) {
+            abort(400, 'Invalid input');
         }
+        
+        $token = Str::random(60);
+        \App\Models\PasswordReset::create([
+            'email'      => $email,
+            'token'      => $token,
+            'expires_at' => now()->addHour(),
+        ]);
+        
+        return response()->json(['status' => 'success', 'message' => 'Password reset requested'], 200);
     }
 
     /**
@@ -162,15 +100,7 @@ class UserController
      */
     public function userDashboard()
     {
-        try {
-            validateJWT(); // 🔒 Ensure user is authenticated
-            view('dashboard/user_dashboard');
-            http_response_code(200);
-            echo json_encode(['status' => 'success', 'message' => 'Dashboard loaded', 'data' => []]);
-        } catch (\Exception $e) {
-            $this->logger->error('Failed to load user dashboard', ['error' => $e->getMessage()]);
-            http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Failed to load user dashboard', 'data' => []]);
-        }
+        $user = Auth::user();
+        return view('dashboard.user', compact('user'));
     }
 }

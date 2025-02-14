@@ -7,6 +7,7 @@ use App\Models\PasswordReset; // added import
 use App\Helpers\SecurityHelper;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
+use Illuminate\Support\Facades\Hash; // added for password checking
 use Exception;
 
 class AuthService
@@ -35,7 +36,7 @@ class AuthService
     public function login($email, $password)
     {
         $user = User::where('email', $email)->first();
-        if (!$user || !password_verify($password, $user->password_hash)) {
+        if (!$user || !Hash::check($password, $user->password_hash)) {
             SecurityHelper::logAuthFailure("Failed login attempt for email: " . $email);
             throw new Exception("Invalid credentials");
         }
@@ -51,9 +52,6 @@ class AuthService
 
     public function registerUser(array $data)
     {
-        $data['password_hash'] = password_hash($data['password'], PASSWORD_BCRYPT);
-        unset($data['password']);
-
         $user = User::create($data);
         if (!$user) {
             throw new Exception("User registration failed");
@@ -70,9 +68,8 @@ class AuthService
         }
 
         $token = bin2hex(random_bytes(32));
-        $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
+        $expiresAt = now()->addHour();
 
-        // Use Eloquent Model for ORM insertion instead of Capsule/PDO
         PasswordReset::create([
             'email'      => $email,
             'token'      => password_hash($token, PASSWORD_BCRYPT),

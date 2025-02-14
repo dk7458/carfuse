@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Notification; // added for Eloquent ORM
+use App\Models\User;         // added to access user relationships
 use PDO;
 use Psr\Log\LoggerInterface;
 use PHPMailer\PHPMailer\PHPMailer;
@@ -14,13 +16,11 @@ use PHPMailer\PHPMailer\Exception;
  */
 class NotificationService
 {
-    private PDO $pdo;
     private LoggerInterface $logger;
     private array $config;
 
-    public function __construct(PDO $pdo, LoggerInterface $logger, array $config)
+    public function __construct(LoggerInterface $logger, array $config)
     {
-        $this->pdo = $pdo;
         $this->logger = $logger;
         $this->config = $config;
     }
@@ -44,15 +44,35 @@ class NotificationService
      */
     private function storeNotification(int $userId, string $type, string $message): void
     {
-        $stmt = $this->pdo->prepare("
-            INSERT INTO notifications (user_id, type, message, sent_at, is_read)
-            VALUES (:user_id, :type, :message, NOW(), 0)
-        ");
-        $stmt->execute([
-            'user_id' => $userId,
-            'type' => $type,
+        $user = User::findOrFail($userId);
+        $user->notifications()->create([
+            'type'    => $type,
             'message' => $message,
+            'sent_at' => now(),
+            'is_read' => false,
         ]);
+    }
+
+    public function getUserNotifications(int $userId)
+    {
+        return Notification::where('user_id', $userId)->latest()->get();
+    }
+
+    public function markAsRead(int $notificationId): void
+    {
+        $notification = Notification::findOrFail($notificationId);
+        $notification->update(['is_read' => true]);
+    }
+
+    public function deleteNotification(int $notificationId): void
+    {
+        $notification = Notification::findOrFail($notificationId);
+        $notification->delete();
+    }
+
+    public function markAllAsRead(int $userId): void
+    {
+        Notification::where('user_id', $userId)->update(['is_read' => true]);
     }
 
     /**

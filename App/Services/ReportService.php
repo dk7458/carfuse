@@ -2,29 +2,28 @@
 
 namespace App\Services;
 
-use PDO;
+use App\Models\Booking;
+use App\Models\Payment;
+use App\Models\User;
+use Dompdf\Dompdf;
 
 class ReportService
 {
-    private PDO $db;
-
-    public function __construct(PDO $db)
-    {
-        $this->db = $db;
-    }
+    // Removed PDO dependency and constructor
 
     /**
      * Generate a report for admin
      */
     public function generateReport(string $reportType, array $dateRange, array $filters = [], string $format): string
     {
+        $start = $dateRange['start'];
+        $end   = $dateRange['end'];
         $data = match ($reportType) {
             'bookings' => $this->getBookingReportData($dateRange, $filters),
             'payments' => $this->getPaymentReportData($dateRange, $filters),
-            'users' => $this->getUserReportData($dateRange, $filters),
-            default => throw new \InvalidArgumentException("Invalid report type: $reportType"),
+            'users'    => $this->getUserReportData($dateRange, $filters),
+            default    => throw new \InvalidArgumentException("Invalid report type: $reportType"),
         };
-
         return $this->exportReport($data, $reportType, $format);
     }
 
@@ -33,12 +32,20 @@ class ReportService
      */
     public function generateUserReport(int $userId, string $reportType, array $dateRange, string $format): string
     {
+        $start = $dateRange['start'];
+        $end   = $dateRange['end'];
         $data = match ($reportType) {
-            'bookings' => $this->getUserBookingReportData($userId, $dateRange),
-            'payments' => $this->getUserPaymentReportData($userId, $dateRange),
-            default => throw new \InvalidArgumentException("Invalid report type: $reportType"),
+            'bookings' => Booking::with('user')
+                         ->where('user_id', $userId)
+                         ->whereBetween('created_at', [$start, $end])
+                         ->get()
+                         ->toArray(),
+            'payments' => Payment::where('user_id', $userId)
+                         ->whereBetween('created_at', [$start, $end])
+                         ->get()
+                         ->toArray(),
+            default    => throw new \InvalidArgumentException("Invalid report type: $reportType"),
         };
-
         return $this->exportReport($data, "{$reportType}_user_{$userId}", $format);
     }
 
@@ -47,29 +54,11 @@ class ReportService
      */
     private function getBookingReportData(array $dateRange, array $filters): array
     {
-        $query = "
-            SELECT b.id, b.pickup_date, b.dropoff_date, b.status, b.total_price, u.email AS user_email
-            FROM bookings b
-            JOIN users u ON b.user_id = u.id
-            WHERE b.created_at BETWEEN :start AND :end
-        ";
-
-        if (!empty($filters['status'])) {
-            $query .= " AND b.status = :status";
+        $query = Booking::with('user')->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+        if(!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
         }
-
-        $stmt = $this->db->prepare($query);
-        $params = [
-            ':start' => $dateRange['start'],
-            ':end' => $dateRange['end'],
-        ];
-
-        if (!empty($filters['status'])) {
-            $params[':status'] = $filters['status'];
-        }
-
-        $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $query->get()->toArray();
     }
 
     /**
@@ -77,29 +66,11 @@ class ReportService
      */
     private function getPaymentReportData(array $dateRange, array $filters): array
     {
-        $query = "
-            SELECT t.id, t.amount, t.type, t.status, t.created_at, u.email AS user_email
-            FROM transaction_logs t
-            JOIN users u ON t.user_id = u.id
-            WHERE t.created_at BETWEEN :start AND :end
-        ";
-
-        if (!empty($filters['type'])) {
-            $query .= " AND t.type = :type";
+        $query = Payment::whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+        if(!empty($filters['type'])) {
+            $query->where('type', $filters['type']);
         }
-
-        $stmt = $this->db->prepare($query);
-        $params = [
-            ':start' => $dateRange['start'],
-            ':end' => $dateRange['end'],
-        ];
-
-        if (!empty($filters['type'])) {
-            $params[':type'] = $filters['type'];
-        }
-
-        $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $query->get()->toArray();
     }
 
     /**
@@ -107,54 +78,7 @@ class ReportService
      */
     private function getUserReportData(array $dateRange, array $filters): array
     {
-        $query = "
-            SELECT id, email, created_at, active
-            FROM users
-            WHERE created_at BETWEEN :start AND :end
-        ";
-
-        $stmt = $this->db->prepare($query);
-        $stmt->execute([
-            ':start' => $dateRange['start'],
-            ':end' => $dateRange['end'],
-        ]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    /**
-     * Fetch user-specific booking report data
-     */
-    private function getUserBookingReportData(int $userId, array $dateRange): array
-    {
-        $stmt = $this->db->prepare("
-            SELECT id, pickup_date, dropoff_date, status, total_price
-            FROM bookings
-            WHERE user_id = :user_id AND created_at BETWEEN :start AND :end
-        ");
-        $stmt->execute([
-            ':user_id' => $userId,
-            ':start' => $dateRange['start'],
-            ':end' => $dateRange['end'],
-        ]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    /**
-     * Fetch user-specific payment report data
-     */
-    private function getUserPaymentReportData(int $userId, array $dateRange): array
-    {
-        $stmt = $this->db->prepare("
-            SELECT id, amount, type, status, created_at
-            FROM transaction_logs
-            WHERE user_id = :user_id AND created_at BETWEEN :start AND :end
-        ");
-        $stmt->execute([
-            ':user_id' => $userId,
-            ':start' => $dateRange['start'],
-            ':end' => $dateRange['end'],
-        ]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return User::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])->get()->toArray();
     }
 
     /**
@@ -165,25 +89,39 @@ class ReportService
         $filePath = __DIR__ . "/../../storage/reports/{$reportName}_" . date('YmdHis') . ".{$format}";
 
         if ($format === 'csv') {
+            // Placeholder: In a Laravel app, you might use Maatwebsite\Excel here.
             $file = fopen($filePath, 'w');
             if (!empty($data)) {
-                fputcsv($file, array_keys($data[0])); // Add headers
+                fputcsv($file, array_keys($data[0])); // headers
                 foreach ($data as $row) {
                     fputcsv($file, $row);
                 }
             }
             fclose($file);
         } elseif ($format === 'pdf') {
-            // For simplicity, we use plain text for PDF export (enhance later with libraries like FPDF or TCPDF)
-            $content = '';
-            foreach ($data as $row) {
-                $content .= implode(' | ', $row) . "\n";
+            // Placeholder: In a Laravel app, you might use Dompdf integration.
+            $dompdf = new Dompdf();
+            $html = '<table border="1"><tr>';
+            if (!empty($data)) {
+                foreach (array_keys($data[0]) as $header) {
+                    $html .= "<th>$header</th>";
+                }
+                $html .= "</tr>";
+                foreach ($data as $row) {
+                    $html .= "<tr>";
+                    foreach ($row as $cell) {
+                        $html .= "<td>$cell</td>";
+                    }
+                    $html .= "</tr>";
+                }
             }
-            file_put_contents($filePath, $content);
+            $html .= "</table>";
+            $dompdf->loadHtml($html);
+            $dompdf->render();
+            file_put_contents($filePath, $dompdf->output());
         } else {
             throw new \InvalidArgumentException("Unsupported format: $format");
         }
-
         return $filePath;
     }
 }

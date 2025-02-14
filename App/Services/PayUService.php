@@ -2,9 +2,10 @@
 
 namespace App\Services;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\RequestException;
-use Psr\Log\LoggerInterface;
+use Exception;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use App\Models\TransactionLog; // for logging transactions
 require_once __DIR__ . '/../../config/payu.php';
 /**
  * PayUService
@@ -13,16 +14,12 @@ require_once __DIR__ . '/../../config/payu.php';
  */
 class PayUService
 {
-    private Client $client;
-    private LoggerInterface $logger;
     private string $merchantKey;
     private string $merchantSalt;
     private string $endpoint;
 
-    public function __construct(Client $client, LoggerInterface $logger, array $config)
+    public function __construct(array $config)
     {
-        $this->client = $client;
-        $this->logger = $logger;
         $this->merchantKey = $config['merchant_key'];
         $this->merchantSalt = $config['merchant_salt'];
         $this->endpoint = $config['endpoint'];
@@ -56,16 +53,12 @@ class PayUService
             'service_provider' => 'payu_paisa'
         ];
 
-        try {
-            $response = $this->client->post($this->endpoint . '/_payment', [
-                'form_params' => $params,
-            ]);
-
-            return json_decode($response->getBody()->getContents(), true);
-        } catch (RequestException $e) {
-            $this->logger->error('PayU payment initialization failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Payment initialization failed'];
-        }
+        $response = Http::post("{$this->endpoint}/_payment", $params);
+        throw_if($response->failed(), Exception::class, 'Payment API error');
+        return [
+            'status' => 'success',
+            'data'   => $response->json()
+        ];
     }
 
     /**
@@ -82,16 +75,12 @@ class PayUService
             'var1' => $transactionId,
         ];
 
-        try {
-            $response = $this->client->post($this->endpoint . '/payment/verify', [
-                'form_params' => $params,
-            ]);
-
-            return json_decode($response->getBody()->getContents(), true);
-        } catch (RequestException $e) {
-            $this->logger->error('PayU payment verification failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Payment verification failed'];
-        }
+        $response = Http::post("{$this->endpoint}/payment/verify", $params);
+        throw_if($response->failed(), Exception::class, 'Payment verification error');
+        return [
+            'status' => 'success',
+            'data'   => $response->json()
+        ];
     }
 
     /**
@@ -110,15 +99,26 @@ class PayUService
             'var2' => $amount,
         ];
 
+        $response = Http::post("{$this->endpoint}/refund", $params);
         try {
-            $response = $this->client->post($this->endpoint . '/refund', [
-                'form_params' => $params,
+            throw_if($response->failed(), Exception::class, 'Refund processing error');
+            // Log the refund transaction using Eloquent
+            TransactionLog::create([
+                'booking_id' => $transactionId,
+                'amount'     => $amount,
+                'type'       => 'refund',
+                'status'     => 'completed'
             ]);
-
-            return json_decode($response->getBody()->getContents(), true);
-        } catch (RequestException $e) {
-            $this->logger->error('PayU refund processing failed', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Refund processing failed'];
+            return [
+                'status' => 'success',
+                'data'   => $response->json()
+            ];
+        } catch (Exception $e) {
+            Log::channel('payu')->error('PayU refund processing failed', ['error' => $e->getMessage()]);
+            return [
+                'status' => 'error',
+                'message' => 'Refund processing failed'
+            ];
         }
     }
 

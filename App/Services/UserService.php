@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\PasswordReset;
+use App\Models\AuditLog; // added for audit logging
 use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Hash;
@@ -46,9 +47,9 @@ class UserService
         }
 
         try {
-            $data['password_hash'] = Hash::make($data['password']);
-            unset($data['password']); // ✅ Prevent raw password storage
-
+            // Removed manual password hashing; rely on the User model mutator for "password"
+            // $data['password_hash'] = Hash::make($data['password']);
+            // unset($data['password']);
             $user = User::create($data);
 
             $this->logAction($user->id, 'user_created', ['email' => $data['email']]);
@@ -67,12 +68,11 @@ class UserService
         try {
             $user = User::findOrFail($id);
 
-            // ✅ Hash new password if provided
-            if (!empty($data['password'])) {
-                $data['password_hash'] = Hash::make($data['password']);
-                unset($data['password']);
-            }
-
+            // Removed manual password hashing; assume mutator will handle updated "password" if supplied
+            // if (!empty($data['password'])) {
+            //     $data['password_hash'] = Hash::make($data['password']);
+            //     unset($data['password']);
+            // }
             $user->update($data);
 
             $this->logAction($id, 'user_updated', $data);
@@ -158,6 +158,11 @@ class UserService
      */
     private function logAction(?int $userId, string $action, array $details = []): void
     {
-        $this->logger->info($action, ['user_id' => $userId, 'details' => $details]);
+        // Replace direct logger entry with creation of an audit log record
+        AuditLog::create([
+            'user_id' => $userId,
+            'action'  => $action,
+            'details' => json_encode($details)
+        ]);
     }
 }
