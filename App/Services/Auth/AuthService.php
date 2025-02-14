@@ -9,6 +9,7 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Support\Facades\Hash; // added for password checking
 use Exception;
+use Psr\Log\NullLogger; // added for logger
 
 class AuthService
 {
@@ -30,7 +31,8 @@ class AuthService
 
         $this->tokenService = new TokenService(
             $encryptionConfig['jwt_secret'],
-            $encryptionConfig['jwt_refresh_secret']
+            $encryptionConfig['jwt_refresh_secret'],
+            new NullLogger() // added logger argument
         );
         // Initialize DatabaseHelper for raw password reset operations
         $this->db = DatabaseHelper::getInstance();
