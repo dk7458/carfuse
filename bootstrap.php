@@ -6,11 +6,11 @@
  *
  * Initializes database connections, logging, encryption, and registers necessary services.
  */
-use Illuminate\Foundation\Application;
+
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use DI\Container as DIContainer;
-use Illuminate\Foundation\Application;
+use Illuminate\Database\Capsule\Manager as Capsule;
 
 // ✅ Load Dependencies
 require_once __DIR__ . '/vendor/autoload.php';
@@ -20,12 +20,8 @@ define('BASE_PATH', __DIR__);
 // ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
 
-$app = new Application(BASE_PATH);
-
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-
-// ✅ Load and Validate Configuration Files
-$configFiles = ['encryption', 'keymanager'];
+// ✅ Load Configuration Files
+$configFiles = ['encryption', 'keymanager', 'database', 'filestorage'];
 $config = [];
 
 foreach ($configFiles as $file) {
@@ -38,19 +34,14 @@ foreach ($configFiles as $file) {
 }
 $logger->info("✅ Configuration files loaded successfully.");
 
+// ✅ Initialize Eloquent ORM for Database Handling
+$capsule = new Capsule;
+$capsule->addConnection($config['database']['app_database']);
+$capsule->addConnection($config['database']['secure_database'], 'secure');
+$capsule->setAsGlobal();
+$capsule->bootEloquent();
 
-
-// ✅ Initialize the main and secure database connections using DatabaseHelper
-try {
-    $database = \App\Helpers\DatabaseHelper::getInstance();
-    $secureDatabase = \App\Helpers\DatabaseHelper::getSecureInstance();
-    $logger->info("✅ Database connections initialized successfully.");
-} catch (Exception $e) {
-    $logger->error("❌ Database initialization failed: " . $e->getMessage());
-    die("❌ Database initialization failed: " . $e->getMessage() . "\n");
-}
-
-// ✅ Ensure Encryption Configuration Exists
+// ✅ Validate Encryption Key
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
     $logger->error("❌ Encryption key missing or invalid.");
     die("❌ Error: Encryption key missing or invalid in config/encryption.php\n");
@@ -61,7 +52,7 @@ $container = require BASE_PATH . '/config/dependencies.php';
 
 // ✅ Retrieve Critical Services
 try {
-    $auditService = $container->get(AuditManager\Services\AuditService::class);
+    $auditService = $container->get(App\Services\AuditService::class);
     $encryptionService = $container->get(App\Services\EncryptionService::class);
     $logger->info("✅ Critical services retrieved successfully.");
 } catch (Exception $e) {
@@ -96,8 +87,8 @@ $logger->info("✅ Bootstrap process completed successfully.");
 
 // ✅ Return Configurations for Application Use
 return [
-    'db' => $database,
-    'secure_db' => $secureDatabase,
+    'db' => $capsule,
+    'secure_db' => $capsule->getConnection('secure'),
     'logger' => $logger,
     'auditService' => $auditService,
     'encryptionService' => $encryptionService,
