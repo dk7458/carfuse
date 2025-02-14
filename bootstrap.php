@@ -2,13 +2,16 @@
 
 /**
  * Centralized Bootstrap File
- * 
- * Initializes database connections, logging, encryption, and registers necessary services.
- *
  * Path: bootstrap.php
+ *
+ * Initializes database connections, logging, encryption, and registers necessary services.
  */
 
+use Illuminate\Events\Dispatcher;
+use Illuminate\Container\Container;
 use DI\Container as DIContainer;
+use Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Support\Facades\Facade;
 use App\Helpers\DatabaseHelper;
 
 // ✅ Load Dependencies
@@ -18,8 +21,10 @@ define('BASE_PATH', __DIR__);
 // ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
 
-// ✅ Initialize Dependency Container (PHP-DI)
-$container = new DIContainer();
+// ✅ Initialize Laravel Container & Set Facade Application BEFORE using facades
+$container = new Container();
+Container::setInstance($container);
+Facade::setFacadeApplication($container);
 
 // ✅ Load Configuration Files
 $configFiles = ['encryption', 'keymanager', 'filestorage'];
@@ -29,23 +34,17 @@ foreach ($configFiles as $file) {
     $path = BASE_PATH . "/config/{$file}.php";
     if (!file_exists($path)) {
         $logger->error("❌ Missing configuration file: {$file}.php");
-        continue; // ✅ Skip missing config instead of terminating
+        die("❌ Error: Missing required configuration file: {$file}.php\n");
     }
     $config[$file] = require $path;
 }
 $logger->info("✅ Configuration files loaded successfully.");
 
-// ✅ Initialize Both Databases Using `DatabaseHelper`
-try {
-    $database = DatabaseHelper::getInstance();        // Main database
-    $secure_database = DatabaseHelper::getSecureInstance(); // Secure database
-    $logger->info("✅ Both databases initialized successfully.");
-} catch (Exception $e) {
-    $logger->error("❌ Database initialization failed: " . $e->getMessage());
-    die("❌ Database initialization failed. Check logs for details.\n");
-}
+// ✅ Initialize Database Using DatabaseHelper
+$database = DatabaseHelper::getInstance();
+$secure_database = DatabaseHelper::getSecureInstance();
 
-// ✅ Ensure Encryption Configuration Exists
+// ✅ Validate Encryption Key
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
     $logger->error("❌ Encryption key missing or invalid.");
     die("❌ Error: Encryption key missing or invalid in config/encryption.php\n");
