@@ -2,16 +2,13 @@
 
 /**
  * Centralized Bootstrap File
- * Path: bootstrap.php
- *
+ * 
  * Initializes database connections, logging, encryption, and registers necessary services.
+ *
+ * Path: bootstrap.php
  */
 
-use Illuminate\Events\Dispatcher;
-use Illuminate\Container\Container;
 use DI\Container as DIContainer;
-use Illuminate\Database\Capsule\Manager as Capsule;
-use Illuminate\Support\Facades\Facade;
 use App\Helpers\DatabaseHelper;
 
 // ✅ Load Dependencies
@@ -21,10 +18,8 @@ define('BASE_PATH', __DIR__);
 // ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
 
-// ✅ Initialize Laravel Container & Facades
-$container = new Container();
-Container::setInstance($container);
-Facade::setFacadeApplication($container);
+// ✅ Initialize Dependency Container (PHP-DI)
+$container = new DIContainer();
 
 // ✅ Load Configuration Files
 $configFiles = ['encryption', 'keymanager', 'filestorage'];
@@ -34,32 +29,23 @@ foreach ($configFiles as $file) {
     $path = BASE_PATH . "/config/{$file}.php";
     if (!file_exists($path)) {
         $logger->error("❌ Missing configuration file: {$file}.php");
-        die("❌ Error: Missing required configuration file: {$file}.php\n");
+        continue; // ✅ Skip missing config instead of terminating
     }
     $config[$file] = require $path;
 }
 $logger->info("✅ Configuration files loaded successfully.");
 
-// ✅ Initialize Database Using Eloquent ORM
-$capsule = new Capsule;
-$capsule->addConnection([
-    'driver'    => 'mysql',
-    'host'      => getenv('DB_HOST'),
-    'database'  => getenv('DB_DATABASE'),
-    'username'  => getenv('DB_USERNAME'),
-    'password'  => getenv('DB_PASSWORD'),
-    'charset'   => 'utf8mb4',
-    'collation' => 'utf8mb4_unicode_ci',
-    'prefix'    => '',
-]);
-$capsule->setAsGlobal();
-$capsule->bootEloquent();
-$capsule->setEventDispatcher(new Dispatcher($container));
+// ✅ Initialize Both Databases Using `DatabaseHelper`
+try {
+    $database = DatabaseHelper::getInstance();        // Main database
+    $secure_database = DatabaseHelper::getSecureInstance(); // Secure database
+    $logger->info("✅ Both databases initialized successfully.");
+} catch (Exception $e) {
+    $logger->error("❌ Database initialization failed: " . $e->getMessage());
+    die("❌ Database initialization failed. Check logs for details.\n");
+}
 
-$database = DatabaseHelper::getInstance();
-$secure_database = DatabaseHelper::getSecureInstance();
-
-// ✅ Validate Encryption Key
+// ✅ Ensure Encryption Configuration Exists
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
     $logger->error("❌ Encryption key missing or invalid.");
     die("❌ Error: Encryption key missing or invalid in config/encryption.php\n");
