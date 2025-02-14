@@ -21,7 +21,7 @@ define('BASE_PATH', __DIR__);
 $logger = require_once BASE_PATH . '/logger.php';
 
 // ✅ Load Configuration Files
-$configFiles = ['encryption', 'keymanager', 'database', 'filestorage'];
+$configFiles = ['encryption', 'keymanager', 'filestorage'];
 $config = [];
 
 foreach ($configFiles as $file) {
