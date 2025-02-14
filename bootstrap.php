@@ -18,6 +18,9 @@ define('BASE_PATH', __DIR__);
 
 // ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
+
+$app = new Application(BASE_PATH);
+
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 // ✅ Load and Validate Configuration Files
