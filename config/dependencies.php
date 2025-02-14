@@ -32,7 +32,7 @@ use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
 use Illuminate\Database\Capsule\Manager as Capsule;
-
+use Illuminate\Foundation\Application;
 // ✅ Initialize Dependency Container
 $container = new Container();
 
