@@ -10,10 +10,10 @@
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use DI\Container as DIContainer;
+use App\Helpers\DatabaseHelper;
 
 // ✅ Load Dependencies
 require_once __DIR__ . '/vendor/autoload.php';
-require_once __DIR__ . '/App/Helpers/DatabaseHelper.php';
 define('BASE_PATH', __DIR__);
 
 // ✅ Load Logger
