@@ -7,13 +7,13 @@
  * Initializes database connections, logging, encryption, and registers necessary services.
  */
 
-use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use DI\Container as DIContainer;
 
 // ✅ Load Dependencies
 require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/App/Helpers/DatabaseHelper.php';
 define('BASE_PATH', __DIR__);
 
 // ✅ Load Logger
@@ -39,18 +39,14 @@ if (!isset($config['database']['app_database'], $config['database']['secure_data
     die("❌ Error: Database configuration missing or incorrect in config/database.php\n");
 }
 
-// ✅ Initialize Eloquent ORM
+// ✅ Initialize the main and secure database connections using DatabaseHelper
 try {
-    $capsule = new Capsule;
-    $capsule->addConnection($config['database']['app_database'], 'default');
-    $capsule->addConnection($config['database']['secure_database'], 'secure');
-    $capsule->setEventDispatcher(new Dispatcher(new Container));
-    $capsule->setAsGlobal();
-    $capsule->bootEloquent();
-    $logger->info("✅ Eloquent ORM initialized successfully.");
+    $database = \App\Helpers\DatabaseHelper::getInstance();
+    $secureDatabase = \App\Helpers\DatabaseHelper::getSecureInstance();
+    $logger->info("✅ Database connections initialized successfully.");
 } catch (Exception $e) {
-    $logger->error("❌ Eloquent initialization failed: " . $e->getMessage());
-    die("❌ Eloquent initialization failed: " . $e->getMessage() . "\n");
+    $logger->error("❌ Database initialization failed: " . $e->getMessage());
+    die("❌ Database initialization failed: " . $e->getMessage() . "\n");
 }
 
 // ✅ Ensure Encryption Configuration Exists
@@ -99,8 +95,8 @@ $logger->info("✅ Bootstrap process completed successfully.");
 
 // ✅ Return Configurations for Application Use
 return [
-    'db' => $capsule->getConnection(),
-    'secure_db' => $capsule->getConnection('secure'),
+    'db' => $database,
+    'secure_db' => $secureDatabase,
     'logger' => $logger,
     'auditService' => $auditService,
     'encryptionService' => $encryptionService,
