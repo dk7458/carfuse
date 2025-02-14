@@ -42,6 +42,7 @@ return array(
     'App\\Services\\Auth\\TokenService' => $baseDir . '/App/Services/Auth/TokenService.php',
     'App\\Services\\BookingService' => $baseDir . '/App/Services/BookingService.php',
     'App\\Services\\EncryptionService' => $baseDir . '/App/Services/EncryptionService.php',
+    'App\\Services\\FileStorage' => $baseDir . '/App/Services/FileStorage.php',
     'App\\Services\\MetricsService' => $baseDir . '/App/Services/MetricsService.php',
     'App\\Services\\NotificationService' => $baseDir . '/App/Services/NotificationService.php',
     'App\\Services\\PayUService' => $baseDir . '/App/Services/PayUService.php',

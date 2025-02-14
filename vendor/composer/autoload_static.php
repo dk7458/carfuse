@@ -491,6 +491,7 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'App\\Services\\Auth\\TokenService' => __DIR__ . '/../..' . '/App/Services/Auth/TokenService.php',
         'App\\Services\\BookingService' => __DIR__ . '/../..' . '/App/Services/BookingService.php',
         'App\\Services\\EncryptionService' => __DIR__ . '/../..' . '/App/Services/EncryptionService.php',
+        'App\\Services\\FileStorage' => __DIR__ . '/../..' . '/App/Services/FileStorage.php',
         'App\\Services\\MetricsService' => __DIR__ . '/../..' . '/App/Services/MetricsService.php',
         'App\\Services\\NotificationService' => __DIR__ . '/../..' . '/App/Services/NotificationService.php',
         'App\\Services\\PayUService' => __DIR__ . '/../..' . '/App/Services/PayUService.php',
