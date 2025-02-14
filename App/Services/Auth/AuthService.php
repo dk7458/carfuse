@@ -9,15 +9,18 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Support\Facades\Hash; // added for password checking
 use Exception;
-use Psr\Log\NullLogger; // added for logger
+use Psr\Log\LoggerInterface;
 
 class AuthService
 {
     private $tokenService;
     private $db;
+    private LoggerInterface $logger; // added
 
-    public function __construct()
+    // Modified constructor to accept LoggerInterface via dependency injection.
+    public function __construct(LoggerInterface $logger)
     {
+        $this->logger = $logger;
         $configPath = __DIR__ . '/../../../config/encryption.php';
         if (!file_exists($configPath)) {
             throw new Exception("Encryption configuration missing.");
@@ -32,7 +35,7 @@ class AuthService
         $this->tokenService = new TokenService(
             $encryptionConfig['jwt_secret'],
             $encryptionConfig['jwt_refresh_secret'],
-            new NullLogger() // added logger argument
+            $this->logger // now injected logger
         );
         // Initialize DatabaseHelper for raw password reset operations
         $this->db = DatabaseHelper::getInstance();

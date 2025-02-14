@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * Logger Configuration
+ *
+ * This file initializes Monolog as the application-wide logger,
+ * ensuring all services use a single logging instance.
+ */
+
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
@@ -14,7 +21,7 @@ if (!is_dir($logDir)) {
 // ✅ Initialize Logger (Monolog)
 try {
     $logger = new Logger('application');
-    $streamHandler = new StreamHandler(__DIR__ . '/logs/application.log', Logger::DEBUG);
+    $streamHandler = new StreamHandler($logDir . '/application.log', Logger::DEBUG);
     $streamHandler->setFormatter(new LineFormatter(null, null, true, true));
     $logger->pushHandler($streamHandler);
 } catch (Exception $e) {
@@ -26,4 +33,5 @@ if (!$logger instanceof LoggerInterface) {
     die("❌ Logger must be an instance of LoggerInterface.\n");
 }
 
+// ✅ Return Logger Instance for Application-Wide Use
 return $logger;

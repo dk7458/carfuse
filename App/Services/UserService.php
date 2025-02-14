@@ -37,7 +37,8 @@ class UserService
             'address' => 'required|string|max:255',
         ];
 
-        $validator = new Validator();
+        // Pass the injected logger to the Validator
+        $validator = new Validator($this->logger);
         if (!$validator->validate($data, $rules)) {
             return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $validator->errors()];
         }

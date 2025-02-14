@@ -4,9 +4,20 @@ namespace App\Services;
 
 use App\Models\AuditLog;
 use Exception;
+use App\Helpers\DatabaseHelper;
+use Psr\Log\LoggerInterface;
 
 class AuditService
 {
+    private $db;
+    private LoggerInterface $logger;
+
+    public function __construct(LoggerInterface $logger)
+    {
+        $this->db = DatabaseHelper::getInstance();
+        $this->logger = $logger;
+    }
+
     /**
      * Log an action using AuditLog Eloquent model.
      */
@@ -18,17 +29,17 @@ class AuditService
         ?string $ipAddress = null
     ): void {
         try {
-            AuditLog::create([
+            $this->db->table('audit_logs')->insert([
                 'action'     => $action,
                 'details'    => json_encode($details, JSON_UNESCAPED_UNICODE),
                 'user_id'    => $userId,
                 'booking_id' => $bookingId,
                 'ip_address' => $ipAddress,
-                'created_at' => now(),
+                'created_at' => now()
             ]);
-            // Optionally log the audit event
-            // $this->logger->info("[AuditService] Logged action: {$action}");
+            $this->logger->info("[AuditService] Logged action: {$action}");
         } catch (Exception $e) {
+            $this->logger->error("[AuditService] Error logging action: " . $e->getMessage());
             throw new Exception('Failed to log action: ' . $e->getMessage());
         }
     }
@@ -38,51 +49,8 @@ class AuditService
      */
     public function getLogs(array $filters): \Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
-        // Ensure user permissions (implement as needed)
-        // if (!auth()->user()->hasPermission('view_logs')) {
-        //     throw new Exception('Unauthorized access.');
-        // }
-        $query = AuditLog::query();
-
-        if (!empty($filters['user_id'])) {
-            $query->where('user_id', $filters['user_id']);
-        }
-        if (!empty($filters['booking_id'])) {
-            $query->where('booking_id', $filters['booking_id']);
-        }
-        if (!empty($filters['action'])) {
-            $query->where('action', $filters['action']);
-        }
-        if (!empty($filters['start_date'])) {
-            $query->where('created_at', '>=', $filters['start_date']);
-        }
-        if (!empty($filters['end_date'])) {
-            $query->where('created_at', '<=', $filters['end_date']);
-        }
-
-        return $query->orderBy('created_at', 'desc')->paginate(10);
-    }
-
-    /**
-     * Retrieve a single log entry by ID.
-     */
-    public function getLogById(int $logId): AuditLog
-    {
-        $log = AuditLog::find($logId);
-        if (!$log) {
-            throw new Exception('Log entry not found.');
-        }
-        return $log;
-    }
-
-    /**
-     * Soft delete logs based on specific filters.
-     */
-    public function deleteLogs(array $filters): int
-    {
         try {
-            $query = AuditLog::query();
-
+            $query = $this->db->table('audit_logs');
             if (!empty($filters['user_id'])) {
                 $query->where('user_id', $filters['user_id']);
             }
@@ -98,10 +66,58 @@ class AuditService
             if (!empty($filters['end_date'])) {
                 $query->where('created_at', '<=', $filters['end_date']);
             }
-
-            // Soft delete records; model must use SoftDeletes.
-            return $query->delete();
+            return $query->orderBy('created_at', 'desc')->paginate(10);
         } catch (Exception $e) {
+            $this->logger->error("[AuditService] Error retrieving logs: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Retrieve a single log entry by ID.
+     */
+    public function getLogById(int $logId)
+    {
+        try {
+            $log = $this->db->table('audit_logs')->where('id', $logId)->first();
+            if (!$log) {
+                throw new Exception('Log entry not found.');
+            }
+            return $log;
+        } catch (Exception $e) {
+            $this->logger->error("[AuditService] Error retrieving log id {$logId}: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Soft delete logs based on specific filters.
+     */
+    public function deleteLogs(array $filters): int
+    {
+        try {
+            $query = $this->db->table('audit_logs');
+            if (!empty($filters['user_id'])) {
+                $query->where('user_id', $filters['user_id']);
+            }
+            if (!empty($filters['booking_id'])) {
+                $query->where('booking_id', $filters['booking_id']);
+            }
+            if (!empty($filters['action'])) {
+                $query->where('action', $filters['action']);
+            }
+            if (!empty($filters['start_date'])) {
+                $query->where('created_at', '>=', $filters['start_date']);
+            }
+            if (!empty($filters['end_date'])) {
+                $query->where('created_at', '<=', $filters['end_date']);
+            }
+            // Assuming soft deletes are handled by marking entries as deleted.
+            $deleted = $query->delete();
+            $this->logger->info("[AuditService] Deleted logs with filters: " . json_encode($filters));
+            return $deleted;
+        } catch (Exception $e) {
+            $this->logger->error("[AuditService] Error deleting logs: " . $e->getMessage());
             throw new Exception('Failed to delete logs: ' . $e->getMessage());
         }
     }

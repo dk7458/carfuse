@@ -6,6 +6,7 @@ use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Helpers\DatabaseHelper; // new import
+use Psr\Log\LoggerInterface; // ensure LoggerInterface is imported
 require_once __DIR__ . '/../../config/payu.php';
 /**
  * PayUService
@@ -18,13 +19,16 @@ class PayUService
     private string $merchantSalt;
     private string $endpoint;
     private $db; // DatabaseHelper instance
+    private LoggerInterface $logger; // injected logger
 
-    public function __construct(array $config)
+    // Constructor updated to accept LoggerInterface
+    public function __construct(array $config, LoggerInterface $logger)
     {
         $this->merchantKey = $config['merchant_key'];
         $this->merchantSalt = $config['merchant_salt'];
         $this->endpoint = $config['endpoint'];
         $this->db = DatabaseHelper::getInstance();
+        $this->logger = $logger;
     }
 
     /**
@@ -101,8 +105,8 @@ class PayUService
             'var2' => $amount,
         ];
 
-        $response = Http::post("{$this->endpoint}/refund", $params);
         try {
+            $response = Http::post("{$this->endpoint}/refund", $params);
             throw_if($response->failed(), Exception::class, 'Refund processing error');
             $this->db->table('transaction_logs')->insert([
                 'booking_id' => $transactionId,
@@ -110,14 +114,13 @@ class PayUService
                 'type'       => 'refund',
                 'status'     => 'completed'
             ]);
-            $this->logger = Log::channel('payu'); // use centralized logging channel
             $this->logger->info("[PayUService] Refund logged for transaction {$transactionId}");
             return [
                 'status' => 'success',
                 'data'   => $response->json()
             ];
         } catch (Exception $e) {
-            Log::channel('payu')->error("[PayUService] Refund processing error: " . $e->getMessage());
+            $this->logger->error("[PayUService] Refund processing error: " . $e->getMessage());
             return [
                 'status' => 'error',
                 'message' => 'Refund processing failed'
