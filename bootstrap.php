@@ -17,7 +17,7 @@ define('BASE_PATH', __DIR__);
 // ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
 // ✅ Load `.env` First Before Anything Else
-$dotenv = Dotenv::createImmutable(__DIR__ . '/../');
+$dotenv = Dotenv::createImmutable(__DIR__ . '/');
 $dotenv->load(); // Load .env variables
 
 // ✅ Load Dependencies
