@@ -41,7 +41,8 @@ $tables = [
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             email_notifications TINYINT(1) DEFAULT 0,
             sms_notifications TINYINT(1) DEFAULT 0,
-            active TINYINT(1) DEFAULT 1
+            active TINYINT(1) DEFAULT 1,
+            deleted_at TIMESTAMP NULL DEFAULT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ",
 
