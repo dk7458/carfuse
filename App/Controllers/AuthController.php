@@ -7,6 +7,7 @@ use App\Services\Auth\AuthService;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Exception;
 use App\Helpers\DatabaseHelper;
+use Psr\Log\NullLogger; // added for logger
 
 require_once __DIR__ . '/../Helpers/ViewHelper.php';
 require_once __DIR__ . '/../Helpers/SecurityHelper.php';
@@ -35,10 +36,11 @@ class AuthController extends Controller
             throw new Exception("JWT configuration missing in encryption.php.");
         }
 
-        // Instantiate TokenService
+        // Instantiate TokenService with logger argument
         $this->tokenService = new TokenService(
             $encryptionConfig['jwt_secret'],
-            $encryptionConfig['jwt_refresh_secret']
+            $encryptionConfig['jwt_refresh_secret'],
+            new NullLogger() // added logger argument
         );
 
         // Initialize Eloquent ORM
