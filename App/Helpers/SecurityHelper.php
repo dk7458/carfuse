@@ -26,21 +26,23 @@ const SESSION_CONFIG = [
 ];
 
 // Enhanced logging with severity levels
-function securityLog($message, $level = 'info') {
-    $logFile = __DIR__ . '/../../logs/security.log';
-    $timestamp = date('Y-m-d H:i:s');
-    $userId = $_SESSION['user_id'] ?? 'guest';
-    
-    // Sanitize sensitive data
-    $patterns = [
-        '/user_id[\s]?[=:][\s]?["\']?\w+["\']?/i',
-        '/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/',
-        '/Mozilla\/[^\s]+/'
-    ];
-    $message = preg_replace($patterns, '[REDACTED]', $message);
-    $sanitizedMessage = str_replace(["\n", "\r"], '', $message);
-    
-    error_log("[$timestamp][$level][user_id: $userId] $sanitizedMessage\n", 3, $logFile);
+if (!function_exists('securityLog')) {
+    function securityLog($message, $level = 'info') {
+        $logFile = __DIR__ . '/../../logs/security.log';
+        $timestamp = date('Y-m-d H:i:s');
+        $userId = $_SESSION['user_id'] ?? 'guest';
+        
+        // Sanitize sensitive data
+        $patterns = [
+            '/user_id[\s]?[=:][\s]?["\']?\w+["\']?/i',
+            '/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/',
+            '/Mozilla\/[^\s]+/'
+        ];
+        $message = preg_replace($patterns, '[REDACTED]', $message);
+        $sanitizedMessage = str_replace(["\n", "\r"], '', $message);
+        
+        error_log("[$timestamp][$level][user_id: $userId] $sanitizedMessage\n", 3, $logFile);
+    }
 }
 
 /**
