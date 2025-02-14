@@ -10,6 +10,8 @@
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use DI\Container as DIContainer;
+use Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Support\Facades\Facade;
 use App\Helpers\DatabaseHelper;
 
 // ✅ Load Dependencies
@@ -18,6 +20,11 @@ define('BASE_PATH', __DIR__);
 
 // ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
+
+// ✅ Initialize Laravel Container & Facades
+$container = new Container();
+Container::setInstance($container);
+Facade::setFacadeApplication($container);
 
 // ✅ Load Configuration Files
 $configFiles = ['encryption', 'keymanager', 'filestorage'];
@@ -32,6 +39,22 @@ foreach ($configFiles as $file) {
     $config[$file] = require $path;
 }
 $logger->info("✅ Configuration files loaded successfully.");
+
+// ✅ Initialize Database Using Eloquent ORM
+$capsule = new Capsule;
+$capsule->addConnection([
+    'driver'    => 'mysql',
+    'host'      => getenv('DB_HOST'),
+    'database'  => getenv('DB_DATABASE'),
+    'username'  => getenv('DB_USERNAME'),
+    'password'  => getenv('DB_PASSWORD'),
+    'charset'   => 'utf8mb4',
+    'collation' => 'utf8mb4_unicode_ci',
+    'prefix'    => '',
+]);
+$capsule->setAsGlobal();
+$capsule->bootEloquent();
+$capsule->setEventDispatcher(new Dispatcher($container));
 
 $database = DatabaseHelper::getInstance();
 $secure_database = DatabaseHelper::getSecureInstance();
