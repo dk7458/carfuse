@@ -23,7 +23,7 @@ $logger = require_once BASE_PATH . '/logger.php';
 $dotenv = Dotenv::createImmutable(__DIR__ . '/');
 $dotenv->load(); // Load .env variables
 
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 
 $configFiles = ['encryption', 'keymanager', 'filestorage'];
 $config = [];
