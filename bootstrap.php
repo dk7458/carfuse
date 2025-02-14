@@ -10,6 +10,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use DI\Container as DIContainer;
+use Illuminate\Foundation\Application;
 
 // ✅ Load Dependencies
 require_once __DIR__ . '/vendor/autoload.php';
