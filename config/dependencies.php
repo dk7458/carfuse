@@ -4,8 +4,9 @@ require_once __DIR__ . '/../vendor/autoload.php'; // Ensure autoload is included
 
 use DI\Container;
 use App\Services\Validator;
-use App\Services\RateLimiter;
+use App\Services\RateLimit;
 use App\Services\Auth\TokenService;
+use App\Services\Auth\AuthService;
 use App\Services\NotificationService;
 use App\Services\UserService;
 use App\Services\PaymentService;
@@ -17,11 +18,12 @@ use App\Services\EncryptionService;
 use App\Services\Security\KeyManager;
 use App\Queues\NotificationQueue;
 use App\Queues\DocumentQueue;
-use DocumentManager\Services\DocumentService;
-use DocumentManager\Services\FileStorage;
-use DocumentManager\Services\TemplateService;
-use DocumentManager\Services\SignatureService;
-use AuditManager\Services\AuditService;
+use App\Services\DocumentService;
+use App\Services\FileStorage;
+use App\Services\TemplateService;
+use App\Services\SignatureService;
+use App\Services\AuditService;
+use App\Services\TransactionService;
 use App\Models\Payment;
 use Psr\Log\LoggerInterface;
 use Monolog\Logger;
@@ -47,7 +49,7 @@ foreach (glob("{$configDirectory}/*.php") as $filePath) {
 
 // ✅ Ensure necessary directories exist
 $templateDirectory = __DIR__ . '/../storage/templates';
-$fileStorageConfig = $config['storage'];
+$fileStorageConfig = $config['filestorage'];
 
 foreach ([$templateDirectory, $fileStorageConfig['base_directory']] as $directory) {
     if (!is_dir($directory)) {
@@ -86,10 +88,6 @@ $capsule->addConnection($config['database']['secure_database'], 'secure');
 $capsule->setAsGlobal();
 $capsule->bootEloquent();
 
-// Removed direct PDO connection container entries
-// $container->set('DB', fn() => $capsule->getConnection());
-// $container->set('SecureDB', fn() => $capsule->getConnection('secure'));
-
 $container->set(Capsule::class, $capsule);
 
 // ✅ Register services in the container
@@ -98,13 +96,12 @@ $container->set(DocumentQueue::class, function () use ($fileStorage, $logger) {
 });
 
 $container->set(Validator::class, fn() => new Validator());
-// Provide the Capsule instance directly so services can use Eloquent models.
 $container->set(RateLimiter::class, fn() => new RateLimiter($capsule));
 $container->set(AuditService::class, fn() => new AuditService($capsule)); 
 
 $container->set(DocumentService::class, function () use ($capsule, $logger, $container) {
     return new DocumentService(
-        $capsule, // use Capsule instance for queries via models
+        $capsule,
         $container->get(AuditService::class),
         $container->get(FileStorage::class),
         $container->get(EncryptionService::class),
