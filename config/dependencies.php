@@ -32,6 +32,37 @@ use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
 use Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Session\SessionManager;
+use Illuminate\Session\Store;
+use Illuminate\Filesystem\Filesystem;
+use Illuminate\Config\Repository as Config;
+use Illuminate\Cookie\CookieJar;
+use Illuminate\Support\Facades\Session;
+
+$container->set(SessionManager::class, function () use ($container) {
+    $config = [
+        'driver' => 'file',
+        'files' => __DIR__ . '/../storage/framework/sessions',
+        'lifetime' => 120,
+        'expire_on_close' => false,
+        'encrypt' => false,
+        'connection' => null,
+        'table' => 'sessions',
+        'store' => null,
+        'lottery' => [2, 100],
+        'cookie' => 'carfuse_session',
+        'path' => '/',
+        'domain' => null,
+        'secure' => false,
+        'http_only' => true,
+        'same_site' => 'lax',
+    ];
+
+    return new SessionManager(new Config(['session' => $config]));
+});
+
+// Bind Session facade
+$container->set(Session::class, fn() => $container->get(SessionManager::class)->driver());
 // ✅ Initialize Dependency Container
 $container = new Container();
 
