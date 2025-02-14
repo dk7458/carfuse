@@ -18,6 +18,7 @@ class DatabaseHelper
 {
     private static $capsule = null;
     private static $secureCapsule = null;
+    private static $initialized = false;
     private static $envLoaded = false;
 
     /**
@@ -32,7 +33,7 @@ class DatabaseHelper
     {
         if (!self::$envLoaded) {
             $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
-            $dotenv->safeLoad(); // Load .env file safely (no errors if missing)
+            $dotenv->safeLoad(); // Load .env safely (no errors if missing)
             self::$envLoaded = true;
         }
     }
@@ -43,16 +44,21 @@ class DatabaseHelper
     private static function initializeDatabase(&$capsule, array $config, string $connectionName)
     {
         if ($capsule === null) {
-            $capsule = new Capsule();
             self::loadEnv();
 
             try {
+                $capsule = new Capsule();
                 $capsule->addConnection($config, $connectionName);
                 $capsule->setEventDispatcher(new Dispatcher(new Container));
-                $capsule->setAsGlobal();
-                $capsule->bootEloquent();
 
-                self::logEvent('database', "✅ {$connectionName} Database connected successfully.");
+                // ✅ Ensure Capsule is Set as Global Once
+                if (!self::$initialized) {
+                    $capsule->setAsGlobal();
+                    $capsule->bootEloquent();
+                    self::$initialized = true;
+                }
+
+                self::logEvent('database', "✅ {$connectionName} Database connected successfully: " . json_encode($config));
             } catch (Exception $e) {
                 self::logEvent('errors', "❌ {$connectionName} Database connection failed: " . $e->getMessage());
                 die(json_encode(["error" => "{$connectionName} database connection failed"]));
@@ -63,19 +69,21 @@ class DatabaseHelper
     /**
      * ✅ Singleton: Get Main Database Instance
      */
-    public static function getInstance()
+    public static function getInstance(): Capsule
     {
-        self::initializeDatabase(self::$capsule, [
-            'driver'    => 'mysql',
-            'host'      => $_ENV['DB_HOST'] ?? 'localhost',
-            'port'      => $_ENV['DB_PORT'] ?? '3306',
-            'database'  => $_ENV['DB_DATABASE'] ?? '',
-            'username'  => $_ENV['DB_USERNAME'] ?? '',
-            'password'  => $_ENV['DB_PASSWORD'] ?? '',
-            'charset'   => $_ENV['DB_CHARSET'] ?? 'utf8mb4',
-            'collation' => 'utf8mb4_unicode_ci',
-            'prefix'    => '',
-        ], 'default');
+        if (self::$capsule === null) {
+            self::initializeDatabase(self::$capsule, [
+                'driver'    => 'mysql',
+                'host'      => $_ENV['DB_HOST'] ?? 'localhost',
+                'port'      => $_ENV['DB_PORT'] ?? '3306',
+                'database'  => $_ENV['DB_DATABASE'] ?? '',
+                'username'  => $_ENV['DB_USERNAME'] ?? '',
+                'password'  => $_ENV['DB_PASSWORD'] ?? '',
+                'charset'   => $_ENV['DB_CHARSET'] ?? 'utf8mb4',
+                'collation' => $_ENV['DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
+                'prefix'    => '',
+            ], 'default');
+        }
 
         return self::$capsule;
     }
@@ -83,19 +91,21 @@ class DatabaseHelper
     /**
      * ✅ Singleton: Get Secure Database Instance
      */
-    public static function getSecureInstance()
+    public static function getSecureInstance(): Capsule
     {
-        self::initializeDatabase(self::$secureCapsule, [
-            'driver'    => 'mysql',
-            'host'      => $_ENV['SECURE_DB_HOST'] ?? 'localhost',
-            'port'      => $_ENV['SECURE_DB_PORT'] ?? '3306',
-            'database'  => $_ENV['SECURE_DB_DATABASE'] ?? '',
-            'username'  => $_ENV['SECURE_DB_USERNAME'] ?? '',
-            'password'  => $_ENV['SECURE_DB_PASSWORD'] ?? '',
-            'charset'   => $_ENV['SECURE_DB_CHARSET'] ?? 'utf8mb4',
-            'collation' => 'utf8mb4_unicode_ci',
-            'prefix'    => '',
-        ], 'secure');
+        if (self::$secureCapsule === null) {
+            self::initializeDatabase(self::$secureCapsule, [
+                'driver'    => 'mysql',
+                'host'      => $_ENV['SECURE_DB_HOST'] ?? 'localhost',
+                'port'      => $_ENV['SECURE_DB_PORT'] ?? '3306',
+                'database'  => $_ENV['SECURE_DB_DATABASE'] ?? '',
+                'username'  => $_ENV['SECURE_DB_USERNAME'] ?? '',
+                'password'  => $_ENV['SECURE_DB_PASSWORD'] ?? '',
+                'charset'   => $_ENV['SECURE_DB_CHARSET'] ?? 'utf8mb4',
+                'collation' => $_ENV['SECURE_DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
+                'prefix'    => '',
+            ], 'secure');
+        }
 
         return self::$secureCapsule;
     }
