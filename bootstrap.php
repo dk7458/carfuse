@@ -7,8 +7,6 @@
  * Initializes database connections, logging, encryption, and registers necessary services.
  */
 
-use Illuminate\Events\Dispatcher;
-use Illuminate\Container\Container;
 use DI\Container as DIContainer;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Support\Facades\Facade;
@@ -21,10 +19,8 @@ define('BASE_PATH', __DIR__);
 // ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
 
-// ✅ Initialize Laravel Container & Set Facade Application BEFORE using facades
-$container = new Container();
-Container::setInstance($container);
-Facade::setFacadeApplication($container);
+// Remove the Illuminate Container initialization and Facade setup
+// ...existing code... (Removed Illuminate\Container\Container and Facade::setFacadeApplication)
 
 // ✅ Load Configuration Files
 $configFiles = ['encryption', 'keymanager', 'filestorage'];
@@ -50,7 +46,7 @@ if (!isset($config['encryption']['encryption_key']) || strlen($config['encryptio
     die("❌ Error: Encryption key missing or invalid in config/encryption.php\n");
 }
 
-// ✅ Initialize Dependency Container
+// ✅ Load Dependency Container from config/dependencies.php
 $container = require BASE_PATH . '/config/dependencies.php';
 
 // ✅ Retrieve Critical Services
@@ -78,14 +74,12 @@ foreach ($requiredServices as $service) {
     }
 }
 
-// ✅ Output warnings for missing dependencies
 if (!empty($missingDependencies)) {
     $logger->warning("⚠️ Missing dependencies detected: " . implode(', ', $missingDependencies));
     echo "⚠️ Missing dependencies detected: " . implode(', ', $missingDependencies) . "\n";
     echo "⚠️ Ensure dependencies are correctly registered in config/dependencies.php.\n";
 }
 
-// ✅ Final Confirmation
 $logger->info("✅ Bootstrap process completed successfully.");
 
 // ✅ Return Configurations for Application Use
