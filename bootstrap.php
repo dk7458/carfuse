@@ -10,6 +10,11 @@
 
 use DI\Container as DIContainer;
 use App\Helpers\DatabaseHelper;
+use Dotenv\Dotenv;
+
+// ✅ Load `.env` First Before Anything Else
+$dotenv = Dotenv::createImmutable(__DIR__ . '/../');
+$dotenv->load(); // Load .env variables
 
 // ✅ Load Dependencies
 require_once __DIR__ . '/vendor/autoload.php';
