@@ -6,7 +6,7 @@
  *
  * Initializes database connections, logging, encryption, and registers necessary services.
  */
-
+use Illuminate\Foundation\Application;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use DI\Container as DIContainer;
@@ -18,6 +18,7 @@ define('BASE_PATH', __DIR__);
 
 // ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 // ✅ Load and Validate Configuration Files
 $configFiles = ['encryption', 'keymanager'];
