@@ -84,6 +84,7 @@ $formatter = new LineFormatter(null, null, true, true);
 $streamHandler->setFormatter($formatter);
 $logger->pushHandler($streamHandler);
 
+// Update LoggerInterface registration if needed
 $container->set(LoggerInterface::class, fn() => $logger);
 
 // ✅ Initialize Encryption Service
@@ -138,11 +139,12 @@ $container->set(Session::class, fn() => $container->get(SessionManager::class)->
 $container->set(DocumentQueue::class, fn() => new DocumentQueue($fileStorage, __DIR__ . '/../storage/document_queue.json', $logger));
 $container->set(Validator::class, fn() => new Validator());
 $container->set(RateLimiter::class, fn() => new RateLimiter($database));
-$container->set(AuditService::class, fn() => new AuditService($database));
+
+// Updated service registrations with dependency injection for Logger and other dependencies
+$container->set(AuditService::class, fn() => new AuditService($logger));
 
 $container->set(DocumentService::class, function () use ($database, $logger, $container) {
     return new DocumentService(
-        $database,
         $container->get(AuditService::class),
         $container->get(FileStorage::class),
         $container->get(EncryptionService::class),
@@ -151,10 +153,19 @@ $container->set(DocumentService::class, function () use ($database, $logger, $co
     );
 });
 
-$container->set(TokenService::class, fn() => new TokenService($config['encryption']['jwt_secret'] ?? '', $config['encryption']['jwt_refresh_secret'] ?? ''));
+$container->set(TokenService::class, fn() => new TokenService(
+    $config['encryption']['jwt_secret'] ?? '',
+    $config['encryption']['jwt_refresh_secret'] ?? '',
+    $container->get(LoggerInterface::class)
+));
+
 $container->set(NotificationService::class, fn() => new NotificationService($database, $logger, $config['notifications'] ?? []));
 $container->set(NotificationQueue::class, fn() => new NotificationQueue($container->get(NotificationService::class), __DIR__ . '/../storage/notification_queue.json', $logger));
-$container->set(UserService::class, fn() => new UserService($database, $logger, $config['encryption']['jwt_secret'] ?? ''));
+
+$container->set(UserService::class, fn() => new UserService(
+    $container->get(LoggerInterface::class),
+    $config['encryption']['jwt_secret'] ?? ''
+));
 
 $container->set(Payment::class, fn() => new Payment());
 
@@ -181,6 +192,8 @@ $container->set(SignatureService::class, function () use ($config, $container) {
 $container->set(TemplateService::class, fn() => new TemplateService(__DIR__ . '/../storage/templates'));
 
 $container->set(KeyManager::class, fn() => new KeyManager($config['keymanager']['keys'] ?? [], $logger));
+
+$container->set(AuthService::class, fn() => new AuthService(/* ...any required dependencies... */));
 
 // ✅ Return the DI container
 return $container;

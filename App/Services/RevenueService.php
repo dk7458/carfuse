@@ -2,35 +2,71 @@
 
 namespace App\Services;
 
+use App\Helpers\DatabaseHelper; // new import
 use App\Models\Payment;
 use App\Models\TransactionLog;
+use Psr\Log\LoggerInterface;
 
 class RevenueService
 {
+    private $db;
+    private LoggerInterface $logger;
+
+    // Assume dependency injection now supplies the logger.
+    public function __construct(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+        $this->db = DatabaseHelper::getInstance();
+    }
+
     public function getMonthlyRevenueTrends(): array
     {
-        $data = Payment::where('status', 'completed')
-            ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, SUM(amount) as revenue')
-            ->groupBy('month')
-            ->orderBy('month')
-            ->get();
-        $labels = $data->pluck('month')->toArray();
-        $amounts = $data->pluck('revenue')->toArray();
-
-        return [
-            'labels' => $labels,
-            'data'   => $amounts,
-        ];
+        try {
+            $data = $this->db->table('payments')
+                ->where('status', 'completed')
+                ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, SUM(amount) as revenue')
+                ->groupBy('month')
+                ->orderBy('month')
+                ->get();
+            $labels = array_column($data, 'month');
+            $amounts = array_column($data, 'revenue');
+            $this->logger->info("[RevenueService] Retrieved monthly revenue trends");
+            return [
+                'labels' => $labels,
+                'data'   => $amounts,
+            ];
+        } catch (\Exception $e) {
+            $this->logger->error("[RevenueService] Database error: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     public function getTotalRevenue(): float
     {
-        return (float) TransactionLog::where('type', 'payment')->sum('amount');
+        try {
+            $total = $this->db->table('transaction_logs')
+                ->where('type', 'payment')
+                ->sum('amount');
+            $this->logger->info("[RevenueService] Retrieved total revenue");
+            return (float) $total;
+        } catch (\Exception $e) {
+            $this->logger->error("[RevenueService] Database error: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     public function getTotalRefunds(): float
     {
-        return (float) TransactionLog::where('type', 'refund')->sum('amount');
+        try {
+            $total = $this->db->table('transaction_logs')
+                ->where('type', 'refund')
+                ->sum('amount');
+            $this->logger->info("[RevenueService] Retrieved total refunds");
+            return (float) $total;
+        } catch (\Exception $e) {
+            $this->logger->error("[RevenueService] Database error: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     public function getNetRevenue(): float

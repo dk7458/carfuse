@@ -2,8 +2,8 @@
 
 namespace DocumentManager\Services;
 
-use PDO;
 use Exception;
+use App\Helpers\DatabaseHelper; // added for database operations
 use AuditManager\Services\AuditService;
 use DocumentManager\Services\FileStorage;
 use DocumentManager\Services\TemplateService;
@@ -18,7 +18,8 @@ use Psr\Log\LoggerInterface;
  */
 class DocumentService
 {
-    private PDO $db;
+    // Replace PDO with DatabaseHelper instance
+    private $db;
     private AuditService $auditService;
     private FileStorage $fileStorage;
     private EncryptionService $encryptionService;
@@ -26,14 +27,13 @@ class DocumentService
     private LoggerInterface $logger;
 
     public function __construct(
-        PDO $db,
         AuditService $auditService,
         FileStorage $fileStorage,
         EncryptionService $encryptionService,
         TemplateService $templateService,
         LoggerInterface $logger
     ) {
-        $this->db = $db;
+        $this->db = DatabaseHelper::getInstance();
         $this->auditService = $auditService;
         $this->fileStorage = $fileStorage;
         $this->encryptionService = $encryptionService;
@@ -78,7 +78,7 @@ class DocumentService
     public function generateContract(int $bookingId, int $userId): string
     {
         try {
-            $this->logger->info("Generating contract", ['bookingId' => $bookingId, 'userId' => $userId]);
+            $this->logger->info("[DocumentService] Generating contract", ['bookingId' => $bookingId, 'userId' => $userId]);
 
             $templateContent = $this->templateService->loadTemplate('rental_contract.html');
             $data = array_merge($this->fetchUserData($userId), $this->fetchBookingData($bookingId));
@@ -87,16 +87,20 @@ class DocumentService
             $encryptedContract = $this->encryptionService->encrypt($renderedContent);
             $filePath = $this->fileStorage->storeFile("contracts", "contract_{$bookingId}.pdf", $encryptedContract);
 
-            $this->db->prepare("
-                INSERT INTO contracts (booking_id, user_id, contract_pdf, created_at) 
-                VALUES (:booking_id, :user_id, :contract_pdf, NOW())
-            ")->execute(['booking_id' => $bookingId, 'user_id' => $userId, 'contract_pdf' => $filePath]);
+            // Replace raw SQL insert/prepare with DatabaseHelper query
+            $this->db->table('contracts')->insert([
+                'booking_id'  => $bookingId,
+                'user_id'     => $userId,
+                'contract_pdf'=> $filePath,
+                'created_at'  => now()
+            ]);
 
             $this->auditService->log('contract_generated', ['booking_id' => $bookingId, 'user_id' => $userId]);
 
             return $filePath;
         } catch (Exception $e) {
-            $this->handleException("Failed to generate contract", $e);
+            $this->logger->error("[DocumentService] Failed to generate contract: " . $e->getMessage());
+            throw $e;
         }
     }
 
@@ -127,17 +131,15 @@ class DocumentService
         try {
             $this->logger->info("Deleting document", ['documentId' => $documentId]);
 
-            $stmt = $this->db->prepare("SELECT file_path FROM documents WHERE id = :document_id");
-            $stmt->execute(['document_id' => $documentId]);
-            $document = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Replace raw PDO prepare with DatabaseHelper query
+            $document = $this->db->table('documents')->where('id', $documentId)->first();
 
             if (!$document) {
                 throw new Exception("Document not found.");
             }
 
-            $this->fileStorage->deleteFile($document['file_path']);
-            $this->db->prepare("DELETE FROM documents WHERE id = :document_id")
-                ->execute(['document_id' => $documentId]);
+            $this->fileStorage->deleteFile($document->file_path);
+            $this->db->table('documents')->where('id', $documentId)->delete();
 
             $this->auditService->log('document_deleted', ['document_id' => $documentId]);
         } catch (Exception $e) {
@@ -166,15 +168,19 @@ class DocumentService
      */
     private function fetchRecord(string $query, array $params, string $errorMessage): array
     {
-        $stmt = $this->db->prepare($query);
-        $stmt->execute($params);
-        $record = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$record) {
-            throw new Exception($errorMessage);
+        try {
+            // Replace raw PDO query with DatabaseHelper call (assuming a helper method exists)
+            $record = $this->db->table(explode(' ', $query)[3])
+                               ->where(key($params), current($params))
+                               ->first();
+            if (!$record) {
+                throw new Exception($errorMessage);
+            }
+            return (array)$record;
+        } catch (Exception $e) {
+            $this->logger->error("[DocumentService] Database error: " . $e->getMessage());
+            throw $e;
         }
-
-        return $record;
     }
 
     /**

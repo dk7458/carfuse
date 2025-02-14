@@ -2,100 +2,122 @@
 
 namespace App\Services;
 
-use App\Models\Booking;
-use App\Models\TransactionLog;
-use App\Models\Payment;
-use App\Models\RefundLog;
-use Illuminate\Support\Facades\DB;
+use App\Helpers\DatabaseHelper; // new import
 use Psr\Log\LoggerInterface;
 
 class PaymentService
 {
     private LoggerInterface $logger;
-    private Payment $paymentModel;
-    private string $payuApiKey;
-    private string $payuApiSecret;
+    private $db;
+    // Removed direct model dependency
 
-    public function __construct(LoggerInterface $logger, Payment $paymentModel, string $payuApiKey, string $payuApiSecret)
+    public function __construct(LoggerInterface $logger)
     {
         $this->logger = $logger;
-        $this->paymentModel = $paymentModel;
-        $this->payuApiKey = $payuApiKey;
-        $this->payuApiSecret = $payuApiSecret;
+        $this->db = DatabaseHelper::getInstance();
     }
 
     public function processPayment($user, array $paymentData)
     {
-        // Verify user authentication
         if (empty($user) || empty($user['authenticated']) || !$user['authenticated']) {
-            $this->logger->error('Unauthenticated payment attempt', ['user' => $user]);
+            $this->logger->error("[PaymentService] Unauthenticated payment attempt");
             return ['status' => 'error', 'message' => 'User not authenticated'];
         }
 
-        // Role-based access control for admin-only transactions
-        if (!empty($paymentData['adminOnly']) && $paymentData['adminOnly'] === true) {
-            if ($user['role'] !== 'admin') {
-                $this->logger->error('Unauthorized admin transaction', ['user' => $user]);
-                return ['status' => 'error', 'message' => 'Admin privileges required'];
-            }
+        if (!empty($paymentData['adminOnly']) && $paymentData['adminOnly'] === true && $user['role'] !== 'admin') {
+            $this->logger->error("[PaymentService] Unauthorized admin transaction");
+            return ['status' => 'error', 'message' => 'Admin privileges required'];
         }
 
-        return DB::transaction(function () use ($paymentData) {
-            // Create payment record using Eloquent
-            Payment::create([
-                'booking_id'     => $paymentData['bookingId'],
-                'amount'         => $paymentData['amount'],
-                'payment_method' => $paymentData['paymentMethod'],
-                'status'         => 'completed'
-            ]);
-            // Update booking status using Eloquent
-            $booking = Booking::findOrFail($paymentData['bookingId']);
-            $booking->update(['status' => 'paid']);
+        try {
+            $this->db->transaction(function () use ($paymentData) {
+                // Insert payment record
+                $this->db->table('payments')->insert([
+                    'booking_id'     => $paymentData['bookingId'],
+                    'amount'         => $paymentData['amount'],
+                    'payment_method' => $paymentData['paymentMethod'],
+                    'status'         => 'completed',
+                    'created_at'     => now()
+                ]);
 
-            $this->logTransaction($paymentData['bookingId'], $paymentData['amount'], 'payment');
+                // Update booking status
+                $booking = $this->db->table('bookings')
+                                ->where('id', $paymentData['bookingId'])
+                                ->first();
+                if (!$booking) {
+                    throw new \Exception("Booking not found");
+                }
+                $this->db->table('bookings')
+                        ->where('id', $paymentData['bookingId'])
+                        ->update(['status' => 'paid']);
 
-            $this->logger->info("Payment processed for booking {$paymentData['bookingId']}");
+                // Log transaction
+                $this->db->table('transaction_logs')->insert([
+                    'booking_id' => $paymentData['bookingId'],
+                    'amount'     => $paymentData['amount'],
+                    'type'       => 'payment',
+                    'status'     => 'completed',
+                    'created_at' => now()
+                ]);
+            });
+            $this->logger->info("[PaymentService] Payment processed for booking {$paymentData['bookingId']}");
             return ['status' => 'success', 'message' => 'Payment processed successfully'];
-        });
+        } catch (\Exception $e) {
+            $this->logger->error("[PaymentService] Database error: " . $e->getMessage());
+            return ['status' => 'error', 'message' => 'Payment processing failed'];
+        }
     }
 
     public function processRefund(int $bookingId, float $amount): bool
     {
-        return DB::transaction(function () use ($bookingId, $amount) {
-            // Create refund record using Eloquent
-            RefundLog::create([
-                'booking_id' => $bookingId,
-                'amount'     => $amount,
-                'status'     => 'processed'
-            ]);
-            // Update booking refund status using Eloquent
-            $booking = Booking::findOrFail($bookingId);
-            $booking->update(['refund_status' => 'processed']);
+        try {
+            $this->db->transaction(function () use ($bookingId, $amount) {
+                $this->db->table('refund_logs')->insert([
+                    'booking_id' => $bookingId,
+                    'amount'     => $amount,
+                    'status'     => 'processed',
+                    'created_at' => now()
+                ]);
+                $booking = $this->db->table('bookings')
+                                ->where('id', $bookingId)
+                                ->first();
+                if (!$booking) {
+                    throw new \Exception("Booking not found");
+                }
+                $this->db->table('bookings')
+                        ->where('id', $bookingId)
+                        ->update(['refund_status' => 'processed']);
 
-            $this->logTransaction($bookingId, $amount, 'refund');
-
-            $this->logger->info("Refund processed for booking $bookingId");
+                $this->db->table('transaction_logs')->insert([
+                    'booking_id' => $bookingId,
+                    'amount'     => $amount,
+                    'type'       => 'refund',
+                    'status'     => 'completed',
+                    'created_at' => now()
+                ]);
+            });
+            $this->logger->info("[PaymentService] Refund processed for booking {$bookingId}");
             return true;
-        });
-    }
-
-    private function logTransaction(int $bookingId, float $amount, string $type): void
-    {
-        TransactionLog::create([
-            'booking_id' => $bookingId,
-            'amount'     => $amount,
-            'type'       => $type,
-            'status'     => 'completed',
-        ]);
+        } catch (\Exception $e) {
+            $this->logger->error("[PaymentService] Database error: " . $e->getMessage());
+            return false;
+        }
     }
 
     public function getMonthlyRevenueTrends(): array
     {
-        return Payment::where('status', 'completed')
-                      ->selectRaw('MONTH(created_at) AS month, SUM(amount) AS total')
-                      ->groupBy('month')
-                      ->orderBy('month')
-                      ->get()
-                      ->toArray();
+        try {
+            $data = $this->db->table('payments')
+                             ->where('status', 'completed')
+                             ->selectRaw('MONTH(created_at) AS month, SUM(amount) AS total')
+                             ->groupBy('month')
+                             ->orderBy('month')
+                             ->get();
+            $this->logger->info("[PaymentService] Retrieved monthly revenue trends");
+            return $data;
+        } catch (\Exception $e) {
+            $this->logger->error("[PaymentService] Database error: " . $e->getMessage());
+            throw $e;
+        }
     }
 }

@@ -20,7 +20,14 @@ class BookingService
      */
     public function getBookingById(int $id): array
     {
-        return Booking::with('vehicle')->findOrFail($id)->toArray();
+        try {
+            $booking = Booking::with('vehicle')->findOrFail($id);
+            $this->logger->info("[BookingService] Retrieved booking with id: {$id}");
+            return $booking->toArray();
+        } catch (Exception $e) {
+            $this->logger->error("[BookingService] Error retrieving booking id {$id}: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -28,12 +35,18 @@ class BookingService
      */
     public function rescheduleBooking(int $id, string $pickupDate, string $dropoffDate): void
     {
-        $booking = Booking::findOrFail($id);
-        $booking->update([
-            'pickup_date' => $pickupDate,
-            'dropoff_date' => $dropoffDate,
-            'status' => 'rescheduled'
-        ]);
+        try {
+            $booking = Booking::findOrFail($id);
+            $booking->update([
+                'pickup_date' => $pickupDate,
+                'dropoff_date' => $dropoffDate,
+                'status' => 'rescheduled'
+            ]);
+            $this->logger->info("[BookingService] Rescheduled booking id: {$id}");
+        } catch (Exception $e) {
+            $this->logger->error("[BookingService] Error rescheduling booking id {$id}: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -41,9 +54,15 @@ class BookingService
      */
     public function cancelBooking(int $id): float
     {
-        $booking = Booking::findOrFail($id);
-        $booking->update(['status' => 'canceled']);
-        return $booking->calculateRefundAmount();
+        try {
+            $booking = Booking::findOrFail($id);
+            $booking->update(['status' => 'canceled']);
+            $this->logger->info("[BookingService] Canceled booking id: {$id}");
+            return $booking->calculateRefundAmount();
+        } catch (Exception $e) {
+            $this->logger->error("[BookingService] Error canceling booking id {$id}: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -51,7 +70,14 @@ class BookingService
      */
     public function getUserIdByBooking(int $id): int
     {
-        return Booking::where('id', $id)->value('user_id');
+        try {
+            $userId = Booking::where('id', $id)->value('user_id');
+            $this->logger->info("[BookingService] Retrieved user id for booking id: {$id}");
+            return $userId;
+        } catch (Exception $e) {
+            $this->logger->error("[BookingService] Error retrieving user id for booking id {$id}: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -59,10 +85,17 @@ class BookingService
      */
     public function getMonthlyBookingTrends(): array
     {
-        return Booking::selectRaw('MONTH(created_at) AS month, COUNT(*) AS total')
-                      ->groupBy('month')
-                      ->get()
-                      ->toArray();
+        try {
+            $trends = Booking::selectRaw('MONTH(created_at) AS month, COUNT(*) AS total')
+                             ->groupBy('month')
+                             ->get()
+                             ->toArray();
+            $this->logger->info("[BookingService] Retrieved monthly booking trends");
+            return $trends;
+        } catch (Exception $e) {
+            $this->logger->error("[BookingService] Error retrieving monthly booking trends: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -70,7 +103,14 @@ class BookingService
      */
     public function getTotalBookings(): int
     {
-        return Booking::count();
+        try {
+            $total = Booking::count();
+            $this->logger->info("[BookingService] Retrieved total number of bookings");
+            return $total;
+        } catch (Exception $e) {
+            $this->logger->error("[BookingService] Error retrieving total number of bookings: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -78,7 +118,14 @@ class BookingService
      */
     public function getCompletedBookings(): int
     {
-        return Booking::where('status', 'completed')->count();
+        try {
+            $completed = Booking::where('status', 'completed')->count();
+            $this->logger->info("[BookingService] Retrieved number of completed bookings");
+            return $completed;
+        } catch (Exception $e) {
+            $this->logger->error("[BookingService] Error retrieving number of completed bookings: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -86,7 +133,14 @@ class BookingService
      */
     public function getCanceledBookings(): int
     {
-        return Booking::where('status', 'canceled')->count();
+        try {
+            $canceled = Booking::where('status', 'canceled')->count();
+            $this->logger->info("[BookingService] Retrieved number of canceled bookings");
+            return $canceled;
+        } catch (Exception $e) {
+            $this->logger->error("[BookingService] Error retrieving number of canceled bookings: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -94,7 +148,14 @@ class BookingService
      */
     public function getBookingLogs(int $bookingId): array
     {
-        return Booking::findOrFail($bookingId)->logs()->orderBy('created_at', 'desc')->get()->toArray();
+        try {
+            $logs = Booking::findOrFail($bookingId)->logs()->orderBy('created_at', 'desc')->get()->toArray();
+            $this->logger->info("[BookingService] Retrieved logs for booking id: {$bookingId}");
+            return $logs;
+        } catch (Exception $e) {
+            $this->logger->error("[BookingService] Error retrieving logs for booking id {$bookingId}: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -102,7 +163,14 @@ class BookingService
      */
     private function isBookingAvailable(int $vehicleId, string $pickupDate, string $dropoffDate): bool
     {
-        return Booking::isAvailable($vehicleId, $pickupDate, $dropoffDate);
+        try {
+            $available = Booking::isAvailable($vehicleId, $pickupDate, $dropoffDate);
+            $this->logger->info("[BookingService] Checked availability for vehicle id: {$vehicleId}");
+            return $available;
+        } catch (Exception $e) {
+            $this->logger->error("[BookingService] Error checking availability for vehicle id {$vehicleId}: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**

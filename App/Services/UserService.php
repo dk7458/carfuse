@@ -2,30 +2,26 @@
 
 namespace App\Services;
 
-use App\Models\User;
-use App\Models\PasswordReset;
-use App\Models\AuditLog; // added for audit logging
 use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Exception;
+use App\Helpers\DatabaseHelper; // added for database operations
 
-/**
- * UserService
- * 
- * Handles user-related operations such as registration, authentication, profile management,
- * role management, and password resets.
- */
 class UserService
 {
     private LoggerInterface $logger;
     private string $jwtSecret;
+    private $db; // DatabaseHelper instance
 
+    // Modified constructor to use DatabaseHelper exclusively
     public function __construct(LoggerInterface $logger, string $jwtSecret)
     {
         $this->logger = $logger;
         $this->jwtSecret = $jwtSecret;
+        $this->db = DatabaseHelper::getInstance();
+        $this->logger->info("[UserService] Initialized.");
     }
 
     /**
@@ -47,15 +43,14 @@ class UserService
         }
 
         try {
-            // Removed manual password hashing; rely on the User model mutator for "password"
-            // $data['password_hash'] = Hash::make($data['password']);
-            // unset($data['password']);
-            $user = User::create($data);
-
-            $this->logAction($user->id, 'user_created', ['email' => $data['email']]);
+            // Replace Eloquent create with DatabaseHelper insert
+            $userId = $this->db->table('users')->insertGetId($data);
+            $this->logger->info("[UserService] User created successfully with id: {$userId}");
+            // ✅ Log the creation using returned user id
+            $this->logAction($userId, 'user_created', ['email' => $data['email']]);
             return ['status' => 'success', 'message' => 'User created successfully'];
         } catch (Exception $e) {
-            $this->logger->error('User creation failed', ['error' => $e->getMessage()]);
+            $this->logger->error("[UserService] User creation failed: " . $e->getMessage());
             return ['status' => 'error', 'message' => 'User creation failed'];
         }
     }
@@ -66,21 +61,20 @@ class UserService
     public function updateUser(int $id, array $data): array
     {
         try {
-            $user = User::findOrFail($id);
-
-            // Removed manual password hashing; assume mutator will handle updated "password" if supplied
-            // if (!empty($data['password'])) {
-            //     $data['password_hash'] = Hash::make($data['password']);
-            //     unset($data['password']);
-            // }
-            $user->update($data);
-
+            // Replace User::findOrFail with DatabaseHelper query
+            $user = $this->db->table('users')->where('id', $id)->first();
+            if (!$user) {
+                $this->logger->error("[UserService] User not found with id: {$id}");
+                throw new ModelNotFoundException();
+            }
+            $this->db->table('users')->where('id', $id)->update($data);
+            $this->logger->info("[UserService] User updated successfully with id: {$id}");
             $this->logAction($id, 'user_updated', $data);
             return ['status' => 'success', 'message' => 'User updated successfully'];
         } catch (ModelNotFoundException $e) {
             return ['status' => 'error', 'message' => 'User not found'];
         } catch (Exception $e) {
-            $this->logger->error('User update failed', ['error' => $e->getMessage()]);
+            $this->logger->error("[UserService] User update failed: " . $e->getMessage());
             return ['status' => 'error', 'message' => 'User update failed'];
         }
     }
@@ -91,17 +85,19 @@ class UserService
     public function authenticate(string $email, string $password): ?string
     {
         try {
-            $user = User::where('email', $email)->first();
+            // Replace direct query with DatabaseHelper table method
+            $user = $this->db->table('users')->where('email', $email)->first();
 
             if (!$user || !Hash::check($password, $user->password_hash)) {
+                $this->logger->error("[UserService] Authentication failed for email: {$email}");
                 $this->logAction(null, 'authentication_failed', ['email' => $email]);
                 return null;
             }
-
+            $this->logger->info("[UserService] Authentication successful for user id: {$user->id}");
             $this->logAction($user->id, 'authentication_successful');
             return $this->generateJWT($user);
         } catch (Exception $e) {
-            $this->logger->error('Authentication failed', ['error' => $e->getMessage()]);
+            $this->logger->error("[UserService] Authentication error: " . $e->getMessage());
             return null;
         }
     }
@@ -109,7 +105,7 @@ class UserService
     /**
      * ✅ Generate a JWT token
      */
-    private function generateJWT(User $user): string
+    private function generateJWT($user): string
     {
         $payload = [
             'sub' => $user->id,
@@ -128,27 +124,24 @@ class UserService
     public function requestPasswordReset(string $email): bool
     {
         try {
-            $user = User::where('email', $email)->first();
-
+            $user = $this->db->table('users')->where('email', $email)->first();
             if (!$user) {
+                $this->logger->error("[UserService] Password reset request failed: user not found for {$email}");
                 return false;
             }
-
             $token = bin2hex(random_bytes(32));
             $expiresAt = now()->addHour();
-
-            PasswordReset::create([
+            // Replace PasswordReset::create with DatabaseHelper insert
+            $this->db->table('password_resets')->insert([
                 'email' => $email,
                 'token' => $token,
                 'expires_at' => $expiresAt
             ]);
-
-            // ✅ Log the password reset request
+            $this->logger->info("[UserService] Password reset requested for user id: {$user->id}");
             $this->logAction($user->id, 'password_reset_requested', ['email' => $email]);
-
             return true;
         } catch (Exception $e) {
-            $this->logger->error('Password reset request failed', ['error' => $e->getMessage()]);
+            $this->logger->error("[UserService] Password reset request error: " . $e->getMessage());
             return false;
         }
     }
@@ -158,11 +151,16 @@ class UserService
      */
     private function logAction(?int $userId, string $action, array $details = []): void
     {
-        // Replace direct logger entry with creation of an audit log record
-        AuditLog::create([
-            'user_id' => $userId,
-            'action'  => $action,
-            'details' => json_encode($details)
-        ]);
+        try {
+            // Replace AuditLog::create with DatabaseHelper insert for audit logging
+            $this->db->table('audit_logs')->insert([
+                'user_id' => $userId,
+                'action'  => $action,
+                'details' => json_encode($details)
+            ]);
+            $this->logger->info("[UserService] Logged action '{$action}' for user id: " . ($userId ?? 'N/A'));
+        } catch (Exception $e) {
+            $this->logger->error("[UserService] Failed to log action '{$action}': " . $e->getMessage());
+        }
     }
 }

@@ -20,7 +20,7 @@ class EncryptionService
         try {
             return Crypt::encryptString($data);
         } catch (\Exception $e) {
-            Log::error('Encryption failed', ['error' => $e->getMessage()]);
+            \Log::error("[EncryptionService] Encryption failed", ['error' => $e->getMessage()]);
             throw $e;
         }
     }
@@ -30,7 +30,7 @@ class EncryptionService
         try {
             return Crypt::decryptString($encryptedData);
         } catch (\Exception $e) {
-            Log::error('Decryption failed', ['error' => $e->getMessage()]);
+            \Log::error("[EncryptionService] Decryption failed", ['error' => $e->getMessage()]);
             return null;
         }
     }

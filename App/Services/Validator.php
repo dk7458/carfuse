@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Psr\Log\LoggerInterface;
+
 /**
  * Validator Service
  *
@@ -10,6 +12,13 @@ namespace App\Services;
 class Validator
 {
     private array $errors = [];
+    private LoggerInterface $logger;
+    
+    // Added constructor for dependency injection
+    public function __construct(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+    }
 
     /**
      * Validate data against rules.

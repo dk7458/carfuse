@@ -5,13 +5,15 @@ namespace App\Services\Auth;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Support\Facades\Cache;
+use Psr\Log\LoggerInterface;
 
 class TokenService
 {
     private string $secretKey;
     private string $refreshSecretKey;
+    private LoggerInterface $logger;
 
-    public function __construct(string $secretKey, string $refreshSecretKey)
+    public function __construct(string $secretKey, string $refreshSecretKey, LoggerInterface $logger)
     {
         if (empty($secretKey) || empty($refreshSecretKey)) {
             throw new \RuntimeException('❌ JWT secrets are missing.');
@@ -19,6 +21,7 @@ class TokenService
 
         $this->secretKey = $secretKey;
         $this->refreshSecretKey = $refreshSecretKey;
+        $this->logger = $logger;
     }
 
     public function generateToken($user): string
@@ -29,7 +32,7 @@ class TokenService
             'iat' => time(),
             'exp' => time() + 3600
         ];
-
+        $this->logger->info("[TokenService] Generated token for user id: {$user->id}");
         return JWT::encode($payload, $this->secretKey, 'HS256');
     }
 

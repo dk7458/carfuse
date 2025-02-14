@@ -2,27 +2,50 @@
 
 namespace App\Services;
 
-use App\Models\User;
-use App\Models\Booking;
-use App\Models\Payment;
+use App\Helpers\DatabaseHelper;
+use Psr\Log\LoggerInterface;
+use Exception;
 
 class MetricsService
 {
+    private $db;
+    private LoggerInterface $logger;
+
+    public function __construct(LoggerInterface $logger)
+    {
+        $this->db = DatabaseHelper::getInstance();
+        $this->logger = $logger;
+    }
+
     public function getDashboardMetrics(): array
     {
-        $metrics = [
-            'total_users'         => User::count(),
-            'active_users'        => User::where('active', true)->count(),
-            'total_bookings'      => Booking::count(),
-            'completed_bookings'  => Booking::where('status', 'completed')->count(),
-            'canceled_bookings'   => Booking::where('status', 'canceled')->count(),
-            'total_revenue'       => Payment::where('status', 'completed')->sum('amount'),
-            'total_refunds'       => Payment::where('status', 'completed')
-                                           ->where('type', 'refund')
-                                           ->sum('amount'),
-        ];
-        $metrics['net_revenue'] = $metrics['total_revenue'] - $metrics['total_refunds'];
-
-        return $metrics;
+        try {
+            $totalUsers        = $this->db->table('users')->count();
+            $activeUsers       = $this->db->table('users')->where('active', true)->count();
+            $totalBookings     = $this->db->table('bookings')->count();
+            $completedBookings = $this->db->table('bookings')->where('status', 'completed')->count();
+            $canceledBookings  = $this->db->table('bookings')->where('status', 'canceled')->count();
+            $totalRevenue      = $this->db->table('payments')->where('status', 'completed')->sum('amount');
+            $totalRefunds      = $this->db->table('payments')
+                                          ->where('status', 'completed')
+                                          ->where('type', 'refund')
+                                          ->sum('amount');
+            
+            $metrics = [
+                'total_users'         => $totalUsers,
+                'active_users'        => $activeUsers,
+                'total_bookings'      => $totalBookings,
+                'completed_bookings'  => $completedBookings,
+                'canceled_bookings'   => $canceledBookings,
+                'total_revenue'       => $totalRevenue,
+                'total_refunds'       => $totalRefunds,
+            ];
+            $metrics['net_revenue'] = $totalRevenue - $totalRefunds;
+            $this->logger->info("[MetricsService] Dashboard metrics retrieved successfully");
+            return $metrics;
+        } catch (Exception $e) {
+            $this->logger->error("[MetricsService] Database error while retrieving metrics: " . $e->getMessage());
+            return [];
+        }
     }
 }

@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Psr\Log\LoggerInterface;
 use DocumentManager\Services\FileStorage;
 use App\Services\EncryptionService;
-use App\Models\Signature;
+use App\Helpers\DatabaseHelper; // new import
 
 /**
  * Signature Service
@@ -21,6 +21,7 @@ class SignatureService
     private FileStorage $fileStorage;
     private EncryptionService $encryptionService;
     private LoggerInterface $logger;
+    private $db; // DatabaseHelper instance
 
     public function __construct(
         array $config,
@@ -37,6 +38,7 @@ class SignatureService
         $this->fileStorage = $fileStorage;
         $this->encryptionService = $encryptionService;
         $this->logger = $logger;
+        $this->db = DatabaseHelper::getInstance();
     }
 
     /**
@@ -50,15 +52,20 @@ class SignatureService
         $fileName = uniqid() . '.' . pathinfo($filePath, PATHINFO_EXTENSION);
         $storagePath = $this->fileStorage->storeFile("signatures/{$userId}", $fileName, $encryptedContent, false);
 
-        // Create signature record via Eloquent ORM
-        Signature::create([
-            'user_id'   => $userId,
-            'file_path' => $storagePath,
-            'encrypted' => true,
-            'created_at'=> now(),
-        ]);
-
-        $this->logger->info("Signature uploaded", ['user_id' => $userId, 'path' => $storagePath]);
+        // Replace direct Eloquent call with DatabaseHelper, wrapped in try–catch.
+        try {
+            $this->db->table('signatures')->insert([
+                'user_id'   => $userId,
+                'file_path' => $storagePath,
+                'encrypted' => true,
+                'created_at'=> now(),
+            ]);
+            $this->logger->info("[SignatureService] Signature record created for user {$userId}");
+        } catch (Exception $e) {
+            $this->logger->error("[SignatureService] Database error: " . $e->getMessage());
+            throw $e;
+        }
+        $this->logger->info("[SignatureService] Signature uploaded for user {$userId} at {$storagePath}");
         return $storagePath;
     }
 

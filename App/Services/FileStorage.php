@@ -53,12 +53,12 @@ class FileStorage
         }
 
         if (file_put_contents($filePath, $content) === false) {
-            $this->logger->error("Failed to store file", ['file' => $fileName, 'path' => $filePath]);
+            $this->logger->error("[FileStorage] Failed to store file", ['file' => $fileName, 'path' => $filePath]);
             throw new Exception("Failed to store file: $fileName");
         }
 
         chmod($filePath, $this->config['security']['permissions']['default']);
-        $this->logger->info("File stored successfully", ['file' => $fileName, 'path' => $filePath]);
+        $this->logger->info("[FileStorage] File stored successfully", ['file' => $fileName, 'path' => $filePath]);
 
         return $filePath;
     }
@@ -75,7 +75,7 @@ class FileStorage
 
         $content = file_get_contents($filePath);
         if ($content === false) {
-            $this->logger->error("Failed to retrieve file", ['path' => $filePath]);
+            $this->logger->error("[FileStorage] Failed to retrieve file", ['path' => $filePath]);
             throw new Exception("Failed to retrieve file: $filePath");
         }
 
@@ -86,7 +86,7 @@ class FileStorage
             }
         }
 
-        $this->logger->info("File retrieved successfully", ['path' => $filePath]);
+        $this->logger->info("[FileStorage] File retrieved successfully", ['path' => $filePath]);
         return $content;
     }
 
@@ -101,11 +101,11 @@ class FileStorage
         }
 
         if (!unlink($filePath)) {
-            $this->logger->error("Failed to delete file", ['path' => $filePath]);
+            $this->logger->error("[FileStorage] Failed to delete file", ['path' => $filePath]);
             throw new Exception("Failed to delete file: $filePath");
         }
 
-        $this->logger->info("File deleted successfully", ['path' => $filePath]);
+        $this->logger->info("[FileStorage] File deleted successfully", ['path' => $filePath]);
     }
 
     /**

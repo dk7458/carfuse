@@ -5,7 +5,7 @@ namespace App\Services;
 use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use App\Models\TransactionLog; // for logging transactions
+use App\Helpers\DatabaseHelper; // new import
 require_once __DIR__ . '/../../config/payu.php';
 /**
  * PayUService
@@ -17,12 +17,14 @@ class PayUService
     private string $merchantKey;
     private string $merchantSalt;
     private string $endpoint;
+    private $db; // DatabaseHelper instance
 
     public function __construct(array $config)
     {
         $this->merchantKey = $config['merchant_key'];
         $this->merchantSalt = $config['merchant_salt'];
         $this->endpoint = $config['endpoint'];
+        $this->db = DatabaseHelper::getInstance();
     }
 
     /**
@@ -102,19 +104,20 @@ class PayUService
         $response = Http::post("{$this->endpoint}/refund", $params);
         try {
             throw_if($response->failed(), Exception::class, 'Refund processing error');
-            // Log the refund transaction using Eloquent
-            TransactionLog::create([
+            $this->db->table('transaction_logs')->insert([
                 'booking_id' => $transactionId,
                 'amount'     => $amount,
                 'type'       => 'refund',
                 'status'     => 'completed'
             ]);
+            $this->logger = Log::channel('payu'); // use centralized logging channel
+            $this->logger->info("[PayUService] Refund logged for transaction {$transactionId}");
             return [
                 'status' => 'success',
                 'data'   => $response->json()
             ];
         } catch (Exception $e) {
-            Log::channel('payu')->error('PayU refund processing failed', ['error' => $e->getMessage()]);
+            Log::channel('payu')->error("[PayUService] Refund processing error: " . $e->getMessage());
             return [
                 'status' => 'error',
                 'message' => 'Refund processing failed'

@@ -3,6 +3,7 @@
 namespace DocumentManager\Services;
 
 use Exception;
+use Psr\Log\LoggerInterface;
 
 /**
  * Template Service
@@ -13,20 +14,23 @@ use Exception;
 class TemplateService
 {
     private string $templateDirectory;
+    private LoggerInterface $logger;
 
     /**
      * Constructor
      *
+     * @param LoggerInterface $logger The logger instance.
      * @param string $templateDirectory The directory where templates are stored.
      * @throws Exception If the directory is invalid or not readable.
      */
-    public function __construct(string $templateDirectory)
+    public function __construct(LoggerInterface $logger, string $templateDirectory)
     {
         if (!is_dir($templateDirectory) || !is_readable($templateDirectory)) {
             throw new \InvalidArgumentException("Invalid template directory: $templateDirectory");
         }
 
         $this->templateDirectory = rtrim($templateDirectory, DIRECTORY_SEPARATOR);
+        $this->logger = $logger;
     }
 
     /**
@@ -49,13 +53,20 @@ class TemplateService
      */
     public function loadTemplate(string $templateName): string
     {
-        $filePath = $this->getTemplatePath($templateName);
+        try {
+            $filePath = $this->getTemplatePath($templateName);
 
-        if (!file_exists($filePath) || !is_readable($filePath)) {
-            throw new Exception("Template not found or unreadable: $templateName");
+            if (!file_exists($filePath) || !is_readable($filePath)) {
+                throw new Exception("Template not found or unreadable: $templateName");
+            }
+
+            $content = file_get_contents($filePath);
+            $this->logger->info("[TemplateService] Loaded template: {$templateName}");
+            return $content;
+        } catch (\Exception $e) {
+            $this->logger->error("[TemplateService] Error loading template: " . $e->getMessage());
+            throw $e;
         }
-
-        return file_get_contents($filePath);
     }
 
     /**
@@ -75,6 +86,7 @@ class TemplateService
             $template = str_replace($placeholder, htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'), $template);
         }
 
+        $this->logger->info("[TemplateService] Rendered template: {$templateName}");
         return $template;
     }
 
@@ -88,13 +100,19 @@ class TemplateService
      */
     public function saveTemplate(string $templateName, string $content): bool
     {
-        $filePath = $this->getTemplatePath($templateName);
+        try {
+            $filePath = $this->getTemplatePath($templateName);
 
-        if (file_put_contents($filePath, $content) === false) {
-            throw new Exception("Failed to save template: $templateName");
+            if (file_put_contents($filePath, $content) === false) {
+                throw new Exception("Failed to save template: $templateName");
+            }
+
+            $this->logger->info("[TemplateService] Saved template: {$templateName}");
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("[TemplateService] Error saving template: " . $e->getMessage());
+            throw $e;
         }
-
-        return true;
     }
 
     /**
@@ -106,17 +124,23 @@ class TemplateService
      */
     public function deleteTemplate(string $templateName): bool
     {
-        $filePath = $this->getTemplatePath($templateName);
+        try {
+            $filePath = $this->getTemplatePath($templateName);
 
-        if (!file_exists($filePath)) {
-            throw new Exception("Template not found: $templateName");
+            if (!file_exists($filePath)) {
+                throw new Exception("Template not found: $templateName");
+            }
+
+            if (!unlink($filePath)) {
+                throw new Exception("Failed to delete template: $templateName");
+            }
+
+            $this->logger->info("[TemplateService] Deleted template: {$templateName}");
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("[TemplateService] Error deleting template: " . $e->getMessage());
+            throw $e;
         }
-
-        if (!unlink($filePath)) {
-            throw new Exception("Failed to delete template: $templateName");
-        }
-
-        return true;
     }
 
     /**

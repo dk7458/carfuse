@@ -3,7 +3,7 @@
 namespace App\Services\Auth;
 
 use App\Models\User;
-use App\Models\PasswordReset; // added import
+use App\Helpers\DatabaseHelper; // added for database operations
 use App\Helpers\SecurityHelper;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -13,6 +13,7 @@ use Exception;
 class AuthService
 {
     private $tokenService;
+    private $db;
 
     public function __construct()
     {
@@ -31,6 +32,8 @@ class AuthService
             $encryptionConfig['jwt_secret'],
             $encryptionConfig['jwt_refresh_secret']
         );
+        // Initialize DatabaseHelper for raw password reset operations
+        $this->db = DatabaseHelper::getInstance();
     }
 
     public function login($email, $password)
@@ -64,17 +67,25 @@ class AuthService
     {
         $user = User::where('email', $email)->first();
         if (!$user) {
+            $this->logger?->error("[AuthService] Password reset failed: email not found ($email)");
             throw new Exception("Email not found.");
         }
 
         $token = bin2hex(random_bytes(32));
         $expiresAt = now()->addHour();
 
-        PasswordReset::create([
-            'email'      => $email,
-            'token'      => password_hash($token, PASSWORD_BCRYPT),
-            'expires_at' => $expiresAt,
-        ]);
+        try {
+            // Replace Eloquent insert with DatabaseHelper insert
+            $this->db->table('password_resets')->insert([
+                'email'      => $email,
+                'token'      => password_hash($token, PASSWORD_BCRYPT),
+                'expires_at' => $expiresAt,
+            ]);
+            SecurityHelper::logAuthFailure("[AuthService] Password reset requested for {$email}");
+        } catch (Exception $e) {
+            $this->logger?->error("[AuthService] Failed to insert password reset: " . $e->getMessage());
+            throw $e;
+        }
 
         // Send email (mock implementation)
         // ...existing code...

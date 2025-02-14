@@ -17,7 +17,7 @@ class RateLimit
     public function isRateLimited(string $ip): bool
     {
         if (RateLimiter::tooManyAttempts($ip, 5)) {
-            Log::channel('security')->warning("Rate limit exceeded for IP: $ip");
+            Log::channel('security')->warning("[RateLimit] Rate limit exceeded for IP: {$ip}");
             return true;
         }
         return false;
@@ -26,6 +26,6 @@ class RateLimit
     public function recordFailedAttempt(string $ip): void
     {
         RateLimiter::hit($ip, 900); // 900 seconds = 15 minutes
-        Log::channel('security')->warning("Recorded failed attempt for IP: $ip");
+        Log::channel('security')->warning("[RateLimit] Recorded failed attempt for IP: {$ip}");
     }
 }

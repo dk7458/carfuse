@@ -26,6 +26,8 @@ class AuditService
                 'ip_address' => $ipAddress,
                 'created_at' => now(),
             ]);
+            // Optionally log the audit event
+            // $this->logger->info("[AuditService] Logged action: {$action}");
         } catch (Exception $e) {
             throw new Exception('Failed to log action: ' . $e->getMessage());
         }

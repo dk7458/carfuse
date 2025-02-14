@@ -2,9 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Notification; // added for Eloquent ORM
-use App\Models\User;         // added to access user relationships
-use PDO;
+use App\Helpers\DatabaseHelper; // new import
 use Psr\Log\LoggerInterface;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -18,11 +16,13 @@ class NotificationService
 {
     private LoggerInterface $logger;
     private array $config;
+    private $db;
 
     public function __construct(LoggerInterface $logger, array $config)
     {
         $this->logger = $logger;
         $this->config = $config;
+        $this->db = DatabaseHelper::getInstance();
     }
 
     /**
@@ -34,7 +34,7 @@ class NotificationService
             $this->storeNotification($userId, $type, $message);
             return $this->dispatchNotification($userId, $type, $message, $options);
         } catch (\Exception $e) {
-            $this->logger->error('Notification failed', ['error' => $e->getMessage()]);
+            $this->logger->error("[NotificationService] Notification failed: " . $e->getMessage());
             return false;
         }
     }
@@ -44,35 +44,74 @@ class NotificationService
      */
     private function storeNotification(int $userId, string $type, string $message): void
     {
-        $user = User::findOrFail($userId);
-        $user->notifications()->create([
-            'type'    => $type,
-            'message' => $message,
-            'sent_at' => now(),
-            'is_read' => false,
-        ]);
+        try {
+            // Instead of Eloquent relationship, we use direct DB insert.
+            $this->db->table('notifications')->insert([
+                'user_id' => $userId,
+                'type'    => $type,
+                'message' => $message,
+                'sent_at' => date('Y-m-d H:i:s'),
+                'is_read' => false,
+            ]);
+            $this->logger->info("[NotificationService] Notification stored for user {$userId}");
+        } catch (\Exception $e) {
+            $this->logger->error("[NotificationService] Database error (storeNotification): " . $e->getMessage());
+            throw $e;
+        }
     }
 
     public function getUserNotifications(int $userId)
     {
-        return Notification::where('user_id', $userId)->latest()->get();
+        try {
+            $notifications = $this->db->table('notifications')
+                                 ->where('user_id', $userId)
+                                 ->orderBy('created_at', 'desc')
+                                 ->get();
+            $this->logger->info("[NotificationService] Retrieved notifications for user {$userId}");
+            return $notifications;
+        } catch (\Exception $e) {
+            $this->logger->error("[NotificationService] Database error (getUserNotifications): " . $e->getMessage());
+            throw $e;
+        }
     }
 
     public function markAsRead(int $notificationId): void
     {
-        $notification = Notification::findOrFail($notificationId);
-        $notification->update(['is_read' => true]);
+        try {
+            $this->db->table('notifications')
+                     ->where('id', $notificationId)
+                     ->update(['is_read' => true]);
+            $this->logger->info("[NotificationService] Marked notification {$notificationId} as read");
+        } catch (\Exception $e) {
+            $this->logger->error("[NotificationService] Database error (markAsRead): " . $e->getMessage());
+            throw $e;
+        }
     }
 
     public function deleteNotification(int $notificationId): void
     {
-        $notification = Notification::findOrFail($notificationId);
-        $notification->delete();
+        try {
+            $this->db->table('notifications')
+                     ->where('id', $notificationId)
+                     ->delete();
+            $this->logger->info("[NotificationService] Deleted notification {$notificationId}");
+        } catch (\Exception $e) {
+            $this->logger->error("[NotificationService] Database error (deleteNotification): " . $e->getMessage());
+            throw $e;
+        }
     }
 
     public function markAllAsRead(int $userId): void
     {
-        Notification::where('user_id', $userId)->update(['is_read' => true]);
+        try {
+            $this->db->table('notifications')
+                     ->where('user_id', $userId)
+                     ->update(['is_read' => true]);
+            $this->logger->info("[NotificationService] Marked all notifications as read for user {$userId}");
+        } catch (\Exception $e) {
+            $this->logger->error("[NotificationService] Database error (markAllAsRead): " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -111,10 +150,11 @@ class NotificationService
             $mail->isHTML(true);
             $mail->Body = "<p>$message</p>";
             $mail->send();
+            $this->logger->info("[NotificationService] Email sent to {$to}");
 
             return true;
         } catch (Exception $e) {
-            $this->logger->error('Email failed', ['error' => $e->getMessage()]);
+            $this->logger->error("[NotificationService] Email error: " . $e->getMessage());
             return false;
         }
     }
@@ -127,10 +167,10 @@ class NotificationService
         if (empty($phone)) return false;
 
         try {
-            $this->logger->info("Sending SMS to $phone: $message");
+            $this->logger->info("[NotificationService] SMS sent to {$phone}");
             return true;
         } catch (\Exception $e) {
-            $this->logger->error('SMS failed', ['error' => $e->getMessage()]);
+            $this->logger->error("[NotificationService] SMS error: " . $e->getMessage());
             return false;
         }
     }

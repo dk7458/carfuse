@@ -2,14 +2,24 @@
 
 namespace App\Services;
 
+use App\Helpers\DatabaseHelper; // new import
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\User;
 use Dompdf\Dompdf;
+use Psr\Log\LoggerInterface;
 
 class ReportService
 {
-    // Removed PDO dependency and constructor
+    private $db;
+    private LoggerInterface $logger;
+
+    // Constructor updated to initialize DatabaseHelper and Logger.
+    public function __construct(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+        $this->db = DatabaseHelper::getInstance();
+    }    
 
     /**
      * Generate a report for admin
@@ -54,11 +64,17 @@ class ReportService
      */
     private function getBookingReportData(array $dateRange, array $filters): array
     {
-        $query = Booking::with('user')->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
-        if(!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
+        try {
+            $query = $this->db->table('bookings')->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+            if (!empty($filters['status'])) {
+                $query->where('status', $filters['status']);
+            }
+            $this->logger->info("[ReportService] Fetched booking report data");
+            return $query->get();
+        } catch (\Exception $e) {
+            $this->logger->error("[ReportService] Database error (booking): " . $e->getMessage());
+            throw $e;
         }
-        return $query->get()->toArray();
     }
 
     /**
@@ -66,11 +82,17 @@ class ReportService
      */
     private function getPaymentReportData(array $dateRange, array $filters): array
     {
-        $query = Payment::whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
-        if(!empty($filters['type'])) {
-            $query->where('type', $filters['type']);
+        try {
+            $query = $this->db->table('payments')->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+            if (!empty($filters['type'])) {
+                $query->where('type', $filters['type']);
+            }
+            $this->logger->info("[ReportService] Fetched payment report data");
+            return $query->get();
+        } catch (\Exception $e) {
+            $this->logger->error("[ReportService] Database error (payments): " . $e->getMessage());
+            throw $e;
         }
-        return $query->get()->toArray();
     }
 
     /**
@@ -78,7 +100,16 @@ class ReportService
      */
     private function getUserReportData(array $dateRange, array $filters): array
     {
-        return User::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])->get()->toArray();
+        try {
+            $data = $this->db->table('users')
+                         ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
+                         ->get();
+            $this->logger->info("[ReportService] Fetched user report data");
+            return $data;
+        } catch (\Exception $e) {
+            $this->logger->error("[ReportService] Database error (users): " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -122,6 +153,7 @@ class ReportService
         } else {
             throw new \InvalidArgumentException("Unsupported format: $format");
         }
+        $this->logger->info("[ReportService] Exported report: {$filePath}");
         return $filePath;
     }
 }
