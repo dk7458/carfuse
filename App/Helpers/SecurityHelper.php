@@ -45,11 +45,15 @@ if (!function_exists('securityLog')) {
     }
 }
 
-/**
- * Log authentication events.
- */
-function logAuthEvent($message, $level = 'info') {
-    Log::channel('auth')->info($message);
+// ...existing code...
+
+if (!function_exists('logAuthEvent')) {
+    /**
+     * Log authentication events.
+     */
+    function logAuthEvent($message, $level = 'info') {
+        Log::channel('auth')->info($message);
+    }
 }
 
 // Helper to log authentication failures to auth.log
