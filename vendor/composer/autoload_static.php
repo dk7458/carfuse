@@ -70,7 +70,6 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
             'Symfony\\Component\\EventDispatcher\\' => 34,
             'Symfony\\Component\\ErrorHandler\\' => 31,
             'Symfony\\Component\\Console\\' => 26,
-            'Services\\' => 9,
         ),
         'R' => 
         array (
@@ -93,7 +92,6 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'M' => 
         array (
             'Monolog\\' => 8,
-            'Middleware\\' => 11,
         ),
         'L' => 
         array (
@@ -116,10 +114,6 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
             'Illuminate\\Console\\' => 19,
             'Illuminate\\Bus\\' => 15,
         ),
-        'H' => 
-        array (
-            'Helpers\\' => 8,
-        ),
         'G' => 
         array (
             'GuzzleHttp\\UriTemplate\\' => 23,
@@ -141,7 +135,6 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'D' => 
         array (
             'Dotenv\\' => 7,
-            'DocumentManager\\' => 16,
             'Doctrine\\Inflector\\' => 19,
             'Doctrine\\Common\\Lexer\\' => 22,
             'DeepCopy\\' => 9,
@@ -158,7 +151,6 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         ),
         'A' => 
         array (
-            'AuditManager\\' => 13,
             'App\\' => 4,
         ),
     );
@@ -272,10 +264,6 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         array (
             0 => __DIR__ . '/..' . '/symfony/console',
         ),
-        'Services\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/App/Services',
-        ),
         'Ramsey\\Uuid\\' => 
         array (
             0 => __DIR__ . '/..' . '/ramsey/uuid/src',
@@ -328,10 +316,6 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'Monolog\\' => 
         array (
             0 => __DIR__ . '/..' . '/monolog/monolog/src/Monolog',
-        ),
-        'Middleware\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/App/Middleware',
         ),
         'Laravel\\SerializableClosure\\' => 
         array (
@@ -396,10 +380,6 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         array (
             0 => __DIR__ . '/..' . '/illuminate/bus',
         ),
-        'Helpers\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/App/Helpers',
-        ),
         'GuzzleHttp\\UriTemplate\\' => 
         array (
             0 => __DIR__ . '/..' . '/guzzlehttp/uri-template/src',
@@ -440,10 +420,6 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         array (
             0 => __DIR__ . '/..' . '/vlucas/phpdotenv/src',
         ),
-        'DocumentManager\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/DocumentManager',
-        ),
         'Doctrine\\Inflector\\' => 
         array (
             0 => __DIR__ . '/..' . '/doctrine/inflector/lib/Doctrine/Inflector',
@@ -471,10 +447,6 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'Brick\\Math\\' => 
         array (
             0 => __DIR__ . '/..' . '/brick/math/src',
-        ),
-        'AuditManager\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/AuditManager',
         ),
         'App\\' => 
         array (
