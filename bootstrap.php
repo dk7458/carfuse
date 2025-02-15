@@ -1,5 +1,7 @@
 <?php
 // Load environment variables before anything else
+require_once __DIR__ . '/vendor/autoload.php';
+
 use Dotenv\Dotenv;
 $dotenv = Dotenv::createImmutable(__DIR__);
 $dotenv->load();
@@ -12,7 +14,6 @@ LaravelContainer::setInstance($laravelContainer);
 Facade::setFacadeApplication($laravelContainer);
 
 // Include autoloader and SecurityHelper only once
-require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 
 // Load Dependency Container from dependencies.php
