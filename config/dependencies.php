@@ -108,27 +108,25 @@ $container->set('db', fn() => $database);
 $container->set('secure_db', fn() => $secure_database);
 
 // ✅ Register Session Handling
-$container->set(SessionManager::class, function () use ($container) {
-    $config = [
-        'driver' => 'file',
-        'files' => __DIR__ . '/../storage/framework/sessions',
-        'lifetime' => 120,
-        'expire_on_close' => false,
-        'encrypt' => false,
-        'connection' => null,
-        'table' => 'sessions',
-        'store' => null,
-        'lottery' => [2, 100],
-        'cookie' => 'carfuse_session',
-        'path' => '/',
-        'domain' => null,
-        'secure' => false,
-        'http_only' => true,
-        'same_site' => 'lax',
-    ];
+$sessionConfig = [
+    'driver'        => 'file',
+    'files'         => __DIR__ . '/../storage/framework/sessions',
+    'lifetime'      => 120, // in minutes
+    'expire_on_close' => false,
+    'encrypt'       => false,
+    'cookie'        => 'carfuse_session',
+    'path'          => '/',
+    'secure'        => false, // Adjust to true in production if needed
+    'http_only'     => true,
+    'same_site'     => 'lax',
+];
 
-    return new SessionManager(new Config(['session' => $config]));
+$container->set(SessionManager::class, function () use ($sessionConfig) {
+    return new SessionManager(new Config(['session' => $sessionConfig]));
 });
+
+// Bind the "session" target so that dependencies expecting it resolve correctly.
+$container->set('session', fn() => $container->get(SessionManager::class)->driver());
 
 // ✅ Bind Session Facade
 $container->set(Session::class, fn() => $container->get(SessionManager::class)->driver());

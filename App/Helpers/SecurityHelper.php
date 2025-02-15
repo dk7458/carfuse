@@ -62,9 +62,10 @@ if (!function_exists('logAuthFailure')) {
 // Updated startSecureSession() to prevent facade issues
 if (!function_exists('startSecureSession')) {
     function startSecureSession() {
-        if (!class_exists('Illuminate\Support\Facades\Facade') || !Container::getInstance()) {
+        if (!class_exists('Illuminate\Support\Facades\Session')) {
             throw new RuntimeException("Laravel Facades are not initialized.");
         }
+        // Use the Session facade to start the session if not already started
         if (!Session::isStarted()) {
             Session::start();
         }
