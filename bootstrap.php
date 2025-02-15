@@ -1,27 +1,12 @@
 <?php
-require_once __DIR__ . '/vendor/autoload.php'; // Moved to top to load Dotenv
+require_once __DIR__ . '/vendor/autoload.php'; // Load autoloader first
 
-/**
- * Centralized Bootstrap File
- * 
- * Initializes database connections, logging, encryption, and registers necessary services.
- *
- * Path: bootstrap.php
- */
-
-// Load .env before anything else
+// Load .env early
 use Dotenv\Dotenv;
 $dotenv = Dotenv::createImmutable(__DIR__);
 $dotenv->load();
-
-// Bootstrap Laravel's Container for Facades using unique alias
-use Illuminate\Container\Container as LaravelContainer;
-use DI\Container as DIContainer;
-use Illuminate\Support\Facades\Facade;
-
-$laravelContainer = new LaravelContainer();
-LaravelContainer::setInstance($laravelContainer);
-Facade::setFacadeApplication($laravelContainer);
+// ✅ Load `dependencies.php` to Retrieve the DI Container
+$container = require_once __DIR__ . '/config/dependencies.php';
 
 define('BASE_PATH', __DIR__);
 
@@ -44,10 +29,11 @@ foreach ($configFiles as $file) {
 }
 $logger->info("✅ Configuration files loaded successfully.");
 
-// ✅ Initialize Databases Using DatabaseHelper
+// Initialize DatabaseHelper before any database calls
+use App\Helpers\DatabaseHelper;
 try {
-    $database = \App\Helpers\DatabaseHelper::getInstance();
-    $secure_database = \App\Helpers\DatabaseHelper::getSecureInstance();
+    $database = DatabaseHelper::getInstance();
+    $secure_database = DatabaseHelper::getSecureInstance();
     $logger->info("✅ Both databases initialized successfully.");
 } catch (Exception $e) {
     $logger->error("❌ Database initialization failed: " . $e->getMessage());
