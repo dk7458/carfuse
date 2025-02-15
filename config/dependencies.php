@@ -1,4 +1,9 @@
 <?php
+// Load environment variables via Dotenv instead of using Illuminate\Config\Repository
+use Dotenv\Dotenv;
+$dotenv = Dotenv::createImmutable(__DIR__ . '/../');
+$dotenv->load();
+
 // Bootstrap Laravel's Container for Facades
 use Illuminate\Container\Container as LaravelContainer;
 use Illuminate\Support\Facades\Facade;
@@ -6,27 +11,26 @@ $laravelContainer = new LaravelContainer();
 LaravelContainer::setInstance($laravelContainer);
 Facade::setFacadeApplication($laravelContainer);
 
-// Explicitly bind configuration and SessionManager so that session facade works correctly
-use Illuminate\Config\Repository as Config;
-use Illuminate\Session\SessionManager;
+// Build a basic config binding using Dotenv values for session configuration.
 $sessionConfig = [
     'driver'          => 'file',
     'files'           => __DIR__ . '/../storage/framework/sessions',
-    'lifetime'        => 120,
-    'expire_on_close' => false,
-    'encrypt'         => false,
-    'cookie'          => 'carfuse_session',
-    'path'            => '/',
-    'secure'          => false, // Change to true in production
-    'http_only'       => true,
-    'same_site'       => 'lax',
+    'lifetime'        => getenv('SESSION_LIFETIME') ?: 120,
+    'expire_on_close' => getenv('SESSION_EXPIRE_ON_CLOSE') ?: false,
+    'encrypt'         => getenv('SESSION_ENCRYPT') ?: false,
+    'cookie'          => getenv('SESSION_COOKIE') ?: 'carfuse_session',
+    'path'            => getenv('SESSION_PATH') ?: '/',
+    'secure'          => getenv('SESSION_SECURE') ?: false,
+    'http_only'       => getenv('SESSION_HTTP_ONLY') ?: true,
+    'same_site'       => getenv('SESSION_SAME_SITE') ?: 'lax',
 ];
-$laravelContainer->bind('config', fn() => new Config(['session' => $sessionConfig]));
+$laravelContainer->bind('config', fn() => ['session' => $sessionConfig]);
+use Illuminate\Session\SessionManager;
 $laravelContainer->singleton(SessionManager::class, fn($app) => new SessionManager($app));
 $laravelContainer->alias(SessionManager::class, 'session');
 
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php'; // Include once
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php'; // Include only once
 
 use DI\Container as DIContainer;
 use App\Helpers\DatabaseHelper;
@@ -60,10 +64,10 @@ use App\Services\PayUService;
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Session;
 
-// ✅ Initialize Dependency Container
+// Initialize DI container
 $container = new DIContainer();
 
-// ✅ Load configuration from `config/` directory
+// Load configuration from `config/` directory
 $configDirectory = __DIR__;
 $config = [];
 
@@ -74,7 +78,7 @@ foreach (glob("{$configDirectory}/*.php") as $filePath) {
     }
 }
 
-// ✅ Ensure necessary directories exist
+// Ensure necessary directories exist
 $templateDirectory = __DIR__ . '/../storage/templates';
 $fileStorageConfig = $config['filestorage'] ?? [];
 
@@ -84,20 +88,20 @@ foreach ([$templateDirectory, $fileStorageConfig['base_directory'] ?? null] as $
     }
 }
 
-// ✅ Load Logger from logger.php and bind LoggerInterface
+// Load Logger from logger.php and bind LoggerInterface
 $logger = require_once __DIR__ . '/../logger.php';
 $container->set(LoggerInterface::class, fn() => $logger);
 
-// ✅ Initialize Encryption Service
+// Initialize Encryption Service
 $encryptionService = new EncryptionService($config['encryption']['encryption_key'] ?? '');
 $container->set(EncryptionService::class, fn() => $encryptionService);
 
-// ✅ Initialize File Storage Before Using It Anywhere
+// Initialize File Storage Before Using It Anywhere
 $fileStorage = new FileStorage($fileStorageConfig, $logger, $encryptionService);
 $container->set(FileStorage::class, fn() => $fileStorage);
 $config['keymanager'] = require __DIR__ . '/keymanager.php';
 
-// ✅ Use DatabaseHelper for all database operations
+// Use DatabaseHelper for all database operations
 try {
     $database = DatabaseHelper::getInstance();
     $secure_database = DatabaseHelper::getSecureInstance();
@@ -110,14 +114,13 @@ try {
 $container->set('db', fn() => $database);
 $container->set('secure_db', fn() => $secure_database);
 
-// ✅ Bind SessionManager via the Laravel Container and register session binding in DI
+// Bind SessionManager via the Laravel Container and register session binding in DI
 $container->set(SessionManager::class, fn() => $laravelContainer->make(SessionManager::class));
 $container->set('session', fn() => $container->get(SessionManager::class)->driver());
-
-// ✅ Bind Session Facade
+// Optionally, bind the Session facade if needed:
 $container->set(Session::class, fn() => $container->get(SessionManager::class)->driver());
 
-// ✅ Register Services
+// Register Services
 $container->set(DocumentQueue::class, fn() => new DocumentQueue($fileStorage, __DIR__ . '/../storage/document_queue.json', $logger));
 $container->set(Validator::class, fn() => new Validator());
 $container->set(RateLimiter::class, fn() => new RateLimiter($database));
@@ -136,8 +139,8 @@ $container->set(DocumentService::class, function () use ($database, $logger, $co
 });
 
 $container->set(TokenService::class, fn() => new TokenService(
-    $config['encryption']['jwt_secret'] ?? '',
-    $config['encryption']['jwt_refresh_secret'] ?? '',
+    getenv('JWT_SECRET') ?: '',
+    getenv('JWT_REFRESH_SECRET') ?: '',
     $container->get(LoggerInterface::class)
 ));
 
@@ -151,8 +154,14 @@ $container->set(UserService::class, fn() => new UserService(
 
 $container->set(Payment::class, fn() => new Payment());
 
-$container->set(PaymentService::class, function () use ($database, $logger, $config) {
-    return new PaymentService($database, $logger, new Payment(), $config['payu']['api_key'] ?? '', $config['payu']['api_secret'] ?? '');
+$container->set(PaymentService::class, function () use ($database, $logger) {
+    return new PaymentService(
+        $database,
+        $logger,
+        new Payment(),
+        getenv('PAYU_API_KEY') ?: '',
+        getenv('PAYU_API_SECRET') ?: ''
+    );
 });
 
 $container->set(PayUService::class, fn() => new PayUService(new Client(), $logger, $config['payu'] ?? []));
@@ -161,10 +170,10 @@ $container->set(MetricsService::class, fn() => new MetricsService($database));
 $container->set(ReportService::class, fn() => new ReportService($database));
 $container->set(RevenueService::class, fn() => new RevenueService($database));
 
-$container->set(SignatureService::class, function () use ($config, $container) {
+$container->set(SignatureService::class, function () use ($container) {
     return new SignatureService(
         new Client(),
-        $config['signature'] ?? [],
+        [], // Assuming additional signature config is not used
         $container->get(FileStorage::class),
         $container->get(EncryptionService::class),
         $container->get(LoggerInterface::class)
@@ -177,5 +186,5 @@ $container->set(KeyManager::class, fn() => new KeyManager($config['keymanager'][
 
 $container->set(AuthService::class, fn() => new AuthService($container->get(LoggerInterface::class)));
 
-// ✅ Return the DI container
+// Return the DI container
 return $container;
