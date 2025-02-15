@@ -6,7 +6,27 @@ $laravelContainer = new LaravelContainer();
 LaravelContainer::setInstance($laravelContainer);
 Facade::setFacadeApplication($laravelContainer);
 
+// Explicitly bind configuration and SessionManager before session functions are used
+use Illuminate\Config\Repository as Config;
+use Illuminate\Session\SessionManager;
+$sessionConfig = [
+    'driver'         => 'file',
+    'files'          => __DIR__ . '/../storage/framework/sessions',
+    'lifetime'       => 120,
+    'expire_on_close'=> false,
+    'encrypt'        => false,
+    'cookie'         => 'carfuse_session',
+    'path'           => '/',
+    'secure'         => false, // Change to true in production
+    'http_only'      => true,
+    'same_site'      => 'lax',
+];
+$laravelContainer->bind('config', fn() => new Config(['session' => $sessionConfig]));
+$laravelContainer->singleton(SessionManager::class, fn($app) => new SessionManager($app));
+$laravelContainer->alias(SessionManager::class, 'session');
+
 require_once __DIR__ . '/../vendor/autoload.php'; // ✅ Ensure autoload is included
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php'; // Include once
 
 use DI\Container as DIContainer;
 use App\Helpers\DatabaseHelper;
@@ -38,12 +58,7 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
 use App\Services\PayUService;
 use GuzzleHttp\Client;
-use Illuminate\Session\SessionManager;
-use Illuminate\Config\Repository as Config;
-use Illuminate\Cookie\CookieJar;
 use Illuminate\Support\Facades\Session;
-
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
 // ✅ Initialize Dependency Container
 $container = new DIContainer();
@@ -108,19 +123,6 @@ $container->set('db', fn() => $database);
 $container->set('secure_db', fn() => $secure_database);
 
 // ✅ Register Session Handling
-$sessionConfig = [
-    'driver'        => 'file',
-    'files'         => __DIR__ . '/../storage/framework/sessions',
-    'lifetime'      => 120, // in minutes
-    'expire_on_close' => false,
-    'encrypt'       => false,
-    'cookie'        => 'carfuse_session',
-    'path'          => '/',
-    'secure'        => false, // Adjust to true in production if needed
-    'http_only'     => true,
-    'same_site'     => 'lax',
-];
-
 $container->set(SessionManager::class, function () use ($sessionConfig) {
     return new SessionManager(new Config(['session' => $sessionConfig]));
 });
