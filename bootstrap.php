@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/vendor/autoload.php'; // Moved to top to load Dotenv
 
 /**
  * Centralized Bootstrap File
@@ -21,8 +22,6 @@ use Illuminate\Support\Facades\Facade;
 $laravelContainer = new LaravelContainer();
 LaravelContainer::setInstance($laravelContainer);
 Facade::setFacadeApplication($laravelContainer);
-
-require_once __DIR__ . '/vendor/autoload.php';
 
 define('BASE_PATH', __DIR__);
 
