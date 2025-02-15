@@ -6,26 +6,26 @@ $laravelContainer = new LaravelContainer();
 LaravelContainer::setInstance($laravelContainer);
 Facade::setFacadeApplication($laravelContainer);
 
-// Explicitly bind configuration and SessionManager before session functions are used
+// Explicitly bind configuration and SessionManager so that session facade works correctly
 use Illuminate\Config\Repository as Config;
 use Illuminate\Session\SessionManager;
 $sessionConfig = [
-    'driver'         => 'file',
-    'files'          => __DIR__ . '/../storage/framework/sessions',
-    'lifetime'       => 120,
-    'expire_on_close'=> false,
-    'encrypt'        => false,
-    'cookie'         => 'carfuse_session',
-    'path'           => '/',
-    'secure'         => false, // Change to true in production
-    'http_only'      => true,
-    'same_site'      => 'lax',
+    'driver'          => 'file',
+    'files'           => __DIR__ . '/../storage/framework/sessions',
+    'lifetime'        => 120,
+    'expire_on_close' => false,
+    'encrypt'         => false,
+    'cookie'          => 'carfuse_session',
+    'path'            => '/',
+    'secure'          => false, // Change to true in production
+    'http_only'       => true,
+    'same_site'       => 'lax',
 ];
 $laravelContainer->bind('config', fn() => new Config(['session' => $sessionConfig]));
 $laravelContainer->singleton(SessionManager::class, fn($app) => new SessionManager($app));
 $laravelContainer->alias(SessionManager::class, 'session');
 
-require_once __DIR__ . '/../vendor/autoload.php'; // ✅ Ensure autoload is included
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php'; // Include once
 
 use DI\Container as DIContainer;
@@ -84,20 +84,8 @@ foreach ([$templateDirectory, $fileStorageConfig['base_directory'] ?? null] as $
     }
 }
 
-// ✅ Initialize Logger First
-$logger = new Logger('carfuse');
-$logFile = __DIR__ . '/../logs/app.log';
-
-if (!file_exists(dirname($logFile))) {
-    mkdir(dirname($logFile), 0775, true);
-}
-
-$streamHandler = new StreamHandler($logFile, Logger::DEBUG);
-$formatter = new LineFormatter(null, null, true, true);
-$streamHandler->setFormatter($formatter);
-$logger->pushHandler($streamHandler);
-
-// Update LoggerInterface registration if needed
+// ✅ Load Logger from logger.php and bind LoggerInterface
+$logger = require_once __DIR__ . '/../logger.php';
 $container->set(LoggerInterface::class, fn() => $logger);
 
 // ✅ Initialize Encryption Service
@@ -109,7 +97,7 @@ $fileStorage = new FileStorage($fileStorageConfig, $logger, $encryptionService);
 $container->set(FileStorage::class, fn() => $fileStorage);
 $config['keymanager'] = require __DIR__ . '/keymanager.php';
 
-// ✅ Initialize Databases Using DatabaseHelper
+// ✅ Use DatabaseHelper for all database operations
 try {
     $database = DatabaseHelper::getInstance();
     $secure_database = DatabaseHelper::getSecureInstance();
@@ -122,12 +110,8 @@ try {
 $container->set('db', fn() => $database);
 $container->set('secure_db', fn() => $secure_database);
 
-// ✅ Register Session Handling
-$container->set(SessionManager::class, function () use ($sessionConfig) {
-    return new SessionManager(new Config(['session' => $sessionConfig]));
-});
-
-// Bind the "session" target so that dependencies expecting it resolve correctly.
+// ✅ Bind SessionManager via the Laravel Container and register session binding in DI
+$container->set(SessionManager::class, fn() => $laravelContainer->make(SessionManager::class));
 $container->set('session', fn() => $container->get(SessionManager::class)->driver());
 
 // ✅ Bind Session Facade
