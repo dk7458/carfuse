@@ -273,8 +273,8 @@ function requireAuth($allowGuest = false) {
         }
     } else {
         // Web authentication using session
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start();
+        if (!Session::isStarted()) {  // Changed from raw session_status() check and session_start()
+            Session::start();
         }
         if (isset($_SESSION['user_id'])) {
             return $_SESSION['user_id'];

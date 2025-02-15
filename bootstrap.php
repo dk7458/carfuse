@@ -63,6 +63,9 @@ if (!isset($config['encryption']['encryption_key']) || strlen($config['encryptio
 // ✅ Load Dependency Container from `config/dependencies.php`
 $container = require BASE_PATH . '/config/dependencies.php';
 
+// Bind the session driver into Laravel's Container so that Session::resolve() works.
+$laravelContainer->instance('session', $container->get('session'));
+
 // ✅ Retrieve Critical Services
 try {
     $auditService = $container->get(\App\Services\AuditService::class);
