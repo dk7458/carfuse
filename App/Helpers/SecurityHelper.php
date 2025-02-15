@@ -14,10 +14,9 @@ define('SECURITY_HELPER_LOADED', true);
 | Path: App/Helpers/SecurityHelper.php
 */
 
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Auth;
+use Psr\Log\LoggerInterface;
 use Illuminate\Support\Facades\Session;
-use Illuminate\Container\Container;
+use Illuminate\Support\Facades\Auth;
 
 // Security Configuration
 const SESSION_CONFIG = [
@@ -31,13 +30,10 @@ const SESSION_CONFIG = [
     'sid_bits_per_character' => 6
 ];
 
-// Updated securityLog() to be defined only once, with standardized logging
+// ✅ Standardized Logging Function
 if (!function_exists('securityLog')) {
-    function securityLog($message, $level = 'info') {
-        $logFilePath = __DIR__ . '/../../logs/security.log';
-        $timestamp = date('Y-m-d H:i:s');
-        $formattedMessage = "[$timestamp][$level] $message\n";
-        file_put_contents($logFilePath, $formattedMessage, FILE_APPEND);
+    function securityLog(LoggerInterface $logger, $message, $level = 'info') {
+        $logger->log($level, "[Security] $message");
     }
 }
 
@@ -59,13 +55,9 @@ if (!function_exists('logAuthFailure')) {
     }
 }
 
-// Updated startSecureSession() to prevent facade issues
+// ✅ Secure Session Handling via Laravel's Session Facade
 if (!function_exists('startSecureSession')) {
     function startSecureSession() {
-        if (!class_exists('Illuminate\Support\Facades\Session')) {
-            throw new RuntimeException("Laravel Facades are not initialized.");
-        }
-        // Use the Session facade to start the session if not already started
         if (!Session::isStarted()) {
             Session::start();
         }
@@ -96,47 +88,36 @@ if (!function_exists('refreshSession')) {
     }
 }
 
-// ...existing code...
-
-if (!function_exists('validateSessionIntegrity')) {
-    function validateSessionIntegrity() {
-        if (!isset($_SESSION['initiated'])) {
-            securityLog('Session integrity check failed: not initiated', 'warning');
-            return false;
+// ✅ Replace raw $_SESSION handling with Session facade in session expiry enforcement
+if (!function_exists('enforceSessionExpiry')) {
+    function enforceSessionExpiry(LoggerInterface $logger) {
+        if (!Session::has('last_activity')) {
+            Session::put('last_activity', time());
+            return;
         }
-    
+        if (time() - Session::get('last_activity') > 1800) { // 30 min timeout
+            securityLog($logger, 'Session expired due to inactivity', 'info');
+            Session::flush();
+        }
+    }
+}
+
+// ✅ Fingerprint-Based Session Integrity Check using Session::put()/get()
+if (!function_exists('validateSessionIntegrity')) {
+    function validateSessionIntegrity(LoggerInterface $logger) {
         $currentIp = hash('sha256', $_SERVER['REMOTE_ADDR']);
         $currentAgent = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
         
-        // Flexible validation for guest sessions
-        if (isset($_SESSION['user_id'])) {
-            // Strict validation for authenticated users
-            if ($_SESSION['client_ip'] !== $currentIp || 
-                $_SESSION['user_agent'] !== $currentAgent) {
-                securityLog('Session integrity check failed: authenticated user mismatch', 'warning');
-                destroySession();
-                return false;
-            }
-        } else {
-            // Update fingerprint for guest sessions
-            $_SESSION['client_ip'] = $currentIp;
-            $_SESSION['user_agent'] = $currentAgent;
-            $_SESSION['guest'] = true;
+        if (!Session::has('client_ip')) {
+            Session::put('client_ip', $currentIp);
+            Session::put('user_agent', $currentAgent);
+            return true;
         }
-    
-        // Check for session timeout (30 minutes)
-        if (time() - $_SESSION['last_activity'] > 1800) {
-            securityLog('Session expired due to inactivity', 'info');
-            destroySession();
+        if (Session::get('client_ip') !== $currentIp || Session::get('user_agent') !== $currentAgent) {
+            securityLog($logger, 'Session integrity check failed: Mismatch detected', 'warning');
+            Session::flush();
             return false;
         }
-    
-        // Refresh session if about to expire (within 5 minutes)
-        if (time() - $_SESSION['last_activity'] > 1500) {
-            refreshSession();
-        }
-    
-        $_SESSION['last_activity'] = time();
         return true;
     }
 }
@@ -167,40 +148,12 @@ function generateSecureToken($length = 64)
     return bin2hex(random_bytes($length / 2));
 }
 
-function destroySession() {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        return false;
-    }
-
-    try {
-        $wasGuest = $_SESSION['guest'] ?? false;
-        securityLog('Initiating session destruction: ' . ($wasGuest ? 'guest' : 'user') . ' session');
-        
-        // Clear session data
-        $_SESSION = [];
-        
-        // Delete session cookie
-        if (ini_get('session.use_cookies')) {
-            $params = session_get_cookie_params();
-            setcookie(session_name(), '', [
-                'expires' => time() - 42000,
-                'path' => $params['path'],
-                'domain' => $params['domain'],
-                'secure' => $params['secure'],
-                'httponly' => $params['httponly'],
-                'samesite' => 'Lax'
-            ]);
-        }
-        
-        if (!session_destroy()) {
-            throw new Exception('Session destruction failed');
-        }
-        
-        securityLog('Session destroyed successfully');
-        return true;
-    } catch (Exception $e) {
-        securityLog('Session destruction error: ' . $e->getMessage(), 'error');
-        return false;
+// ✅ Secure Session Destruction using Session::flush()
+if (!function_exists('destroySession')) {
+    function destroySession(LoggerInterface $logger) {
+        securityLog($logger, 'Destroying session', 'info');
+        Session::flush();
+        securityLog($logger, 'Session destroyed successfully', 'info');
     }
 }
 
@@ -225,7 +178,7 @@ function getUserRole()
  */
 function getSessionData($key)
 {
-    return $_SESSION[$key] ?? null;
+    return Session::get($key);
 }
 
 /**
@@ -233,7 +186,7 @@ function getSessionData($key)
  */
 function setSessionData($key, $value)
 {
-    $_SESSION[$key] = $value;
+    Session::put($key, $value);
 }
 
 /**
@@ -251,48 +204,19 @@ function requireUserAuth() {
     requireAuth();
 }
 
-// New function to enforce authentication dynamically
-function requireAuth($allowGuest = false) {
-    // Get HTTP headers if available
-    $headers = function_exists('getallheaders') ? getallheaders() : [];
-    $authHeader = $headers['Authorization'] ?? '';
-
-    if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
-        // API authentication using JWT Bearer
-        $config = require __DIR__ . '/../../config/encryption.php';
-        $jwtSecret = $config['jwt_secret'] ?? '';
-        $token = substr($authHeader, 7);
-        try {
-            return (array) Firebase\JWT\JWT::decode($token, new Firebase\JWT\Key($jwtSecret, 'HS256'));
-        } catch (Exception $e) {
-            error_log("[AUTH] API authentication failure: " . $e->getMessage() . "\n", 3, __DIR__ . '/../../logs/auth.log');
-            header('Content-Type: application/json');
-            http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized']);
-            exit;
+// ✅ Enforce API Authentication using requireAuth()
+if (!function_exists('requireAuth')) {
+    function requireAuth($allowGuest = false) {
+        if (Auth::check()) {
+            return Auth::user();
         }
-    } else {
-        // Web authentication using session
-        if (!Session::isStarted()) {  // Changed from raw session_status() check and session_start()
-            Session::start();
-        }
-        if (isset($_SESSION['user_id'])) {
-            return $_SESSION['user_id'];
-        } elseif ($allowGuest) {
+        if ($allowGuest) {
             return null;
-        } else {
-            error_log("[AUTH] Web authentication failure: No session user_id\n", 3, __DIR__ . '/../../logs/auth.log');
-            // If the request expects JSON, return JSON response
-            if (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false) {
-                header('Content-Type: application/json');
-                http_response_code(401);
-                echo json_encode(['error' => 'Unauthorized']);
-            } else {
-                http_response_code(401);
-                echo 'Unauthorized';
-            }
-            exit;
         }
+        header('Content-Type: application/json');
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        exit;
     }
 }
 
