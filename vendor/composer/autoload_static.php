@@ -112,6 +112,7 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
             'Illuminate\\Contracts\\' => 21,
             'Illuminate\\Container\\' => 21,
             'Illuminate\\Console\\' => 19,
+            'Illuminate\\Config\\' => 18,
             'Illuminate\\Bus\\' => 15,
         ),
         'G' => 
@@ -375,6 +376,10 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'Illuminate\\Console\\' => 
         array (
             0 => __DIR__ . '/..' . '/illuminate/console',
+        ),
+        'Illuminate\\Config\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/illuminate/config',
         ),
         'Illuminate\\Bus\\' => 
         array (
@@ -999,6 +1004,7 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'Illuminate\\Bus\\Queueable' => __DIR__ . '/..' . '/illuminate/bus/Queueable.php',
         'Illuminate\\Bus\\UniqueLock' => __DIR__ . '/..' . '/illuminate/bus/UniqueLock.php',
         'Illuminate\\Bus\\UpdatedBatchJobCounts' => __DIR__ . '/..' . '/illuminate/bus/UpdatedBatchJobCounts.php',
+        'Illuminate\\Config\\Repository' => __DIR__ . '/..' . '/illuminate/config/Repository.php',
         'Illuminate\\Console\\Application' => __DIR__ . '/..' . '/illuminate/console/Application.php',
         'Illuminate\\Console\\BufferedConsoleOutput' => __DIR__ . '/..' . '/illuminate/console/BufferedConsoleOutput.php',
         'Illuminate\\Console\\CacheCommandMutex' => __DIR__ . '/..' . '/illuminate/console/CacheCommandMutex.php',

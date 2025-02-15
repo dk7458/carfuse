@@ -550,6 +550,7 @@ return array(
     'Illuminate\\Bus\\Queueable' => $vendorDir . '/illuminate/bus/Queueable.php',
     'Illuminate\\Bus\\UniqueLock' => $vendorDir . '/illuminate/bus/UniqueLock.php',
     'Illuminate\\Bus\\UpdatedBatchJobCounts' => $vendorDir . '/illuminate/bus/UpdatedBatchJobCounts.php',
+    'Illuminate\\Config\\Repository' => $vendorDir . '/illuminate/config/Repository.php',
     'Illuminate\\Console\\Application' => $vendorDir . '/illuminate/console/Application.php',
     'Illuminate\\Console\\BufferedConsoleOutput' => $vendorDir . '/illuminate/console/BufferedConsoleOutput.php',
     'Illuminate\\Console\\CacheCommandMutex' => $vendorDir . '/illuminate/console/CacheCommandMutex.php',

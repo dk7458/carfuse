@@ -3,6 +3,7 @@
     "description": "Car rental and management system with user management, payment handling, and advanced features.",
     "type": "project",
     "require": {
+        "illuminate/config": "^10.48",
         "php": "^8.1",
         "firebase/php-jwt": "^6.11",
         "monolog/monolog": "^3.3",
