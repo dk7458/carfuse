@@ -8,9 +8,19 @@
  * Path: bootstrap.php
  */
 
-use DI\Container as DIContainer;
-use App\Helpers\DatabaseHelper;
+// Load .env before anything else
 use Dotenv\Dotenv;
+$dotenv = Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
+// Bootstrap Laravel's Container for Facades using unique alias
+use Illuminate\Container\Container as LaravelContainer;
+use DI\Container as DIContainer;
+use Illuminate\Support\Facades\Facade;
+
+$laravelContainer = new LaravelContainer();
+LaravelContainer::setInstance($laravelContainer);
+Facade::setFacadeApplication($laravelContainer);
 
 require_once __DIR__ . '/vendor/autoload.php';
 
@@ -19,10 +29,7 @@ define('BASE_PATH', __DIR__);
 // ✅ Load Logger
 $logger = require_once BASE_PATH . '/logger.php';
 
-// ✅ Load `.env` First Before Anything Else
-$dotenv = Dotenv::createImmutable(__DIR__ . '/');
-$dotenv->load(); // Load .env variables
-
+// Use require_once for SecurityHelper to avoid multiple inclusions
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 
 $configFiles = ['encryption', 'keymanager', 'filestorage'];
@@ -40,8 +47,8 @@ $logger->info("✅ Configuration files loaded successfully.");
 
 // ✅ Initialize Databases Using DatabaseHelper
 try {
-    $database = DatabaseHelper::getInstance();
-    $secure_database = DatabaseHelper::getSecureInstance();
+    $database = \App\Helpers\DatabaseHelper::getInstance();
+    $secure_database = \App\Helpers\DatabaseHelper::getSecureInstance();
     $logger->info("✅ Both databases initialized successfully.");
 } catch (Exception $e) {
     $logger->error("❌ Database initialization failed: " . $e->getMessage());
@@ -59,20 +66,42 @@ $container = require BASE_PATH . '/config/dependencies.php';
 
 // ✅ Retrieve Critical Services
 try {
-    $auditService = $container->get(App\Services\AuditService::class);
-    $encryptionService = $container->get(App\Services\EncryptionService::class);
+    $auditService = $container->get(\App\Services\AuditService::class);
+    $encryptionService = $container->get(\App\Services\EncryptionService::class);
     $logger->info("✅ Critical services retrieved successfully.");
 } catch (Exception $e) {
     $logger->error("❌ Service retrieval failed: " . $e->getMessage());
     die("❌ Service retrieval failed: " . $e->getMessage() . "\n");
 }
 
+// Example: Ensure AuthService receives LoggerInterface from the bootstrapped container
+$container->set(\App\Services\AuthService::class, fn() => new \App\Services\AuthService($laravelContainer->get(Psr\Log\LoggerInterface::class)));
+
+// Session Handling (using Laravel SessionManager) remains unchanged
+use Illuminate\Session\SessionManager;
+use Illuminate\Config\Repository as Config;
+$container->set(SessionManager::class, function () use ($container) {
+	$sessionConfig = [
+		'driver' => 'file',
+		'files' => __DIR__ . '/../storage/framework/sessions',
+		'lifetime' => 120,
+		'expire_on_close' => false,
+		'encrypt' => false,
+		'cookie' => 'carfuse_session',
+		'path' => '/',
+		'secure' => false,
+		'http_only' => true,
+		'same_site' => 'lax',
+	];
+	return new SessionManager(new Config(['session' => $sessionConfig]));
+});
+
 // ✅ Validate Required Dependencies
 $missingDependencies = [];
 $requiredServices = [
-    App\Services\NotificationService::class,
-    App\Services\Auth\TokenService::class,
-    App\Services\Validator::class
+    \App\Services\NotificationService::class,
+    \App\Services\Auth\TokenService::class,
+    \App\Services\Validator::class
 ];
 
 foreach ($requiredServices as $service) {

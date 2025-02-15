@@ -1,4 +1,9 @@
 <?php
+if (defined('SECURITY_HELPER_LOADED')) {
+    return;
+}
+define('SECURITY_HELPER_LOADED', true);
+
 /*
 |--------------------------------------------------------------------------
 | Security Helper - Centralized Session & Security Functions
@@ -12,6 +17,7 @@
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Container\Container;
 
 // Security Configuration
 const SESSION_CONFIG = [
@@ -25,23 +31,13 @@ const SESSION_CONFIG = [
     'sid_bits_per_character' => 6
 ];
 
-// Enhanced logging with severity levels
+// Updated securityLog() to be defined only once, with standardized logging
 if (!function_exists('securityLog')) {
     function securityLog($message, $level = 'info') {
-        $logFile = __DIR__ . '/../../logs/security.log';
+        $logFilePath = __DIR__ . '/../../logs/security.log';
         $timestamp = date('Y-m-d H:i:s');
-        $userId = $_SESSION['user_id'] ?? 'guest';
-        
-        // Sanitize sensitive data
-        $patterns = [
-            '/user_id[\s]?[=:][\s]?["\']?\w+["\']?/i',
-            '/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/',
-            '/Mozilla\/[^\s]+/'
-        ];
-        $message = preg_replace($patterns, '[REDACTED]', $message);
-        $sanitizedMessage = str_replace(["\n", "\r"], '', $message);
-        
-        error_log("[$timestamp][$level][user_id: $userId] $sanitizedMessage\n", 3, $logFile);
+        $formattedMessage = "[$timestamp][$level] $message\n";
+        file_put_contents($logFilePath, $formattedMessage, FILE_APPEND);
     }
 }
 
@@ -63,18 +59,15 @@ if (!function_exists('logAuthFailure')) {
     }
 }
 
+// Updated startSecureSession() to prevent facade issues
 if (!function_exists('startSecureSession')) {
-    // Replace startSecureSession() to use native PHP sessions instead of Laravel's Session facade.
     function startSecureSession() {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start();
+        if (!class_exists('Illuminate\Support\Facades\Facade') || !Container::getInstance()) {
+            throw new RuntimeException("Laravel Facades are not initialized.");
         }
-        $_SESSION['initiated'] = time();
-        $_SESSION['client_ip'] = hash('sha256', $_SERVER['REMOTE_ADDR'] ?? '');
-        $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'] ?? '';
-        $_SESSION['last_activity'] = time();
-        $_SESSION['guest'] = true;
-        error_log('New guest session initiated.');
+        if (!Session::isStarted()) {
+            Session::start();
+        }
         return true;
     }
 }

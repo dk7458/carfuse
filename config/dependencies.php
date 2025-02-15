@@ -1,17 +1,14 @@
 <?php
-
-/**
- * Dependency Injection Configuration
- * 
- * This file initializes and registers all application dependencies,
- * including services, database connections, logging, encryption, and queue management.
- *
- * Path: config/dependencies.php
- */
+// Bootstrap Laravel's Container for Facades
+use Illuminate\Container\Container as LaravelContainer;
+use Illuminate\Support\Facades\Facade;
+$laravelContainer = new LaravelContainer();
+LaravelContainer::setInstance($laravelContainer);
+Facade::setFacadeApplication($laravelContainer);
 
 require_once __DIR__ . '/../vendor/autoload.php'; // ✅ Ensure autoload is included
 
-use DI\Container;
+use DI\Container as DIContainer;
 use App\Helpers\DatabaseHelper;
 use App\Services\Validator;
 use App\Services\RateLimiter;
@@ -49,7 +46,7 @@ use Illuminate\Support\Facades\Session;
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 
 // ✅ Initialize Dependency Container
-$container = new Container();
+$container = new DIContainer();
 
 // ✅ Load configuration from `config/` directory
 $configDirectory = __DIR__;
@@ -194,7 +191,7 @@ $container->set(TemplateService::class, fn() => new TemplateService(__DIR__ . '/
 
 $container->set(KeyManager::class, fn() => new KeyManager($config['keymanager']['keys'] ?? [], $logger));
 
-$container->set(AuthService::class, fn() => new AuthService(/* ...any required dependencies... */));
+$container->set(AuthService::class, fn() => new AuthService($container->get(LoggerInterface::class)));
 
 // ✅ Return the DI container
 return $container;
