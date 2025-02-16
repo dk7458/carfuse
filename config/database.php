@@ -1,3 +1,6 @@
+<?php
+
+// This file must return an array of database configurations
 return [
     'app_database' => [
         'driver'    => 'mysql',
