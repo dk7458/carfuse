@@ -6,9 +6,7 @@ use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Notification;
 use App\Models\User;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -32,13 +30,14 @@ class DashboardController extends Controller
     }
 
     /**
-     * Render user dashboard view using Eloquent ORM and caching.
+     * Render user dashboard view.
      */
     public function userDashboard()
     {
         try {
-            // Eager load bookings and notifications for the authenticated user
-            $user = Auth::user()->load(['bookings', 'notifications']);
+            // Assume session_start() is already called.
+            $user = (object)['id' => $_SESSION['user_id'] ?? null]; // Replace with native session retrieval
+            // ...existing code for eager loading if needed...
             $statistics = Cache::remember('user_dashboard_' . $user->id, 60, function () use ($user) {
                 return [
                     'total_bookings'     => Booking::where('user_id', $user->id)->count(),
@@ -48,18 +47,18 @@ class DashboardController extends Controller
             });
             view('dashboard/user_dashboard', ['user' => $user, 'statistics' => $statistics]);
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to load user dashboard', ['error' => $e->getMessage()]);
+            error_log('Failed to load user dashboard: '.$e->getMessage());
             abort(500, 'Error loading dashboard');
         }
     }
 
     /**
-     * Fetch user bookings using Eloquent ORM.
+     * Fetch user bookings.
      */
     public function getUserBookings(): void
     {
         try {
-            $bookings = Booking::where('user_id', Auth::id())->get();
+            $bookings = Booking::where('user_id', $_SESSION['user_id'] ?? null)->get();
             http_response_code(200);
             echo json_encode([
                 'status'  => 'success',
@@ -67,13 +66,13 @@ class DashboardController extends Controller
                 'data'    => ['bookings' => $bookings]
             ]);
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to fetch bookings', ['error' => $e->getMessage()]);
+            error_log('Failed to fetch bookings: '.$e->getMessage());
             abort(500, 'Failed to fetch bookings');
         }
     }
 
     /**
-     * Fetch dashboard statistics using Eloquent ORM and caching.
+     * Fetch dashboard statistics.
      */
     public function fetchStatistics(): void
     {
@@ -92,18 +91,18 @@ class DashboardController extends Controller
                 'data'    => $stats
             ]);
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to fetch statistics', ['error' => $e->getMessage()]);
+            error_log('Failed to fetch statistics: '.$e->getMessage());
             abort(500, 'Failed to fetch statistics');
         }
     }
 
     /**
-     * Fetch user notifications using Eloquent ORM.
+     * Fetch user notifications.
      */
     public function fetchNotifications(): void
     {
         try {
-            $notifications = Notification::where('user_id', Auth::id())
+            $notifications = Notification::where('user_id', $_SESSION['user_id'] ?? null)
                 ->latest()
                 ->get();
             http_response_code(200);
@@ -113,18 +112,18 @@ class DashboardController extends Controller
                 'data'    => ['notifications' => $notifications]
             ]);
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to fetch notifications', ['error' => $e->getMessage()]);
+            error_log('Failed to fetch notifications: '.$e->getMessage());
             abort(500, 'Failed to fetch notifications');
         }
     }
 
     /**
-     * Fetch user profile using Eloquent ORM.
+     * Fetch user profile.
      */
     public function fetchUserProfile(): void
     {
         try {
-            $profile = User::findOrFail(Auth::id());
+            $profile = User::findOrFail($_SESSION['user_id'] ?? null);
             http_response_code(200);
             echo json_encode([
                 'status'  => 'success',
@@ -132,7 +131,7 @@ class DashboardController extends Controller
                 'data'    => ['profile' => $profile]
             ]);
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to fetch user profile', ['error' => $e->getMessage()]);
+            error_log('Failed to fetch user profile: '.$e->getMessage());
             abort(500, 'Failed to fetch user profile');
         }
     }

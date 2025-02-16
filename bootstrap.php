@@ -1,17 +1,19 @@
 <?php
+// Ensure secure native PHP sessions
+ini_set('session.use_only_cookies', 1);
+ini_set('session.use_strict_mode', 1);
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_samesite', 'Lax');
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 // Load environment variables before anything else
 require_once __DIR__ . '/vendor/autoload.php';
 
 use Dotenv\Dotenv;
 $dotenv = Dotenv::createImmutable(__DIR__);
 $dotenv->load();
-
-// Bootstrap Laravel's Container for Facades
-use Illuminate\Container\Container as LaravelContainer;
-use Illuminate\Support\Facades\Facade;
-$laravelContainer = new LaravelContainer();
-LaravelContainer::setInstance($laravelContainer);
-Facade::setFacadeApplication($laravelContainer);
 
 // Include autoloader and SecurityHelper only once
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
@@ -35,24 +37,7 @@ try {
     die("❌ Database initialization failed. Check logs for details.\n");
 }
 
-// Register SessionManager using .env values and bind into Laravel's container
-use Illuminate\Session\SessionManager;
-use Illuminate\Config\Repository as Config;
-$sessionConfig = [
-    'driver'          => 'file',
-    'files'           => __DIR__ . '/../storage/framework/sessions',
-    'lifetime'        => getenv('SESSION_LIFETIME') ?: 120,
-    'expire_on_close' => getenv('SESSION_EXPIRE_ON_CLOSE') ?: false,
-    'encrypt'         => getenv('SESSION_ENCRYPT') ?: false,
-    'cookie'          => getenv('SESSION_COOKIE') ?: 'carfuse_session',
-    'path'            => getenv('SESSION_PATH') ?: '/',
-    'secure'          => getenv('SESSION_SECURE') ?: false,
-    'http_only'       => getenv('SESSION_HTTP_ONLY') ?: true,
-    'same_site'       => getenv('SESSION_SAME_SITE') ?: 'lax',
-];
-$sessionManager = new SessionManager(new Config(['session' => $sessionConfig]));
-$container->set(SessionManager::class, fn() => $sessionManager);
-$laravelContainer->instance('session', $sessionManager);
+// Remove Laravel's SessionManager initialization and related Config usage
 
 define('BASE_PATH', __DIR__);
 $configFiles = ['encryption', 'keymanager', 'filestorage'];

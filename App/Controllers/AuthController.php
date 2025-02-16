@@ -67,9 +67,8 @@ class AuthController extends Controller
     {
         header('Content-Type: application/json');
         try {
-            // Use array as-is if provided, otherwise call getParsedBody()
-            $data = is_array($request) ? $request : $request->getParsedBody(); // changed code
-
+            // Replace Laravel request parsing with native PHP.
+            $data = $_POST;
             $email = $data['email'] ?? '';
             $password = $data['password'] ?? '';
 
@@ -98,6 +97,7 @@ class AuthController extends Controller
                 'message' => 'User logged in',
                 'data' => [] // JWT not exposed in response
             ]);
+            exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
@@ -105,6 +105,7 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'data' => []
             ]);
+            exit;
         }
     }
 
@@ -115,9 +116,7 @@ class AuthController extends Controller
     {
         header('Content-Type: application/json');
         try {
-            // Use array as-is if provided, otherwise call getParsedBody()
-            $data = is_array($request) ? $request : $request->getParsedBody(); // changed code
-
+            $data = $_POST;
             $name = $data['name'] ?? '';
             $surname = $data['surname'] ?? '';
             $email = $data['email'] ?? '';
@@ -141,6 +140,7 @@ class AuthController extends Controller
                 'message' => 'User registered',
                 'data' => $result
             ]);
+            exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
@@ -148,6 +148,7 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'data' => []
             ]);
+            exit;
         }
     }
 
@@ -158,9 +159,7 @@ class AuthController extends Controller
     {
         header('Content-Type: application/json');
         try {
-            // Use array as-is if provided, otherwise call getParsedBody()
-            $data = is_array($request) ? $request : $request->getParsedBody(); // changed code
-
+            $data = $_POST;
             $email = $data['email'] ?? '';
 
             // Delegate password reset request logic to AuthService
@@ -172,6 +171,7 @@ class AuthController extends Controller
                 'message' => 'Password reset request processed',
                 'data' => $result
             ]);
+            exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
@@ -179,6 +179,7 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'data' => []
             ]);
+            exit;
         }
     }
 
@@ -218,6 +219,7 @@ class AuthController extends Controller
                     'message' => 'Token refreshed',
                     'data' => []
                 ]);
+                exit;
             } else {
                 throw new Exception('Invalid refresh token');
             }
@@ -228,6 +230,7 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'data' => []
             ]);
+            exit;
         }
     }
 
@@ -263,6 +266,7 @@ class AuthController extends Controller
                 'message' => 'User logged out',
                 'data' => []
             ]);
+            exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
@@ -270,6 +274,7 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'data' => []
             ]);
+            exit;
         }
     }
 
@@ -294,6 +299,7 @@ class AuthController extends Controller
                 'message' => 'User details fetched',
                 'data' => $userData
             ]);
+            exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
@@ -301,6 +307,7 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'data' => []
             ]);
+            exit;
         }
     }
 

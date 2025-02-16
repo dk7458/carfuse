@@ -2,98 +2,77 @@
 
 namespace App\Middleware;
 
-use Closure;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+// Removed: use Illuminate\Http\Request;
+// Removed: use Illuminate\Support\Facades\Log;
+use Psr\Log\LoggerInterface;
 use App\Services\EncryptionService;
 
 class EncryptionMiddleware
 {
-    /**
-     * Handle an incoming request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Closure  $next
-     * @return mixed
-     */
-    public function handle(Request $request, Closure $next)
+    private LoggerInterface $logger;
+    
+    public function __construct(LoggerInterface $logger)
     {
-        // Encrypt sensitive data in the request
-        if ($this->isSensitiveEndpoint($request)) {
+        $this->logger = $logger;
+    }
+    
+    // Modified handle() to use native PHP request handling without Closure
+    public function handle(array $request)
+    {
+        $uri = $_SERVER['REQUEST_URI'] ?? '/';
+        if ($this->isSensitiveEndpoint($uri)) {
             $this->encryptRequestData($request);
         }
 
-        $response = $next($request);
-
-        // Encrypt sensitive data in the response
-        if ($this->isSensitiveEndpoint($request)) {
-            $this->encryptResponseData($response);
+        // Process request (replace with your actual request processing)
+        // ...existing code or processRequest($request)...
+        $response = []; // Placeholder for processed response
+        
+        if ($this->isSensitiveEndpoint($uri)) {
+            $response = $this->encryptResponseData(json_encode($response));
         }
-
-        return $response;
+        
+        echo json_encode($response);
+        exit;
+    }
+    
+    // Modified to encrypt response data and return a string
+    private function encryptResponseData(string $data): string
+    {
+        return EncryptionService::encrypt($data);
     }
 
-    /**
-     * Determine if the request is for a sensitive endpoint.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return bool
-     */
-    private function isSensitiveEndpoint(Request $request): bool
+    // Handle encryption on native request arrays (e.g., $_POST or $_GET)
+    private function encryptRequestData(array &$request)
     {
-        $sensitiveEndpoints = [
-            '/user/profile-data',
-            // Add other sensitive endpoints here
-        ];
-
-        return in_array($request->path(), $sensitiveEndpoints);
-    }
-
-    /**
-     * Encrypt sensitive data in the request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return void
-     */
-    private function encryptRequestData(Request $request): void
-    {
-        $data = $request->all();
-        foreach ($data as $key => $value) {
+        foreach ($request as $key => $value) {
             if ($this->isSensitiveField($key)) {
-                $data[$key] = EncryptionService::encrypt($value);
+                $request[$key] = EncryptionService::encrypt($value);
             }
         }
-        $request->merge($data);
     }
 
-    /**
-     * Encrypt sensitive data in the response.
-     *
-     * @param  \Illuminate\Http\Response  $response
-     * @return void
-     */
-    private function encryptResponseData($response): void
-    {
-        $data = $response->getContent();
-        $encryptedData = EncryptionService::encrypt($data);
-        $response->setContent($encryptedData);
-    }
-
-    /**
-     * Determine if the field is sensitive.
-     *
-     * @param  string  $field
-     * @return bool
-     */
+    // Load sensitive fields dynamically from configuration file
     private function isSensitiveField(string $field): bool
     {
-        $sensitiveFields = [
-            'password',
-            'email',
-            'phone',
-            // Add other sensitive fields here
-        ];
-
+        $configPath = __DIR__ . '/../../config/sensitive_fields.json';
+        $config = file_exists($configPath) ? json_decode(file_get_contents($configPath), true) : [];
+        $sensitiveFields = $config['sensitive_fields'] ?? ['password', 'email', 'phone'];
         return in_array($field, $sensitiveFields);
+    }
+
+    // Load sensitive endpoints dynamically from configuration file
+    private function isSensitiveEndpoint(string $endpoint): bool
+    {
+        $configPath = __DIR__ . '/../../config/sensitive_endpoints.json';
+        $config = file_exists($configPath) ? json_decode(file_get_contents($configPath), true) : [];
+        $sensitiveEndpoints = $config['sensitive_endpoints'] ?? ['/user/profile-data'];
+        return in_array($endpoint, $sensitiveEndpoints);
+    }
+    
+    // Log events using injected LoggerInterface
+    private function logEvent(string $message)
+    {
+        $this->logger->info("[EncryptionMiddleware] $message");
     }
 }

@@ -25,23 +25,32 @@ class AdminController extends Controller
     public function getAllUsers()
     {
         $users = User::with('roles')->latest()->paginate(10);
-        return response()->json(['users' => $users], 200);
+        header('Content-Type: application/json');
+        http_response_code(200);
+        echo json_encode(['users' => $users]);
+        exit;
     }
 
     /**
      * ✅ Update a user's role.
      */
-    public function updateUserRole(Request $request, $userId)
+    public function updateUserRole($userId)
     {
-        $request->validate([
-            'role' => 'required|string|in:user,admin,manager'
-        ]);
-
+        // Replace Laravel validation with native checks.
+        $role = $_POST['role'] ?? '';
+        $allowedRoles = ['user', 'admin', 'manager'];
+        if (!$role || !in_array($role, $allowedRoles)) {
+            http_response_code(400);
+            echo json_encode(['message' => 'Invalid role']);
+            exit;
+        }
         $user = User::findOrFail($userId);
-        $user->update(['role' => $request->role]);
-
-        Log::channel('audit')->info("User role updated: {$user->email} to {$request->role}");
-        return response()->json(['message' => 'User role updated successfully'], 200);
+        $user->update(['role' => $role]);
+        error_log("AUDIT: User role updated: {$user->email} to {$role}");
+        header('Content-Type: application/json');
+        http_response_code(200);
+        echo json_encode(['message' => 'User role updated successfully']);
+        exit;
     }
 
     /**
@@ -51,9 +60,11 @@ class AdminController extends Controller
     {
         $user = User::findOrFail($userId);
         $user->delete();
-
-        Log::channel('audit')->warning("User deleted: {$user->email}");
-        return response()->json(['message' => 'User deleted successfully'], 200);
+        error_log("AUDIT: User deleted: {$user->email}");
+        header('Content-Type: application/json');
+        http_response_code(200);
+        echo json_encode(['message' => 'User deleted successfully']);
+        exit;
     }
 
     /**
@@ -70,29 +81,39 @@ class AdminController extends Controller
                 'latest_transactions' => TransactionLog::latest()->limit(5)->get(),
             ];
         });
-
-        return response()->json($dashboardData, 200);
+        header('Content-Type: application/json');
+        http_response_code(200);
+        echo json_encode($dashboardData);
+        exit;
     }
 
     /**
      * ✅ Create a new admin user.
      */
-    public function createAdmin(Request $request)
+    public function createAdmin()
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:8',
-        ]);
+        // Use native PHP POST handling.
+        $data = $_POST;
+        // Basic native validation.
+        if (!isset($data['name'], $data['email'], $data['password']) ||
+            !filter_var($data['email'], FILTER_VALIDATE_EMAIL) ||
+            strlen($data['password']) < 8
+        ) {
+            http_response_code(400);
+            echo json_encode(['message' => 'Invalid input']);
+            exit;
+        }
 
         $admin = Admin::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
             'role' => 'admin'
         ]);
-
-        Log::channel('audit')->info("New admin created: {$admin->email}");
-        return response()->json(['message' => 'Admin created successfully', 'admin' => $admin], 201);
+        error_log("AUDIT: New admin created: {$admin->email}");
+        header('Content-Type: application/json');
+        http_response_code(201);
+        echo json_encode(['message' => 'Admin created successfully', 'admin' => $admin]);
+        exit;
     }
 }

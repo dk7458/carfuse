@@ -4,7 +4,7 @@ namespace App\Services\Auth;
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-use Illuminate\Support\Facades\Cache;
+// Removed: use Illuminate\Support\Facades\Cache;
 use Psr\Log\LoggerInterface;
 
 class TokenService
@@ -46,18 +46,17 @@ class TokenService
         }
     }
 
-    // New method: validateToken() to reject expired tokens and log failures
     public function validateToken(string $token): ?array
     {
         try {
             $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
             if ($decoded->exp < time()) {
-                \logAuthFailure("Expired token for user id: " . ($decoded->sub ?? 'unknown'));
+                error_log("Expired token for user id: " . ($decoded->sub ?? 'unknown'));
                 return null;
             }
             return (array)$decoded;
         } catch (\Exception $e) {
-            \logAuthFailure("Token validation failed: " . $e->getMessage());
+            error_log("Token validation failed: " . $e->getMessage());
             return null;
         }
     }
@@ -80,7 +79,7 @@ class TokenService
         if ($decoded) {
             $userId = $decoded['sub'];
 
-            if (Cache::has("revoked_refresh_token_$refreshToken")) {
+            if (apcu_exists("revoked_refresh_token_$refreshToken")) {
                 return null;
             }
 
@@ -89,28 +88,27 @@ class TokenService
         return null;
     }
 
-    // New method: refreshToken() to securely generate a new access token using a valid refresh token
     public function refreshToken(string $refreshToken): ?string
     {
         try {
             $decoded = JWT::decode($refreshToken, new Key($this->refreshSecretKey, 'HS256'));
             if ($decoded->exp < time()) {
-                \logAuthFailure("Expired refresh token for user id: " . ($decoded->sub ?? 'unknown'));
+                error_log("Expired refresh token for user id: " . ($decoded->sub ?? 'unknown'));
                 return null;
             }
-            if (\Illuminate\Support\Facades\Cache::has("revoked_refresh_token_$refreshToken")) {
-                \logAuthFailure("Revoked refresh token attempted for user id: " . ($decoded->sub ?? 'unknown'));
+            if (apcu_exists("revoked_refresh_token_$refreshToken")) {
+                error_log("Revoked refresh token attempted for user id: " . ($decoded->sub ?? 'unknown'));
                 return null;
             }
             return $this->generateToken((object)['id' => $decoded->sub]);
         } catch (\Exception $e) {
-            \logAuthFailure("Refresh token validation failed: " . $e->getMessage());
+            error_log("Refresh token validation failed: " . $e->getMessage());
             return null;
         }
     }
 
     public function revokeToken(string $token): void
     {
-        Cache::put("revoked_refresh_token_$token", true, 604800);
+        apcu_store("revoked_refresh_token_$token", true, 604800);
     }
 }

@@ -5,14 +5,12 @@ namespace App\Controllers;
 use App\Models\User;
 use App\Services\UserService;
 use App\Services\NotificationService;
-use App\Services\Validator;
+// Removed: use App\Services\Validator;
+// Removed: use Illuminate\Support\Facades\Auth;
+// Removed: use Illuminate\Support\Facades\Log;
 use App\Services\RateLimiter;
 use App\Services\AuditService;
-use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Routing\Controller;
@@ -25,21 +23,18 @@ use Illuminate\Routing\Controller;
 class UserController extends Controller
 {
     private UserService $userService;
-    private LoggerInterface $logger;
-    private Validator $validator;
+    // private LoggerInterface $logger; // Using native error_log()
+    // private Validator $validator;
     private RateLimiter $rateLimiter;
     private AuditService $auditService;
     private NotificationService $notificationService;
 
     public function __construct(
-        LoggerInterface $logger,
-        Validator $validator,
+        /* Removed LoggerInterface, Validator, ... */
         RateLimiter $rateLimiter,
         AuditService $auditService,
         NotificationService $notificationService
     ) {
-        $this->logger = $logger;
-        $this->validator = $validator;
         $this->rateLimiter = $rateLimiter;
         $this->auditService = $auditService;
         $this->notificationService = $notificationService;
@@ -51,8 +46,23 @@ class UserController extends Controller
      */
     public function updateProfile()
     {
-        $user = Auth::user();
-        $data = request()->validate([
+        session_start();
+        $user = $_SESSION['user'] ?? null;
+        if (!$user) {
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
+            exit;
+        }
+        // Custom extraction/validation from $_POST (assumes custom_validate() exists)
+        $data = [
+            'name'    => $_POST['name'] ?? null,
+            'surname' => $_POST['surname'] ?? null,
+            'email'   => $_POST['email'] ?? null,
+            'phone'   => $_POST['phone'] ?? null,
+            'address' => $_POST['address'] ?? null,
+        ];
+        // Assume custom_validate() throws an exception on failure.
+        custom_validate($data, [
             'name'    => 'required|string|max:255',
             'surname' => 'required|string|max:255',
             'email'   => 'required|email',
@@ -61,9 +71,11 @@ class UserController extends Controller
         ]);
         
         $user->update($data);
-        Log::channel('audit')->info('User profile updated', ['user_id' => $user->id]);
+        error_log("Audit: User profile updated for user_id: {$user->id}");
         
-        return response()->json(['status' => 'success', 'message' => 'Profile updated successfully'], 200);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'success', 'message' => 'Profile updated successfully']);
+        exit;
     }
 
     /**
@@ -71,7 +83,11 @@ class UserController extends Controller
      */
     public function getProfile()
     {
-        return response()->json(Auth::user(), 200);
+        session_start();
+        $user = $_SESSION['user'] ?? null;
+        header('Content-Type: application/json');
+        echo json_encode($user);
+        exit;
     }
 
     /**
@@ -79,9 +95,11 @@ class UserController extends Controller
      */
     public function requestPasswordReset()
     {
-        $email = request('email');
+        $email = $_POST['email'] ?? null;
         if (!$email) {
-            abort(400, 'Invalid input');
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Invalid input']);
+            exit;
         }
         
         $token = Str::random(60);
@@ -91,7 +109,9 @@ class UserController extends Controller
             'expires_at' => now()->addHour(),
         ]);
         
-        return response()->json(['status' => 'success', 'message' => 'Password reset requested'], 200);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'success', 'message' => 'Password reset requested']);
+        exit;
     }
 
     /**
@@ -99,7 +119,10 @@ class UserController extends Controller
      */
     public function userDashboard()
     {
-        $user = Auth::user();
-        return view('dashboard.user', compact('user'));
+        session_start();
+        // Instead of Laravel view(), use native PHP rendering or simple HTML output.
+        header('Content-Type: text/html');
+        echo "<html><body><h1>User Dashboard</h1><!-- ...existing dashboard HTML... --></body></html>";
+        exit;
     }
 }

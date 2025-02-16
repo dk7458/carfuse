@@ -3,15 +3,13 @@
 namespace App\Services\Auth;
 
 use App\Models\User;
-use App\Helpers\DatabaseHelper; // added for database operations
+use App\Helpers\DatabaseHelper;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-use Illuminate\Support\Facades\Hash; // added for password checking
+// Removed: use Illuminate\Support\Facades\Hash;
 use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\SecurityHelper; // ✅ Updated: use correct namespace
-
-require_once __DIR__ . '/../../Helpers/SecurityHelper.php';
 
 class AuthService
 {
@@ -46,11 +44,18 @@ class AuthService
     public function login($email, $password)
     {
         $user = User::where('email', $email)->first();
-        if (!$user || !Hash::check($password, $user->password_hash)) {
-            // ✅ Call the helper function directly instead of using the incorrect namespace reference
-            logAuthFailure("Failed login attempt for email: " . $email);
+        // Use PHP's password_verify() instead of Hash::check()
+        if (!$user || !password_verify($password, $user->password_hash)) {
+            $this->logger->warning("Failed login attempt for email: " . $email);
             throw new Exception("Invalid credentials");
         }
+
+        // Ensure session is started and set session variables
+        if(session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION['user_id'] = $user->id;
+        $_SESSION['user_role'] = $user->role ?? 'user';
 
         $token = $this->tokenService->generateToken($user);
         $refreshToken = $this->tokenService->generateRefreshToken($user);
@@ -89,7 +94,7 @@ class AuthService
                 'token'      => password_hash($token, PASSWORD_BCRYPT),
                 'expires_at' => $expiresAt,
             ]);
-            SecurityHelper::logAuthFailure("[AuthService] Password reset requested for {$email}");
+            $this->logger->info("[AuthService] Password reset requested for {$email}");
         } catch (Exception $e) {
             $this->logger?->error("[AuthService] Failed to insert password reset: " . $e->getMessage());
             throw $e;
@@ -103,7 +108,13 @@ class AuthService
 
     public function validateToken($token)
     {
-        return $this->tokenService->validateToken($token);
+        try {
+            $decoded = JWT::decode($token, new Key($this->tokenService->jwtSecret, 'HS256'));
+            return (array)$decoded;
+        } catch (Exception $e) {
+            $this->logger->error("[AuthService] Invalid token: " . $e->getMessage());
+            return false;
+        }
     }
 
     public function getUserFromToken($token)
@@ -118,6 +129,11 @@ class AuthService
 
     public function logout()
     {
+        // Clear session data and session cookie for secure logout
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            setcookie(session_name(), '', time() - 42000, '/');
+        }
         session_destroy();
     }
 }

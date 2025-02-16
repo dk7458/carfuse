@@ -7,7 +7,6 @@ use App\Models\RefundLog;
 use App\Models\TransactionLog;
 use App\Models\InstallmentPlan;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Http\Request;
 
 /**
  * Payment Controller
@@ -42,45 +41,44 @@ class PaymentController extends Controller
     /**
      * Process a payment.
      */
-    public function processPayment(Request $request): void
+    public function processPayment(): void
     {
-        $data = $request->validate([
-            'user_id'         => 'required|integer',
-            'booking_id'      => 'required|integer',
-            'amount'          => 'required|numeric|min:0.01',
-            'payment_method_id'=> 'required|integer',
+        $data = $this->validateRequest($_POST, [
+            'user_id'          => 'required|integer',
+            'booking_id'       => 'required|integer',
+            'amount'           => 'required|numeric|min:0.01',
+            'payment_method_id' => 'required|integer',
         ]);
         try {
             $payment = Payment::create([
-                'booking_id'      => $data['booking_id'],
-                'user_id'         => $data['user_id'],
-                'amount'          => $data['amount'],
-                'payment_method'  => $data['payment_method_id'],
-                'status'          => 'completed'
+                'booking_id'     => $data['booking_id'],
+                'user_id'        => $data['user_id'],
+                'amount'         => $data['amount'],
+                'payment_method' => $data['payment_method_id'],
+                'status'         => 'completed'
             ]);
             // Update related booking status via Eloquent relationship
             $payment->booking()->update(['status' => 'paid']);
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Payment processed',
                 'data'    => ['payment' => $payment]
             ], 200);
         } catch (\Exception $e) {
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Payment processing failed',
                 'data'    => []
             ], 500);
         }
-        exit;
     }
 
     /**
      * Refund a payment.
      */
-    public function refundPayment(Request $request): void
+    public function refundPayment(): void
     {
-        $data = $request->validate([
+        $data = $this->validateRequest($_POST, [
             'transaction_id' => 'required|integer',
             'amount'         => 'required|numeric|min:0.01',
         ]);
@@ -90,13 +88,13 @@ class PaymentController extends Controller
                 'amount'         => $data['amount'],
                 'status'         => 'processed'
             ]);
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Refund processed',
                 'data'    => ['refund' => $refund]
             ], 200);
         } catch (\Exception $e) {
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Refund processing failed',
                 'data'    => []
@@ -107,28 +105,28 @@ class PaymentController extends Controller
     /**
      * Set up installment payments.
      */
-    public function setupInstallment(Request $request): void
+    public function setupInstallment(): void
     {
-        $data = $request->validate([
-            'user_id'          => 'required|integer',
-            'total_amount'     => 'required|numeric|min:0.01',
-            'installments'     => 'required|integer|min:2',
-            'payment_method_id'=> 'required|integer',
+        $data = $this->validateRequest($_POST, [
+            'user_id'           => 'required|integer',
+            'total_amount'      => 'required|numeric|min:0.01',
+            'installments'      => 'required|integer|min:2',
+            'payment_method_id' => 'required|integer',
         ]);
         try {
             $plan = InstallmentPlan::create([
-                'user_id'         => $data['user_id'],
-                'total_amount'    => $data['total_amount'],
-                'installments'    => $data['installments'],
-                'payment_method'  => $data['payment_method_id'],
+                'user_id'        => $data['user_id'],
+                'total_amount'   => $data['total_amount'],
+                'installments'   => $data['installments'],
+                'payment_method' => $data['payment_method_id'],
             ]);
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Installment plan created',
                 'data'    => ['installment_plan' => $plan]
             ], 200);
         } catch (\Exception $e) {
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Installment plan setup failed',
                 'data'    => []
@@ -143,16 +141,16 @@ class PaymentController extends Controller
     {
         try {
             $transactions = TransactionLog::with(['payment', 'booking'])
-                ->where('user_id', Auth::id())
+                ->where('user_id', $_SESSION['user_id'] ?? null)
                 ->latest()
                 ->get();
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Transactions fetched',
                 'data'    => ['transactions' => $transactions]
             ], 200);
         } catch (\Exception $e) {
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch user transactions',
                 'data'    => []
@@ -167,13 +165,13 @@ class PaymentController extends Controller
     {
         try {
             $details = TransactionLog::findOrFail($transactionId);
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Payment details fetched',
                 'data'    => ['details' => $details]
             ], 200);
         } catch (\Exception $e) {
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch payment details',
                 'data'    => []

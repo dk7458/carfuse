@@ -4,7 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
+// Removed: use Illuminate\Support\Facades\Log
 
 class EncryptionService
 {
@@ -20,7 +20,7 @@ class EncryptionService
         try {
             return Crypt::encryptString($data);
         } catch (\Exception $e) {
-            \Log::error("[EncryptionService] Encryption failed", ['error' => $e->getMessage()]);
+            error_log("[EncryptionService] Encryption failed: " . $e->getMessage());
             throw $e;
         }
     }
@@ -30,7 +30,7 @@ class EncryptionService
         try {
             return Crypt::decryptString($encryptedData);
         } catch (\Exception $e) {
-            \Log::error("[EncryptionService] Decryption failed", ['error' => $e->getMessage()]);
+            error_log("[EncryptionService] Decryption failed: " . $e->getMessage());
             return null;
         }
     }
@@ -47,7 +47,7 @@ class EncryptionService
             Storage::put($outputFile, $encrypted);
             return true;
         } catch (\Exception $e) {
-            Log::error('File encryption failed', ['error' => $e->getMessage()]);
+            error_log("File encryption failed: " . $e->getMessage());
             return false;
         }
     }
@@ -60,7 +60,7 @@ class EncryptionService
             Storage::put($outputFile, $decrypted);
             return true;
         } catch (\Exception $e) {
-            Log::error('File decryption failed', ['error' => $e->getMessage()]);
+            error_log("File decryption failed: " . $e->getMessage());
             return false;
         }
     }

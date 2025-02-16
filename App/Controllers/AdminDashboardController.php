@@ -31,9 +31,10 @@ class AdminDashboardController
             });
             $recentBookings = Booking::with('user')->latest()->limit(5)->get();
 
-            view('admin/dashboard', ['metrics' => $metrics, 'recentBookings' => $recentBookings]);
+            extract(compact('metrics', 'recentBookings'));
+            include BASE_PATH . '/public/views/admin/dashboard.php';
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to load admin dashboard', ['error' => $e->getMessage()]);
+            error_log("DASHBOARD ERROR: " . $e->getMessage());
             http_response_code(500);
             echo 'Error loading the dashboard. Please try again later.';
         }
@@ -59,6 +60,7 @@ class AdminDashboardController
             });
             $recentBookings = Booking::with('user')->latest()->limit(5)->get();
 
+            header('Content-Type: application/json');
             http_response_code(200);
             echo json_encode([
                 'status'  => 'success',
@@ -68,14 +70,16 @@ class AdminDashboardController
                     'recent_bookings' => $recentBookings,
                 ]
             ]);
+            exit;
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to fetch dashboard data', ['error' => $e->getMessage()]);
+            error_log("DASHBOARD ERROR: " . $e->getMessage());
             http_response_code(500);
             echo json_encode([
                 'status'  => 'error',
                 'message' => 'Failed to fetch dashboard data',
                 'data'    => []
             ]);
+            exit;
         }
     }
 }

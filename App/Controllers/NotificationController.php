@@ -4,7 +4,6 @@ namespace App\Controllers;
 
 use App\Models\Notification;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Http\Request;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -22,20 +21,20 @@ class NotificationController extends Controller
     /**
      * Display user notifications.
      */
-    public function viewNotifications(Request $request)
+    public function viewNotifications()
     {
         try {
             $notifications = Notification::with('user')
-                ->where('user_id', Auth::id())
+                ->where('user_id', $_SESSION['user_id'] ?? null)
                 ->latest()
                 ->get();
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notifications loaded',
                 'data'    => ['notifications' => $notifications]
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'An error occurred while fetching notifications',
                 'data'    => []
@@ -50,16 +49,16 @@ class NotificationController extends Controller
     {
         try {
             $notifications = Notification::with('user')
-                ->where('user_id', Auth::id())
+                ->where('user_id', $_SESSION['user_id'] ?? null)
                 ->latest()
                 ->get();
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notifications fetched',
                 'data'    => ['notifications' => $notifications]
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch user notifications',
                 'data'    => []
@@ -74,17 +73,17 @@ class NotificationController extends Controller
     {
         try {
             $notifications = Notification::with('user')
-                ->where('user_id', Auth::id())
+                ->where('user_id', $_SESSION['user_id'] ?? null)
                 ->where('is_read', false)
                 ->latest()
                 ->get();
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notifications fetched',
                 'data'    => ['notifications' => $notifications]
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch notifications',
                 'data'    => []
@@ -95,22 +94,22 @@ class NotificationController extends Controller
     /**
      * Mark a notification as read.
      */
-    public function markNotificationAsRead(Request $request)
+    public function markNotificationAsRead()
     {
-        $data = $request->validate([
+        $data = $this->validateRequest($_POST, [
             'notification_id' => 'required|integer'
         ]);
 
         try {
             $notification = Notification::findOrFail($data['notification_id']);
             $notification->update(['is_read' => true]);
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notification marked as read',
                 'data'    => []
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to mark notification as read',
                 'data'    => []
@@ -121,22 +120,22 @@ class NotificationController extends Controller
     /**
      * Delete a notification.
      */
-    public function deleteNotification(Request $request)
+    public function deleteNotification()
     {
-        $data = $request->validate([
+        $data = $this->validateRequest($_POST, [
             'notification_id' => 'required|integer'
         ]);
 
         try {
             $notification = Notification::findOrFail($data['notification_id']);
             $notification->delete();
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notification deleted',
                 'data'    => []
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to delete notification',
                 'data'    => []
@@ -147,9 +146,9 @@ class NotificationController extends Controller
     /**
      * Send a notification.
      */
-    public function sendNotification(Request $request)
+    public function sendNotification()
     {
-        $data = $request->validate([
+        $data = $this->validateRequest($_POST, [
             'user_id' => 'required|integer',
             'type'    => 'required|in:email,sms,webhook,push',
             'message' => 'required|string|max:1000',
@@ -162,17 +161,17 @@ class NotificationController extends Controller
                 'user_id' => $data['user_id'],
                 'type'    => $data['type'],
                 'message' => $data['message'],
-                'sent_at' => now(),
+                'sent_at' => date('Y-m-d H:i:s'),
                 'is_read' => false,
             ]);
             // Optionally dispatch via queue or any external channel here.
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notification sent successfully',
                 'data'    => ['notification' => $notification]
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to send notification',
                 'data'    => []

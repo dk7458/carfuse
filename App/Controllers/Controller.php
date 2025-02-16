@@ -15,6 +15,10 @@ class Controller
     public function __construct(LoggerInterface $logger)
     {
         $this->logger = $logger;
+        // Ensure session has started
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
     }
 
     /**
@@ -42,8 +46,10 @@ class Controller
      */
     protected function checkAuth(): void
     {
-        session_start();
-        if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? null) !== 'admin') {
             $this->jsonResponse(['status' => 'error', 'message' => 'Unauthorized'], 403);
         }
     }

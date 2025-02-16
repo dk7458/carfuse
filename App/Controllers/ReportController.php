@@ -5,7 +5,7 @@ namespace App\Controllers;
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\User;
-use Illuminate\Http\Request;
+// Removed: use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use PDF;
 
@@ -14,20 +14,18 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 class ReportController extends Controller
 {
     private ReportService $reportService;
-    private Validator $validator;
+    // Removed: private Validator $validator;
     private NotificationService $notificationService;
-    private LoggerInterface $logger;
+    // Removed: private LoggerInterface $logger;
 
     public function __construct(
         ReportService $reportService,
-        Validator $validator,
+        /* Removed Validator */ $validator,
         NotificationService $notificationService,
-        LoggerInterface $logger
+        /* Removed LoggerInterface */ $logger
     ) {
         $this->reportService = $reportService;
-        $this->validator = $validator;
         $this->notificationService = $notificationService;
-        $this->logger = $logger;
     }
 
     /**
@@ -38,12 +36,12 @@ class ReportController extends Controller
         try {
             $data = ['view' => 'admin/reports'];
             http_response_code(200);
-            echo json_encode(['status' => 'success','message' => 'Report dashboard loaded','data' => $data]);
+            echo json_encode(['status' => 'success', 'message' => 'Report dashboard loaded', 'data' => $data]);
         } catch (\Exception $e) {
-            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
-            $this->logger->error('Failed to load admin report dashboard', ['error' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            error_log("Error: Failed to load admin report dashboard, error: " . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['status' => 'error','message' => 'Failed to load report dashboard','data' => []]);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load report dashboard', 'data' => []]);
         }
         exit;
     }
@@ -51,20 +49,21 @@ class ReportController extends Controller
     /**
      * Generate Report for Admin using Eloquent ORM.
      */
-    public function generateReport(Request $request)
+    public function generateReport()
     {
-        $validated = $request->validate([
-            'report_type'          => 'required|in:bookings,payments,users',
-            'date_range.start'     => 'required|date',
-            'date_range.end'       => 'required|date',
-            'filters'              => 'array',
-            'format'               => 'required|in:csv,pdf',
-        ]);
+        // Replace Request validation with native PHP validation
+        $validated = $_POST; // Assumes JSON-decoded input or form data
 
-        $start = $validated['date_range']['start'];
-        $end = $validated['date_range']['end'];
-        $format = $validated['format'];
-        $reportType = $validated['report_type'];
+        $start      = $validated['date_range']['start'] ?? null;
+        $end        = $validated['date_range']['end'] ?? null;
+        $format     = $validated['format'] ?? null;
+        $reportType = $validated['report_type'] ?? null;
+
+        if (!$start || !$end || !$format || !$reportType) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Missing required parameters']);
+            exit;
+        }
 
         switch ($reportType) {
             case 'bookings':
@@ -84,18 +83,22 @@ class ReportController extends Controller
                     ->toArray();
                 break;
             default:
-                return response()->json(['status' => 'error', 'message' => 'Invalid report type'], 400);
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Invalid report type']);
+                exit;
         }
 
         $filename = "{$reportType}_report_" . date('YmdHis');
         if ($format === 'csv') {
-            // Assumes ReportExport implements necessary interfaces (e.g., FromArray)
+            // Assuming Excel::download now returns file content in native PHP
             return Excel::download(new \App\Exports\ReportExport($data), $filename . ".csv");
         } elseif ($format === 'pdf') {
             $pdf = PDF::loadView('reports.template', ['data' => $data]);
             return $pdf->download($filename . ".pdf");
         } else {
-            return response()->json(['status' => 'error', 'message' => 'Unsupported format'], 400);
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Unsupported format']);
+            exit;
         }
     }
 
@@ -107,12 +110,12 @@ class ReportController extends Controller
         try {
             $data = ['view' => 'user/reports'];
             http_response_code(200);
-            echo json_encode(['status' => 'success','message' => 'User report dashboard loaded','data' => $data]);
+            echo json_encode(['status' => 'success', 'message' => 'User report dashboard loaded', 'data' => $data]);
         } catch (\Exception $e) {
-            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
-            $this->logger->error('Failed to load user report dashboard', ['error' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            error_log("Error: Failed to load user report dashboard, error: " . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['status' => 'error','message' => 'Failed to load report dashboard','data' => []]);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load report dashboard', 'data' => []]);
         }
         exit;
     }
@@ -120,21 +123,20 @@ class ReportController extends Controller
     /**
      * Generate Report for a User using Eloquent ORM.
      */
-    public function generateUserReport(Request $request)
+    public function generateUserReport()
     {
-        $validated = $request->validate([
-            'user_id'              => 'required|integer',
-            'report_type'          => 'required|in:bookings,payments',
-            'date_range.start'     => 'required|date',
-            'date_range.end'       => 'required|date',
-            'format'               => 'required|in:csv,pdf',
-        ]);
+        $validated = $_POST;
+        $userId     = $validated['user_id'] ?? null;
+        $start      = $validated['date_range']['start'] ?? null;
+        $end        = $validated['date_range']['end'] ?? null;
+        $format     = $validated['format'] ?? null;
+        $reportType = $validated['report_type'] ?? null;
 
-        $userId = $validated['user_id'];
-        $start  = $validated['date_range']['start'];
-        $end    = $validated['date_range']['end'];
-        $format = $validated['format'];
-        $reportType = $validated['report_type'];
+        if (!$userId || !$start || !$end || !$format || !$reportType) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Missing required parameters']);
+            exit;
+        }
 
         switch ($reportType) {
             case 'bookings':
@@ -151,7 +153,9 @@ class ReportController extends Controller
                     ->toArray();
                 break;
             default:
-                return response()->json(['status' => 'error', 'message' => 'Invalid report type'], 400);
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Invalid report type']);
+                exit;
         }
 
         $filename = "user_{$userId}_{$reportType}_report_" . date('YmdHis');
@@ -161,7 +165,9 @@ class ReportController extends Controller
             $pdf = PDF::loadView('reports.template', ['data' => $data]);
             return $pdf->download($filename . ".pdf");
         } else {
-            return response()->json(['status' => 'error', 'message' => 'Unsupported format'], 400);
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Unsupported format']);
+            exit;
         }
     }
 
@@ -173,7 +179,7 @@ class ReportController extends Controller
         try {
             if (!file_exists($filePath)) {
                 http_response_code(404);
-                echo json_encode(['status' => 'error','message' => 'Report not found','data' => []]);
+                echo json_encode(['status' => 'error', 'message' => 'Report not found', 'data' => []]);
                 return;
             }
 
@@ -187,10 +193,10 @@ class ReportController extends Controller
             readfile($filePath);
             exit;
         } catch (\Exception $e) {
-            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
-            $this->logger->error('Failed to download report', ['error' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            error_log("Error: Failed to download report, error: " . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['status' => 'error','message' => 'Failed to download report','data' => []]);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to download report', 'data' => []]);
         }
     }
 }

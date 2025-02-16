@@ -37,10 +37,11 @@ class UserService
             'address' => 'required|string|max:255',
         ];
 
-        // Pass the injected logger to the Validator
-        $validator = new Validator($this->logger);
-        if (!$validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $validator->errors()];
+        // Replace Laravel Validator instantiation with custom static validation
+        try {
+            Validator::validate($data, $rules);
+        } catch (Exception $e) {
+            return ['status' => 'error', 'message' => $e->getMessage()];
         }
 
         try {

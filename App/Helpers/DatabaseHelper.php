@@ -3,10 +3,10 @@
 namespace App\Helpers;
 
 use Illuminate\Database\Capsule\Manager as Capsule;
-use Illuminate\Events\Dispatcher;
-use Illuminate\Container\Container;
 use Dotenv\Dotenv;
 use Exception;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
 
 /**
  * DatabaseHelper - Centralized Database Manager
@@ -39,7 +39,25 @@ class DatabaseHelper
     }
 
     /**
-     * ✅ Initialize Database Connection
+     * ✅ Retrieve Database Configuration Dynamically
+     */
+    private static function getDatabaseConfig($prefix)
+    {
+        return [
+            'driver'    => 'mysql',
+            'host'      => $_ENV["{$prefix}_DB_HOST"] ?? 'localhost',
+            'port'      => $_ENV["{$prefix}_DB_PORT"] ?? '3306',
+            'database'  => $_ENV["{$prefix}_DB_DATABASE"] ?? '',
+            'username'  => $_ENV["{$prefix}_DB_USERNAME"] ?? '',
+            'password'  => $_ENV["{$prefix}_DB_PASSWORD"] ?? '',
+            'charset'   => $_ENV["{$prefix}_DB_CHARSET"] ?? 'utf8mb4',
+            'collation' => $_ENV["{$prefix}_DB_COLLATION"] ?? 'utf8mb4_unicode_ci',
+            'prefix'    => '',
+        ];
+    }
+
+    /**
+     * ✅ Initialize Database Connection Without Laravel's Event Dispatcher
      */
     private static function initializeDatabase(&$capsule, array $config, string $connectionName)
     {
@@ -49,7 +67,7 @@ class DatabaseHelper
             try {
                 $capsule = new Capsule();
                 $capsule->addConnection($config, $connectionName);
-                $capsule->setEventDispatcher(new Dispatcher(new Container));
+                // Removed Event dispatcher since we're not using Laravel events.
 
                 // ✅ Ensure Capsule is Set as Global Once
                 if (!self::$initialized) {
@@ -58,12 +76,20 @@ class DatabaseHelper
                     self::$initialized = true;
                 }
 
-                self::logEvent('database', "✅ {$connectionName} Database connected successfully: " . json_encode($config));
+                self::logEvent('database', "✅ {$connectionName} Database connected successfully.");
             } catch (Exception $e) {
-                self::logEvent('errors', "❌ {$connectionName} Database connection failed: " . $e->getMessage());
-                die(json_encode(["error" => "{$connectionName} database connection failed"]));
+                self::handleDatabaseError($connectionName, $e);
             }
         }
+    }
+
+    /**
+     * ✅ Handle Database Connection Failures Gracefully
+     */
+    private static function handleDatabaseError(string $connectionName, Exception $e)
+    {
+        self::logEvent('errors', "❌ {$connectionName} Database connection failed: " . $e->getMessage());
+        die(json_encode(["error" => "{$connectionName} database connection failed"]));
     }
 
     /**
@@ -72,17 +98,7 @@ class DatabaseHelper
     public static function getInstance(): Capsule
     {
         if (self::$capsule === null) {
-            self::initializeDatabase(self::$capsule, [
-                'driver'    => 'mysql',
-                'host'      => $_ENV['DB_HOST'] ?? 'localhost',
-                'port'      => $_ENV['DB_PORT'] ?? '3306',
-                'database'  => $_ENV['DB_DATABASE'] ?? '',
-                'username'  => $_ENV['DB_USERNAME'] ?? '',
-                'password'  => $_ENV['DB_PASSWORD'] ?? '',
-                'charset'   => $_ENV['DB_CHARSET'] ?? 'utf8mb4',
-                'collation' => $_ENV['DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
-                'prefix'    => '',
-            ], 'default');
+            self::initializeDatabase(self::$capsule, self::getDatabaseConfig('DB'), 'default');
         }
 
         return self::$capsule;
@@ -94,29 +110,20 @@ class DatabaseHelper
     public static function getSecureInstance(): Capsule
     {
         if (self::$secureCapsule === null) {
-            self::initializeDatabase(self::$secureCapsule, [
-                'driver'    => 'mysql',
-                'host'      => $_ENV['SECURE_DB_HOST'] ?? 'localhost',
-                'port'      => $_ENV['SECURE_DB_PORT'] ?? '3306',
-                'database'  => $_ENV['SECURE_DB_DATABASE'] ?? '',
-                'username'  => $_ENV['SECURE_DB_USERNAME'] ?? '',
-                'password'  => $_ENV['SECURE_DB_PASSWORD'] ?? '',
-                'charset'   => $_ENV['SECURE_DB_CHARSET'] ?? 'utf8mb4',
-                'collation' => $_ENV['SECURE_DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
-                'prefix'    => '',
-            ], 'secure');
+            self::initializeDatabase(self::$secureCapsule, self::getDatabaseConfig('SECURE_DB'), 'secure');
         }
 
         return self::$secureCapsule;
     }
 
     /**
-     * ✅ Log Events
+     * ✅ Log Events Using Monolog
      */
     private static function logEvent($category, $message)
     {
         $logFilePath = __DIR__ . "/../../logs/{$category}.log";
-        $timestamp = date('Y-m-d H:i:s');
-        file_put_contents($logFilePath, "[$timestamp] $message\n", FILE_APPEND);
+        $log = new Logger('database');
+        $log->pushHandler(new StreamHandler($logFilePath, Logger::DEBUG));
+        $log->info($message);
     }
 }

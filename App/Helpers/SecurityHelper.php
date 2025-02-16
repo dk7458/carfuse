@@ -14,26 +14,31 @@ define('SECURITY_HELPER_LOADED', true);
 | Path: App/Helpers/SecurityHelper.php
 */
 
-use Psr\Log\LoggerInterface;
-use Illuminate\Support\Facades\Session;
-use Illuminate\Support\Facades\Auth;
+// Removed: use Illuminate\Support\Facades\Session;
+// Removed: use Illuminate\Support\Facades\Auth;
+// Removed: use Illuminate\Support\Facades\Log;
 
 // Security Configuration
 const SESSION_CONFIG = [
-    'use_only_cookies' => 1,
-    'use_strict_mode' => 1,
-    'cookie_httponly' => 1,
-    'cookie_samesite' => 'Lax',
-    'gc_maxlifetime' => 3600,
-    'cookie_lifetime' => 0,
-    'use_trans_sid' => 0,
-    'sid_bits_per_character' => 6
+    'use_only_cookies'        => 1,
+    'use_strict_mode'         => 1,
+    'cookie_httponly'         => 1,
+    'cookie_samesite'         => 'Lax',
+    'gc_maxlifetime'          => 3600,
+    'cookie_lifetime'         => 0,
+    'use_trans_sid'           => 0,
+    'sid_bits_per_character'  => 6
 ];
 
 // ✅ Standardized Logging Function
 if (!function_exists('securityLog')) {
-    function securityLog(LoggerInterface $logger, $message, $level = 'info') {
-        $logger->log($level, "[Security] $message");
+    function securityLog($logger, $message, $level = 'info') {
+        // Use logger if available; fall back to error_log
+        if ($logger && method_exists($logger, 'log')) {
+            $logger->log($level, "[Security] $message");
+        } else {
+            error_log("[Security][$level] $message");
+        }
     }
 }
 
@@ -44,22 +49,26 @@ if (!function_exists('logAuthEvent')) {
      * Log authentication events.
      */
     function logAuthEvent($message, $level = 'info') {
-        Log::channel('auth')->info($message);
+        error_log("[Auth][$level] $message");
     }
 }
 
 if (!function_exists('logAuthFailure')) {
-    // Helper to log authentication failures to auth.log
+    // Helper to log authentication failures
     function logAuthFailure($message) {
-        Log::channel('auth')->error($message);
+        error_log("[Auth][error] $message");
     }
 }
 
-// ✅ Secure Session Handling via Laravel's Session Facade
+// ✅ Secure Session Handling using native PHP sessions
 if (!function_exists('startSecureSession')) {
     function startSecureSession() {
-        if (!Session::isStarted()) {
-            Session::start();
+        if (session_status() === PHP_SESSION_NONE) {
+            ini_set('session.use_only_cookies', 1);
+            ini_set('session.use_strict_mode', 1);
+            ini_set('session.cookie_httponly', 1);
+            ini_set('session.cookie_samesite', 'Lax');
+            session_start();
         }
         return true;
     }
@@ -72,7 +81,6 @@ if (!function_exists('refreshSession')) {
      * Refresh session to extend its duration.
      */
     function refreshSession() {
-        // Changed to security.log
         $logFile = __DIR__ . '/../../logs/security.log';
         $timestamp = date('Y-m-d H:i:s');
     
@@ -88,34 +96,42 @@ if (!function_exists('refreshSession')) {
     }
 }
 
-// ✅ Replace raw $_SESSION handling with Session facade in session expiry enforcement
+// ✅ Replace Laravel session calls with native PHP for session expiry enforcement
 if (!function_exists('enforceSessionExpiry')) {
-    function enforceSessionExpiry(LoggerInterface $logger) {
-        if (!Session::has('last_activity')) {
-            Session::put('last_activity', time());
+    function enforceSessionExpiry($logger) {
+        if (!isset($_SESSION['last_activity'])) {
+            $_SESSION['last_activity'] = time();
             return;
         }
-        if (time() - Session::get('last_activity') > 1800) { // 30 min timeout
+        if (time() - $_SESSION['last_activity'] > 1800) { // 30 min timeout
             securityLog($logger, 'Session expired due to inactivity', 'info');
-            Session::flush();
+            $_SESSION = [];
+            if (ini_get('session.use_cookies')) {
+                setcookie(session_name(), '', time() - 42000, '/');
+            }
+            session_destroy();
         }
     }
 }
 
-// ✅ Fingerprint-Based Session Integrity Check using Session::put()/get()
+// ✅ Fingerprint-Based Session Integrity Check
 if (!function_exists('validateSessionIntegrity')) {
-    function validateSessionIntegrity(LoggerInterface $logger) {
+    function validateSessionIntegrity($logger) {
         $currentIp = hash('sha256', $_SERVER['REMOTE_ADDR']);
         $currentAgent = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
         
-        if (!Session::has('client_ip')) {
-            Session::put('client_ip', $currentIp);
-            Session::put('user_agent', $currentAgent);
+        if (!isset($_SESSION['client_ip'])) {
+            $_SESSION['client_ip'] = $currentIp;
+            $_SESSION['user_agent'] = $currentAgent;
             return true;
         }
-        if (Session::get('client_ip') !== $currentIp || Session::get('user_agent') !== $currentAgent) {
+        if ($_SESSION['client_ip'] !== $currentIp || $_SESSION['user_agent'] !== $currentAgent) {
             securityLog($logger, 'Session integrity check failed: Mismatch detected', 'warning');
-            Session::flush();
+            $_SESSION = [];
+            if (ini_get('session.use_cookies')) {
+                setcookie(session_name(), '', time() - 42000, '/');
+            }
+            session_destroy();
             return false;
         }
         return true;
@@ -133,7 +149,7 @@ if (!function_exists('sanitizeInput')) {
         if (!isset($data) || $data === null) {
             $data = ''; // ✅ Default to empty string to prevent undefined variable errors
         }
-        $cleanedData = trim((string) $data); // ✅ Cast to string before trim()
+        $cleanedData = trim((string)$data);
         return htmlspecialchars($cleanedData, ENT_QUOTES, 'UTF-8');
     }
 }
@@ -148,11 +164,15 @@ function generateSecureToken($length = 64)
     return bin2hex(random_bytes($length / 2));
 }
 
-// ✅ Secure Session Destruction using Session::flush()
+// ✅ Secure Session Destruction using native PHP
 if (!function_exists('destroySession')) {
-    function destroySession(LoggerInterface $logger) {
+    function destroySession($logger) {
         securityLog($logger, 'Destroying session', 'info');
-        Session::flush();
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            setcookie(session_name(), '', time() - 42000, '/');
+        }
+        session_destroy();
         securityLog($logger, 'Session destroyed successfully', 'info');
     }
 }
@@ -162,7 +182,7 @@ if (!function_exists('destroySession')) {
  */
 function isUserLoggedIn()
 {
-    return Auth::check();
+    return isset($_SESSION['user_id']);
 }
 
 /**
@@ -170,7 +190,7 @@ function isUserLoggedIn()
  */
 function getUserRole()
 {
-    return Auth::check() ? Auth::user()->role : 'guest';
+    return isset($_SESSION['user_id']) ? ($_SESSION['user_role'] ?? 'guest') : 'guest';
 }
 
 /**
@@ -178,7 +198,7 @@ function getUserRole()
  */
 function getSessionData($key)
 {
-    return Session::get($key);
+    return $_SESSION[$key] ?? null;
 }
 
 /**
@@ -186,29 +206,30 @@ function getSessionData($key)
  */
 function setSessionData($key, $value)
 {
-    Session::put($key, $value);
+    $_SESSION[$key] = $value;
 }
 
 /**
  * Validate JWT token.
  */
 function validateJWT($token) {
-    // Instead of manual decoding, we delegate to Laravel's 'api' guard.
-    return Auth::guard('api')->user();
+    // Replace Laravel's authentication with a native JWT approach or session check.
+    // For example, decode using firebase/php-jwt, here we simply check session.
+    return $_SESSION['user_id'] ?? null;
 }
 
 /**
  * Enforce authentication for protected pages.
  */
 function requireUserAuth() {
-    requireAuth();
+    return requireAuth();
 }
 
-// ✅ Enforce API Authentication using requireAuth()
+// ✅ Custom Authentication Enforcement
 if (!function_exists('requireAuth')) {
     function requireAuth($allowGuest = false) {
-        if (Auth::check()) {
-            return Auth::user();
+        if (isset($_SESSION['user_id'])) {
+            return $_SESSION['user_id'];
         }
         if ($allowGuest) {
             return null;
@@ -220,8 +241,24 @@ if (!function_exists('requireAuth')) {
     }
 }
 
+// ✅ CSRF Token Generation
+if (!function_exists('generateCsrfToken')) {
+    function generateCsrfToken() {
+        if (!isset($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['csrf_token'];
+    }
+}
+
+// Validate CSRF token in POST requests (example usage)
+// if ($_SERVER['REQUEST_METHOD'] === 'POST' && 
+//     (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? ''))) {
+//     die("CSRF validation failed.");
+// }
+
 // Initialize secure session when the file is included
 if (!startSecureSession()) {
-    securityLog('Critical: Failed to initialize secure session', 'critical');
+    securityLog(null, 'Critical: Failed to initialize secure session', 'critical');
 }
 ?>

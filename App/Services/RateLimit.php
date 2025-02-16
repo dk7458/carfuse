@@ -2,8 +2,7 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Log;
+// ...existing imports removed (no RateLimiter or Log) ...
 
 /**
  * Rate Limiter Service
@@ -16,8 +15,15 @@ class RateLimit
 
     public function isRateLimited(string $ip): bool
     {
-        if (RateLimiter::tooManyAttempts($ip, 5)) {
-            Log::channel('security')->warning("[RateLimit] Rate limit exceeded for IP: {$ip}");
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (!isset($_SESSION['rate_limit'])) {
+            $_SESSION['rate_limit'] = [];
+        }
+        $attempts = $_SESSION['rate_limit'][$ip] ?? 0;
+        if ($attempts >= 5) {
+            error_log("[RateLimit] Rate limit exceeded for IP: {$ip}");
             return true;
         }
         return false;
@@ -25,7 +31,13 @@ class RateLimit
 
     public function recordFailedAttempt(string $ip): void
     {
-        RateLimiter::hit($ip, 900); // 900 seconds = 15 minutes
-        Log::channel('security')->warning("[RateLimit] Recorded failed attempt for IP: {$ip}");
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (!isset($_SESSION['rate_limit'])) {
+            $_SESSION['rate_limit'] = [];
+        }
+        $_SESSION['rate_limit'][$ip] = ($_SESSION['rate_limit'][$ip] ?? 0) + 1;
+        error_log("[RateLimit] Recorded failed attempt for IP: {$ip}");
     }
 }

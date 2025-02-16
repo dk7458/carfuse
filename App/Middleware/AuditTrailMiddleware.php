@@ -5,6 +5,9 @@ namespace AuditManager\Middleware;
 use AuditManager\Services\AuditService;
 use Psr\Log\LoggerInterface;
 
+/**
+ * AuditTrailMiddleware - Logs user actions for audit tracking.
+ */
 class AuditTrailMiddleware
 {
     private AuditService $auditService;
@@ -17,38 +20,50 @@ class AuditTrailMiddleware
     }
 
     /**
-     * Handle an incoming request.
-     * Logs relevant details to the audit trail.
+     * Handle an incoming request and log relevant details.
+     *
+     * @param array $request The request data.
+     * @param callable $next The next middleware function.
      */
     public function handle(array $request, callable $next)
     {
         try {
-            // Extract relevant data from the request
-            $action = $this->determineAction($request);
-            $details = json_encode($request); // Sanitize or limit this as necessary
-            $userId = $request['user_id'] ?? null;
-            $bookingId = $request['booking_id'] ?? null;
+            // Extract request details
+            $action = $this->determineAction();
+            $details = json_encode($this->sanitizeRequestData($request));
+            $userId = $_SESSION['user_id'] ?? null;
             $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 
             // Log the action
-            $this->auditService->log($action, $details, $userId, $bookingId, $ipAddress);
+            $this->auditService->log($action, $details, $userId, $ipAddress);
 
             // Continue to the next middleware/controller
             return $next($request);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to log action in audit trail', ['error' => $e->getMessage()]);
-            // Allow the request to proceed even if logging fails
-            return $next($request);
+            $this->logger->error('[AuditTrail] Failed to log action', ['error' => $e->getMessage()]);
+            return $next($request); // Allow the request to proceed even if logging fails
         }
     }
 
     /**
-     * Determine the action based on the request.
+     * Determine the action performed based on the request.
+     *
+     * @return string
      */
-    private function determineAction(array $request): string
+    private function determineAction(): string
     {
-        // Determine action based on the request (e.g., URL, HTTP method, etc.)
-        $action = $_SERVER['REQUEST_METHOD'] . ' ' . ($_SERVER['REQUEST_URI'] ?? 'unknown');
-        return $action;
+        return $_SERVER['REQUEST_METHOD'] . ' ' . ($_SERVER['REQUEST_URI'] ?? 'unknown');
+    }
+
+    /**
+     * Sanitize request data before logging.
+     *
+     * @param array $request The raw request data.
+     * @return array The sanitized request data.
+     */
+    private function sanitizeRequestData(array $request): array
+    {
+        unset($request['password'], $request['token']); // Remove sensitive fields
+        return $request;
     }
 }
