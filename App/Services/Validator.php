@@ -66,4 +66,18 @@ class Validator
             }
         }
     }
+
+    /**
+     * Validate JSON structure by checking that required fields are present and non-empty.
+     */
+    public function validateJsonStructure(array $data, array $requiredFields): bool
+    {
+        $this->errors = [];
+        foreach ($requiredFields as $field) {
+            if (!isset($data[$field]) || empty($data[$field])) {
+                $this->errors[$field][] = 'Missing or empty field.';
+            }
+        }
+        return empty($this->errors);
+    }
 }

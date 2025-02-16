@@ -2,24 +2,33 @@
 === public/.htaccess ===
 RewriteEngine On
 
-# ✅ Allow direct access to API files
-RewriteCond %{REQUEST_URI} ^/api/.*\.php$
+# ✅ Allow guest access to public views (without requiring authentication)
+RewriteRule ^(home|auth/login|vehicles|auth/register)$ views/$1.php [L]
+
+# ✅ Route API requests correctly
+#RewriteCond %{REQUEST_URI} ^/api/
+#RewriteRule ^api/(.*)$ index.php?route=api/$1 [QSA,L]
+
+# ✅ Prevent direct access to backend directories
+RewriteRule ^(App/Controllers|App/Services|config|vendor|logs) - [F,L]
+
+# ✅ Ensure static assets load properly
+RewriteCond %{REQUEST_URI} ^/(css|js|images|views|uploads|assets)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
-RewriteRule ^ - [L]
+RewriteRule ^(css|js|images|views|uploads|assets)/(.*)$ /public/$1/$2 [L]
 
-# ✅ Allow direct access to static files (CSS, JS, images)
-RewriteCond %{REQUEST_URI} ^/(css|js|images|api)/(.*)$
-RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
-RewriteRule ^(css|js|images|api)/(.*)$ /public/$1/$2 [L]
+# ✅ Prevent direct access to api.php
+#RewriteRule ^api.php - [F,L]
+# Ensure API routes don't get redirected
+RewriteCond %{REQUEST_URI} ^/api/ [NC]
+RewriteRule .* - [L]
 
-# ✅ Protect backend files while allowing frontend access to specific backend components
-RewriteCond %{REQUEST_URI} ^/App/(.*)$
-RewriteCond %{REQUEST_URI} !^/App/Services/PublicAccess/
-RewriteRule ^ - [F,L]
+# ✅ Ensure requests with no extension are forwarded correctly
+RewriteCond %{REQUEST_URI} !\.(css|js|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico|pdf|json)$ [NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
 
-# ✅ Forward all non-API, non-static requests to FastRoute in index.php
-RewriteCond %{REQUEST_URI} !^/api/.*$
-RewriteCond %{REQUEST_URI} !^/(css|js|images|public)/.*$
+# ✅ Forward all remaining requests to FastRoute in index.php
 RewriteRule ^ index.php [QSA,L]
 === public/dashboard.php ===
 <?php
@@ -46,6 +55,100 @@ if (!isset($_SESSION["user_id"])) {
     <p><a href="/logout.php">Logout</a></p>
 </body>
 </html>
+=== public/api/auth/register.php ===
+<?php
+
+require_once __DIR__ . '/../../../vendor/autoload.php';
+require_once __DIR__ . '/../../../App/Controllers/AuthController.php';
+
+use App\Controllers\AuthController;
+
+// ✅ Set Headers
+header('Content-Type: application/json');
+
+// ✅ Check for POST Request
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["error" => "Method Not Allowed"]);
+    exit;
+}
+
+// ✅ Retrieve JSON Input
+$data = json_decode(file_get_contents("php://input"), true);
+
+// ✅ Initialize AuthController
+$authController = new AuthController();
+$authController->register($data);
+=== public/api/auth/refresh.php ===
+=== public/api/auth/login.php ===
+<?php
+
+require_once __DIR__ . '/../../../vendor/autoload.php';
+
+use App\Controllers\AuthController;
+
+// ✅ Set Headers
+header('Content-Type: application/json');
+
+// ✅ Check for POST Request
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["error" => "Method Not Allowed"]);
+    exit;
+}
+
+// ✅ Retrieve JSON Input
+$data = json_decode(file_get_contents("php://input"), true);
+
+// ✅ Initialize AuthController
+$authController = new AuthController();
+$authController->login($data);
+=== public/api/auth/reset_request.php ===
+<?php
+
+require_once __DIR__ . '/../../../vendor/autoload.php';
+require_once __DIR__ . '/../../../App/Controllers/AuthController.php';
+
+use App\Controllers\AuthController;
+
+// ✅ Set Headers
+header('Content-Type: application/json');
+
+// ✅ Check for POST Request
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["error" => "Method Not Allowed"]);
+    exit;
+}
+
+// ✅ Retrieve JSON Input
+$data = json_decode(file_get_contents("php://input"), true);
+
+// ✅ Initialize AuthController
+$authController = new AuthController();
+$authController->resetPasswordRequest($data);
+=== public/api/auth/logout.php ===
+=== public/api/admin/dashboard.php ===
+=== public/api/admin/users.php ===
+=== public/api/admin/logs.php ===
+=== public/api/system/status.php ===
+=== public/api/system/logs.php ===
+=== public/api/payments/process.php ===
+=== public/api/payments/history.php ===
+=== public/api/payments/refund.php ===
+=== public/api/user/profile.php ===
+=== public/api/user/notifications.php ===
+=== public/api/user/settings.php ===
+=== public/api/bookings/cancel.php ===
+=== public/api/bookings/reschedule.php ===
+=== public/api/bookings/view.php ===
+=== public/api/bookings/create.php ===
+=== public/api/index.php ===
+=== public/api/transactions/logs.php ===
+=== public/api/transactions/details.php ===
+=== public/api/documents/sign.php ===
+=== public/api/documents/upload.php ===
+=== public/api/documents/view.php ===
 === public/api/views/profile.php ===
 <?php
 require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
@@ -82,6 +185,56 @@ echo json_encode($userProfile);
 file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - /views/profile API processed successfully\n", FILE_APPEND);
 ?>
 === public/api/views/dashboard.php ===
+<?php
+require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
+
+// Log the receipt of the request
+file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - Received API /views/dashboard request\n", FILE_APPEND);
+
+// Set header for valid JSON
+header("Content-Type: application/json");
+
+// Check if user is logged in
+if (!isUserLoggedIn()) {
+    http_response_code(403);
+    echo json_encode(["error" => "Unauthorized"]);
+    file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - Unauthorized access to /views/dashboard\n", FILE_APPEND);
+    exit();
+}
+
+// Explicit success status
+http_response_code(200);
+
+// Load dashboard content dynamically
+$recentBookings = [
+    ["id" => 101, "user" => "John Doe", "car" => "2019 Toyota Camry", "date" => "2023-10-01"],
+    ["id" => 102, "user" => "Jane Smith", "car" => "2018 Honda Accord", "date" => "2023-10-02"],
+    // ...additional bookings...
+];
+$stats = [
+    "totalUsers" => 1500,
+    "totalBookings" => 300,
+    // ...additional stats...
+];
+$notifications = [
+    ["id" => 1, "message" => "Your booking has been confirmed."],
+    ["id" => 2, "message" => "New car listings available."],
+    // ...additional notifications...
+];
+
+// Prepare response data
+$responseData = [
+    "recentBookings" => $recentBookings,
+    "stats" => $stats,
+    "notifications" => $notifications
+];
+
+// Return JSON response with dashboard data
+echo json_encode($responseData);
+
+// Log completion of API handling
+file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - /views/dashboard API processed successfully\n", FILE_APPEND);
+?>
 === public/api/views/vehicles.php ===
 <?php
 // Log the receipt of the request
@@ -108,6 +261,43 @@ echo json_encode($vehicles);
 file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - /views/vehicles API processed successfully\n", FILE_APPEND);
 ?>
 === public/api/views/home.php ===
+<?php
+// Enforce GET requests only:
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    http_response_code(405);
+    echo json_encode(["error" => "Method Not Allowed"]);
+    exit();
+}
+
+// Log public request
+file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - Public API request to /views/home\n", FILE_APPEND);
+
+// Allow public API access without authentication
+header("Content-Type: application/json");
+
+// Explicit success status
+http_response_code(200);
+
+// Load homepage content dynamically
+$welcomeMessage = "Welcome to CarFuse!";
+$latestListings = [
+    ["id" => 1, "title" => "2019 Toyota Camry", "price" => 24000],
+    ["id" => 2, "title" => "2018 Honda Accord", "price" => 22000],
+    // ...additional listings...
+];
+
+// Prepare response data
+$responseData = [
+    "welcomeMessage" => $welcomeMessage,
+    "latestListings" => $latestListings
+];
+
+// Return JSON response with site metadata
+echo json_encode($responseData);
+
+// Log completion of API handling
+file_put_contents(__DIR__ . '/../../../logs/debug.log', date('Y-m-d H:i:s') . " - /views/home API processed successfully\n", FILE_APPEND);
+?>
 === public/api/views/reports.php ===
 <?php
 require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
@@ -198,6 +388,1535 @@ echo json_encode(["status" => "API working"]);
 // Log completion of API handling
 file_put_contents('debug.log', date('Y-m-d H:i:s') . " - /test API processed successfully\n", FILE_APPEND);
 ?>
+=== public/api/consent/revoke.php ===
+<?php
+require_once __DIR__ . '/../../../vendor/autoload.php';
+require_once __DIR__ . '/../../../App/Helpers/DatabaseHelper.php';
+
+use Illuminate\Database\Capsule\Manager as Capsule;
+use App\Helpers\DatabaseHelper;
+
+// ✅ Initialize Secure Database
+DatabaseHelper::getSecureInstance();
+
+// ✅ Remove Consent Log
+$userReference = $_SERVER['REMOTE_ADDR'];
+Capsule::connection('secure')->table('consent_logs')
+    ->where('user_reference', $userReference)
+    ->delete();
+
+echo json_encode(["status" => "success", "message" => "Consent revoked"]);
+=== public/api/consent/accept.php ===
+<?php
+require_once __DIR__ . '/../../../vendor/autoload.php';
+require_once __DIR__ . '/../../../App/Helpers/DatabaseHelper.php';
+
+use Illuminate\Database\Capsule\Manager as Capsule;
+use App\Helpers\DatabaseHelper;
+
+// ✅ Initialize Secure Database
+DatabaseHelper::getSecureInstance();
+
+// ✅ Store Consent with Timestamp
+$userReference = $_SERVER['REMOTE_ADDR']; // Track per IP
+$timestamp = date('Y-m-d H:i:s');
+
+Capsule::connection('secure')->table('consent_logs')->insert([
+    'user_reference' => $userReference,
+    'ip_address' => $_SERVER['REMOTE_ADDR'],
+    'consent_given' => 1,
+    'timestamp' => $timestamp
+]);
+
+echo json_encode(["status" => "success", "message" => "Consent accepted"]);
+=== public/api/dashboard/reports.php ===
+=== public/api/dashboard/metrics.php ===
+=== public/api/reports/generate.php ===
+=== public/api/reports/view.php ===
+=== public/css/style.css ===
+/* Dark Minimal Theme */
+
+/* Added CSS Variables for consistency */
+:root {
+    --primary-bg: #121212;
+    --secondary-bg: #181818;
+    --accent-color: #FFD700;
+    --hover-color: #FFC107;
+    --button-bg: #007bff;
+    --button-hover-bg: #0056b3;
+    --success-bg: #28a745;
+    --error-color: #FF4C4C;
+    --font-family: Arial, sans-serif;
+    --base-font-size: 16px;
+    --primary-color: #3498db;
+    --secondary-color: #2ecc71;
+    --tertiary-color: #e74c3c;
+    --font-size-base: 16px;
+    --font-size-large: 24px;
+    --font-size-small: 12px;
+}
+
+body {
+    background-color: var(--primary-bg);
+    color: #fff;
+    font-family: var(--font-family);
+    margin: 0;
+    padding: 0;
+    font-size: var(--font-size-base);
+    background-color: #f4f4f4;
+}
+header {
+    background-color: var(--secondary-bg);
+    text-align: center;
+    padding: 15px 0;
+}
+.logo img {
+    max-height: 104px;
+    margin: 15px 0;
+}
+nav {
+    display: flex;
+    justify-content: center;
+    padding: 15px 0;
+}
+nav a {
+    color: #fff;
+    text-decoration: none;
+    margin: 0 15px;
+    font-size: 1rem;
+    transition: color 0.3s ease;
+}
+nav a:hover {
+    color: var(--accent-color);
+}
+
+/* Hero Section */
+.hero {
+    text-align: center;
+    padding: 100px 20px;
+    background: url('/public/images/hero-bg.jpg') no-repeat center center/cover;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+}
+.hero h1 {
+    font-size: 48px;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+}
+.hero p {
+    font-size: 20px;
+    opacity: 0.8;
+    margin-bottom: 30px;
+}
+.hero-title {
+    font-size: 2.5rem;
+    font-weight: bold;
+}
+.hero-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.8;
+}
+
+/* Search Form */
+.search-form {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+.search-form input, .search-form button {
+    padding: 12px;
+    font-size: var(--base-font-size);
+    border-radius: 5px;
+    border: none;
+}
+.search-form button {
+    background: var(--accent-color);
+    color: var(--primary-bg);
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+.search-form button:hover {
+    background: var(--hover-color);
+}
+
+/* Features Section */
+.features {
+    text-align: center;
+    padding: 60px 20px;
+}
+.features h2 {
+    font-size: 36px;
+    margin-bottom: 20px;
+}
+.feature-list {
+    display: flex;
+    justify-content: center;
+    gap: 50px;
+}
+.feature {
+    font-size: 18px;
+    background: #181818;
+    padding: 20px;
+    border-radius: 5px;
+}
+.features-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+.feature-box {
+    background: #1a1a1a;
+    padding: 20px;
+    border-radius: 8px;
+    transition: transform 0.3s ease;
+}
+.feature-box:hover {
+    transform: scale(1.05);
+}
+
+/* CTA Section */
+.cta {
+    margin-top: 40px;
+    background: var(--success-bg);
+    padding: 20px;
+    border-radius: 8px;
+}
+.btn {
+    display: inline-block;
+    background: var(--button-bg);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: background 0.3s ease;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    text-align: center;
+    cursor: pointer;
+    font-size: var(--font-size-base);
+}
+.btn:hover {
+    background: var(--button-hover-bg);
+}
+.btn-primary {
+    background-color: var(--primary-color);
+    color: #fff;
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: #fff;
+}
+
+.btn-tertiary {
+    background-color: var(--tertiary-color);
+    color: #fff;
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    padding: 20px;
+    background: #181818;
+    opacity: 0.8;
+}
+
+/* Error Message */
+.error-message {
+    color: var(--error-color);
+    display: none;
+}
+
+/* Responsive Media Queries */
+@media (max-width: 768px) {
+    nav {
+        flex-direction: column;
+    }
+    .hero {
+        padding: 80px 10px;
+    }
+    .feature-list, .features-container {
+        flex-direction: column;
+        gap: 20px;
+    }
+    .navbar .container {
+        flex-direction: column;
+    }
+
+    .navbar .nav-links {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .navbar .nav-links li {
+        margin: 0.5rem 0;
+    }
+
+    .hero-section, .features-section, .testimonials-section {
+        padding: 1rem 0;
+    }
+}
+@media (max-width: 480px) {
+    nav a {
+        margin: 5px 0;
+        font-size: 0.9rem;
+    }
+    .hero h1 {
+        font-size: 2.5rem;
+    }
+    .hero p {
+        font-size: 1rem;
+    }
+}
+
+.navbar {
+    background-color: var(--primary-color);
+    color: #fff;
+    padding: 1rem;
+}
+
+.navbar .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.navbar .nav-links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+}
+
+.navbar .nav-links li {
+    margin-left: 1rem;
+}
+
+.navbar .nav-links a {
+    color: #fff;
+    text-decoration: none;
+    font-size: var(--font-size-base);
+}
+
+.hero-section {
+    background-color: #fff;
+    padding: 2rem 0;
+    text-align: center;
+}
+
+.features-section, .testimonials-section {
+    padding: 2rem 0;
+}
+
+.features-section .icon, .testimonials-section blockquote {
+    font-size: var(--font-size-large);
+}
+=== public/css/profile.css ===
+/*
+|--------------------------------------------------------------------------
+| Profile Styles (profile.css)
+|--------------------------------------------------------------------------
+| This file contains styles for the user profile page, including form fields,
+| avatar upload, and account settings. Designed with a sleek, modern look.
+*/
+
+/* General Profile Page Styles */
+body {
+    background-color: #121212;
+    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.profile-container {
+    max-width: 600px;
+    margin: 40px auto;
+    background: #1E1E1E;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
+    text-align: center;
+}
+
+.profile-container h2 {
+    font-size: 2rem;
+    margin-bottom: 20px;
+}
+
+/* Avatar Upload */
+.avatar-upload {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.avatar-preview {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 3px solid #FFD700;
+    object-fit: cover;
+    margin-bottom: 10px;
+}
+
+.avatar-upload input[type="file"] {
+    display: none;
+}
+
+.upload-label {
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.upload-label:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+}
+
+/* Profile Form */
+.profile-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.profile-form input, .profile-form select, .profile-form button {
+    padding: 12px;
+    font-size: 1rem;
+    border-radius: 5px;
+    border: none;
+}
+
+.profile-form input, .profile-form select {
+    background: #333;
+    color: #fff;
+    border: 1px solid #444;
+    width: 100%;
+}
+
+.profile-form input:focus, .profile-form select:focus {
+    border-color: #FFD700;
+    outline: 0;
+}
+
+.profile-form button {
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.profile-form button:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .profile-container {
+        padding: 15px;
+    }
+}
+
+=== public/css/logs.css ===
+/* ...existing code... */
+
+/* Remove redundant table styles */
+/* .logs table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: var(--surface-color);
+}
+.logs table th {
+    background-color: var(--primary-color);
+    color: white;
+}
+.logs table td {
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    text-align: left;
+}
+.logs table tr:nth-child(even) {
+    background-color: #222;
+}
+.logs table tr:hover {
+    background-color: #333;
+} */
+
+/* Ensure tables remain responsive on smaller screens */
+@media (max-width: 768px) {
+    .logs table {
+        display: block;
+        overflow-x: auto;
+    }
+    .logs table th, .logs table td {
+        white-space: nowrap;
+    }
+}
+=== public/css/documents.css ===
+/*
+|--------------------------------------------------------------------------
+| Documents Styles (documents.css)
+|--------------------------------------------------------------------------
+| This file contains styles for document management, including uploading,
+| signing, and previewing documents. The design follows a dark, modern theme.
+*/
+
+/* General Document Page Styles */
+body {
+    background-color: #121212;
+    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.document-container {
+    max-width: 800px;
+    margin: 40px auto;
+    background: #1E1E1E;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
+}
+
+.document-container h2 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 20px;
+}
+
+/* Document Upload Section */
+.upload-area {
+    border: 2px dashed #FFD700;
+    padding: 20px;
+    text-align: center;
+    border-radius: 8px;
+    transition: all 0.3s;
+}
+
+.upload-area:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.upload-input {
+    display: none;
+}
+
+.upload-label {
+    display: block;
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    padding: 12px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.upload-label:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+}
+
+/* Document Preview */
+.document-preview {
+    margin-top: 20px;
+    padding: 15px;
+    background: #242424;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.document-preview iframe {
+    width: 100%;
+    height: 500px;
+    border: none;
+    background: #000;
+}
+
+/* Signature Section */
+.signature-area {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.signature-pad {
+    width: 100%;
+    height: 200px;
+    background: #fff;
+    border-radius: 5px;
+    border: 2px solid #FFD700;
+}
+
+/* Confirmation & Action Buttons */
+.document-actions {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.document-actions button {
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    padding: 12px 15px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.document-actions button:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .document-container {
+        padding: 15px;
+    }
+    .document-preview iframe {
+        height: 300px;
+    }
+}
+
+=== public/css/dashboard.css ===
+/*
+|--------------------------------------------------------------------------
+| Dashboard Styles (dashboard.css)
+|--------------------------------------------------------------------------
+| This file contains styles for both user and admin dashboards.
+| Ensures a dark, sleek, and minimal look with responsive design.
+*/
+
+/* General Dashboard Layout */
+body {
+    background-color: #121212;
+    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.dashboard-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 250px;
+    background: #1E1E1E;
+    padding: 20px;
+    transition: width 0.3s ease;
+}
+
+.sidebar a {
+    display: block;
+    padding: 12px;
+    color: #FFFFFF;
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background 0.3s;
+}
+
+.sidebar a:hover {
+    background: #FFD700;
+    color: #121212;
+}
+
+.sidebar .active {
+    background: #FF8C00;
+}
+
+.main-content {
+    flex-grow: 1;
+    padding: 20px;
+}
+
+/* Widgets & Stats */
+.widget {
+    background: #1E1E1E;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    margin-bottom: 20px;
+    transition: transform 0.3s;
+}
+
+.widget:hover {
+    transform: scale(1.05);
+}
+
+.widget h2 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+}
+
+.widget .value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #FFD700;
+}
+
+/* Tables */
+.dashboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.dashboard-table th, .dashboard-table td {
+    padding: 12px;
+    border-bottom: 1px solid #333;
+    text-align: left;
+}
+
+.dashboard-table th {
+    background: #181818;
+}
+
+.dashboard-table tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Buttons */
+.action-button {
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.action-button:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .dashboard-container {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .sidebar a {
+        display: inline-block;
+        margin: 5px;
+    }
+}
+
+=== public/css/payments.css ===
+/*
+|--------------------------------------------------------------------------
+| Payments Styles (payments.css)
+|--------------------------------------------------------------------------
+| This file contains styles for the payments page, ensuring a sleek, modern,
+| and secure UI with a dark, minimal aesthetic.
+*/
+
+/* General Payment Page Styles */
+body {
+    background-color: #121212;
+    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.payment-container {
+    max-width: 600px;
+    margin: 40px auto;
+    background: #1E1E1E;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
+}
+
+.payment-container h2 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 20px;
+}
+
+/* Payment Form */
+.payment-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.payment-form input, .payment-form select, .payment-form button {
+    padding: 12px;
+    font-size: 1rem;
+    border-radius: 5px;
+    border: none;
+}
+
+.payment-form input, .payment-form select {
+    background: #333;
+    color: #fff;
+    border: 1px solid #444;
+    width: 100%;
+}
+
+.payment-form input:focus, .payment-form select:focus {
+    border-color: #FFD700;
+    outline: 0;
+}
+
+.payment-form button {
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.payment-form button:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+}
+
+/* Transaction History */
+.transaction-history {
+    margin-top: 30px;
+}
+
+.transaction-history table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.transaction-history th, .transaction-history td {
+    padding: 12px;
+    border-bottom: 1px solid #333;
+    text-align: left;
+}
+
+.transaction-history th {
+    background: #181818;
+}
+
+.transaction-history tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Payment Success & Error Messages */
+.payment-message {
+    text-align: center;
+    padding: 15px;
+    border-radius: 5px;
+    margin-top: 20px;
+}
+
+.payment-success {
+    background-color: #28a745;
+    color: white;
+}
+
+.payment-error {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .payment-container {
+        padding: 15px;
+    }
+    
+    .transaction-history table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+
+=== public/css/notifications.css ===
+/* notifications.css _ Real_Time Notifications */
+
+.notifications-panel {
+    position: absolute;
+    right: 20px;
+    top: 50px;
+    background: #1E1E1E;
+    color: #FFF;
+    padding: 15px;
+    border-radius: 5px;
+    max-width: 90%;
+    width: 300px;
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    transform: translateY(-10px);
+    opacity: 0;
+}
+
+.notifications-panel.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.notification.unread {
+    background: #1E1E1E;
+    font-weight: bold;
+    border-left: 5px solid #FF4500; /* Add indicator */
+}
+
+.notification.read {
+    background: #252525;
+    opacity: 0.85;
+}
+
+.notification {
+    position: relative;
+    padding-right: 30px; /* Space for close button */
+}
+
+.notification .close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: transparent;
+    border: none;
+    color: #FFF;
+    cursor: pointer;
+    font-size: 16px;
+    transition: color 0.3s;
+}
+
+.notification .close-btn:hover {
+    color: #FF4500;
+}
+
+@media (max-width: 600px) {
+    .notifications-panel {
+        right: 10px;
+        top: 10px;
+        width: 100%;
+    }
+}
+
+=== public/css/main.css ===
+/* main.css - Unified Styling for CarFuse */
+
+:root {
+    --bg-color: #121212;
+    --text-color: #f5f5f5;
+    --primary-color: #0066ff;
+    --hover-color: #0044cc;
+    --surface-color: #181818;
+    --border-color: #444;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --error-color: #dc3545;
+    --card-bg: #1E1E1E;
+    --highlight-color: #FFD700;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    color: var(--text-color);
+    background: var(--bg-color);
+    margin: 0;
+    padding: 0;
+}
+
+/* Buttons */
+.btn, .btn-primary {
+    background: linear-gradient(45deg, var(--highlight-color), #FF8C00);
+    color: #000;
+    padding: 10px 15px;
+    border-radius: 6px;
+    transition: 0.3s;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+}
+.btn:hover, .btn-primary:hover {
+    filter: brightness(1.2);
+    background-color: var(--hover-color);
+}
+.btn:focus, input[type="submit"]:focus {
+    outline: 2px solid var(--warning-color);
+}
+
+/* Forms */
+input, select, textarea {
+    background: #333;
+    border: 1px solid var(--border-color);
+    color: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+    border-color: var(--primary-color);
+    outline: 0;
+}
+
+/* Navigation */
+nav {
+    background: var(--surface-color);
+    padding: 10px;
+    text-align: center;
+}
+nav a {
+    color: var(--text-color);
+    margin: 0 15px;
+    text-decoration: none;
+}
+nav a:hover {
+    color: var(--highlight-color);
+}
+
+/* Cards & Widgets */
+.card, .widget {
+    background: var(--card-bg);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(255, 255, 255, 0.1);
+}
+.card h3, .widget h3 {
+    color: var(--text-color);
+    font-size: 1.8rem;
+}
+.card p, .widget p {
+    color: #bbb;
+    font-size: 1.2rem;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: var(--surface-color);
+}
+th, td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+}
+th {
+    background: var(--primary-color);
+    color: white;
+}
+tr:nth-child(even) {
+    background-color: #222;
+}
+tr:hover {
+    background-color: #333;
+}
+
+/* Toast Notifications */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    max-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.toast {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 15px;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    transform: translateY(-10px);
+    animation: fadeInUp 0.3s ease-in-out forwards;
+}
+.toast-success {
+    background: var(--success-color);
+}
+.toast-warning {
+    background: var(--warning-color);
+    color: #121212;
+}
+.toast-error {
+    background: var(--error-color);
+}
+.toast .close-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    transition: color 0.3s;
+}
+.toast .close-btn:hover {
+    color: #ffd700;
+}
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+@media (max-width: 600px) {
+    #toast-container {
+        right: 10px;
+        width: 90%;
+    }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    body {
+        font-size: 14px;
+    }
+    .card, .widget {
+        margin: 10px 0;
+    }
+    table {
+        display: block;
+        overflow-x: auto;
+    }
+    th, td {
+        white-space: nowrap;
+    }
+    #toast-container {
+        right: 10px;
+        bottom: 10px;
+        max-width: 250px;
+    }
+}
+
+/* Homepage Specific Styles */
+.homepage {
+    /* Hero Section */
+    .hero {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        background: url('/public/assets/images/hero-bg.jpg') no-repeat center center/cover;
+        position: relative;
+    }
+    .hero h1 {
+        font-size: 3rem;
+        font-weight: bold;
+        text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+        margin-bottom: 15px;
+    }
+    .hero p {
+        font-size: 1.5rem;
+        opacity: 0.8;
+        margin-bottom: 20px;
+    }
+    .cta-button {
+        display: inline-block;
+        background: linear-gradient(45deg, #FFD700, #FF8C00);
+        color: #121212;
+        font-weight: bold;
+        padding: 12px 25px;
+        border-radius: 8px;
+        text-decoration: none;
+        transition: all 0.3s ease;
+    }
+    .cta-button:hover {
+        background: linear-gradient(45deg, #FFC107, #FF4500);
+        transform: scale(1.05);
+    }
+
+    /* Why Us Section */
+    .why-us {
+        text-align: center;
+        padding: 60px 20px;
+        background: #181818;
+    }
+    .why-us h2 {
+        font-size: 2rem;
+        margin-bottom: 30px;
+    }
+    .features {
+        display: flex;
+        justify-content: center;
+        gap: 50px;
+        flex-wrap: wrap;
+    }
+    .feature {
+        background: #1E1E1E;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        width: 250px;
+        transition: transform 0.3s ease;
+    }
+    .feature:hover {
+        transform: translateY(-5px);
+    }
+    .icon {
+        font-size: 2rem;
+        margin-bottom: 10px;
+        color: #FFD700;
+    }
+
+    /* Booking Form */
+    .booking-form {
+        text-align: center;
+        padding: 50px 20px;
+    }
+    .booking-form h2 {
+        font-size: 2rem;
+        margin-bottom: 20px;
+    }
+    .booking-form form {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 15px;
+        max-width: 600px;
+        margin: auto;
+    }
+    .booking-form input, .booking-form button {
+        padding: 12px;
+        font-size: 1rem;
+        border-radius: 5px;
+        border: none;
+    }
+    .booking-form input {
+        width: 100%;
+        max-width: 250px;
+        background: #222;
+        color: #fff;
+        border: 1px solid #444;
+    }
+    .booking-form button {
+        background: #FFD700;
+        color: #121212;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+    .booking-form button:hover {
+        background: #FFC107;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .hero h1 {
+            font-size: 2.5rem;
+        }
+        .hero p {
+            font-size: 1.2rem;
+        }
+        .booking-form form {
+            flex-direction: column;
+            align-items: center;
+        }
+        .booking-form input {
+            max-width: 100%;
+        }
+    }
+}
+
+/* Dark Minimal Theme */
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+header {
+    background-color: var(--surface-color);
+    text-align: center;
+    padding: 15px 0;
+}
+.logo img {
+    max-height: 104px;
+    margin: 15px 0;
+}
+nav {
+    display: flex;
+    justify-content: center;
+    padding: 15px 0;
+}
+nav a {
+    color: var(--text-color);
+    text-decoration: none;
+    margin: 0 15px;
+    font-size: 18px;
+}
+nav a:hover {
+    color: var(--highlight-color);
+}
+
+/* Hero Section */
+.hero {
+    text-align: center;
+    padding: 100px 20px;
+    background: url('/public/images/hero-bg.jpg') no-repeat center center/cover;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+}
+.hero h1 {
+    font-size: 48px;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+}
+.hero p {
+    font-size: 20px;
+    opacity: 0.8;
+    margin-bottom: 30px;
+}
+.hero-title {
+    font-size: 2.5rem;
+    font-weight: bold;
+}
+.hero-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.8;
+}
+
+/* Search Form */
+.search-form {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+.search-form input, .search-form button {
+    padding: 12px;
+    font-size: 16px;
+    border-radius: 5px;
+    border: none;
+}
+.search-form button {
+    background: var(--highlight-color);
+    color: var(--bg-color);
+    font-weight: bold;
+    cursor: pointer;
+}
+.search-form button:hover {
+    background: var(--warning-color);
+}
+
+/* Features Section */
+.features {
+    text-align: center;
+    padding: 60px 20px;
+}
+.features h2 {
+    font-size: 36px;
+    margin-bottom: 20px;
+}
+.feature-list {
+    display: flex;
+    justify-content: center;
+    gap: 50px;
+}
+.feature {
+    font-size: 18px;
+    background: var(--surface-color);
+    padding: 20px;
+    border-radius: 5px;
+}
+.features-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+.feature-box {
+    background: #1a1a1a;
+    padding: 20px;
+    border-radius: 8px;
+    transition: transform 0.3s ease;
+}
+.feature-box:hover {
+    transform: scale(1.05);
+}
+
+/* CTA Section */
+.cta {
+    margin-top: 40px;
+    background: var(--success-color);
+    padding: 20px;
+    border-radius: 8px;
+}
+.btn {
+    display: inline-block;
+    background: var(--primary-color);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: background 0.3s ease;
+}
+.btn:hover {
+    background: var(--hover-color);
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    padding: 20px;
+    background: var(--surface-color);
+    opacity: 0.8;
+}
+
+/* Error Message */
+.error-message {
+    color: var(--error-color);
+    display: none;
+}
+
+=== public/css/transaction-logs.css ===
+/* ...existing code... */
+
+/* Remove redundant table styles */
+/* .transaction-logs table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: var(--surface-color);
+}
+.transaction-logs table th {
+    background-color: var(--primary-color);
+    color: white;
+}
+.transaction-logs table td {
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    text-align: left;
+}
+.transaction-logs table tr:nth-child(even) {
+    background-color: #222;
+}
+.transaction-logs table tr:hover {
+    background-color: #333;
+} */
+
+/* Ensure tables remain responsive on smaller screens */
+@media (max-width: 768px) {
+    .transaction-logs table {
+        display: block;
+        overflow-x: auto;
+    }
+    .transaction-logs table th, .transaction-logs table td {
+        white-space: nowrap;
+    }
+}
+=== public/css/auth.css ===
+/* ===================================================
+   Authentication Pages Styles (Dark Minimal Theme)
+   Path: public/css/auth.css
+   Applies to: Login, Register, Forgot Password
+   =================================================== */
+
+   :root {
+    --primary-color: #1a1a1a;
+    --secondary-color: #2c2c2c;
+    --accent-color: #5d9cec;
+    --text-color: #e0e0e0;
+    --error-color: #e74c3c;
+    --border-radius: 8px;
+}
+
+/* Global Styling */
+body {
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    font-family: "Arial", sans-serif;
+}
+
+/* Centering the Authentication Box */
+.auth-container {
+    max-width: 400px;
+    width: 90%;
+    background: var(--secondary-color);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+    text-align: center;
+}
+
+/* Form Inputs */
+.auth-container input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 12px;
+    border: 1px solid #444;
+    border-radius: var(--border-radius);
+    background-color: #333;
+    color: var(--text-color);
+}
+
+.auth-container input:focus {
+    border-color: var(--accent-color);
+    outline: none;
+}
+
+/* Submit Button */
+.auth-container button {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: var(--border-radius);
+    background-color: var(--accent-color);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: 0.3s ease;
+}
+
+.auth-container button:hover {
+    background-color: #3b8ed6;
+}
+
+/* Error & Response Messages */
+.auth-container .alert {
+    padding: 10px;
+    margin-top: 10px;
+    border-radius: var(--border-radius);
+    display: none;
+}
+
+.alert-danger {
+    background-color: var(--error-color);
+    color: white;
+}
+
+.alert-success {
+    background-color: #27ae60;
+    color: white;
+}
+
+/* Forgot Password Link */
+.auth-container a {
+    color: var(--accent-color);
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.auth-container a:hover {
+    text-decoration: underline;
+}
 === public/css/shared.css ===
 body {
     font-family: Arial, sans-serif;
@@ -248,6 +1967,332 @@ button {
 button:hover {
     background: #0056b3;
 }
+=== public/css/home.css ===
+/*
+|--------------------------------------------------------------------------
+| Home Page Styles (home.css)
+|--------------------------------------------------------------------------
+| This file contains styles for the home page, ensuring a dark, sleek, and
+| minimal design. It applies to the hero section, booking form, and the
+| "Why Us" section.
+*/
+
+/* General Page Styling */
+body {
+    background-color: #121212;
+    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+/* Hero Section */
+.hero {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: url('/public/assets/images/hero-bg.jpg') no-repeat center center/cover;
+    position: relative;
+}
+
+.hero h1 {
+    font-size: 3rem;
+    font-weight: bold;
+    text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+    margin-bottom: 15px;
+}
+
+.hero p {
+    font-size: 1.5rem;
+    opacity: 0.8;
+    margin-bottom: 20px;
+}
+
+.cta-button {
+    display: inline-block;
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    padding: 12px 25px;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.cta-button:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+    transform: scale(1.05);
+}
+
+/* Why Us Section */
+.why-us {
+    text-align: center;
+    padding: 60px 20px;
+    background: #181818;
+}
+
+.why-us h2 {
+    font-size: 2rem;
+    margin-bottom: 30px;
+}
+
+.features {
+    display: flex;
+    justify-content: center;
+    gap: 50px;
+    flex-wrap: wrap;
+}
+
+.feature {
+    background: #1E1E1E;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    width: 250px;
+    transition: transform 0.3s ease;
+}
+
+.feature:hover {
+    transform: translateY(-5px);
+}
+
+.icon {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    color: #FFD700;
+}
+
+/* Booking Form */
+.booking-form {
+    text-align: center;
+    padding: 50px 20px;
+}
+
+.booking-form h2 {
+    font-size: 2rem;
+    margin-bottom: 20px;
+}
+
+.booking-form form {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    max-width: 600px;
+    margin: auto;
+}
+
+.booking-form input, .booking-form button {
+    padding: 12px;
+    font-size: 1rem;
+    border-radius: 5px;
+    border: none;
+}
+
+.booking-form input {
+    width: 100%;
+    max-width: 250px;
+    background: #222;
+    color: #fff;
+    border: 1px solid #444;
+}
+
+.booking-form button {
+    background: #FFD700;
+    color: #121212;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.booking-form button:hover {
+    background: #FFC107;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .hero h1 {
+        font-size: 2.5rem;
+    }
+
+    .hero p {
+        font-size: 1.2rem;
+    }
+
+    .booking-form form {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .booking-form input {
+        max-width: 100%;
+    }
+}
+
+=== public/css/toasts.css ===
+/* This file has been removed. */
+
+=== public/css/bookings.css ===
+/*
+|--------------------------------------------------------------------------
+| Bookings Styles (bookings.css)
+|--------------------------------------------------------------------------
+| This file contains styles for the booking process, ensuring a sleek and
+| user-friendly experience with a dark, modern aesthetic.
+*/
+
+/* General Booking Page Styles */
+body {
+    background-color: #121212;
+    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.booking-container {
+    max-width: 800px;
+    margin: 40px auto;
+    background: #1E1E1E;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
+}
+
+.booking-container h2 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 20px;
+}
+
+/* Booking Form */
+.booking-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.booking-form input, .booking-form select, .booking-form button {
+    padding: 12px;
+    font-size: 1rem;
+    border-radius: 5px;
+    border: none;
+}
+
+.booking-form input, .booking-form select {
+    background: #333;
+    color: #fff;
+    border: 1px solid #444;
+    width: 100%;
+}
+
+.booking-form input:focus, .booking-form select:focus {
+    border-color: #FFD700;
+    outline: 0;
+}
+
+.booking-form button {
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.booking-form button:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+}
+
+/* Vehicle Selection */
+.vehicle-selection {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.vehicle-card {
+    background: #181818;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    transition: transform 0.3s;
+}
+
+.vehicle-card:hover {
+    transform: scale(1.05);
+}
+
+.vehicle-card h3 {
+    color: #FFD700;
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+}
+
+/* Booking Confirmation */
+.booking-confirmation {
+    text-align: center;
+    padding: 20px;
+    background: #242424;
+    border-radius: 8px;
+    margin-top: 30px;
+}
+
+.booking-confirmation p {
+    font-size: 1.2rem;
+    color: #FFD700;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .booking-container {
+        padding: 15px;
+    }
+    
+    .vehicle-selection {
+        grid-template-columns: 1fr;
+    }
+}
+
+=== public/css/reports.css ===
+/* ...existing code... */
+
+/* Remove redundant table styles */
+/* .reports table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: var(--surface-color);
+}
+.reports table th {
+    background-color: var(--primary-color);
+    color: white;
+}
+.reports table td {
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    text-align: left;
+}
+.reports table tr:nth-child(even) {
+    background-color: #222;
+}
+.reports table tr:hover {
+    background-color: #333;
+} */
+
+/* Ensure tables remain responsive on smaller screens */
+@media (max-width: 768px) {
+    .reports table {
+        display: block;
+        overflow-x: auto;
+    }
+    .reports table th, .reports table td {
+        white-space: nowrap;
+    }
+}
 === public/index.php ===
 <?php
 ini_set('display_errors', 1);
@@ -256,56 +2301,56 @@ error_reporting(E_ALL);
 
 // ✅ Load Bootstrap & Services
 $bootstrap = require_once __DIR__ . '/../bootstrap.php';
+
+// ✅ Ensure Logger is Set
+if (!isset($bootstrap['logger']) || !$bootstrap['logger'] instanceof \Psr\Log\LoggerInterface) {
+    die("❌ Fatal Error: Logger must be an instance of LoggerInterface.");
+}
 $logger = $bootstrap['logger'];
 
-// ✅ Start Secure Session
-startSecureSession();
+// ✅ Get Requested URI & Log Request
+$requestUri = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
+$logger->info("Requested URI: /$requestUri");
 
-// ✅ Get Requested URI
-$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$logger->info("Requested URI: $requestUri");
+// ✅ Load FastRoute Dispatcher
+$dispatcher = require __DIR__ . '/../config/routes.php';
 
-// ✅ PRIORITIZE API REQUEST HANDLING
-if (strpos($requestUri, '/api/') === 0) {
-    $apiPath = $_SERVER['DOCUMENT_ROOT'] . $requestUri . '.php';
-
-    if (file_exists($apiPath)) {
-        $logger->info("API Request Served: $requestUri");
-        require $apiPath;
-        exit;
-    } else {
-        http_response_code(404);
-        $logger->error("API Not Found: $requestUri");
-        echo json_encode(["error" => "API Not Found"]);
-        exit;
-    }
+// ✅ Ensure Dispatcher is Valid
+if (!$dispatcher instanceof FastRoute\Dispatcher) {
+    $logger->error("FastRoute dispatcher is not valid.");
+    throw new Exception("FastRoute dispatcher is not valid.");
 }
 
-// ✅ FastRoute Dispatching for Views
-$dispatcher = require __DIR__ . '/../config/routes.php';
-$routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], $requestUri);
+// ✅ Route Request
+$routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], "/$requestUri");
 
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::FOUND:
-        $viewPath = __DIR__ . "/views/" . $routeInfo[1];
-        
-        if (file_exists($viewPath)) {
-            $logger->info("Rendering View: " . $routeInfo[1]);
-            require $viewPath;
+        $handler = $routeInfo[1];
+        $vars = $routeInfo[2];
+
+        if (is_callable($handler)) {
+            $logger->info("Executing handler for route: /$requestUri");
+            call_user_func($handler, $vars); // Changed from call_user_func_array to call_user_func
         } else {
-            http_response_code(404);
-            $logger->error("View Not Found: " . $routeInfo[1]);
-            require __DIR__ . "/views/errors/404.php";
+            http_response_code(500);
+            $logger->error("Handler not callable for route: /$requestUri");
+            require __DIR__ . "/../public/views/errors/500.php";
         }
         exit;
 
     case FastRoute\Dispatcher::NOT_FOUND:
         http_response_code(404);
         $logger->error("404 Not Found: $requestUri");
-        require __DIR__ . "/views/errors/404.php";
+        require __DIR__ . "/../public/views/errors/404.php";
+        exit;
+
+    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+        http_response_code(405);
+        $logger->error("405 Method Not Allowed: $requestUri");
+        echo json_encode(["error" => "Method Not Allowed"]);
         exit;
 }
-?>
 === public/views/auth/register.php ===
 <?php
 /*
@@ -331,12 +2376,7 @@ switch ($routeInfo[0]) {
 require_once BASE_PATH . '/App/Helpers/SecurityHelper.php';
 
 if (session_status() === PHP_SESSION_NONE) {
-    require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
-}
-
-if (isset($_SESSION['user_id'])) {
-    header("Location: /dashboard");
-    exit;
+    require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
 }
 ?>
 
@@ -571,12 +2611,7 @@ require_once BASE_PATH . '/App/Helpers/SecurityHelper.php'; // Ensure CSRF funct
 include __DIR__ . '/../layouts/header.php';
 
 if (session_status() === PHP_SESSION_NONE) {
-    require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
-}
-
-if (isset($_SESSION['user_id'])) {
-    header("Location: /dashboard");
-    exit;
+    require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
 }
 ?>
 
@@ -1478,6 +3513,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 ?>
 === public/views/admin/audit_logs.php ===
 <?php
+// Verify admin session and include necessary helpers
 if (!isset($_SESSION['admin_id'])) {
     header('Location: login.php');
     exit();
@@ -1511,64 +3547,83 @@ if (!isset($_SESSION['admin_id'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Logi Audytowe</title>
+    <!-- Include Bootstrap CSS -->
+    <link rel="stylesheet" href="path/to/bootstrap.min.css">
     <link rel="stylesheet" href="path/to/admin.css">
 </head>
 <body>
-    <h1 class="text-center">Logi Audytowe</h1>
+    <div class="container mt-5">
+        <h1 class="text-center">Logi Audytowe</h1>
+        <div class="card my-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3>Historia Zdarzeń w Systemie</h3>
+                <button class="btn btn-secondary" id="clearFilters">Wyczyść Filtry</button>
+            </div>
+            <div class="card-body">
+                <!-- Filtry -->
+                <form id="filterForm" class="row mb-4">
+                    <?= csrf_field() ?>
+                    <div class="col-md-2">
+                        <input type="text" class="form-control" name="user_id" placeholder="ID Użytkownika" value="<?= filter_input(INPUT_GET, 'user_id', FILTER_SANITIZE_STRING) ?: '' ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" class="form-control" name="booking_id" placeholder="ID Rezerwacji" value="<?= filter_input(INPUT_GET, 'booking_id', FILTER_SANITIZE_STRING) ?: '' ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="date" class="form-control" name="start_date" placeholder="Data początkowa" value="<?= filter_input(INPUT_GET, 'start_date', FILTER_SANITIZE_STRING) ?: '' ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="date" class="form-control" name="end_date" placeholder="Data końcowa" value="<?= filter_input(INPUT_GET, 'end_date', FILTER_SANITIZE_STRING) ?: '' ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-control" name="action_type">
+                            <option value="">Rodzaj akcji</option>
+                            <option value="login">Logowanie</option>
+                            <option value="update">Aktualizacja</option>
+                            <option value="delete">Usunięcie</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 text-end">
+                        <button type="submit" class="btn btn-primary">Filtruj</button>
+                    </div>
+                </form>
 
-    <div class="admin-container">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3>Historia Zdarzeń w Systemie</h3>
-            <button class="btn btn-secondary" id="clearFilters">Wyczyść Filtry</button>
+                <!-- Tabela Logów -->
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>ID</th>
+                                <th>Użytkownik</th>
+                                <th>Akcja</th>
+                                <th>Opis</th>
+                                <th>ID Rezerwacji</th>
+                                <th>Adres IP</th>
+                                <th>Data</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditLogs">
+                            <!-- ... dane ładowane przez AJAX ... -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination (sample placeholder) -->
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center" id="pagination">
+                        <!-- AJAX should populate pagination links here -->
+                        <li class="page-item disabled"><a class="page-link" href="#">Poprzednia</a></li>
+                        <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                        <li class="page-item"><a class="page-link" href="#">2</a></li>
+                        <li class="page-item"><a class="page-link" href="#">Następna</a></li>
+                    </ul>
+                </nav>
+            </div>
         </div>
-
-        <!-- Filtry -->
-        <form id="filterForm" class="row mb-4">
-            <?= csrf_field() ?>
-            <div class="col-md-2">
-                <input type="text" class="form-control" name="user_id" placeholder="ID Użytkownika">
-            </div>
-            <div class="col-md-2">
-                <input type="text" class="form-control" name="booking_id" placeholder="ID Rezerwacji">
-            </div>
-            <div class="col-md-2">
-                <input type="date" class="form-control" name="start_date" placeholder="Data początkowa">
-            </div>
-            <div class="col-md-2">
-                <input type="date" class="form-control" name="end_date" placeholder="Data końcowa">
-            </div>
-            <div class="col-md-2">
-                <select class="form-control" name="action_type">
-                    <option value="">Rodzaj akcji</option>
-                    <option value="login">Logowanie</option>
-                    <option value="update">Aktualizacja</option>
-                    <option value="delete">Usunięcie</option>
-                </select>
-            </div>
-            <div class="col-md-2 text-end">
-                <button type="submit" class="btn btn-primary">Filtruj</button>
-            </div>
-        </form>
-
-        <!-- Tabela Logów -->
-        <table class="table table-bordered table-striped">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Użytkownik</th>
-                    <th>Akcja</th>
-                    <th>Opis</th>
-                    <th>ID Rezerwacji</th>
-                    <th>Adres IP</th>
-                    <th>Data</th>
-                </tr>
-            </thead>
-            <tbody id="auditLogs">
-                <!-- Dane będą ładowane dynamicznie -->
-            </tbody>
-        </table>
     </div>
 
+    <!-- Include Bootstrap JS and dependencies -->
+    <script src="path/to/bootstrap.bundle.min.js"></script>
     <script src="path/to/admin.js"></script>
     <script>
     document.addEventListener("DOMContentLoaded", function() {
@@ -1592,13 +3647,12 @@ if (!isset($_SESSION['admin_id'])) {
             if (formData) {
                 url += "?" + new URLSearchParams(formData).toString();
             }
-
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     const auditLogsTable = document.getElementById("auditLogs");
                     auditLogsTable.innerHTML = "";
-                    data.forEach(log => {
+                    data.logs.forEach(log => {
                         auditLogsTable.innerHTML += `
                             <tr>
                                 <td>${log.id}</td>
@@ -1611,6 +3665,10 @@ if (!isset($_SESSION['admin_id'])) {
                             </tr>
                         `;
                     });
+                    // Update pagination if available
+                    if(data.pagination){
+                        document.getElementById("pagination").innerHTML = data.pagination;
+                    }
                 })
                 .catch(error => console.error("Błąd pobierania logów audytowych:", error));
         }
@@ -2965,6 +5023,45 @@ document.addEventListener("DOMContentLoaded", function() {
     fetchRefunds();
 });
 </script>
+=== public/views/cookie_policy.php ===
+<?php
+require_once __DIR__ . '/../vendor/autoload.php';
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cookie & Data Policy</title>
+</head>
+<body>
+    <h2>Cookie & Data Storage Policy</h2>
+    <p>We use cookies to improve user experience and store minimal user data for security.</p>
+    <p>By clicking "Accept", you consent to our use of cookies and data storage as outlined in our privacy policy.</p>
+    
+    <button id="accept-cookies">Accept</button>
+    <button id="revoke-consent">Revoke Consent</button>
+
+    <script>
+        document.getElementById("accept-cookies").addEventListener("click", function () {
+            fetch("/api/consent/accept.php", { method: "POST" })
+                .then(() => {
+                    document.cookie = "cookie_consent=true; path=/; max-age=31536000";
+                    alert("Consent accepted.");
+                });
+        });
+
+        document.getElementById("revoke-consent").addEventListener("click", function () {
+            fetch("/api/consent/revoke.php", { method: "POST" })
+                .then(() => {
+                    document.cookie = "cookie_consent=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    alert("Consent revoked. Some site features may be disabled.");
+                });
+        });
+    </script>
+</body>
+</html>
 === public/views/dashboard.php ===
 <!DOCTYPE html>
 <html lang="pl">
@@ -4610,6 +6707,14 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
     }
 
+    const isProtectedPage = ["/dashboard", "/profile"].includes(window.location.pathname);
+    if (isProtectedPage) {
+        const jwt = document.cookie.split('; ').find(row => row.startsWith('jwt='));
+        if (!jwt) {
+            window.location.href = "/auth/login.php";
+        }
+    }
+
     async function fetchData(endpoint) {
         try {
             const response = await fetch(endpoint, {
@@ -4818,9 +6923,9 @@ async function fetchAdminStatistics() {
     try {
         showLoadingIndicators();
         const [totalUsers, totalBookings, totalRevenue] = await Promise.all([
-            ajax.get('/statistics/totalUsers'),
-            ajax.get('/statistics/totalBookings'),
-            ajax.get('/statistics/totalRevenue')
+            secureFetch('/statistics/totalUsers'),
+            secureFetch('/statistics/totalBookings'),
+            secureFetch('/statistics/totalRevenue')
         ]);
         updateWidgets({
             totalUsers: totalUsers.data,
@@ -4841,7 +6946,7 @@ async function fetchAdminStatistics() {
 async function fetchUserStatistics() {
     try {
         showLoadingIndicators();
-        const response = await ajax.get('/statistics/user');
+        const response = await secureFetch('/statistics/user');
         updateWidgets(response.data);
     } catch (error) {
         showErrorToast('Nie udało się pobrać statystyk użytkownika.');
@@ -4922,6 +7027,108 @@ function getUserRole() {
     // Replace with actual implementation
     return 'user'; // or 'admin'
 }
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    return parts.length === 2 ? parts.pop().split(';').shift() : null;
+}
+
+function deleteCookie(name) {
+    document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Strict';
+}
+
+function parseJwt(token) {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c =>
+            '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+        ).join(''));
+        return JSON.parse(jsonPayload);
+    } catch (e) {
+        return null;
+    }
+}
+
+function checkJwtExpiration() {
+    const token = getCookie('jwt');
+    if (token) {
+        const payload = parseJwt(token);
+        if (payload && payload.exp) {
+            if (Date.now() >= payload.exp * 1000) { // token expired
+                deleteCookie('jwt');
+                deleteCookie('refresh_token');
+                window.location.href = '/auth/login'; // redirect to login page
+            }
+        }
+    }
+}
+
+/**
+ * Checks if the JWT token is expired.
+ * @param {string} token 
+ * @return {boolean}
+ */
+function isTokenExpired(token) {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp < Date.now() / 1000;
+}
+
+/**
+ * Clears auth cookies and redirects to login.
+ */
+function autoLogout() {
+    deleteCookie('jwt');
+    deleteCookie('refresh_token');
+    window.location.href = '/auth/login.php';
+}
+
+/**
+ * Checks JWT on page load.
+ */
+(function checkJwtOnLoad() {
+    const token = getCookie('jwt');
+    if (token && isTokenExpired(token)) {
+        autoLogout();
+    }
+})();
+
+/**
+ * A wrapper for fetch that adds X-Auth-Token header.
+ */
+async function secureFetch(url, options = {}) {
+    // Always send JWT if available
+    const token = getCookie('jwt');
+    if (token) {
+        if (!options.headers) options.headers = {};
+        options.headers["X-Auth-Token"] = "Bearer " + token;
+    }
+    return fetch(url, options).then(response => {
+        // Optionally implement silent re-authentication here using refresh tokens
+        return response;
+    });
+}
+
+/**
+ * Checks token existence and expiration on protected pages.
+ */
+function checkTokenAndRedirect() {
+    const token = getCookie('jwt');
+    if (!token || isTokenExpired(token)) {
+        deleteCookie('jwt');
+        deleteCookie('refresh_token');
+        window.location.href = '/auth/login.php';
+    }
+}
+
+// Run the check on page load
+checkTokenAndRedirect();
+// Periodically check every 30 seconds
+setInterval(checkTokenAndRedirect, 30000);
+
+// Run the expiration check on page load
+checkJwtExpiration();
 === public/js/shared copy.js ===
 // Ensure this script only runs once
 if (!window.sharedJsInitialized) {
@@ -5635,7 +7842,7 @@ async function refreshSession() {
         if (now >= expiration) {
             await logout();
         } else {
-            const response = await ajax.get('/session/refresh');
+            const response = await ajax.get('/session/refresh', null, { 'X-Auth-Token': token });
             if (response.success) {
                 ajax.setToken(response.token);
             } else {
@@ -5802,6 +8009,31 @@ function showWarningToast(message, autoDismiss = true, dismissTime = 3000) {
 function showErrorToast(message, autoDismiss = true, dismissTime = 3000) {
     createToast('error', message, autoDismiss, dismissTime);
 }
+=== public/js/cookies.js ===
+document.addEventListener("DOMContentLoaded", function () {
+    const cookieBanner = document.getElementById("cookie-banner");
+    const acceptCookies = document.getElementById("accept-cookies");
+    const manageConsent = document.getElementById("manage-consent");
+
+    // ✅ Check if user has already given consent
+    if (document.cookie.includes("cookie_consent=true")) {
+        cookieBanner.style.display = "none";
+    }
+
+    // ✅ Handle Consent Acceptance
+    acceptCookies.addEventListener("click", function () {
+        fetch("/api/consent/accept.php", { method: "POST" })
+            .then(() => {
+                document.cookie = "cookie_consent=true; path=/; max-age=31536000";
+                cookieBanner.style.display = "none";
+            });
+    });
+
+    // ✅ Manage Consent Preferences
+    manageConsent.addEventListener("click", function () {
+        window.location.href = "/cookie_policy.php";
+    });
+});
 === public/js/documents.js ===
 import ajax from './ajax';
 import { showErrorToast, showSuccessToast } from './toasts';
@@ -6137,6 +8369,53 @@ document.addEventListener("DOMContentLoaded", function () {
         .then(data => console.log("API Response:", data))
         .catch(error => console.error("API Error:", error));
 });
+
+// Retrieve JWT from sessionStorage or cookie
+function getAuthToken() {
+    const token = sessionStorage.getItem("jwt") || getCookie("jwt");
+    if (token && !isTokenExpired(token)) {
+        return token;
+    }
+    return null;
+}
+
+/**
+ * Checks if the JWT token is expired.
+ * @param {string} token 
+ * @return {boolean}
+ */
+function isTokenExpired(token) {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c =>
+            '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+        ).join(''));
+        const payload = JSON.parse(jsonPayload);
+        return Date.now() >= payload.exp * 1000;
+    } catch (e) {
+        console.error("Error decoding token:", e);
+        return true;
+    }
+}
+
+/**
+ * A wrapper for fetch that adds Authorization header for protected endpoints.
+ * Protected endpoints: /api/views/profile.php, /api/views/dashboard.php
+ */
+async function secureFetch(url, options = {}) {
+    const protectedEndpoints = ['/api/views/profile.php', '/api/views/dashboard.php'];
+    if (protectedEndpoints.includes(url.trim())) {
+        const token = getAuthToken();
+        if (token) {
+            options.headers = {
+                ...options.headers,
+                "Authorization": "Bearer " + token
+            };
+        }
+    }
+    return fetch(url, options);
+}
 === public/js/admin.js ===
 document.addEventListener("DOMContentLoaded", function () {
     // Fetch and manage admin dashboard data
@@ -6636,3 +8915,123 @@ function clearErrors() {
     // Log successful API script loading
     console.log('API script loaded successfully');
 })();
+=== public/api.php ===
+<?php
+define('API_ENTRY', true);
+date_default_timezone_set('UTC');
+
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../App/Middleware/AuthMiddleware.php';
+
+use FastRoute\RouteCollector;
+use function FastRoute\simpleDispatcher;
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+// ✅ Log every API request
+function logApiEvent($message) {
+    $timestamp = date('Y-m-d H:i:s');
+    $logFile = __DIR__ . '/../logs/api.log';
+    file_put_contents($logFile, "{$timestamp} - {$message}\n", FILE_APPEND);
+}
+
+// ✅ Standardized JSON response function
+function sendJsonResponse($status, $message, $data = [], $httpCode = 200) {
+    http_response_code($httpCode);
+    header('Content-Type: application/json');
+    echo json_encode(['status' => $status, 'message' => $message, 'data' => $data]);
+    exit();
+}
+
+// ✅ Extract JWT from Authorization Header or Cookie
+function getJWT() {
+    $headers = getallheaders();
+    if (isset($headers['Authorization']) && preg_match('/Bearer\s(\S+)/', $headers['Authorization'], $matches)) {
+        return $matches[1];
+    }
+    return $_COOKIE['jwt'] ?? null;
+}
+
+// ✅ Capture Incoming API Request
+$method = $_SERVER['REQUEST_METHOD'];
+$requestUri = $_SERVER['REQUEST_URI'];
+logApiEvent("Request: {$method} {$requestUri}");
+
+// ✅ Parse API Path
+$apiPath = trim(str_replace('/api/', '', parse_url($requestUri, PHP_URL_PATH)), '/');
+
+// ✅ Validate JWT for Protected Routes
+$protectedRoutes = ['dashboard', 'profile', 'reports'];
+if (in_array($apiPath, $protectedRoutes)) {
+    $jwt = getJWT();
+    if (!$jwt || !SecurityHelper::validateJWT($jwt)) {
+        logApiEvent("JWT validation failed: {$apiPath}");
+        sendJsonResponse('error', 'Unauthorized', [], 401);
+    }
+}
+
+// ✅ CSRF Protection for Authenticated POST Requests
+if ($method === 'POST' && getJWT()) {
+    $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? '');
+    if (!validateCsrfToken($csrf)) {
+        logApiEvent("CSRF validation failed: {$apiPath}");
+        sendJsonResponse('error', 'Invalid CSRF token', [], 403);
+    }
+}
+
+// ✅ Dynamically Register API Endpoints
+$apiDir = __DIR__ . '/api';
+$apiRoutes = [];
+
+if (is_dir($apiDir)) {
+    $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($apiDir, RecursiveDirectoryIterator::SKIP_DOTS));
+    foreach ($iterator as $file) {
+        if ($file->isFile() && $file->getExtension() === 'php') {
+            $relativePath = ltrim(str_replace([$apiDir, '\\'], ['', '/'], $file->getPathname()), '/');
+            $route = preg_replace('/\.php$/', '', $relativePath);
+            $apiRoutes[$route] = $file->getPathname();
+        }
+    }
+}
+
+// ✅ Setup FastRoute Dispatcher
+$dispatcher = simpleDispatcher(function (RouteCollector $router) use ($apiRoutes) {
+    foreach ($apiRoutes as $route => $filePath) {
+        $router->addRoute(['GET', 'POST'], '/' . $route, $filePath);
+    }
+});
+
+// ✅ Route API Request
+$routeInfo = $dispatcher->dispatch($method, "/{$apiPath}");
+
+switch ($routeInfo[0]) {
+    case FastRoute\Dispatcher::NOT_FOUND:
+        logApiEvent("404 API Not Found: {$apiPath}");
+        sendJsonResponse('error', 'API route not found', [], 404);
+        break;
+
+    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+        logApiEvent("405 Method Not Allowed: {$apiPath}");
+        sendJsonResponse('error', 'Method not allowed', [], 405);
+        break;
+
+    case FastRoute\Dispatcher::FOUND:
+        $handler = $routeInfo[1];
+        ob_start();
+        include $handler;
+        $output = ob_get_clean();
+
+        // ✅ Validate JSON Output
+        $jsonOutput = json_decode($output, true);
+        if ($jsonOutput === null && json_last_error() !== JSON_ERROR_NONE) {
+            logApiEvent("Invalid JSON Response from {$apiPath}");
+            sendJsonResponse('error', 'Invalid response format', [], 500);
+        }
+
+        sendJsonResponse('success', 'Request successful', ['data' => $jsonOutput ?: $output], 200);
+        break;
+}
+
+logApiEvent("Unhandled API request: {$requestUri}");
+sendJsonResponse('error', 'Unhandled API request', [], 500);

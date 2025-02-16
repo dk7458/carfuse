@@ -128,7 +128,6 @@ class AuthController extends Controller
     {
         header('Content-Type: application/json');
         
-        // Ensure $request is a valid array
         if (!is_array($request)) {
             http_response_code(400);
             echo json_encode([
@@ -141,8 +140,33 @@ class AuthController extends Controller
         
         $data = $request;
 
+        // Verify required fields exist
+        $required = ['name', 'email', 'password', 'confirm_password'];
+        foreach ($required as $field) {
+            if (empty($data[$field])) {
+                http_response_code(400);
+                echo json_encode([
+                    'status'  => 'error',
+                    'message' => "Missing required field: $field",
+                    'data'    => []
+                ]);
+                exit;
+            }
+        }
+
+        // Ensure password confirmation matches
+        if ($data['password'] !== $data['confirm_password']) {
+            http_response_code(400);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Password and confirm password do not match',
+                'data'    => ['password' => 'Mismatch']
+            ]);
+            exit;
+        }
+        
         // Validate input using Validator service
-        $validator = new Validator(new NullLogger());
+        $validator = new Validator(new \Psr\Log\NullLogger());
         $rules = [
             'name'             => 'required',
             'email'            => 'required|email',
@@ -158,17 +182,7 @@ class AuthController extends Controller
             ]);
             exit;
         }
-        // Ensure password confirmation matches
-        if ($data['password'] !== $data['confirm_password']) {
-            http_response_code(400);
-            echo json_encode([
-                'status'  => 'error',
-                'message' => 'Password and confirm password do not match',
-                'data'    => []
-            ]);
-            exit;
-        }
-        
+
         // Prepare registration data (ignore confirm_password)
         $registrationData = [
             'name'     => $data['name'],
@@ -182,7 +196,6 @@ class AuthController extends Controller
         try {
             // Delegate registration logic to AuthService
             $result = $this->authService->registerUser($registrationData);
-
             http_response_code(201);
             echo json_encode([
                 'status'  => 'success',
@@ -191,7 +204,7 @@ class AuthController extends Controller
             ]);
             exit;
         } catch (Exception $e) {
-            http_response_code(400);
+            http_response_code(500);
             echo json_encode([
                 'status'  => 'error',
                 'message' => $e->getMessage(),

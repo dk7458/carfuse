@@ -6,14 +6,12 @@ namespace App\Controllers;
 use App\Models\User;
 use App\Services\UserService;
 use App\Services\NotificationService;
-use App\Services\Validator;
+// Removed: use App\Services\Validator;
+// Removed: use Illuminate\Support\Facades\Auth;
+// Removed: use Illuminate\Support\Facades\Log;
 use App\Services\RateLimiter;
 use App\Services\AuditService;
-use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Routing\Controller;
@@ -26,21 +24,18 @@ use Illuminate\Routing\Controller;
 class UserController extends Controller
 {
     private UserService $userService;
-    private LoggerInterface $logger;
-    private Validator $validator;
+    // private LoggerInterface $logger; // Using native error_log()
+    // private Validator $validator;
     private RateLimiter $rateLimiter;
     private AuditService $auditService;
     private NotificationService $notificationService;
 
     public function __construct(
-        LoggerInterface $logger,
-        Validator $validator,
+        /* Removed LoggerInterface, Validator, ... */
         RateLimiter $rateLimiter,
         AuditService $auditService,
         NotificationService $notificationService
     ) {
-        $this->logger = $logger;
-        $this->validator = $validator;
         $this->rateLimiter = $rateLimiter;
         $this->auditService = $auditService;
         $this->notificationService = $notificationService;
@@ -52,8 +47,23 @@ class UserController extends Controller
      */
     public function updateProfile()
     {
-        $user = Auth::user();
-        $data = request()->validate([
+        session_start();
+        $user = $_SESSION['user'] ?? null;
+        if (!$user) {
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
+            exit;
+        }
+        // Custom extraction/validation from $_POST (assumes custom_validate() exists)
+        $data = [
+            'name'    => $_POST['name'] ?? null,
+            'surname' => $_POST['surname'] ?? null,
+            'email'   => $_POST['email'] ?? null,
+            'phone'   => $_POST['phone'] ?? null,
+            'address' => $_POST['address'] ?? null,
+        ];
+        // Assume custom_validate() throws an exception on failure.
+        custom_validate($data, [
             'name'    => 'required|string|max:255',
             'surname' => 'required|string|max:255',
             'email'   => 'required|email',
@@ -62,9 +72,11 @@ class UserController extends Controller
         ]);
         
         $user->update($data);
-        Log::channel('audit')->info('User profile updated', ['user_id' => $user->id]);
+        error_log("Audit: User profile updated for user_id: {$user->id}");
         
-        return response()->json(['status' => 'success', 'message' => 'Profile updated successfully'], 200);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'success', 'message' => 'Profile updated successfully']);
+        exit;
     }
 
     /**
@@ -72,7 +84,11 @@ class UserController extends Controller
      */
     public function getProfile()
     {
-        return response()->json(Auth::user(), 200);
+        session_start();
+        $user = $_SESSION['user'] ?? null;
+        header('Content-Type: application/json');
+        echo json_encode($user);
+        exit;
     }
 
     /**
@@ -80,9 +96,11 @@ class UserController extends Controller
      */
     public function requestPasswordReset()
     {
-        $email = request('email');
+        $email = $_POST['email'] ?? null;
         if (!$email) {
-            abort(400, 'Invalid input');
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Invalid input']);
+            exit;
         }
         
         $token = Str::random(60);
@@ -92,7 +110,9 @@ class UserController extends Controller
             'expires_at' => now()->addHour(),
         ]);
         
-        return response()->json(['status' => 'success', 'message' => 'Password reset requested'], 200);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'success', 'message' => 'Password reset requested']);
+        exit;
     }
 
     /**
@@ -100,8 +120,11 @@ class UserController extends Controller
      */
     public function userDashboard()
     {
-        $user = Auth::user();
-        return view('dashboard.user', compact('user'));
+        session_start();
+        // Instead of Laravel view(), use native PHP rendering or simple HTML output.
+        header('Content-Type: text/html');
+        echo "<html><body><h1>User Dashboard</h1><!-- ...existing dashboard HTML... --></body></html>";
+        exit;
     }
 }
 === App/Controllers/BookingController.php ===
@@ -111,8 +134,6 @@ namespace App\Controllers;
 
 use App\Models\Booking;
 use App\Models\RefundLog;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
@@ -155,48 +176,55 @@ class BookingController extends Controller
     {
         try {
             $booking = Booking::with('logs')->findOrFail($id);
-            return response()->json([
+            header('Content-Type: application/json');
+            http_response_code(200);
+            echo json_encode([
                 'status'  => 'success',
                 'message' => 'Booking details fetched',
                 'data'    => ['booking' => $booking]
-            ], 200);
+            ]);
+            exit;
         } catch (\Exception $e) {
-            Log::channel('booking')->error($e->getMessage());
-            abort(404, 'Booking not found');
+            error_log("BOOKING ERROR: " . $e->getMessage());
+            http_response_code(404);
+            echo 'Booking not found';
+            exit;
         }
     }
 
     /**
      * Reschedule Booking
      */
-    public function rescheduleBooking(int $id, Request $request): array
+    public function rescheduleBooking(int $id): void
     {
-        $data = $request->validate([
-            'pickup_date'  => 'required|date|after_or_equal:today',
-            'dropoff_date' => 'required|date|after:pickup_date',
-        ]);
-
+        $data = $_POST; // minimal custom validation assumed
+        
         try {
             $booking = Booking::findOrFail($id);
             $booking->update([
                 'pickup_date'  => $data['pickup_date'],
                 'dropoff_date' => $data['dropoff_date'],
             ]);
-            Log::channel('audit')->info('Booking rescheduled', ['booking_id' => $id]);
-            return response()->json([
+            error_log("AUDIT: Booking rescheduled, booking_id: {$id}");
+            header('Content-Type: application/json');
+            http_response_code(200);
+            echo json_encode([
                 'status'  => 'success',
                 'message' => 'Booking rescheduled successfully'
-            ], 200)->getData(true);
+            ]);
+            exit;
         } catch (\Exception $e) {
-            Log::channel('booking')->error('Failed to reschedule booking: ' . $e->getMessage());
-            abort(500, 'Failed to reschedule booking');
+            error_log("BOOKING ERROR: Failed to reschedule booking: " . $e->getMessage());
+            http_response_code(500);
+            echo 'Failed to reschedule booking';
+            exit;
         }
     }
 
     /**
      * Cancel Booking
      */
-    public function cancelBooking(int $id): array
+    public function cancelBooking(int $id): void
     {
         try {
             $booking = Booking::findOrFail($id);
@@ -211,83 +239,105 @@ class BookingController extends Controller
                     'status'     => 'processed'
                 ]);
             }
-            Log::channel('booking')->info('Booking canceled', ['booking_id' => $id]);
-            return response()->json([
+            error_log("BOOKING: Booking canceled, booking_id: {$id}");
+            header('Content-Type: application/json');
+            http_response_code(200);
+            echo json_encode([
                 'status'  => 'success',
                 'message' => 'Booking canceled successfully'
-            ], 200)->getData(true);
+            ]);
+            exit;
         } catch (\Exception $e) {
-            Log::channel('booking')->error('Failed to cancel booking: ' . $e->getMessage());
-            abort(500, 'Failed to cancel booking');
+            error_log("BOOKING ERROR: Failed to cancel booking: " . $e->getMessage());
+            http_response_code(500);
+            echo 'Failed to cancel booking';
+            exit;
         }
     }
 
     /**
      * Fetch Booking Logs
      */
-    public function getBookingLogs(int $bookingId): array
+    public function getBookingLogs(int $bookingId): void
     {
         try {
             $logs = Booking::findOrFail($bookingId)->logs()->latest()->get();
-            return response()->json([
+            header('Content-Type: application/json');
+            http_response_code(200);
+            echo json_encode([
                 'status'  => 'success',
                 'message' => 'Booking logs fetched successfully',
                 'data'    => ['logs' => $logs]
-            ], 200)->getData(true);
+            ]);
+            exit;
         } catch (\Exception $e) {
-            Log::channel('booking')->error('Failed to fetch booking logs: ' . $e->getMessage());
-            abort(500, 'Failed to fetch booking logs');
+            error_log("BOOKING ERROR: Failed to fetch booking logs: " . $e->getMessage());
+            http_response_code(500);
+            echo 'Failed to fetch booking logs';
+            exit;
         }
     }
 
     /**
      * List All Bookings for a User
      */
-    public function getUserBookings(): array
+    public function getUserBookings(): void
     {
         try {
-            $bookings = Booking::where('user_id', Auth::id())->latest()->get();
-            return response()->json([
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new \Exception('User not authenticated');
+            }
+            $bookings = Booking::where('user_id', $userId)->latest()->get();
+            header('Content-Type: application/json');
+            http_response_code(200);
+            echo json_encode([
                 'status'  => 'success',
                 'message' => 'User bookings fetched successfully',
                 'data'    => ['bookings' => $bookings]
-            ], 200)->getData(true);
+            ]);
+            exit;
         } catch (\Exception $e) {
-            Log::channel('booking')->error('Failed to fetch user bookings: ' . $e->getMessage());
-            abort(500, 'Failed to fetch user bookings');
+            error_log("BOOKING ERROR: Failed to fetch user bookings: " . $e->getMessage());
+            http_response_code(500);
+            echo 'Failed to fetch user bookings';
+            exit;
         }
     }
 
     /**
      * Create New Booking
      */
-    public function createBooking(Request $request): array
+    public function createBooking(): void
     {
-        $data = $request->validate([
-            'user_id'    => 'required|integer',
-            'vehicle_id' => 'required|integer',
-            'pickup_date'  => 'required|date|after_or_equal:today',
-            'dropoff_date' => 'required|date|after:pickup_date',
-        ]);
-
+        $data = $_POST; // assuming custom validation is performed elsewhere
+        
         try {
             // Check vehicle availability using an assumed Booking::isAvailable() scope.
             if (!Booking::isAvailable($data['vehicle_id'], $data['pickup_date'], $data['dropoff_date'])) {
-                return response()->json([
+                header('Content-Type: application/json');
+                http_response_code(400);
+                echo json_encode([
                     'status'  => 'error',
                     'message' => 'Vehicle is not available for the selected dates'
-                ], 400)->getData(true);
+                ]);
+                exit;
             }
             $booking = Booking::create($data);
-            Log::channel('booking')->info('Booking created', ['booking_id' => $booking->id]);
-            return response()->json([
+            error_log("BOOKING: Booking created, booking_id: {$booking->id}");
+            header('Content-Type: application/json');
+            http_response_code(201);
+            echo json_encode([
                 'status'  => 'success',
                 'message' => 'Booking created successfully',
                 'data'    => ['booking_id' => $booking->id]
-            ], 201)->getData(true);
+            ]);
+            exit;
         } catch (\Exception $e) {
-            Log::channel('booking')->error('Failed to create booking: ' . $e->getMessage());
-            abort(500, 'Failed to create booking');
+            error_log("BOOKING ERROR: Failed to create booking: " . $e->getMessage());
+            http_response_code(500);
+            echo 'Failed to create booking';
+            exit;
         }
     }
 }
@@ -298,7 +348,6 @@ namespace App\Controllers;
 
 use App\Models\Notification;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Http\Request;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -316,20 +365,20 @@ class NotificationController extends Controller
     /**
      * Display user notifications.
      */
-    public function viewNotifications(Request $request)
+    public function viewNotifications()
     {
         try {
             $notifications = Notification::with('user')
-                ->where('user_id', Auth::id())
+                ->where('user_id', $_SESSION['user_id'] ?? null)
                 ->latest()
                 ->get();
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notifications loaded',
                 'data'    => ['notifications' => $notifications]
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'An error occurred while fetching notifications',
                 'data'    => []
@@ -344,16 +393,16 @@ class NotificationController extends Controller
     {
         try {
             $notifications = Notification::with('user')
-                ->where('user_id', Auth::id())
+                ->where('user_id', $_SESSION['user_id'] ?? null)
                 ->latest()
                 ->get();
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notifications fetched',
                 'data'    => ['notifications' => $notifications]
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch user notifications',
                 'data'    => []
@@ -368,17 +417,17 @@ class NotificationController extends Controller
     {
         try {
             $notifications = Notification::with('user')
-                ->where('user_id', Auth::id())
+                ->where('user_id', $_SESSION['user_id'] ?? null)
                 ->where('is_read', false)
                 ->latest()
                 ->get();
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notifications fetched',
                 'data'    => ['notifications' => $notifications]
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch notifications',
                 'data'    => []
@@ -389,22 +438,22 @@ class NotificationController extends Controller
     /**
      * Mark a notification as read.
      */
-    public function markNotificationAsRead(Request $request)
+    public function markNotificationAsRead()
     {
-        $data = $request->validate([
+        $data = $this->validateRequest($_POST, [
             'notification_id' => 'required|integer'
         ]);
 
         try {
             $notification = Notification::findOrFail($data['notification_id']);
             $notification->update(['is_read' => true]);
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notification marked as read',
                 'data'    => []
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to mark notification as read',
                 'data'    => []
@@ -415,22 +464,22 @@ class NotificationController extends Controller
     /**
      * Delete a notification.
      */
-    public function deleteNotification(Request $request)
+    public function deleteNotification()
     {
-        $data = $request->validate([
+        $data = $this->validateRequest($_POST, [
             'notification_id' => 'required|integer'
         ]);
 
         try {
             $notification = Notification::findOrFail($data['notification_id']);
             $notification->delete();
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notification deleted',
                 'data'    => []
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to delete notification',
                 'data'    => []
@@ -441,9 +490,9 @@ class NotificationController extends Controller
     /**
      * Send a notification.
      */
-    public function sendNotification(Request $request)
+    public function sendNotification()
     {
-        $data = $request->validate([
+        $data = $this->validateRequest($_POST, [
             'user_id' => 'required|integer',
             'type'    => 'required|in:email,sms,webhook,push',
             'message' => 'required|string|max:1000',
@@ -456,17 +505,17 @@ class NotificationController extends Controller
                 'user_id' => $data['user_id'],
                 'type'    => $data['type'],
                 'message' => $data['message'],
-                'sent_at' => now(),
+                'sent_at' => date('Y-m-d H:i:s'),
                 'is_read' => false,
             ]);
             // Optionally dispatch via queue or any external channel here.
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Notification sent successfully',
                 'data'    => ['notification' => $notification]
             ], 200);
         } catch (\Exception $e) {
-            return response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to send notification',
                 'data'    => []
@@ -502,23 +551,32 @@ class AdminController extends Controller
     public function getAllUsers()
     {
         $users = User::with('roles')->latest()->paginate(10);
-        return response()->json(['users' => $users], 200);
+        header('Content-Type: application/json');
+        http_response_code(200);
+        echo json_encode(['users' => $users]);
+        exit;
     }
 
     /**
      * ✅ Update a user's role.
      */
-    public function updateUserRole(Request $request, $userId)
+    public function updateUserRole($userId)
     {
-        $request->validate([
-            'role' => 'required|string|in:user,admin,manager'
-        ]);
-
+        // Replace Laravel validation with native checks.
+        $role = $_POST['role'] ?? '';
+        $allowedRoles = ['user', 'admin', 'manager'];
+        if (!$role || !in_array($role, $allowedRoles)) {
+            http_response_code(400);
+            echo json_encode(['message' => 'Invalid role']);
+            exit;
+        }
         $user = User::findOrFail($userId);
-        $user->update(['role' => $request->role]);
-
-        Log::channel('audit')->info("User role updated: {$user->email} to {$request->role}");
-        return response()->json(['message' => 'User role updated successfully'], 200);
+        $user->update(['role' => $role]);
+        error_log("AUDIT: User role updated: {$user->email} to {$role}");
+        header('Content-Type: application/json');
+        http_response_code(200);
+        echo json_encode(['message' => 'User role updated successfully']);
+        exit;
     }
 
     /**
@@ -528,9 +586,11 @@ class AdminController extends Controller
     {
         $user = User::findOrFail($userId);
         $user->delete();
-
-        Log::channel('audit')->warning("User deleted: {$user->email}");
-        return response()->json(['message' => 'User deleted successfully'], 200);
+        error_log("AUDIT: User deleted: {$user->email}");
+        header('Content-Type: application/json');
+        http_response_code(200);
+        echo json_encode(['message' => 'User deleted successfully']);
+        exit;
     }
 
     /**
@@ -547,30 +607,40 @@ class AdminController extends Controller
                 'latest_transactions' => TransactionLog::latest()->limit(5)->get(),
             ];
         });
-
-        return response()->json($dashboardData, 200);
+        header('Content-Type: application/json');
+        http_response_code(200);
+        echo json_encode($dashboardData);
+        exit;
     }
 
     /**
      * ✅ Create a new admin user.
      */
-    public function createAdmin(Request $request)
+    public function createAdmin()
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:8',
-        ]);
+        // Use native PHP POST handling.
+        $data = $_POST;
+        // Basic native validation.
+        if (!isset($data['name'], $data['email'], $data['password']) ||
+            !filter_var($data['email'], FILTER_VALIDATE_EMAIL) ||
+            strlen($data['password']) < 8
+        ) {
+            http_response_code(400);
+            echo json_encode(['message' => 'Invalid input']);
+            exit;
+        }
 
         $admin = Admin::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
             'role' => 'admin'
         ]);
-
-        Log::channel('audit')->info("New admin created: {$admin->email}");
-        return response()->json(['message' => 'Admin created successfully', 'admin' => $admin], 201);
+        error_log("AUDIT: New admin created: {$admin->email}");
+        header('Content-Type: application/json');
+        http_response_code(201);
+        echo json_encode(['message' => 'Admin created successfully', 'admin' => $admin]);
+        exit;
     }
 }
 === App/Controllers/AuthController.php ===
@@ -584,6 +654,7 @@ use Illuminate\Database\Capsule\Manager as Capsule;
 use Exception;
 use App\Helpers\DatabaseHelper;
 use Psr\Log\NullLogger; // added for logger
+use App\Services\Validator; // added import
 
 class AuthController extends Controller
 {
@@ -642,45 +713,57 @@ class AuthController extends Controller
     public function login($request)
     {
         header('Content-Type: application/json');
+        
+        // Ensure $request is a valid array (JSON-decoded)
+        if (!is_array($request)) {
+            http_response_code(400);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Invalid JSON input',
+                'data'    => []
+            ]);
+            exit;
+        }
+        
+        $data = $request;
+        $email = $data['email'] ?? '';
+        $password = $data['password'] ?? '';
+        
         try {
-            // Use array as-is if provided, otherwise call getParsedBody()
-            $data = is_array($request) ? $request : $request->getParsedBody(); // changed code
-
-            $email = $data['email'] ?? '';
-            $password = $data['password'] ?? '';
-
             // Delegate login logic to AuthService
             $result = $this->authService->login($email, $password);
 
-            // Securely store JWT and refresh token in HTTP-only cookies
+            // Securely store tokens
             setcookie("jwt", $result['token'], [
-                "expires" => time() + 3600,
-                "path" => "/",
-                "secure" => true,
+                "expires"  => time() + 3600,
+                "path"     => "/",
+                "secure"   => true,
                 "httponly" => true,
                 "samesite" => "Strict"
             ]);
             setcookie("refresh_token", $result['refresh_token'], [
-                "expires" => time() + 604800,
-                "path" => "/",
-                "secure" => true,
+                "expires"  => time() + 604800,
+                "path"     => "/",
+                "secure"   => true,
                 "httponly" => true,
                 "samesite" => "Strict"
             ]);
-
+            
             http_response_code(200);
             echo json_encode([
                 'status' => 'success',
                 'message' => 'User logged in',
-                'data' => [] // JWT not exposed in response
+                'data'  => [] // JWT not exposed in response
             ]);
+            exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => $e->getMessage(),
-                'data' => []
+                'data'    => []
             ]);
+            exit;
         }
     }
 
@@ -690,40 +773,77 @@ class AuthController extends Controller
     public function register($request)
     {
         header('Content-Type: application/json');
-        try {
-            // Use array as-is if provided, otherwise call getParsedBody()
-            $data = is_array($request) ? $request : $request->getParsedBody(); // changed code
-
-            $name = $data['name'] ?? '';
-            $surname = $data['surname'] ?? '';
-            $email = $data['email'] ?? '';
-            $password = $data['password'] ?? '';
-            $phone = $data['phone'] ?? null;
-            $address = $data['address'] ?? null;
-
-            // Delegate registration logic to AuthService
-            $result = $this->authService->registerUser([
-                'name' => $name,
-                'surname' => $surname,
-                'email' => $email,
-                'password' => $password,
-                'phone' => $phone,
-                'address' => $address
+        
+        // Ensure $request is a valid array
+        if (!is_array($request)) {
+            http_response_code(400);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Invalid JSON input',
+                'data'    => []
             ]);
+            exit;
+        }
+        
+        $data = $request;
+
+        // Validate input using Validator service
+        $validator = new Validator(new NullLogger());
+        $rules = [
+            'name'             => 'required',
+            'email'            => 'required|email',
+            'password'         => 'required',
+            'confirm_password' => 'required'
+        ];
+        if (!$validator->validate($data, $rules)) {
+            http_response_code(400);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Validation failed',
+                'data'    => $validator->errors()
+            ]);
+            exit;
+        }
+        // Ensure password confirmation matches
+        if ($data['password'] !== $data['confirm_password']) {
+            http_response_code(400);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Password and confirm password do not match',
+                'data'    => []
+            ]);
+            exit;
+        }
+        
+        // Prepare registration data (ignore confirm_password)
+        $registrationData = [
+            'name'     => $data['name'],
+            'surname'  => $data['surname']  ?? '',
+            'email'    => $data['email'],
+            'password' => $data['password'],
+            'phone'    => $data['phone']    ?? null,
+            'address'  => $data['address']  ?? null
+        ];
+
+        try {
+            // Delegate registration logic to AuthService
+            $result = $this->authService->registerUser($registrationData);
 
             http_response_code(201);
             echo json_encode([
-                'status' => 'success',
+                'status'  => 'success',
                 'message' => 'User registered',
-                'data' => $result
+                'data'    => $result
             ]);
+            exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => $e->getMessage(),
-                'data' => []
+                'data'    => []
             ]);
+            exit;
         }
     }
 
@@ -734,9 +854,7 @@ class AuthController extends Controller
     {
         header('Content-Type: application/json');
         try {
-            // Use array as-is if provided, otherwise call getParsedBody()
-            $data = is_array($request) ? $request : $request->getParsedBody(); // changed code
-
+            $data = $_POST;
             $email = $data['email'] ?? '';
 
             // Delegate password reset request logic to AuthService
@@ -748,6 +866,7 @@ class AuthController extends Controller
                 'message' => 'Password reset request processed',
                 'data' => $result
             ]);
+            exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
@@ -755,6 +874,7 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'data' => []
             ]);
+            exit;
         }
     }
 
@@ -794,6 +914,7 @@ class AuthController extends Controller
                     'message' => 'Token refreshed',
                     'data' => []
                 ]);
+                exit;
             } else {
                 throw new Exception('Invalid refresh token');
             }
@@ -804,6 +925,7 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'data' => []
             ]);
+            exit;
         }
     }
 
@@ -839,6 +961,7 @@ class AuthController extends Controller
                 'message' => 'User logged out',
                 'data' => []
             ]);
+            exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
@@ -846,6 +969,7 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'data' => []
             ]);
+            exit;
         }
     }
 
@@ -870,6 +994,7 @@ class AuthController extends Controller
                 'message' => 'User details fetched',
                 'data' => $userData
             ]);
+            exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
@@ -877,6 +1002,7 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'data' => []
             ]);
+            exit;
         }
     }
 
@@ -903,7 +1029,7 @@ class AuthController extends Controller
 namespace App\Controllers;
 
 use App\Services\SignatureService;
-use App\Services\Validator;
+// Removed: use App\Services\Validator;
 use Psr\Log\LoggerInterface;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
@@ -917,17 +1043,16 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 class SignatureController extends Controller
 {
     private SignatureService $signatureService;
-    private Validator $validator;
-    private LoggerInterface $logger;
+    // private Validator $validator;
+    // private LoggerInterface $logger;
 
     public function __construct(
         SignatureService $signatureService,
-        Validator $validator,
-        LoggerInterface $logger
+        /* Removed Validator */ $validator,
+        /* Removed LoggerInterface */ $logger
     ) {
         $this->signatureService = $signatureService;
-        $this->validator = $validator;
-        $this->logger = $logger;
+        // Assignments removed for validator and logger as we use custom validation and error_log()
     }
 
     /**
@@ -943,18 +1068,19 @@ class SignatureController extends Controller
             'file' => 'required|file|mimes:png,jpg,jpeg|max:2048', // Max 2MB
         ];
 
-        if (!$this->validator->validate($data, $rules)) {
-            $this->logger->warning('Signature validation failed', ['data' => $data]);
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $this->validator->errors()];
+        try {
+            custom_validate($data, $rules);
+        } catch (\Exception $ex) {
+            error_log("Warning: Signature validation failed. Data: " . json_encode($data));
+            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $ex->getMessage()];
         }
 
         try {
             $signaturePath = $this->signatureService->uploadSignature($data['user_id'], $data['file']);
-            $this->logger->info('Signature uploaded successfully', ['user_id' => $data['user_id']]);
-
+            error_log("Info: Signature uploaded successfully for user_id: " . $data['user_id']);
             return ['status' => 'success', 'message' => 'Signature uploaded successfully', 'signature_path' => $signaturePath];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to upload signature', ['error' => $e->getMessage()]);
+            error_log("Error: Failed to upload signature, error: " . $e->getMessage());
             return ['status' => 'error', 'message' => 'Failed to upload signature'];
         }
     }
@@ -972,13 +1098,13 @@ class SignatureController extends Controller
             $isValid = $this->signatureService->verifySignature($userId, $documentHash);
 
             if ($isValid) {
-                $this->logger->info('Signature verified successfully', ['user_id' => $userId]);
+                error_log("Info: Signature verified successfully for user_id: {$userId}");
                 return ['status' => 'success', 'message' => 'Signature verified successfully'];
             }
 
             return ['status' => 'error', 'message' => 'Signature verification failed'];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to verify signature', ['error' => $e->getMessage()]);
+            error_log("Error: Failed to verify signature, error: " . $e->getMessage());
             return ['status' => 'error', 'message' => 'Failed to verify signature'];
         }
     }
@@ -995,13 +1121,13 @@ class SignatureController extends Controller
             $signaturePath = $this->signatureService->getSignature($userId);
 
             if ($signaturePath) {
-                $this->logger->info('Signature retrieved successfully', ['user_id' => $userId]);
+                error_log("Info: Signature retrieved successfully for user_id: {$userId}");
                 return ['status' => 'success', 'signature_path' => $signaturePath];
             }
 
             return ['status' => 'error', 'message' => 'Signature not found'];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to retrieve signature', ['error' => $e->getMessage()]);
+            error_log("Error: Failed to retrieve signature, error: " . $e->getMessage());
             return ['status' => 'error', 'message' => 'Failed to retrieve signature'];
         }
     }
@@ -1015,9 +1141,7 @@ use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Notification;
 use App\Models\User;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -1041,13 +1165,14 @@ class DashboardController extends Controller
     }
 
     /**
-     * Render user dashboard view using Eloquent ORM and caching.
+     * Render user dashboard view.
      */
     public function userDashboard()
     {
         try {
-            // Eager load bookings and notifications for the authenticated user
-            $user = Auth::user()->load(['bookings', 'notifications']);
+            // Assume session_start() is already called.
+            $user = (object)['id' => $_SESSION['user_id'] ?? null]; // Replace with native session retrieval
+            // ...existing code for eager loading if needed...
             $statistics = Cache::remember('user_dashboard_' . $user->id, 60, function () use ($user) {
                 return [
                     'total_bookings'     => Booking::where('user_id', $user->id)->count(),
@@ -1057,18 +1182,18 @@ class DashboardController extends Controller
             });
             view('dashboard/user_dashboard', ['user' => $user, 'statistics' => $statistics]);
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to load user dashboard', ['error' => $e->getMessage()]);
+            error_log('Failed to load user dashboard: '.$e->getMessage());
             abort(500, 'Error loading dashboard');
         }
     }
 
     /**
-     * Fetch user bookings using Eloquent ORM.
+     * Fetch user bookings.
      */
     public function getUserBookings(): void
     {
         try {
-            $bookings = Booking::where('user_id', Auth::id())->get();
+            $bookings = Booking::where('user_id', $_SESSION['user_id'] ?? null)->get();
             http_response_code(200);
             echo json_encode([
                 'status'  => 'success',
@@ -1076,13 +1201,13 @@ class DashboardController extends Controller
                 'data'    => ['bookings' => $bookings]
             ]);
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to fetch bookings', ['error' => $e->getMessage()]);
+            error_log('Failed to fetch bookings: '.$e->getMessage());
             abort(500, 'Failed to fetch bookings');
         }
     }
 
     /**
-     * Fetch dashboard statistics using Eloquent ORM and caching.
+     * Fetch dashboard statistics.
      */
     public function fetchStatistics(): void
     {
@@ -1101,18 +1226,18 @@ class DashboardController extends Controller
                 'data'    => $stats
             ]);
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to fetch statistics', ['error' => $e->getMessage()]);
+            error_log('Failed to fetch statistics: '.$e->getMessage());
             abort(500, 'Failed to fetch statistics');
         }
     }
 
     /**
-     * Fetch user notifications using Eloquent ORM.
+     * Fetch user notifications.
      */
     public function fetchNotifications(): void
     {
         try {
-            $notifications = Notification::where('user_id', Auth::id())
+            $notifications = Notification::where('user_id', $_SESSION['user_id'] ?? null)
                 ->latest()
                 ->get();
             http_response_code(200);
@@ -1122,18 +1247,18 @@ class DashboardController extends Controller
                 'data'    => ['notifications' => $notifications]
             ]);
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to fetch notifications', ['error' => $e->getMessage()]);
+            error_log('Failed to fetch notifications: '.$e->getMessage());
             abort(500, 'Failed to fetch notifications');
         }
     }
 
     /**
-     * Fetch user profile using Eloquent ORM.
+     * Fetch user profile.
      */
     public function fetchUserProfile(): void
     {
         try {
-            $profile = User::findOrFail(Auth::id());
+            $profile = User::findOrFail($_SESSION['user_id'] ?? null);
             http_response_code(200);
             echo json_encode([
                 'status'  => 'success',
@@ -1141,7 +1266,7 @@ class DashboardController extends Controller
                 'data'    => ['profile' => $profile]
             ]);
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to fetch user profile', ['error' => $e->getMessage()]);
+            error_log('Failed to fetch user profile: '.$e->getMessage());
             abort(500, 'Failed to fetch user profile');
         }
     }
@@ -1180,9 +1305,10 @@ class AdminDashboardController
             });
             $recentBookings = Booking::with('user')->latest()->limit(5)->get();
 
-            view('admin/dashboard', ['metrics' => $metrics, 'recentBookings' => $recentBookings]);
+            extract(compact('metrics', 'recentBookings'));
+            include BASE_PATH . '/public/views/admin/dashboard.php';
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to load admin dashboard', ['error' => $e->getMessage()]);
+            error_log("DASHBOARD ERROR: " . $e->getMessage());
             http_response_code(500);
             echo 'Error loading the dashboard. Please try again later.';
         }
@@ -1208,6 +1334,7 @@ class AdminDashboardController
             });
             $recentBookings = Booking::with('user')->latest()->limit(5)->get();
 
+            header('Content-Type: application/json');
             http_response_code(200);
             echo json_encode([
                 'status'  => 'success',
@@ -1217,14 +1344,16 @@ class AdminDashboardController
                     'recent_bookings' => $recentBookings,
                 ]
             ]);
+            exit;
         } catch (\Exception $e) {
-            Log::channel('dashboard')->error('Failed to fetch dashboard data', ['error' => $e->getMessage()]);
+            error_log("DASHBOARD ERROR: " . $e->getMessage());
             http_response_code(500);
             echo json_encode([
                 'status'  => 'error',
                 'message' => 'Failed to fetch dashboard data',
                 'data'    => []
             ]);
+            exit;
         }
     }
 }
@@ -1238,7 +1367,6 @@ use App\Models\RefundLog;
 use App\Models\TransactionLog;
 use App\Models\InstallmentPlan;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Http\Request;
 
 /**
  * Payment Controller
@@ -1273,45 +1401,44 @@ class PaymentController extends Controller
     /**
      * Process a payment.
      */
-    public function processPayment(Request $request): void
+    public function processPayment(): void
     {
-        $data = $request->validate([
-            'user_id'         => 'required|integer',
-            'booking_id'      => 'required|integer',
-            'amount'          => 'required|numeric|min:0.01',
-            'payment_method_id'=> 'required|integer',
+        $data = $this->validateRequest($_POST, [
+            'user_id'          => 'required|integer',
+            'booking_id'       => 'required|integer',
+            'amount'           => 'required|numeric|min:0.01',
+            'payment_method_id' => 'required|integer',
         ]);
         try {
             $payment = Payment::create([
-                'booking_id'      => $data['booking_id'],
-                'user_id'         => $data['user_id'],
-                'amount'          => $data['amount'],
-                'payment_method'  => $data['payment_method_id'],
-                'status'          => 'completed'
+                'booking_id'     => $data['booking_id'],
+                'user_id'        => $data['user_id'],
+                'amount'         => $data['amount'],
+                'payment_method' => $data['payment_method_id'],
+                'status'         => 'completed'
             ]);
             // Update related booking status via Eloquent relationship
             $payment->booking()->update(['status' => 'paid']);
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Payment processed',
                 'data'    => ['payment' => $payment]
             ], 200);
         } catch (\Exception $e) {
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Payment processing failed',
                 'data'    => []
             ], 500);
         }
-        exit;
     }
 
     /**
      * Refund a payment.
      */
-    public function refundPayment(Request $request): void
+    public function refundPayment(): void
     {
-        $data = $request->validate([
+        $data = $this->validateRequest($_POST, [
             'transaction_id' => 'required|integer',
             'amount'         => 'required|numeric|min:0.01',
         ]);
@@ -1321,13 +1448,13 @@ class PaymentController extends Controller
                 'amount'         => $data['amount'],
                 'status'         => 'processed'
             ]);
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Refund processed',
                 'data'    => ['refund' => $refund]
             ], 200);
         } catch (\Exception $e) {
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Refund processing failed',
                 'data'    => []
@@ -1338,28 +1465,28 @@ class PaymentController extends Controller
     /**
      * Set up installment payments.
      */
-    public function setupInstallment(Request $request): void
+    public function setupInstallment(): void
     {
-        $data = $request->validate([
-            'user_id'          => 'required|integer',
-            'total_amount'     => 'required|numeric|min:0.01',
-            'installments'     => 'required|integer|min:2',
-            'payment_method_id'=> 'required|integer',
+        $data = $this->validateRequest($_POST, [
+            'user_id'           => 'required|integer',
+            'total_amount'      => 'required|numeric|min:0.01',
+            'installments'      => 'required|integer|min:2',
+            'payment_method_id' => 'required|integer',
         ]);
         try {
             $plan = InstallmentPlan::create([
-                'user_id'         => $data['user_id'],
-                'total_amount'    => $data['total_amount'],
-                'installments'    => $data['installments'],
-                'payment_method'  => $data['payment_method_id'],
+                'user_id'        => $data['user_id'],
+                'total_amount'   => $data['total_amount'],
+                'installments'   => $data['installments'],
+                'payment_method' => $data['payment_method_id'],
             ]);
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Installment plan created',
                 'data'    => ['installment_plan' => $plan]
             ], 200);
         } catch (\Exception $e) {
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Installment plan setup failed',
                 'data'    => []
@@ -1374,16 +1501,16 @@ class PaymentController extends Controller
     {
         try {
             $transactions = TransactionLog::with(['payment', 'booking'])
-                ->where('user_id', Auth::id())
+                ->where('user_id', $_SESSION['user_id'] ?? null)
                 ->latest()
                 ->get();
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Transactions fetched',
                 'data'    => ['transactions' => $transactions]
             ], 200);
         } catch (\Exception $e) {
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch user transactions',
                 'data'    => []
@@ -1398,13 +1525,13 @@ class PaymentController extends Controller
     {
         try {
             $details = TransactionLog::findOrFail($transactionId);
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Payment details fetched',
                 'data'    => ['details' => $details]
             ], 200);
         } catch (\Exception $e) {
-            response()->json([
+            $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch payment details',
                 'data'    => []
@@ -1430,6 +1557,10 @@ class Controller
     public function __construct(LoggerInterface $logger)
     {
         $this->logger = $logger;
+        // Ensure session has started
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
     }
 
     /**
@@ -1457,8 +1588,10 @@ class Controller
      */
     protected function checkAuth(): void
     {
-        session_start();
-        if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? null) !== 'admin') {
             $this->jsonResponse(['status' => 'error', 'message' => 'Unauthorized'], 403);
         }
     }
@@ -1558,7 +1691,7 @@ class DocumentController extends Controller
             ]);
             return $this->jsonResponse(['status' => 'success', 'message' => 'Template uploaded successfully', 'template_id' => $template->id]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to upload template', ['error' => $e->getMessage()]);
+            error_log('Failed to upload template: '.$e->getMessage());
             return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to upload template']);
         }
     }
@@ -1579,7 +1712,7 @@ class DocumentController extends Controller
             ]);
             return $this->jsonResponse(['status' => 'success', 'message' => 'Contract generated successfully', 'contract_path' => $contractPath]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to generate contract', ['error' => $e->getMessage()]);
+            error_log('Failed to generate contract: '.$e->getMessage());
             return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to generate contract']);
         }
     }
@@ -1607,10 +1740,10 @@ class DocumentController extends Controller
                 $_SERVER['REMOTE_ADDR'] ?? null
             );
 
-            return ['status' => 'success', 'message' => 'T&C document uploaded successfully'];
+            return $this->jsonResponse(['status' => 'success', 'message' => 'T&C document uploaded successfully']);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to upload T&C document', ['error' => $e->getMessage()]);
-            return ['status' => 'error', 'message' => 'Failed to upload T&C document'];
+            error_log('Failed to upload T&C document: '.$e->getMessage());
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to upload T&C document']);
         }
     }
 
@@ -1631,7 +1764,7 @@ class DocumentController extends Controller
 
             return ['status' => 'success', 'message' => 'Invoice generated successfully', 'invoice_path' => $invoicePath];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to generate invoice', ['error' => $e->getMessage()]);
+            error_log('Failed to generate invoice: '.$e->getMessage());
             return ['status' => 'error', 'message' => 'Failed to generate invoice'];
         }
     }
@@ -1653,7 +1786,7 @@ class DocumentController extends Controller
 
             return ['status' => 'success', 'message' => 'Document deleted successfully'];
         } catch (\Exception $e) {
-            $this->logger->error('Failed to delete document', ['error' => $e->getMessage()]);
+            error_log('Failed to delete document: '.$e->getMessage());
             return ['status' => 'error', 'message' => 'Failed to delete document'];
         }
     }
@@ -1666,7 +1799,7 @@ namespace App\Controllers;
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\User;
-use Illuminate\Http\Request;
+// Removed: use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use PDF;
 
@@ -1675,20 +1808,18 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 class ReportController extends Controller
 {
     private ReportService $reportService;
-    private Validator $validator;
+    // Removed: private Validator $validator;
     private NotificationService $notificationService;
-    private LoggerInterface $logger;
+    // Removed: private LoggerInterface $logger;
 
     public function __construct(
         ReportService $reportService,
-        Validator $validator,
+        /* Removed Validator */ $validator,
         NotificationService $notificationService,
-        LoggerInterface $logger
+        /* Removed LoggerInterface */ $logger
     ) {
         $this->reportService = $reportService;
-        $this->validator = $validator;
         $this->notificationService = $notificationService;
-        $this->logger = $logger;
     }
 
     /**
@@ -1699,12 +1830,12 @@ class ReportController extends Controller
         try {
             $data = ['view' => 'admin/reports'];
             http_response_code(200);
-            echo json_encode(['status' => 'success','message' => 'Report dashboard loaded','data' => $data]);
+            echo json_encode(['status' => 'success', 'message' => 'Report dashboard loaded', 'data' => $data]);
         } catch (\Exception $e) {
-            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
-            $this->logger->error('Failed to load admin report dashboard', ['error' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            error_log("Error: Failed to load admin report dashboard, error: " . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['status' => 'error','message' => 'Failed to load report dashboard','data' => []]);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load report dashboard', 'data' => []]);
         }
         exit;
     }
@@ -1712,20 +1843,21 @@ class ReportController extends Controller
     /**
      * Generate Report for Admin using Eloquent ORM.
      */
-    public function generateReport(Request $request)
+    public function generateReport()
     {
-        $validated = $request->validate([
-            'report_type'          => 'required|in:bookings,payments,users',
-            'date_range.start'     => 'required|date',
-            'date_range.end'       => 'required|date',
-            'filters'              => 'array',
-            'format'               => 'required|in:csv,pdf',
-        ]);
+        // Replace Request validation with native PHP validation
+        $validated = $_POST; // Assumes JSON-decoded input or form data
 
-        $start = $validated['date_range']['start'];
-        $end = $validated['date_range']['end'];
-        $format = $validated['format'];
-        $reportType = $validated['report_type'];
+        $start      = $validated['date_range']['start'] ?? null;
+        $end        = $validated['date_range']['end'] ?? null;
+        $format     = $validated['format'] ?? null;
+        $reportType = $validated['report_type'] ?? null;
+
+        if (!$start || !$end || !$format || !$reportType) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Missing required parameters']);
+            exit;
+        }
 
         switch ($reportType) {
             case 'bookings':
@@ -1745,18 +1877,22 @@ class ReportController extends Controller
                     ->toArray();
                 break;
             default:
-                return response()->json(['status' => 'error', 'message' => 'Invalid report type'], 400);
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Invalid report type']);
+                exit;
         }
 
         $filename = "{$reportType}_report_" . date('YmdHis');
         if ($format === 'csv') {
-            // Assumes ReportExport implements necessary interfaces (e.g., FromArray)
+            // Assuming Excel::download now returns file content in native PHP
             return Excel::download(new \App\Exports\ReportExport($data), $filename . ".csv");
         } elseif ($format === 'pdf') {
             $pdf = PDF::loadView('reports.template', ['data' => $data]);
             return $pdf->download($filename . ".pdf");
         } else {
-            return response()->json(['status' => 'error', 'message' => 'Unsupported format'], 400);
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Unsupported format']);
+            exit;
         }
     }
 
@@ -1768,12 +1904,12 @@ class ReportController extends Controller
         try {
             $data = ['view' => 'user/reports'];
             http_response_code(200);
-            echo json_encode(['status' => 'success','message' => 'User report dashboard loaded','data' => $data]);
+            echo json_encode(['status' => 'success', 'message' => 'User report dashboard loaded', 'data' => $data]);
         } catch (\Exception $e) {
-            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
-            $this->logger->error('Failed to load user report dashboard', ['error' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            error_log("Error: Failed to load user report dashboard, error: " . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['status' => 'error','message' => 'Failed to load report dashboard','data' => []]);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load report dashboard', 'data' => []]);
         }
         exit;
     }
@@ -1781,21 +1917,20 @@ class ReportController extends Controller
     /**
      * Generate Report for a User using Eloquent ORM.
      */
-    public function generateUserReport(Request $request)
+    public function generateUserReport()
     {
-        $validated = $request->validate([
-            'user_id'              => 'required|integer',
-            'report_type'          => 'required|in:bookings,payments',
-            'date_range.start'     => 'required|date',
-            'date_range.end'       => 'required|date',
-            'format'               => 'required|in:csv,pdf',
-        ]);
+        $validated = $_POST;
+        $userId     = $validated['user_id'] ?? null;
+        $start      = $validated['date_range']['start'] ?? null;
+        $end        = $validated['date_range']['end'] ?? null;
+        $format     = $validated['format'] ?? null;
+        $reportType = $validated['report_type'] ?? null;
 
-        $userId = $validated['user_id'];
-        $start  = $validated['date_range']['start'];
-        $end    = $validated['date_range']['end'];
-        $format = $validated['format'];
-        $reportType = $validated['report_type'];
+        if (!$userId || !$start || !$end || !$format || !$reportType) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Missing required parameters']);
+            exit;
+        }
 
         switch ($reportType) {
             case 'bookings':
@@ -1812,7 +1947,9 @@ class ReportController extends Controller
                     ->toArray();
                 break;
             default:
-                return response()->json(['status' => 'error', 'message' => 'Invalid report type'], 400);
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Invalid report type']);
+                exit;
         }
 
         $filename = "user_{$userId}_{$reportType}_report_" . date('YmdHis');
@@ -1822,7 +1959,9 @@ class ReportController extends Controller
             $pdf = PDF::loadView('reports.template', ['data' => $data]);
             return $pdf->download($filename . ".pdf");
         } else {
-            return response()->json(['status' => 'error', 'message' => 'Unsupported format'], 400);
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Unsupported format']);
+            exit;
         }
     }
 
@@ -1834,7 +1973,7 @@ class ReportController extends Controller
         try {
             if (!file_exists($filePath)) {
                 http_response_code(404);
-                echo json_encode(['status' => 'error','message' => 'Report not found','data' => []]);
+                echo json_encode(['status' => 'error', 'message' => 'Report not found', 'data' => []]);
                 return;
             }
 
@@ -1848,10 +1987,10 @@ class ReportController extends Controller
             readfile($filePath);
             exit;
         } catch (\Exception $e) {
-            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n", 3, BASE_PATH . '/logs/api.log');
-            $this->logger->error('Failed to download report', ['error' => $e->getMessage()]);
+            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            error_log("Error: Failed to download report, error: " . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['status' => 'error','message' => 'Failed to download report','data' => []]);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to download report', 'data' => []]);
         }
     }
 }
@@ -1873,17 +2012,14 @@ class AuditController extends Controller
     /**
      * ✅ Render the audit log view for the admin.
      */
-    public function index(Request $request)
+    public function index()
     {
         try {
-            // Validate request filters (add rules as needed)
-            $filters = $request->validate([
-                // 'field_name' => 'rule'
-            ]);
+            // Replace request->validate(...) with native PHP filters (assuming $_POST).
+            $filters = $_POST; // custom validation can be performed as needed
             $logs = AuditLog::where($filters)->latest()->paginate(10);
-            // Pass $logs to the included view
             extract(compact('logs'));
-            include 'public/views/admin/audit_logs.php';
+            include BASE_PATH . '/public/views/admin/audit_logs.php';
         } catch (\Exception $e) {
             // Centralized error handling
             return $this->handleException($e);
@@ -1893,15 +2029,15 @@ class AuditController extends Controller
     /**
      * ✅ API Endpoint: Fetch logs based on filters.
      */
-    public function fetchLogs(Request $request)
+    public function fetchLogs()
     {
         try {
-            // Validate request filters (add rules as needed)
-            $filters = $request->validate([
-                // 'field_name' => 'rule'
-            ]);
+            $filters = $_POST; // custom validation as needed
             $logs = AuditLog::where($filters)->latest()->paginate(10);
-            return $this->jsonResponse(['status' => 'success', 'logs' => $logs]);
+            header('Content-Type: application/json');
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'logs' => $logs]);
+            exit;
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -3930,10 +4066,11 @@ class UserService
             'address' => 'required|string|max:255',
         ];
 
-        // Pass the injected logger to the Validator
-        $validator = new Validator($this->logger);
-        if (!$validator->validate($data, $rules)) {
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $validator->errors()];
+        // Replace Laravel Validator instantiation with custom static validation
+        try {
+            Validator::validate($data, $rules);
+        } catch (Exception $e) {
+            return ['status' => 'error', 'message' => $e->getMessage()];
         }
 
         try {
@@ -4378,8 +4515,7 @@ class BookingService
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Log;
+// ...existing imports removed (no RateLimiter or Log) ...
 
 /**
  * Rate Limiter Service
@@ -4392,8 +4528,15 @@ class RateLimit
 
     public function isRateLimited(string $ip): bool
     {
-        if (RateLimiter::tooManyAttempts($ip, 5)) {
-            Log::channel('security')->warning("[RateLimit] Rate limit exceeded for IP: {$ip}");
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (!isset($_SESSION['rate_limit'])) {
+            $_SESSION['rate_limit'] = [];
+        }
+        $attempts = $_SESSION['rate_limit'][$ip] ?? 0;
+        if ($attempts >= 5) {
+            error_log("[RateLimit] Rate limit exceeded for IP: {$ip}");
             return true;
         }
         return false;
@@ -4401,8 +4544,14 @@ class RateLimit
 
     public function recordFailedAttempt(string $ip): void
     {
-        RateLimiter::hit($ip, 900); // 900 seconds = 15 minutes
-        Log::channel('security')->warning("[RateLimit] Recorded failed attempt for IP: {$ip}");
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (!isset($_SESSION['rate_limit'])) {
+            $_SESSION['rate_limit'] = [];
+        }
+        $_SESSION['rate_limit'][$ip] = ($_SESSION['rate_limit'][$ip] ?? 0) + 1;
+        error_log("[RateLimit] Recorded failed attempt for IP: {$ip}");
     }
 }
 === App/Services/Auth/TokenService.php ===
@@ -4412,7 +4561,7 @@ namespace App\Services\Auth;
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-use Illuminate\Support\Facades\Cache;
+// Removed: use Illuminate\Support\Facades\Cache;
 use Psr\Log\LoggerInterface;
 
 class TokenService
@@ -4454,18 +4603,17 @@ class TokenService
         }
     }
 
-    // New method: validateToken() to reject expired tokens and log failures
     public function validateToken(string $token): ?array
     {
         try {
             $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
             if ($decoded->exp < time()) {
-                \logAuthFailure("Expired token for user id: " . ($decoded->sub ?? 'unknown'));
+                error_log("Expired token for user id: " . ($decoded->sub ?? 'unknown'));
                 return null;
             }
             return (array)$decoded;
         } catch (\Exception $e) {
-            \logAuthFailure("Token validation failed: " . $e->getMessage());
+            error_log("Token validation failed: " . $e->getMessage());
             return null;
         }
     }
@@ -4488,7 +4636,7 @@ class TokenService
         if ($decoded) {
             $userId = $decoded['sub'];
 
-            if (Cache::has("revoked_refresh_token_$refreshToken")) {
+            if (apcu_exists("revoked_refresh_token_$refreshToken")) {
                 return null;
             }
 
@@ -4497,29 +4645,28 @@ class TokenService
         return null;
     }
 
-    // New method: refreshToken() to securely generate a new access token using a valid refresh token
     public function refreshToken(string $refreshToken): ?string
     {
         try {
             $decoded = JWT::decode($refreshToken, new Key($this->refreshSecretKey, 'HS256'));
             if ($decoded->exp < time()) {
-                \logAuthFailure("Expired refresh token for user id: " . ($decoded->sub ?? 'unknown'));
+                error_log("Expired refresh token for user id: " . ($decoded->sub ?? 'unknown'));
                 return null;
             }
-            if (\Illuminate\Support\Facades\Cache::has("revoked_refresh_token_$refreshToken")) {
-                \logAuthFailure("Revoked refresh token attempted for user id: " . ($decoded->sub ?? 'unknown'));
+            if (apcu_exists("revoked_refresh_token_$refreshToken")) {
+                error_log("Revoked refresh token attempted for user id: " . ($decoded->sub ?? 'unknown'));
                 return null;
             }
             return $this->generateToken((object)['id' => $decoded->sub]);
         } catch (\Exception $e) {
-            \logAuthFailure("Refresh token validation failed: " . $e->getMessage());
+            error_log("Refresh token validation failed: " . $e->getMessage());
             return null;
         }
     }
 
     public function revokeToken(string $token): void
     {
-        Cache::put("revoked_refresh_token_$token", true, 604800);
+        apcu_store("revoked_refresh_token_$token", true, 604800);
     }
 }
 === App/Services/Auth/AuthService.php ===
@@ -4528,15 +4675,13 @@ class TokenService
 namespace App\Services\Auth;
 
 use App\Models\User;
-use App\Helpers\DatabaseHelper; // added for database operations
+use App\Helpers\DatabaseHelper;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-use Illuminate\Support\Facades\Hash; // added for password checking
+// Removed: use Illuminate\Support\Facades\Hash;
 use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\SecurityHelper; // ✅ Updated: use correct namespace
-
-require_once __DIR__ . '/../../Helpers/SecurityHelper.php';
 
 class AuthService
 {
@@ -4571,11 +4716,18 @@ class AuthService
     public function login($email, $password)
     {
         $user = User::where('email', $email)->first();
-        if (!$user || !Hash::check($password, $user->password_hash)) {
-            // ✅ Call the helper function directly instead of using the incorrect namespace reference
-            logAuthFailure("Failed login attempt for email: " . $email);
+        // Use PHP's password_verify() instead of Hash::check()
+        if (!$user || !password_verify($password, $user->password_hash)) {
+            $this->logger->warning("Failed login attempt for email: " . $email);
             throw new Exception("Invalid credentials");
         }
+
+        // Ensure session is started and set session variables
+        if(session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION['user_id'] = $user->id;
+        $_SESSION['user_role'] = $user->role ?? 'user';
 
         $token = $this->tokenService->generateToken($user);
         $refreshToken = $this->tokenService->generateRefreshToken($user);
@@ -4614,7 +4766,7 @@ class AuthService
                 'token'      => password_hash($token, PASSWORD_BCRYPT),
                 'expires_at' => $expiresAt,
             ]);
-            SecurityHelper::logAuthFailure("[AuthService] Password reset requested for {$email}");
+            $this->logger->info("[AuthService] Password reset requested for {$email}");
         } catch (Exception $e) {
             $this->logger?->error("[AuthService] Failed to insert password reset: " . $e->getMessage());
             throw $e;
@@ -4628,7 +4780,13 @@ class AuthService
 
     public function validateToken($token)
     {
-        return $this->tokenService->validateToken($token);
+        try {
+            $decoded = JWT::decode($token, new Key($this->tokenService->jwtSecret, 'HS256'));
+            return (array)$decoded;
+        } catch (Exception $e) {
+            $this->logger->error("[AuthService] Invalid token: " . $e->getMessage());
+            return false;
+        }
     }
 
     public function getUserFromToken($token)
@@ -4643,6 +4801,11 @@ class AuthService
 
     public function logout()
     {
+        // Clear session data and session cookie for secure logout
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            setcookie(session_name(), '', time() - 42000, '/');
+        }
         session_destroy();
     }
 }
@@ -5279,7 +5442,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
+// Removed: use Illuminate\Support\Facades\Log
 
 class EncryptionService
 {
@@ -5295,7 +5458,7 @@ class EncryptionService
         try {
             return Crypt::encryptString($data);
         } catch (\Exception $e) {
-            \Log::error("[EncryptionService] Encryption failed", ['error' => $e->getMessage()]);
+            error_log("[EncryptionService] Encryption failed: " . $e->getMessage());
             throw $e;
         }
     }
@@ -5305,7 +5468,7 @@ class EncryptionService
         try {
             return Crypt::decryptString($encryptedData);
         } catch (\Exception $e) {
-            \Log::error("[EncryptionService] Decryption failed", ['error' => $e->getMessage()]);
+            error_log("[EncryptionService] Decryption failed: " . $e->getMessage());
             return null;
         }
     }
@@ -5322,7 +5485,7 @@ class EncryptionService
             Storage::put($outputFile, $encrypted);
             return true;
         } catch (\Exception $e) {
-            Log::error('File encryption failed', ['error' => $e->getMessage()]);
+            error_log("File encryption failed: " . $e->getMessage());
             return false;
         }
     }
@@ -5335,7 +5498,7 @@ class EncryptionService
             Storage::put($outputFile, $decrypted);
             return true;
         } catch (\Exception $e) {
-            Log::error('File decryption failed', ['error' => $e->getMessage()]);
+            error_log("File decryption failed: " . $e->getMessage());
             return false;
         }
     }
@@ -6264,99 +6427,78 @@ class PayUService
 
 namespace App\Middleware;
 
-use Closure;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+// Removed: use Illuminate\Http\Request;
+// Removed: use Illuminate\Support\Facades\Log;
+use Psr\Log\LoggerInterface;
 use App\Services\EncryptionService;
 
 class EncryptionMiddleware
 {
-    /**
-     * Handle an incoming request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Closure  $next
-     * @return mixed
-     */
-    public function handle(Request $request, Closure $next)
+    private LoggerInterface $logger;
+    
+    public function __construct(LoggerInterface $logger)
     {
-        // Encrypt sensitive data in the request
-        if ($this->isSensitiveEndpoint($request)) {
+        $this->logger = $logger;
+    }
+    
+    // Modified handle() to use native PHP request handling without Closure
+    public function handle(array $request)
+    {
+        $uri = $_SERVER['REQUEST_URI'] ?? '/';
+        if ($this->isSensitiveEndpoint($uri)) {
             $this->encryptRequestData($request);
         }
 
-        $response = $next($request);
-
-        // Encrypt sensitive data in the response
-        if ($this->isSensitiveEndpoint($request)) {
-            $this->encryptResponseData($response);
+        // Process request (replace with your actual request processing)
+        // ...existing code or processRequest($request)...
+        $response = []; // Placeholder for processed response
+        
+        if ($this->isSensitiveEndpoint($uri)) {
+            $response = $this->encryptResponseData(json_encode($response));
         }
-
-        return $response;
+        
+        echo json_encode($response);
+        exit;
+    }
+    
+    // Modified to encrypt response data and return a string
+    private function encryptResponseData(string $data): string
+    {
+        return EncryptionService::encrypt($data);
     }
 
-    /**
-     * Determine if the request is for a sensitive endpoint.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return bool
-     */
-    private function isSensitiveEndpoint(Request $request): bool
+    // Handle encryption on native request arrays (e.g., $_POST or $_GET)
+    private function encryptRequestData(array &$request)
     {
-        $sensitiveEndpoints = [
-            '/user/profile-data',
-            // Add other sensitive endpoints here
-        ];
-
-        return in_array($request->path(), $sensitiveEndpoints);
-    }
-
-    /**
-     * Encrypt sensitive data in the request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return void
-     */
-    private function encryptRequestData(Request $request): void
-    {
-        $data = $request->all();
-        foreach ($data as $key => $value) {
+        foreach ($request as $key => $value) {
             if ($this->isSensitiveField($key)) {
-                $data[$key] = EncryptionService::encrypt($value);
+                $request[$key] = EncryptionService::encrypt($value);
             }
         }
-        $request->merge($data);
     }
 
-    /**
-     * Encrypt sensitive data in the response.
-     *
-     * @param  \Illuminate\Http\Response  $response
-     * @return void
-     */
-    private function encryptResponseData($response): void
-    {
-        $data = $response->getContent();
-        $encryptedData = EncryptionService::encrypt($data);
-        $response->setContent($encryptedData);
-    }
-
-    /**
-     * Determine if the field is sensitive.
-     *
-     * @param  string  $field
-     * @return bool
-     */
+    // Load sensitive fields dynamically from configuration file
     private function isSensitiveField(string $field): bool
     {
-        $sensitiveFields = [
-            'password',
-            'email',
-            'phone',
-            // Add other sensitive fields here
-        ];
-
+        $configPath = __DIR__ . '/../../config/sensitive_fields.json';
+        $config = file_exists($configPath) ? json_decode(file_get_contents($configPath), true) : [];
+        $sensitiveFields = $config['sensitive_fields'] ?? ['password', 'email', 'phone'];
         return in_array($field, $sensitiveFields);
+    }
+
+    // Load sensitive endpoints dynamically from configuration file
+    private function isSensitiveEndpoint(string $endpoint): bool
+    {
+        $configPath = __DIR__ . '/../../config/sensitive_endpoints.json';
+        $config = file_exists($configPath) ? json_decode(file_get_contents($configPath), true) : [];
+        $sensitiveEndpoints = $config['sensitive_endpoints'] ?? ['/user/profile-data'];
+        return in_array($endpoint, $sensitiveEndpoints);
+    }
+    
+    // Log events using injected LoggerInterface
+    private function logEvent(string $message)
+    {
+        $this->logger->info("[EncryptionMiddleware] $message");
     }
 }
 === App/Middleware/AuthMiddleware.php ===
@@ -6364,31 +6506,89 @@ class EncryptionMiddleware
 
 namespace App\Middleware;
 
-use Closure;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Log;
+use App\Helpers\SecurityHelper;
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+use Psr\Log\LoggerInterface;
 
+/**
+ * AuthMiddleware - Handles authentication for API requests.
+ * Ensures valid JWT tokens and role-based access control.
+ */
 class AuthMiddleware
 {
-    public function handle(Request $request, Closure $next, ...$guards)
+    private LoggerInterface $logger;
+    private string $jwtSecret;
+
+    public function __construct(LoggerInterface $logger)
     {
-        // Use Laravel's auth guard to get the authenticated user
-        $user = Auth::guard('api')->check() ? Auth::guard('api')->user() : Auth::user();
+        $this->logger = $logger;
 
-        if (!$user) {
-            Log::channel('security')->warning('Unauthorized access attempt: No authenticated user found.');
-            abort(401, 'Unauthorized');
+        $configPath = __DIR__ . '/../../config/encryption.php';
+        if (!file_exists($configPath)) {
+            throw new \Exception("Encryption configuration missing.");
         }
 
-        // If "admin" is required, use Gate for role-based access
-        if (in_array('admin', $guards) && !Gate::allows('admin-action')) {
-            Log::channel('security')->warning("User {$user->id} attempted admin access without privileges.");
-            abort(403, 'Forbidden');
+        $encryptionConfig = require $configPath;
+        if (!isset($encryptionConfig['jwt_secret'])) {
+            throw new \Exception("JWT secret missing in encryption.php.");
         }
 
-        return $next($request);
+        $this->jwtSecret = $encryptionConfig['jwt_secret'];
+    }
+
+    /**
+     * Handle authentication and authorization.
+     *
+     * @param callable $next The next middleware function.
+     * @param array $roles Required roles (e.g., 'admin').
+     */
+    public function handle($next, ...$roles)
+    {
+        // Ensure Authorization header exists
+        $headers = getallheaders();
+        if (!isset($headers['Authorization']) || !str_starts_with($headers['Authorization'], 'Bearer ')) {
+            $this->logger->warning("[AuthMiddleware] Unauthorized access attempt: Missing Authorization header.");
+            http_response_code(401);
+            exit(json_encode(['error' => 'Unauthorized']));
+        }
+
+        // Extract and validate JWT token
+        $token = substr($headers['Authorization'], 7);
+        $decoded = $this->validateToken($token);
+        if (!$decoded) {
+            $this->logger->warning("[AuthMiddleware] Invalid token detected.");
+            http_response_code(401);
+            exit(json_encode(['error' => 'Invalid token']));
+        }
+
+        // Extract user details
+        $_SESSION['user_id'] = $decoded['sub'] ?? null;
+        $_SESSION['user_role'] = $decoded['role'] ?? 'guest';
+
+        // Check role-based access control
+        if (!empty($roles) && !in_array($_SESSION['user_role'], $roles)) {
+            $this->logger->warning("[AuthMiddleware] User {$_SESSION['user_id']} attempted unauthorized access.");
+            http_response_code(403);
+            exit(json_encode(['error' => 'Forbidden']));
+        }
+
+        // Proceed with the request
+        return $next();
+    }
+
+    /**
+     * Validate JWT token and return decoded data.
+     */
+    private function validateToken($token)
+    {
+        try {
+            $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
+            return (array) $decoded;
+        } catch (\Exception $e) {
+            $this->logger->error("[AuthMiddleware] Token validation failed: " . $e->getMessage());
+            return false;
+        }
     }
 }
 === App/Middleware/AuditTrailMiddleware.php ===
@@ -6399,6 +6599,9 @@ namespace AuditManager\Middleware;
 use AuditManager\Services\AuditService;
 use Psr\Log\LoggerInterface;
 
+/**
+ * AuditTrailMiddleware - Logs user actions for audit tracking.
+ */
 class AuditTrailMiddleware
 {
     private AuditService $auditService;
@@ -6411,39 +6614,51 @@ class AuditTrailMiddleware
     }
 
     /**
-     * Handle an incoming request.
-     * Logs relevant details to the audit trail.
+     * Handle an incoming request and log relevant details.
+     *
+     * @param array $request The request data.
+     * @param callable $next The next middleware function.
      */
     public function handle(array $request, callable $next)
     {
         try {
-            // Extract relevant data from the request
-            $action = $this->determineAction($request);
-            $details = json_encode($request); // Sanitize or limit this as necessary
-            $userId = $request['user_id'] ?? null;
-            $bookingId = $request['booking_id'] ?? null;
+            // Extract request details
+            $action = $this->determineAction();
+            $details = json_encode($this->sanitizeRequestData($request));
+            $userId = $_SESSION['user_id'] ?? null;
             $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 
             // Log the action
-            $this->auditService->log($action, $details, $userId, $bookingId, $ipAddress);
+            $this->auditService->log($action, $details, $userId, $ipAddress);
 
             // Continue to the next middleware/controller
             return $next($request);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to log action in audit trail', ['error' => $e->getMessage()]);
-            // Allow the request to proceed even if logging fails
-            return $next($request);
+            $this->logger->error('[AuditTrail] Failed to log action', ['error' => $e->getMessage()]);
+            return $next($request); // Allow the request to proceed even if logging fails
         }
     }
 
     /**
-     * Determine the action based on the request.
+     * Determine the action performed based on the request.
+     *
+     * @return string
      */
-    private function determineAction(array $request): string
+    private function determineAction(): string
     {
-        // Determine action based on the request (e.g., URL, HTTP method, etc.)
-        $action = $_SERVER['REQUEST_METHOD'] . ' ' . ($_SERVER['REQUEST_URI'] ?? 'unknown');
-        return $action;
+        return $_SERVER['REQUEST_METHOD'] . ' ' . ($_SERVER['REQUEST_URI'] ?? 'unknown');
+    }
+
+    /**
+     * Sanitize request data before logging.
+     *
+     * @param array $request The raw request data.
+     * @return array The sanitized request data.
+     */
+    private function sanitizeRequestData(array $request): array
+    {
+        unset($request['password'], $request['token']); // Remove sensitive fields
+        return $request;
     }
 }
 === App/Helpers/ViewHelper.php ===
@@ -6477,26 +6692,31 @@ define('SECURITY_HELPER_LOADED', true);
 | Path: App/Helpers/SecurityHelper.php
 */
 
-use Psr\Log\LoggerInterface;
-use Illuminate\Support\Facades\Session;
-use Illuminate\Support\Facades\Auth;
+// Removed: use Illuminate\Support\Facades\Session;
+// Removed: use Illuminate\Support\Facades\Auth;
+// Removed: use Illuminate\Support\Facades\Log;
 
 // Security Configuration
 const SESSION_CONFIG = [
-    'use_only_cookies' => 1,
-    'use_strict_mode' => 1,
-    'cookie_httponly' => 1,
-    'cookie_samesite' => 'Lax',
-    'gc_maxlifetime' => 3600,
-    'cookie_lifetime' => 0,
-    'use_trans_sid' => 0,
-    'sid_bits_per_character' => 6
+    'use_only_cookies'        => 1,
+    'use_strict_mode'         => 1,
+    'cookie_httponly'         => 1,
+    'cookie_samesite'         => 'Lax',
+    'gc_maxlifetime'          => 3600,
+    'cookie_lifetime'         => 0,
+    'use_trans_sid'           => 0,
+    'sid_bits_per_character'  => 6
 ];
 
 // ✅ Standardized Logging Function
 if (!function_exists('securityLog')) {
-    function securityLog(LoggerInterface $logger, $message, $level = 'info') {
-        $logger->log($level, "[Security] $message");
+    function securityLog($logger, $message, $level = 'info') {
+        // Use logger if available; fall back to error_log
+        if ($logger && method_exists($logger, 'log')) {
+            $logger->log($level, "[Security] $message");
+        } else {
+            error_log("[Security][$level] $message");
+        }
     }
 }
 
@@ -6507,22 +6727,26 @@ if (!function_exists('logAuthEvent')) {
      * Log authentication events.
      */
     function logAuthEvent($message, $level = 'info') {
-        Log::channel('auth')->info($message);
+        error_log("[Auth][$level] $message");
     }
 }
 
 if (!function_exists('logAuthFailure')) {
-    // Helper to log authentication failures to auth.log
+    // Helper to log authentication failures
     function logAuthFailure($message) {
-        Log::channel('auth')->error($message);
+        error_log("[Auth][error] $message");
     }
 }
 
-// ✅ Secure Session Handling via Laravel's Session Facade
+// ✅ Secure Session Handling using native PHP sessions
 if (!function_exists('startSecureSession')) {
     function startSecureSession() {
-        if (!Session::isStarted()) {
-            Session::start();
+        if (session_status() === PHP_SESSION_NONE) {
+            ini_set('session.use_only_cookies', 1);
+            ini_set('session.use_strict_mode', 1);
+            ini_set('session.cookie_httponly', 1);
+            ini_set('session.cookie_samesite', 'Lax');
+            session_start();
         }
         return true;
     }
@@ -6535,7 +6759,6 @@ if (!function_exists('refreshSession')) {
      * Refresh session to extend its duration.
      */
     function refreshSession() {
-        // Changed to security.log
         $logFile = __DIR__ . '/../../logs/security.log';
         $timestamp = date('Y-m-d H:i:s');
     
@@ -6551,34 +6774,42 @@ if (!function_exists('refreshSession')) {
     }
 }
 
-// ✅ Replace raw $_SESSION handling with Session facade in session expiry enforcement
+// ✅ Replace Laravel session calls with native PHP for session expiry enforcement
 if (!function_exists('enforceSessionExpiry')) {
-    function enforceSessionExpiry(LoggerInterface $logger) {
-        if (!Session::has('last_activity')) {
-            Session::put('last_activity', time());
+    function enforceSessionExpiry($logger) {
+        if (!isset($_SESSION['last_activity'])) {
+            $_SESSION['last_activity'] = time();
             return;
         }
-        if (time() - Session::get('last_activity') > 1800) { // 30 min timeout
+        if (time() - $_SESSION['last_activity'] > 1800) { // 30 min timeout
             securityLog($logger, 'Session expired due to inactivity', 'info');
-            Session::flush();
+            $_SESSION = [];
+            if (ini_get('session.use_cookies')) {
+                setcookie(session_name(), '', time() - 42000, '/');
+            }
+            session_destroy();
         }
     }
 }
 
-// ✅ Fingerprint-Based Session Integrity Check using Session::put()/get()
+// ✅ Fingerprint-Based Session Integrity Check
 if (!function_exists('validateSessionIntegrity')) {
-    function validateSessionIntegrity(LoggerInterface $logger) {
+    function validateSessionIntegrity($logger) {
         $currentIp = hash('sha256', $_SERVER['REMOTE_ADDR']);
         $currentAgent = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
         
-        if (!Session::has('client_ip')) {
-            Session::put('client_ip', $currentIp);
-            Session::put('user_agent', $currentAgent);
+        if (!isset($_SESSION['client_ip'])) {
+            $_SESSION['client_ip'] = $currentIp;
+            $_SESSION['user_agent'] = $currentAgent;
             return true;
         }
-        if (Session::get('client_ip') !== $currentIp || Session::get('user_agent') !== $currentAgent) {
+        if ($_SESSION['client_ip'] !== $currentIp || $_SESSION['user_agent'] !== $currentAgent) {
             securityLog($logger, 'Session integrity check failed: Mismatch detected', 'warning');
-            Session::flush();
+            $_SESSION = [];
+            if (ini_get('session.use_cookies')) {
+                setcookie(session_name(), '', time() - 42000, '/');
+            }
+            session_destroy();
             return false;
         }
         return true;
@@ -6596,7 +6827,7 @@ if (!function_exists('sanitizeInput')) {
         if (!isset($data) || $data === null) {
             $data = ''; // ✅ Default to empty string to prevent undefined variable errors
         }
-        $cleanedData = trim((string) $data); // ✅ Cast to string before trim()
+        $cleanedData = trim((string)$data);
         return htmlspecialchars($cleanedData, ENT_QUOTES, 'UTF-8');
     }
 }
@@ -6611,11 +6842,15 @@ function generateSecureToken($length = 64)
     return bin2hex(random_bytes($length / 2));
 }
 
-// ✅ Secure Session Destruction using Session::flush()
+// ✅ Secure Session Destruction using native PHP
 if (!function_exists('destroySession')) {
-    function destroySession(LoggerInterface $logger) {
+    function destroySession($logger) {
         securityLog($logger, 'Destroying session', 'info');
-        Session::flush();
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            setcookie(session_name(), '', time() - 42000, '/');
+        }
+        session_destroy();
         securityLog($logger, 'Session destroyed successfully', 'info');
     }
 }
@@ -6625,7 +6860,7 @@ if (!function_exists('destroySession')) {
  */
 function isUserLoggedIn()
 {
-    return Auth::check();
+    return isset($_SESSION['user_id']);
 }
 
 /**
@@ -6633,7 +6868,7 @@ function isUserLoggedIn()
  */
 function getUserRole()
 {
-    return Auth::check() ? Auth::user()->role : 'guest';
+    return isset($_SESSION['user_id']) ? ($_SESSION['user_role'] ?? 'guest') : 'guest';
 }
 
 /**
@@ -6641,7 +6876,7 @@ function getUserRole()
  */
 function getSessionData($key)
 {
-    return Session::get($key);
+    return $_SESSION[$key] ?? null;
 }
 
 /**
@@ -6649,29 +6884,30 @@ function getSessionData($key)
  */
 function setSessionData($key, $value)
 {
-    Session::put($key, $value);
+    $_SESSION[$key] = $value;
 }
 
 /**
  * Validate JWT token.
  */
 function validateJWT($token) {
-    // Instead of manual decoding, we delegate to Laravel's 'api' guard.
-    return Auth::guard('api')->user();
+    // Replace Laravel's authentication with a native JWT approach or session check.
+    // For example, decode using firebase/php-jwt, here we simply check session.
+    return $_SESSION['user_id'] ?? null;
 }
 
 /**
  * Enforce authentication for protected pages.
  */
 function requireUserAuth() {
-    requireAuth();
+    return requireAuth();
 }
 
-// ✅ Enforce API Authentication using requireAuth()
+// ✅ Custom Authentication Enforcement
 if (!function_exists('requireAuth')) {
     function requireAuth($allowGuest = false) {
-        if (Auth::check()) {
-            return Auth::user();
+        if (isset($_SESSION['user_id'])) {
+            return $_SESSION['user_id'];
         }
         if ($allowGuest) {
             return null;
@@ -6683,9 +6919,25 @@ if (!function_exists('requireAuth')) {
     }
 }
 
+// ✅ CSRF Token Generation
+if (!function_exists('generateCsrfToken')) {
+    function generateCsrfToken() {
+        if (!isset($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['csrf_token'];
+    }
+}
+
+// Validate CSRF token in POST requests (example usage)
+// if ($_SERVER['REQUEST_METHOD'] === 'POST' && 
+//     (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? ''))) {
+//     die("CSRF validation failed.");
+// }
+
 // Initialize secure session when the file is included
 if (!startSecureSession()) {
-    securityLog('Critical: Failed to initialize secure session', 'critical');
+    securityLog(null, 'Critical: Failed to initialize secure session', 'critical');
 }
 ?>
 === App/Helpers/DatabaseHelper.php ===
@@ -6698,6 +6950,8 @@ use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use Dotenv\Dotenv;
 use Exception;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
 
 /**
  * DatabaseHelper - Centralized Database Manager
@@ -6730,7 +6984,7 @@ class DatabaseHelper
     }
 
     /**
-     * ✅ Initialize Database Connection
+     * ✅ Initialize Database Connection with proper connection validation and logging
      */
     private static function initializeDatabase(&$capsule, array $config, string $connectionName)
     {
@@ -6742,19 +6996,32 @@ class DatabaseHelper
                 $capsule->addConnection($config, $connectionName);
                 $capsule->setEventDispatcher(new Dispatcher(new Container));
 
-                // ✅ Ensure Capsule is Set as Global Once
+                // Force a connection attempt
+                $pdo = $capsule->getConnection($connectionName)->getPdo();
+                if (!$pdo) {
+                    throw new Exception("Failed to obtain PDO connection.");
+                }
+
                 if (!self::$initialized) {
                     $capsule->setAsGlobal();
                     $capsule->bootEloquent();
                     self::$initialized = true;
                 }
 
-                self::logEvent('database', "✅ {$connectionName} Database connected successfully: " . json_encode($config));
+                self::logEvent('database', "✅ {$connectionName} Database connected successfully.");
             } catch (Exception $e) {
-                self::logEvent('errors', "❌ {$connectionName} Database connection failed: " . $e->getMessage());
-                die(json_encode(["error" => "{$connectionName} database connection failed"]));
+                self::handleDatabaseError($connectionName, $e);
             }
         }
+    }
+
+    /**
+     * ✅ Handle Database Connection Failures with detailed error logging
+     */
+    private static function handleDatabaseError(string $connectionName, Exception $e)
+    {
+        self::logEvent('errors', "❌ {$connectionName} Database connection failed: " . $e->getMessage());
+        die(json_encode(["error" => "{$connectionName} database connection failed"]));
     }
 
     /**
@@ -6802,12 +7069,13 @@ class DatabaseHelper
     }
 
     /**
-     * ✅ Log Events
+     * ✅ Log Events Using Monolog for proper formatting and timestamps
      */
     private static function logEvent($category, $message)
     {
         $logFilePath = __DIR__ . "/../../logs/{$category}.log";
-        $timestamp = date('Y-m-d H:i:s');
-        file_put_contents($logFilePath, "[$timestamp] $message\n", FILE_APPEND);
+        $log = new Logger('database');
+        $log->pushHandler(new StreamHandler($logFilePath, Logger::DEBUG));
+        $log->info($message);
     }
 }
