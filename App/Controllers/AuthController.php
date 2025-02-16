@@ -8,6 +8,7 @@ use Illuminate\Database\Capsule\Manager as Capsule;
 use Exception;
 use App\Helpers\DatabaseHelper;
 use Psr\Log\NullLogger; // added for logger
+use App\Services\Validator; // added import
 
 class AuthController extends Controller
 {
@@ -115,38 +116,65 @@ class AuthController extends Controller
     public function register($request)
     {
         header('Content-Type: application/json');
-        try {
-            $data = $_POST;
-            $name = $data['name'] ?? '';
-            $surname = $data['surname'] ?? '';
-            $email = $data['email'] ?? '';
-            $password = $data['password'] ?? '';
-            $phone = $data['phone'] ?? null;
-            $address = $data['address'] ?? null;
+        
+        // Use the passed request data instead of $_POST
+        $data = $request;
 
-            // Delegate registration logic to AuthService
-            $result = $this->authService->registerUser([
-                'name' => $name,
-                'surname' => $surname,
-                'email' => $email,
-                'password' => $password,
-                'phone' => $phone,
-                'address' => $address
+        // Validate input using Validator service
+        $validator = new Validator(new NullLogger());
+        $rules = [
+            'name'             => 'required',
+            'email'            => 'required|email',
+            'password'         => 'required',
+            'confirm_password' => 'required'
+        ];
+        if (!$validator->validate($data, $rules)) {
+            http_response_code(400);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Validation failed',
+                'data'    => $validator->errors()
             ]);
+            exit;
+        }
+        // Ensure password confirmation matches
+        if ($data['password'] !== $data['confirm_password']) {
+            http_response_code(400);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Password and confirm password do not match',
+                'data'    => []
+            ]);
+            exit;
+        }
+        
+        // Prepare registration data (ignore confirm_password)
+        $registrationData = [
+            'name'     => $data['name'],
+            'surname'  => $data['surname']  ?? '',
+            'email'    => $data['email'],
+            'password' => $data['password'],
+            'phone'    => $data['phone']    ?? null,
+            'address'  => $data['address']  ?? null
+        ];
+
+        try {
+            // Delegate registration logic to AuthService
+            $result = $this->authService->registerUser($registrationData);
 
             http_response_code(201);
             echo json_encode([
-                'status' => 'success',
+                'status'  => 'success',
                 'message' => 'User registered',
-                'data' => $result
+                'data'    => $result
             ]);
             exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => $e->getMessage(),
-                'data' => []
+                'data'    => []
             ]);
             exit;
         }

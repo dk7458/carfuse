@@ -7,6 +7,8 @@ use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use Dotenv\Dotenv;
 use Exception;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
 
 /**
  * DatabaseHelper - Centralized Database Manager
@@ -39,7 +41,7 @@ class DatabaseHelper
     }
 
     /**
-     * ✅ Initialize Database Connection
+     * ✅ Initialize Database Connection with proper connection validation and logging
      */
     private static function initializeDatabase(&$capsule, array $config, string $connectionName)
     {
@@ -51,19 +53,32 @@ class DatabaseHelper
                 $capsule->addConnection($config, $connectionName);
                 $capsule->setEventDispatcher(new Dispatcher(new Container));
 
-                // ✅ Ensure Capsule is Set as Global Once
+                // Force a connection attempt
+                $pdo = $capsule->getConnection($connectionName)->getPdo();
+                if (!$pdo) {
+                    throw new Exception("Failed to obtain PDO connection.");
+                }
+
                 if (!self::$initialized) {
                     $capsule->setAsGlobal();
                     $capsule->bootEloquent();
                     self::$initialized = true;
                 }
 
-                self::logEvent('database', "✅ {$connectionName} Database connected successfully: " . json_encode($config));
+                self::logEvent('database', "✅ {$connectionName} Database connected successfully.");
             } catch (Exception $e) {
-                self::logEvent('errors', "❌ {$connectionName} Database connection failed: " . $e->getMessage());
-                die(json_encode(["error" => "{$connectionName} database connection failed"]));
+                self::handleDatabaseError($connectionName, $e);
             }
         }
+    }
+
+    /**
+     * ✅ Handle Database Connection Failures with detailed error logging
+     */
+    private static function handleDatabaseError(string $connectionName, Exception $e)
+    {
+        self::logEvent('errors', "❌ {$connectionName} Database connection failed: " . $e->getMessage());
+        die(json_encode(["error" => "{$connectionName} database connection failed"]));
     }
 
     /**
@@ -111,12 +126,13 @@ class DatabaseHelper
     }
 
     /**
-     * ✅ Log Events
+     * ✅ Log Events Using Monolog for proper formatting and timestamps
      */
     private static function logEvent($category, $message)
     {
         $logFilePath = __DIR__ . "/../../logs/{$category}.log";
-        $timestamp = date('Y-m-d H:i:s');
-        file_put_contents($logFilePath, "[$timestamp] $message\n", FILE_APPEND);
+        $log = new Logger('database');
+        $log->pushHandler(new StreamHandler($logFilePath, Logger::DEBUG));
+        $log->info($message);
     }
 }
