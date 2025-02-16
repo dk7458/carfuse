@@ -67,44 +67,55 @@ class AuthController extends Controller
     public function login($request)
     {
         header('Content-Type: application/json');
+        
+        // Ensure $request is a valid array (JSON-decoded)
+        if (!is_array($request)) {
+            http_response_code(400);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Invalid JSON input',
+                'data'    => []
+            ]);
+            exit;
+        }
+        
+        $data = $request;
+        $email = $data['email'] ?? '';
+        $password = $data['password'] ?? '';
+        
         try {
-            // Replace Laravel request parsing with native PHP.
-            $data = $_POST;
-            $email = $data['email'] ?? '';
-            $password = $data['password'] ?? '';
-
             // Delegate login logic to AuthService
             $result = $this->authService->login($email, $password);
 
-            // Securely store JWT and refresh token in HTTP-only cookies
+            // Securely store tokens
             setcookie("jwt", $result['token'], [
-                "expires" => time() + 3600,
-                "path" => "/",
-                "secure" => true,
+                "expires"  => time() + 3600,
+                "path"     => "/",
+                "secure"   => true,
                 "httponly" => true,
                 "samesite" => "Strict"
             ]);
             setcookie("refresh_token", $result['refresh_token'], [
-                "expires" => time() + 604800,
-                "path" => "/",
-                "secure" => true,
+                "expires"  => time() + 604800,
+                "path"     => "/",
+                "secure"   => true,
                 "httponly" => true,
                 "samesite" => "Strict"
             ]);
-
+            
             http_response_code(200);
             echo json_encode([
                 'status' => 'success',
                 'message' => 'User logged in',
-                'data' => [] // JWT not exposed in response
+                'data'  => [] // JWT not exposed in response
             ]);
             exit;
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => $e->getMessage(),
-                'data' => []
+                'data'    => []
             ]);
             exit;
         }
