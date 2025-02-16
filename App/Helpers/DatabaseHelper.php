@@ -3,7 +3,6 @@
 namespace App\Helpers;
 
 use Illuminate\Database\Capsule\Manager as Capsule;
-use Dotenv\Dotenv;
 use Exception;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
@@ -19,41 +18,28 @@ class DatabaseHelper
     private static $capsule = null;
     private static $secureCapsule = null;
     private static $initialized = false;
-    private static $envLoaded = false;
 
-    /**
-     * ✅ Private Constructor - Prevent Direct Instantiation (Singleton)
-     */
     private function __construct() {}
 
     /**
-     * ✅ Load Environment Variables
+     * ✅ Load Configuration from config/database.php
      */
-    private static function loadEnv()
+    private static function loadConfig(): array
     {
-        if (!self::$envLoaded) {
-            $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
-            $dotenv->safeLoad(); // Load .env safely (no errors if missing)
-            self::$envLoaded = true;
+        $configPath = __DIR__ . '/../../config/database.php';
+        if (!file_exists($configPath)) {
+            throw new Exception("Database configuration file missing.");
         }
+        return require $configPath;
     }
 
     /**
      * ✅ Retrieve Database Configuration Dynamically
      */
-    private static function getDatabaseConfig($prefix)
+    private static function getDatabaseConfig(string $key): array
     {
-        return [
-            'driver'    => 'mysql',
-            'host'      => $_ENV["{$prefix}_DB_HOST"] ?? 'localhost',
-            'port'      => $_ENV["{$prefix}_DB_PORT"] ?? '3306',
-            'database'  => $_ENV["{$prefix}_DB_DATABASE"] ?? '',
-            'username'  => $_ENV["{$prefix}_DB_USERNAME"] ?? '',
-            'password'  => $_ENV["{$prefix}_DB_PASSWORD"] ?? '',
-            'charset'   => $_ENV["{$prefix}_DB_CHARSET"] ?? 'utf8mb4',
-            'collation' => $_ENV["{$prefix}_DB_COLLATION"] ?? 'utf8mb4_unicode_ci',
-            'prefix'    => '',
-        ];
+        $config = self::loadConfig();
+        return $config[$key] ?? [];
     }
 
     /**
@@ -62,8 +48,6 @@ class DatabaseHelper
     private static function initializeDatabase(&$capsule, array $config, string $connectionName)
     {
         if ($capsule === null) {
-            self::loadEnv();
-
             try {
                 $capsule = new Capsule();
                 $capsule->addConnection($config, $connectionName);
@@ -98,7 +82,7 @@ class DatabaseHelper
     public static function getInstance(): Capsule
     {
         if (self::$capsule === null) {
-            self::initializeDatabase(self::$capsule, self::getDatabaseConfig('DB'), 'default');
+            self::initializeDatabase(self::$capsule, self::getDatabaseConfig('app_database'), 'default');
         }
 
         return self::$capsule;
@@ -110,7 +94,7 @@ class DatabaseHelper
     public static function getSecureInstance(): Capsule
     {
         if (self::$secureCapsule === null) {
-            self::initializeDatabase(self::$secureCapsule, self::getDatabaseConfig('SECURE_DB'), 'secure');
+            self::initializeDatabase(self::$secureCapsule, self::getDatabaseConfig('secure_database'), 'secure');
         }
 
         return self::$secureCapsule;
