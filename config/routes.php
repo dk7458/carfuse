@@ -3,7 +3,6 @@
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
 use App\Middleware\AuthMiddleware;
-use App\Helpers\SecurityHelper; // added for CSRF and rate limiting
 
 // ✅ Define the FastRoute Dispatcher
 return simpleDispatcher(function (RouteCollector $router) {
@@ -57,29 +56,9 @@ return simpleDispatcher(function (RouteCollector $router) {
     ];
 
     foreach ($apiRoutes as $route => $filePath) {
-        // Add CSRF protection and rate limiting for specific POST endpoints
-        if (in_array($route, ['/api/auth/login', '/api/auth/register'])) {
-            $router->addRoute(['GET', 'POST'], $route, function () use ($filePath, $route) {
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    $csrfToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-                    if (empty($csrfToken) || !SecurityHelper::validateCsrfToken($csrfToken)) {
-                        http_response_code(401);
-                        echo json_encode(["error" => "Unauthorized: invalid CSRF token"]);
-                        exit;
-                    }
-                    if (!SecurityHelper::checkRateLimit($_SERVER['REMOTE_ADDR'], $route)) {
-                        http_response_code(429);
-                        echo json_encode(["error" => "Too many requests: rate limit exceeded"]);
-                        exit;
-                    }
-                }
-                require __DIR__ . '/../public/' . $filePath;
-            });
-        } else {
-            $router->addRoute(['GET', 'POST'], $route, function () use ($filePath) {
-                require __DIR__ . '/../public/' . $filePath;
-            });
-        }
+        $router->addRoute(['GET', 'POST'], $route, function () use ($filePath) {
+            require __DIR__ . '/../public/' . $filePath;
+        });
     }
 
     // ✅ Default Route for Unmatched Requests
