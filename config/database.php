@@ -1,5 +1,12 @@
 <?php
+use Dotenv\Dotenv;
 
+// Ensure `.env` is loaded before accessing database credentials
+$dotenvPath = __DIR__ . '/../';
+if (file_exists($dotenvPath . '.env')) {
+    $dotenv = Dotenv::createImmutable($dotenvPath);
+    $dotenv->safeLoad();
+}
 // This file must return an array of database configurations
 return [
     'app_database' => [
