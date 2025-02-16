@@ -7,6 +7,8 @@ if (file_exists($dotenvPath . '.env')) {
     $dotenv = Dotenv::createImmutable($dotenvPath);
     $dotenv->safeLoad();
 }
+var_dump(getenv('DB_HOST'));
+
 // This file must return an array of database configurations
 return [
     'app_database' => [
