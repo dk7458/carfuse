@@ -117,7 +117,17 @@ class AuthController extends Controller
     {
         header('Content-Type: application/json');
         
-        // Use the passed request data instead of $_POST
+        // Ensure $request is a valid array
+        if (!is_array($request)) {
+            http_response_code(400);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Invalid JSON input',
+                'data'    => []
+            ]);
+            exit;
+        }
+        
         $data = $request;
 
         // Validate input using Validator service
