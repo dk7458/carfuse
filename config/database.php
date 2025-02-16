@@ -13,10 +13,10 @@ var_dump(getenv('DB_HOST'));
 return [
     'app_database' => [
         'driver'    => 'mysql',
-        'host'      => getenv('DB_HOST'),
-        'database'  => getenv('DB_DATABASE'),
-        'username'  => getenv('DB_USERNAME'),
-        'password'  => getenv('DB_PASSWORD'),
+        'host'      => $_ENV['DB_HOST'] ?? '',
+        'database'  => $_ENV['DB_DATABASE'] ?? '',
+        'username'  => $_ENV['DB_USERNAME'] ?? '',
+        'password'  => $_ENV['DB_PASSWORD'] ?? '',
         'charset'   => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix'    => '',

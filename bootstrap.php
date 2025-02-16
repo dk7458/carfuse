@@ -10,7 +10,6 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Load environment variables before anything else
 require_once __DIR__ . '/vendor/autoload.php';
-
 use Dotenv\Dotenv;
 $dotenv = Dotenv::createImmutable(__DIR__);
 $dotenv->load();
