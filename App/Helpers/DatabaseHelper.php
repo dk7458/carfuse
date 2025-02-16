@@ -15,9 +15,10 @@ use Monolog\Handler\StreamHandler;
  */
 class DatabaseHelper
 {
-    private static $capsule = null;
-    private static $secureCapsule = null;
-    private static $initialized = false;
+    private static ?Capsule $capsule = null;
+    private static ?Capsule $secureCapsule = null;
+    private static bool $initialized = false;
+    private static ?Logger $logger = null;
 
     private function __construct() {}
 
@@ -28,7 +29,8 @@ class DatabaseHelper
     {
         $configPath = __DIR__ . '/../../config/database.php';
         if (!file_exists($configPath)) {
-            throw new Exception("Database configuration file missing.");
+            self::logEvent('errors', "❌ Database configuration file missing.");
+            die(json_encode(["error" => "Database configuration file missing."]));
         }
         return require $configPath;
     }
@@ -39,7 +41,11 @@ class DatabaseHelper
     private static function getDatabaseConfig(string $key): array
     {
         $config = self::loadConfig();
-        return $config[$key] ?? [];
+        if (!isset($config[$key])) {
+            self::logEvent('errors', "❌ Missing database configuration for {$key}.");
+            die(json_encode(["error" => "Missing database configuration for {$key}."]));
+        }
+        return $config[$key];
     }
 
     /**
@@ -48,12 +54,26 @@ class DatabaseHelper
     private static function initializeDatabase(&$capsule, array $config, string $connectionName)
     {
         if ($capsule === null) {
+            // Ensure configuration has necessary credentials
+            if (
+                empty($config['host']) || empty($config['database']) ||
+                empty($config['username']) || empty($config['password'])
+            ) {
+                self::logEvent('errors', "❌ {$connectionName} Database configuration error: Missing credentials.");
+                die(json_encode(["error" => "{$connectionName} database configuration error."]));
+            }
+
             try {
                 $capsule = new Capsule();
                 $capsule->addConnection($config, $connectionName);
-                // Removed Event dispatcher since we're not using Laravel events.
+                
+                // Force connection to detect errors
+                $pdo = $capsule->getConnection($connectionName)->getPdo();
 
-                // ✅ Ensure Capsule is Set as Global Once
+                if (!$pdo) {
+                    throw new Exception("Could not establish PDO connection.");
+                }
+
                 if (!self::$initialized) {
                     $capsule->setAsGlobal();
                     $capsule->bootEloquent();
@@ -73,7 +93,7 @@ class DatabaseHelper
     private static function handleDatabaseError(string $connectionName, Exception $e)
     {
         self::logEvent('errors', "❌ {$connectionName} Database connection failed: " . $e->getMessage());
-        die(json_encode(["error" => "{$connectionName} database connection failed"]));
+        die(json_encode(["error" => "{$connectionName} database connection failed: " . $e->getMessage()]));
     }
 
     /**
@@ -84,7 +104,6 @@ class DatabaseHelper
         if (self::$capsule === null) {
             self::initializeDatabase(self::$capsule, self::getDatabaseConfig('app_database'), 'default');
         }
-
         return self::$capsule;
     }
 
@@ -96,18 +115,18 @@ class DatabaseHelper
         if (self::$secureCapsule === null) {
             self::initializeDatabase(self::$secureCapsule, self::getDatabaseConfig('secure_database'), 'secure');
         }
-
         return self::$secureCapsule;
     }
 
     /**
      * ✅ Log Events Using Monolog
      */
-    private static function logEvent($category, $message)
+    private static function logEvent(string $category, string $message)
     {
-        $logFilePath = __DIR__ . "/../../logs/{$category}.log";
-        $log = new Logger('database');
-        $log->pushHandler(new StreamHandler($logFilePath, Logger::DEBUG));
-        $log->info($message);
+        if (self::$logger === null) {
+            self::$logger = new Logger('database');
+            self::$logger->pushHandler(new StreamHandler(__DIR__ . "/../../logs/{$category}.log", Logger::DEBUG));
+        }
+        self::$logger->info($message);
     }
 }
