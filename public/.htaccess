@@ -13,9 +13,13 @@ RewriteRule ^api/(.*)$ index.php [QSA,L]
 RewriteRule ^(App|config|vendor)/ - [F,L]
 
 # ✅ Ensure static assets load properly
-RewriteCond %{REQUEST_URI} ^/(css|js|images|views|uploads|assets)/(.*)$
-RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images|views|uploads|assets)/(.*)$ /public/$1/$2 [L]
+
+# ✅ Prevent direct access to api.php
+#RewriteRule ^api.php - [F,L]
+# Ensure API routes don't get redirected
+RewriteCond %{REQUEST_URI} ^/api/ [NC]
+RewriteRule .* - [L]
 
 # ✅ Ensure requests with no extension are forwarded correctly
 RewriteCond %{REQUEST_URI} !\.(css|js|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico|pdf|json)$ [NC]
