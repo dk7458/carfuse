@@ -60,7 +60,7 @@ $encryptionService = new EncryptionService($config['encryption']['encryption_key
 $container->set(EncryptionService::class, fn() => $encryptionService);
 
 // ✅ Initialize FileStorage.
-$fileStorage = new FileStorage($fileStorageConfig, $logger, $encryptionService);
+$fileStorage = new FileStorage($logger, $fileStorageConfig, $encryptionService);
 $container->set(FileStorage::class, fn() => $fileStorage);
 
 // ✅ Load key manager configuration.
