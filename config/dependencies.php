@@ -97,8 +97,8 @@ $container->set(NotificationQueue::class, new NotificationQueue($container->get(
 $container->set(UserService::class, new UserService($logger, $config['encryption']['jwt_secret'] ?? ''));
 $container->set(Payment::class, new Payment());
 $container->set(PaymentService::class, new PaymentService(
-    $database,
     $logger,
+    $database,
     new Payment(),
     getenv('PAYU_API_KEY') ?: '',
     getenv('PAYU_API_SECRET') ?: ''
