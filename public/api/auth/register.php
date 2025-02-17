@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../../vendor/autoload.php';
 require_once __DIR__ . '/../../../App/Controllers/AuthController.php';
 
 use App\Controllers\AuthController;
+use PDOException;
 
 // ✅ Set Headers
 header('Content-Type: application/json');
@@ -22,14 +23,17 @@ $authController = new AuthController();
 
 try {
     $result = $authController->register($data);
-    sendJsonResponse('success', 'User registered successfully', ['user_id' => $result->id], 200);
+    sendJsonResponse('success', 'User registered successfully', ['user_id' => $result->id], 201);
 } catch (PDOException $e) {
     logApiError("Database Error: " . $e->getMessage());
-    if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+
+    // ✅ Check for Duplicate Entry using SQLSTATE Code
+    if ($e->getCode() == 23000) {
         sendJsonResponse('error', 'User already exists', [], 400);
     }
+
     sendJsonResponse('error', 'Internal Server Error', [], 500);
 } catch (Exception $e) {
-    logApiError("Database Error: " . $e->getMessage());
+    logApiError("Application Error: " . $e->getMessage());
     sendJsonResponse('error', 'Internal Server Error', [], 500);
 }
