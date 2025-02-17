@@ -84,8 +84,11 @@ $container->set(Validator::class, fn() => new Validator($container->get(Psr\Log\
 $container->set(RateLimiter::class, new RateLimiter($database));
 $container->set(AuditService::class, new AuditService($logger));
 $container->set(TokenService::class, new TokenService(
-    getenv('JWT_SECRET') ?: '',
-    getenv('JWT_REFRESH_SECRET') ?: '',
+    //getenv('JWT_SECRET') ?: '',
+    $_ENV['JWT_SECRET'] ?: '',
+    $_ENV['JWT_REFRESH_SECRET'] ?: '',
+    //getenv('JWT_REFRESH_SECRET') ?: '',
+
     $logger
 ));
 $container->set(AuthService::class, new AuthService($logger));
