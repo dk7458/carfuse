@@ -5,7 +5,7 @@ date_default_timezone_set('UTC');
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../App/Middleware/AuthMiddleware.php';
-require_once __DIR__ . '/BaseApi.php'; 
+require_once __DIR__ . '/api/BaseApi.php'; 
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
 use Firebase\JWT\JWT;
