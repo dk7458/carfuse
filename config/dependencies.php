@@ -88,9 +88,9 @@ $container->set(AuditService::class, new AuditService($logger));
 
 // Reorder parameters: logger comes first.
 $container->set(TokenService::class, new TokenService(
-    $logger,
     $_ENV['JWT_SECRET'] ?: '',
-    $_ENV['JWT_REFRESH_SECRET'] ?: ''
+    $_ENV['JWT_REFRESH_SECRET'] ?: '',
+    $logger
 ));
 
 // NotificationService already had logger first.
