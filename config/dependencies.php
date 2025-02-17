@@ -80,7 +80,7 @@ $container->set('db', $database);
 $container->set('secure_db', $secure_database);
 
 // Register Services.
-$container->set(Validator::class, new Validator());
+$container->set(Validator::class, fn() => new Validator($container->get(Psr\Log\LoggerInterface::class)));
 $container->set(RateLimiter::class, new RateLimiter($database));
 $container->set(AuditService::class, new AuditService($logger));
 $container->set(TokenService::class, new TokenService(
