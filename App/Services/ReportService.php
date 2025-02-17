@@ -34,7 +34,7 @@ class ReportService
             'users'    => $this->getUserReportData($dateRange, $filters),
             default    => throw new \InvalidArgumentException("Invalid report type: $reportType"),
         };
-        return $this->exportReport($data, $reportType, $format);
+        return $this->exportReport($format, $data, $reportType);
     }
 
     /**

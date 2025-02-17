@@ -1,6 +1,6 @@
 <?php
 
-namespace AuditManager\Middleware;
+namespace App\Middleware;
 
 use AuditManager\Services\AuditService;
 use Psr\Log\LoggerInterface;
