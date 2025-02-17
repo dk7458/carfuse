@@ -103,7 +103,7 @@ $container->set(PaymentService::class, new PaymentService(
     getenv('PAYU_API_KEY') ?: '',
     getenv('PAYU_API_SECRET') ?: ''
 ));
-$container->set(BookingService::class, new BookingService($database, $logger));
+$container->set(BookingService::class, new BookingService($logger, $database));
 $container->set(MetricsService::class, new MetricsService($database));
 $container->set(ReportService::class, new ReportService($database));
 $container->set(RevenueService::class, new RevenueService($database));
