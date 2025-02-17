@@ -20,6 +20,25 @@ require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 // Load Dependency Container from dependencies.php
 $container = require_once __DIR__ . '/config/dependencies.php';
 
+try {
+    $database = DatabaseHelper::getInstance();
+    if (!$database) {
+        error_log("❌ [BOOTSTRAP] DatabaseHelper::getInstance() returned null.", 3, __DIR__ . "/logs/debug.log");
+        die("❌ Database instance failed to initialize.\n");
+    }
+
+    $secure_database = DatabaseHelper::getSecureInstance();
+    if (!$secure_database) {
+        error_log("❌ [BOOTSTRAP] DatabaseHelper::getSecureInstance() returned null.", 3, __DIR__ . "/logs/debug.log");
+        die("❌ Secure Database instance failed to initialize.\n");
+    }
+
+    $logger->info("✅ Both databases initialized successfully.");
+} catch (Exception $e) {
+    error_log("❌ [BOOTSTRAP] Database initialization failed: " . $e->getMessage(), 3, __DIR__ . "/logs/debug.log");
+    die("❌ Database initialization failed. Check logs for details.\n");
+}
+
 // Load Logger from logger.php and bind LoggerInterface
 use Psr\Log\LoggerInterface;
 $logger = require_once __DIR__ . '/logger.php';
