@@ -9,7 +9,7 @@ namespace App\Services;
  *
  * Implements IP-based rate limiting.
  */
-class RateLimit
+class RateLimiter
 {
     // Removed PDO dependency
 
