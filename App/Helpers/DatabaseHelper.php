@@ -10,12 +10,6 @@ use Exception;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 
-/**
- * DatabaseHelper - Centralized Database Manager
- *
- * This class ensures all database interactions are handled via Eloquent ORM.
- * It initializes both `app_database` and `secure_database` connections.
- */
 class DatabaseHelper
 {
     private static $capsule = null;
@@ -23,26 +17,17 @@ class DatabaseHelper
     private static $initialized = false;
     private static $envLoaded = false;
 
-    /**
-     * ✅ Private Constructor - Prevent Direct Instantiation (Singleton)
-     */
     private function __construct() {}
 
-    /**
-     * ✅ Load Environment Variables
-     */
     private static function loadEnv()
     {
         if (!self::$envLoaded) {
             $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
-            $dotenv->safeLoad(); // Load .env safely (no errors if missing)
+            $dotenv->safeLoad();
             self::$envLoaded = true;
         }
     }
 
-    /**
-     * ✅ Initialize Database Connection with proper connection validation and logging
-     */
     private static function initializeDatabase(&$capsule, array $config, string $connectionName)
     {
         if ($capsule === null) {
@@ -53,7 +38,6 @@ class DatabaseHelper
                 $capsule->addConnection($config, $connectionName);
                 $capsule->setEventDispatcher(new Dispatcher(new Container));
 
-                // Force a connection attempt
                 $pdo = $capsule->getConnection($connectionName)->getPdo();
                 if (!$pdo) {
                     throw new Exception("Failed to obtain PDO connection.");
@@ -72,18 +56,12 @@ class DatabaseHelper
         }
     }
 
-    /**
-     * ✅ Handle Database Connection Failures with detailed error logging
-     */
     private static function handleDatabaseError(string $connectionName, Exception $e)
     {
         self::logEvent('errors', "❌ {$connectionName} Database connection failed: " . $e->getMessage());
         die(json_encode(["error" => "{$connectionName} database connection failed"]));
     }
 
-    /**
-     * ✅ Singleton: Get Main Database Instance
-     */
     public static function getInstance(): Capsule
     {
         if (self::$capsule === null) {
@@ -103,9 +81,6 @@ class DatabaseHelper
         return self::$capsule;
     }
 
-    /**
-     * ✅ Singleton: Get Secure Database Instance
-     */
     public static function getSecureInstance(): Capsule
     {
         if (self::$secureCapsule === null) {
@@ -125,14 +100,72 @@ class DatabaseHelper
         return self::$secureCapsule;
     }
 
-    /**
-     * ✅ Log Events Using Monolog for proper formatting and timestamps
-     */
     private static function logEvent($category, $message)
     {
         $logFilePath = __DIR__ . "/../../logs/{$category}.log";
         $log = new Logger('database');
         $log->pushHandler(new StreamHandler($logFilePath, Logger::DEBUG));
         $log->info($message);
+    }
+
+    /**
+     * ✅ Safe Query Execution with Exception Handling
+     */
+    public static function safeQuery(callable $query)
+    {
+        try {
+            return $query(self::getInstance());
+        } catch (\PDOException $e) {
+            logApiError("Database Query Error: " . $e->getMessage());
+
+            if ($e->getCode() == "23000") {
+                sendJsonResponse('error', 'Duplicate entry error', [], 400);
+            }
+
+            sendJsonResponse('error', 'Database query error', [], 500);
+        } catch (\Exception $e) {
+            logApiError("Database Query Error: " . $e->getMessage());
+            sendJsonResponse('error', 'Database query error', [], 500);
+        }
+    }
+
+    /**
+     * ✅ Wrapper for Insert Queries
+     */
+    public static function insert($table, $data)
+    {
+        return self::safeQuery(function ($db) use ($table, $data) {
+            return $db->table($table)->insertGetId($data);
+        });
+    }
+
+    /**
+     * ✅ Wrapper for Update Queries
+     */
+    public static function update($table, $data, $where)
+    {
+        return self::safeQuery(function ($db) use ($table, $data, $where) {
+            return $db->table($table)->where($where)->update($data);
+        });
+    }
+
+    /**
+     * ✅ Wrapper for Delete Queries
+     */
+    public static function delete($table, $where)
+    {
+        return self::safeQuery(function ($db) use ($table, $where) {
+            return $db->table($table)->where($where)->delete();
+        });
+    }
+
+    /**
+     * ✅ Wrapper for Select Queries
+     */
+    public static function select($query, $params = [])
+    {
+        return self::safeQuery(function ($db) use ($query, $params) {
+            return $db->select($query, $params);
+        });
     }
 }

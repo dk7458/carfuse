@@ -4,11 +4,10 @@ namespace App\Controllers;
 
 use App\Services\Auth\TokenService;
 use App\Services\Auth\AuthService;
-use Illuminate\Database\Capsule\Manager as Capsule;
 use Exception;
 use App\Helpers\DatabaseHelper;
-use Psr\Log\NullLogger; // added for logger
-use App\Services\Validator; // added import
+use Psr\Log\NullLogger;
+use App\Services\Validator;
 
 class AuthController extends Controller
 {
@@ -18,130 +17,70 @@ class AuthController extends Controller
     public function __construct()
     {
         startSecureSession();
-        // Pass NullLogger to AuthService constructor
         $this->authService = new AuthService(new NullLogger());
 
-        // Load the encryption configuration
         $configPath = __DIR__ . '/../../config/encryption.php';
         if (!file_exists($configPath)) {
             throw new Exception("Encryption configuration missing.");
         }
-
         $encryptionConfig = require $configPath;
-
-        // Ensure required keys exist
         if (!isset($encryptionConfig['jwt_secret'], $encryptionConfig['jwt_refresh_secret'])) {
             throw new Exception("JWT configuration missing in encryption.php.");
         }
-
-        // Instantiate TokenService with logger argument
         $this->tokenService = new TokenService(
             $encryptionConfig['jwt_secret'],
             $encryptionConfig['jwt_refresh_secret'],
-            new NullLogger() // added logger argument
+            new NullLogger()
         );
-
-        // Initialize Eloquent ORM
+        // Initialize DatabaseHelper (handles DB setup via safeQuery)
         DatabaseHelper::getInstance();
     }
 
-    /**
-     * Show the login page (GET /auth/login)
-     */
     public function loginView()
     {
         view('auth/login');
     }
 
-    /**
-     * Show the register page (GET /auth/register)
-     */
     public function registerView()
     {
         view('auth/register');
     }
 
-    /**
-     * Handle user login (POST /auth/login)
-     */
     public function login($request)
     {
-        header('Content-Type: application/json');
-        
-        // Ensure $request is a valid array (JSON-decoded)
         if (!is_array($request)) {
-            http_response_code(400);
-            echo json_encode([
-                'status'  => 'error',
-                'message' => 'Invalid JSON input',
-                'data'    => []
-            ]);
-            exit;
+            sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         
         $data = $request;
         $email = $data['email'] ?? '';
         $password = $data['password'] ?? '';
         
-        try {
-            // Delegate login logic to AuthService
-            $result = $this->authService->login($email, $password);
-
-            // Securely store tokens
-            setcookie("jwt", $result['token'], [
-                "expires"  => time() + 3600,
-                "path"     => "/",
-                "secure"   => true,
-                "httponly" => true,
-                "samesite" => "Strict"
-            ]);
-            setcookie("refresh_token", $result['refresh_token'], [
-                "expires"  => time() + 604800,
-                "path"     => "/",
-                "secure"   => true,
-                "httponly" => true,
-                "samesite" => "Strict"
-            ]);
-            
-            http_response_code(200);
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'User logged in',
-                'data'  => [] // JWT not exposed in response
-            ]);
-            exit;
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'status'  => 'error',
-                'message' => $e->getMessage(),
-                'data'    => []
-            ]);
-            exit;
-        }
+        $result = $this->authService->login($email, $password);
+        setcookie("jwt", $result['token'], [
+            "expires"  => time() + 3600,
+            "path"     => "/",
+            "secure"   => true,
+            "httponly" => true,
+            "samesite" => "Strict"
+        ]);
+        setcookie("refresh_token", $result['refresh_token'], [
+            "expires"  => time() + 604800,
+            "path"     => "/",
+            "secure"   => true,
+            "httponly" => true,
+            "samesite" => "Strict"
+        ]);
+        sendJsonResponse('success', 'User logged in', [], 200);
     }
 
-    /**
-     * Handle user registration (POST /auth/register)
-     */
     public function register($request)
     {
-        header('Content-Type: application/json');
-        
-        // Ensure $request is a valid array
         if (!is_array($request)) {
-            http_response_code(400);
-            echo json_encode([
-                'status'  => 'error',
-                'message' => 'Invalid JSON input',
-                'data'    => []
-            ]);
-            exit;
+            sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         
         $data = $request;
-
-        // Validate input using Validator service
         $validator = new Validator(new NullLogger());
         $rules = [
             'name'             => 'required',
@@ -150,26 +89,12 @@ class AuthController extends Controller
             'confirm_password' => 'required'
         ];
         if (!$validator->validate($data, $rules)) {
-            http_response_code(400);
-            echo json_encode([
-                'status'  => 'error',
-                'message' => 'Validation failed',
-                'data'    => $validator->errors()
-            ]);
-            exit;
+            sendJsonResponse('error', 'Validation failed', $validator->errors(), 400);
         }
-        // Ensure password confirmation matches
         if ($data['password'] !== $data['confirm_password']) {
-            http_response_code(400);
-            echo json_encode([
-                'status'  => 'error',
-                'message' => 'Password and confirm password do not match',
-                'data'    => []
-            ]);
-            exit;
+            sendJsonResponse('error', 'Password and confirm password do not match', [], 400);
         }
         
-        // Prepare registration data (ignore confirm_password)
         $registrationData = [
             'name'     => $data['name'],
             'surname'  => $data['surname']  ?? '',
@@ -179,190 +104,74 @@ class AuthController extends Controller
             'address'  => $data['address']  ?? null
         ];
 
-        try {
-            // Delegate registration logic to AuthService
-            $result = $this->authService->registerUser($registrationData);
-
-            http_response_code(201);
-            echo json_encode([
-                'status'  => 'success',
-                'message' => 'User registered',
-                'data'    => $result
-            ]);
-            exit;
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'status'  => 'error',
-                'message' => $e->getMessage(),
-                'data'    => []
-            ]);
-            exit;
-        }
+        $result = $this->authService->registerUser($registrationData);
+        sendJsonResponse('success', 'User registered', $result, 201);
     }
 
-    /**
-     * Handle password reset request (POST /auth/reset-password-request)
-     */
     public function resetPasswordRequest($request)
     {
-        header('Content-Type: application/json');
-        try {
-            $data = $_POST;
-            $email = $data['email'] ?? '';
-
-            // Delegate password reset request logic to AuthService
-            $result = $this->authService->resetPasswordRequest($email);
-
-            http_response_code(200);
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'Password reset request processed',
-                'data' => $result
-            ]);
-            exit;
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'status' => 'error',
-                'message' => $e->getMessage(),
-                'data' => []
-            ]);
-            exit;
-        }
+        $data = $_POST;
+        $email = $data['email'] ?? '';
+        $result = $this->authService->resetPasswordRequest($email);
+        sendJsonResponse('success', 'Password reset request processed', $result, 200);
     }
 
-    /**
-     * Refresh access token (POST /auth/refresh)
-     */
     public function refresh()
     {
-        header('Content-Type: application/json');
-        try {
-            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-                throw new Exception('Method Not Allowed');
-            }
-
-            $refreshToken = $_COOKIE['refresh_token'] ?? null;
-
-            if (!$refreshToken) {
-                throw new Exception('Refresh token is required');
-            }
-
-            // Delegate token refresh logic to AuthService
-            $newToken = $this->tokenService->refreshToken($refreshToken);
-
-            if ($newToken) {
-                // Set new access token in HTTP-only secure cookie
-                setcookie("jwt", $newToken, [
-                    "expires" => time() + 3600,
-                    "path" => "/",
-                    "secure" => true,
-                    "httponly" => true,
-                    "samesite" => "Strict"
-                ]);
-
-                http_response_code(200);
-                echo json_encode([
-                    'status' => 'success',
-                    'message' => 'Token refreshed',
-                    'data' => []
-                ]);
-                exit;
-            } else {
-                throw new Exception('Invalid refresh token');
-            }
-        } catch (Exception $e) {
-            http_response_code(401);
-            echo json_encode([
-                'status' => 'error',
-                'message' => $e->getMessage(),
-                'data' => []
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            sendJsonResponse('error', 'Method Not Allowed', [], 405);
+        }
+        $refreshToken = $_COOKIE['refresh_token'] ?? null;
+        if (!$refreshToken) {
+            sendJsonResponse('error', 'Refresh token is required', [], 400);
+        }
+        $newToken = $this->tokenService->refreshToken($refreshToken);
+        if ($newToken) {
+            setcookie("jwt", $newToken, [
+                "expires" => time() + 3600,
+                "path" => "/",
+                "secure" => true,
+                "httponly" => true,
+                "samesite" => "Strict"
             ]);
-            exit;
+            sendJsonResponse('success', 'Token refreshed', [], 200);
+        } else {
+            sendJsonResponse('error', 'Invalid refresh token', [], 401);
         }
     }
 
-    /**
-     * Handle user logout (POST /auth/logout)
-     */
     public function logout($request)
     {
-        header('Content-Type: application/json');
-        try {
-            // Delegate logout logic to AuthService
-            $this->authService->logout();
-
-            // Clear the JWT and refresh token cookies
-            setcookie("jwt", "", [
-                "expires" => time() - 3600,
-                "path" => "/",
-                "secure" => true,
-                "httponly" => true,
-                "samesite" => "Strict"
-            ]);
-            setcookie("refresh_token", "", [
-                "expires" => time() - 3600,
-                "path" => "/",
-                "secure" => true,
-                "httponly" => true,
-                "samesite" => "Strict"
-            ]);
-
-            http_response_code(200);
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'User logged out',
-                'data' => []
-            ]);
-            exit;
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'status' => 'error',
-                'message' => $e->getMessage(),
-                'data' => []
-            ]);
-            exit;
-        }
+        $this->authService->logout();
+        setcookie("jwt", "", [
+            "expires" => time() - 3600,
+            "path" => "/",
+            "secure" => true,
+            "httponly" => true,
+            "samesite" => "Strict"
+        ]);
+        setcookie("refresh_token", "", [
+            "expires" => time() - 3600,
+            "path" => "/",
+            "secure" => true,
+            "httponly" => true,
+            "samesite" => "Strict"
+        ]);
+        sendJsonResponse('success', 'User logged out', [], 200);
     }
 
-    /**
-     * Get user details endpoint, ensuring token is valid
-     */
     public function userDetails($request)
     {
-        header('Content-Type: application/json');
-        try {
-            $token = $_COOKIE['jwt'] ?? '';
-
-            // Validate token before processing
-            if (!$this->authService->validateToken($token)) {
-                throw new Exception('Invalid token.');
-            }
-
-            $userData = $this->authService->getUserFromToken($token);
-            http_response_code(200);
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'User details fetched',
-                'data' => $userData
-            ]);
-            exit;
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'status' => 'error',
-                'message' => $e->getMessage(),
-                'data' => []
-            ]);
-            exit;
+        $token = $_COOKIE['jwt'] ?? '';
+        if (!$this->authService->validateToken($token)) {
+            sendJsonResponse('error', 'Invalid token', [], 400);
         }
+        $userData = $this->authService->getUserFromToken($token);
+        sendJsonResponse('success', 'User details fetched', $userData, 200);
     }
 
     private function refreshToken()
     {
-        // Logic to refresh JWT token
         // ...existing code...
     }
 
