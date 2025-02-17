@@ -25,20 +25,10 @@ use Psr\Log\LoggerInterface;
 $logger = require_once __DIR__ . '/logger.php';
 $container->set(LoggerInterface::class, fn() => $logger);
 
-// Initialize DatabaseHelper for database interactions
-use App\Helpers\DatabaseHelper;
-try {
-    $database = DatabaseHelper::getInstance();
-    $secure_database = DatabaseHelper::getSecureInstance();
-    $logger->info("✅ Both databases initialized successfully.");
-} catch (Exception $e) {
-    $logger->error("❌ Database initialization failed: " . $e->getMessage());
-    die("❌ Database initialization failed. Check logs for details.\n");
-}
-
+// Remove redundant DatabaseHelper initialization
 // Ensure DatabaseHelper is available globally.
-$container->set('db', fn() => $database);
-$container->set('secure_db', fn() => $secure_database);
+$database = $container->get('db');
+$secure_database = $container->get('secure_db');
 
 // Remove Laravel's SessionManager initialization and related Config usage
 
