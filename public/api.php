@@ -83,6 +83,8 @@ $dispatcher = simpleDispatcher(function (RouteCollector $router) use ($apiRoutes
         $router->addRoute(['GET', 'POST'], '/' . $route, $filePath);
     }
 });
+logApiEvent("Dispatching API route: {$apiPath}");
+$routeInfo = $dispatcher->dispatch($method, "/{$apiPath}");
 
 // ✅ Route API Request
 $routeInfo = $dispatcher->dispatch($method, "/{$apiPath}");
