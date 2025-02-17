@@ -120,11 +120,11 @@ $container->set(ReportService::class, new ReportService($logger, $database));
 // RevenueService: add logger as first argument.
 $container->set(RevenueService::class, new RevenueService($logger, $database));
 
-// For SignatureService, move logger to be the first parameter.
+// For SignatureService, pass an empty array as the $config.
 $container->set(SignatureService::class, new SignatureService(
-    $logger,
+    [],            // $config array
+    $logger, 
     new Client(),
-    [],
     $fileStorage,
     $encryptionService
 ));
