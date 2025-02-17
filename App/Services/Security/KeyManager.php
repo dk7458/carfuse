@@ -10,10 +10,10 @@ class KeyManager
     private array $keys;
     private LoggerInterface $logger;
 
-    public function __construct(array $keys, LoggerInterface $logger)
+    public function __construct(LoggerInterface $logger, array $keys)
     {
-        $this->keys = $keys;
         $this->logger = $logger;
+        $this->keys = $keys;
     }
 
     public function getKey(string $identifier): string
@@ -21,7 +21,7 @@ class KeyManager
         $keyName = 'encryption_key_' . strtolower($identifier);
 
         if (!isset($this->keys[$keyName]) || empty($this->keys[$keyName])) {
-            $this->logger->error("[KeyManager] Encryption key for {$identifier} not found.");
+            $this->logger->error("[KeyManager] Encryption key for {$identifier} not found.", ['category' => 'security']);
             throw new Exception("Encryption key for {$identifier} not found.");
         }
 
@@ -35,7 +35,7 @@ class KeyManager
 
     public function storeKey(string $identifier, string $key): void
     {
-        $this->logger->info("[KeyManager] Storing key for {$identifier}");
+        $this->logger->info("[KeyManager] Storing key for {$identifier}", ['category' => 'security']);
         // Implementation for storing key securely (e.g., database, key vault)
     }
 
@@ -43,12 +43,12 @@ class KeyManager
     {
         $newKey = $this->generateKey();
         $this->storeKey($identifier, $newKey);
-        $this->logger->info("[KeyManager] Rotated key for {$identifier}");
+        $this->logger->info("[KeyManager] Rotated key for {$identifier}", ['category' => 'security']);
     }
 
     public function revokeKey(string $identifier): void
     {
-        $this->logger->info("[KeyManager] Revoking key for {$identifier}");
+        $this->logger->info("[KeyManager] Revoking key for {$identifier}", ['category' => 'security']);
         // Implementation for revoking key securely
     }
 }

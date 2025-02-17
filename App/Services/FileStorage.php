@@ -22,14 +22,14 @@ class FileStorage
     /**
      * Constructor
      *
-     * @param array $config Configuration for the FileStorage service.
      * @param LoggerInterface $logger Logger instance for logging file operations.
+     * @param array $config Configuration for the FileStorage service.
      * @param EncryptionService $encryptionService Service for encrypting file contents.
      */
-    public function __construct(array $config, LoggerInterface $logger, EncryptionService $encryptionService)
+    public function __construct(LoggerInterface $logger, array $config, EncryptionService $encryptionService)
     {
-        $this->config = $config;
         $this->logger = $logger;
+        $this->config = $config;
         $this->encryptionService = $encryptionService;
 
         $this->basePath = rtrim($config['base_directory'], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
@@ -53,12 +53,12 @@ class FileStorage
         }
 
         if (file_put_contents($filePath, $content) === false) {
-            $this->logger->error("[FileStorage] Failed to store file", ['file' => $fileName, 'path' => $filePath]);
+            $this->logger->error("[FileStorage] Failed to store file", ['file' => $fileName, 'path' => $filePath, 'category' => 'file']);
             throw new Exception("Failed to store file: $fileName");
         }
 
         chmod($filePath, $this->config['security']['permissions']['default']);
-        $this->logger->info("[FileStorage] File stored successfully", ['file' => $fileName, 'path' => $filePath]);
+        $this->logger->info("[FileStorage] File stored successfully", ['file' => $fileName, 'path' => $filePath, 'category' => 'file']);
 
         return $filePath;
     }
@@ -69,13 +69,13 @@ class FileStorage
     public function retrieveFile(string $filePath, bool $decrypt = false): string
     {
         if (!file_exists($filePath) || !is_readable($filePath)) {
-            $this->logger->error("File not found or not readable", ['path' => $filePath]);
+            $this->logger->error("File not found or not readable", ['path' => $filePath, 'category' => 'file']);
             throw new Exception("File not found or not readable: $filePath");
         }
 
         $content = file_get_contents($filePath);
         if ($content === false) {
-            $this->logger->error("[FileStorage] Failed to retrieve file", ['path' => $filePath]);
+            $this->logger->error("[FileStorage] Failed to retrieve file", ['path' => $filePath, 'category' => 'file']);
             throw new Exception("Failed to retrieve file: $filePath");
         }
 
@@ -86,7 +86,7 @@ class FileStorage
             }
         }
 
-        $this->logger->info("[FileStorage] File retrieved successfully", ['path' => $filePath]);
+        $this->logger->info("[FileStorage] File retrieved successfully", ['path' => $filePath, 'category' => 'file']);
         return $content;
     }
 
@@ -96,16 +96,16 @@ class FileStorage
     public function deleteFile(string $filePath): void
     {
         if (!file_exists($filePath)) {
-            $this->logger->error("File not found", ['path' => $filePath]);
+            $this->logger->error("File not found", ['path' => $filePath, 'category' => 'file']);
             throw new Exception("File not found: $filePath");
         }
 
         if (!unlink($filePath)) {
-            $this->logger->error("[FileStorage] Failed to delete file", ['path' => $filePath]);
+            $this->logger->error("[FileStorage] Failed to delete file", ['path' => $filePath, 'category' => 'file']);
             throw new Exception("Failed to delete file: $filePath");
         }
 
-        $this->logger->info("[FileStorage] File deleted successfully", ['path' => $filePath]);
+        $this->logger->info("[FileStorage] File deleted successfully", ['path' => $filePath, 'category' => 'file']);
     }
 
     /**
@@ -124,12 +124,12 @@ class FileStorage
         $path = $this->basePath . trim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 
         if (!is_dir($path) && !mkdir($path, 0755, true)) {
-            $this->logger->error("Failed to create directory", ['path' => $path]);
+            $this->logger->error("Failed to create directory", ['path' => $path, 'category' => 'file']);
             throw new Exception("Failed to create directory: $path");
         }
 
         if (!is_writable($path)) {
-            $this->logger->error("Directory is not writable", ['path' => $path]);
+            $this->logger->error("Directory is not writable", ['path' => $path, 'category' => 'file']);
             throw new Exception("Directory is not writable: $path");
         }
 

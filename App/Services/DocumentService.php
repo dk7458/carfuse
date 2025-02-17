@@ -18,27 +18,26 @@ use Psr\Log\LoggerInterface;
  */
 class DocumentService
 {
-    // Replace PDO with DatabaseHelper instance
+    private LoggerInterface $logger;
     private $db;
     private AuditService $auditService;
     private FileStorage $fileStorage;
     private EncryptionService $encryptionService;
     private TemplateService $templateService;
-    private LoggerInterface $logger;
 
     public function __construct(
+        LoggerInterface $logger,
         AuditService $auditService,
         FileStorage $fileStorage,
         EncryptionService $encryptionService,
-        TemplateService $templateService,
-        LoggerInterface $logger
+        TemplateService $templateService
     ) {
+        $this->logger = $logger;
         $this->db = DatabaseHelper::getInstance();
         $this->auditService = $auditService;
         $this->fileStorage = $fileStorage;
         $this->encryptionService = $encryptionService;
         $this->templateService = $templateService;
-        $this->logger = $logger;
     }
 
     /**
@@ -63,7 +62,7 @@ class DocumentService
     private function processTemplate(string $name, string $content, string $logAction): void
     {
         try {
-            $this->logger->info("Uploading template: {$name}");
+            $this->logger->info("Uploading template: {$name}", ['category' => 'document']);
             $encryptedContent = $this->encryptionService->encrypt($content);
             $this->templateService->saveTemplate("{$name}.html", $encryptedContent);
             $this->auditService->log($logAction, ['name' => $name]);
@@ -78,7 +77,7 @@ class DocumentService
     public function generateContract(int $bookingId, int $userId): string
     {
         try {
-            $this->logger->info("[DocumentService] Generating contract", ['bookingId' => $bookingId, 'userId' => $userId]);
+            $this->logger->info("[DocumentService] Generating contract", ['bookingId' => $bookingId, 'userId' => $userId, 'category' => 'document']);
 
             $templateContent = $this->templateService->loadTemplate('rental_contract.html');
             $data = array_merge($this->fetchUserData($userId), $this->fetchBookingData($bookingId));
@@ -99,7 +98,7 @@ class DocumentService
 
             return $filePath;
         } catch (Exception $e) {
-            $this->logger->error("[DocumentService] Failed to generate contract: " . $e->getMessage());
+            $this->logger->error("[DocumentService] Failed to generate contract: " . $e->getMessage(), ['category' => 'document']);
             throw $e;
         }
     }
@@ -110,7 +109,7 @@ class DocumentService
     public function retrieveDocument(string $filePath): string
     {
         try {
-            $this->logger->info("Retrieving document", ['filePath' => $filePath]);
+            $this->logger->info("Retrieving document", ['filePath' => $filePath, 'category' => 'document']);
 
             $encryptedContent = $this->fileStorage->retrieveFile($filePath);
             $decryptedContent = $this->encryptionService->decrypt($encryptedContent);
@@ -129,7 +128,7 @@ class DocumentService
     public function deleteDocument(int $documentId): void
     {
         try {
-            $this->logger->info("Deleting document", ['documentId' => $documentId]);
+            $this->logger->info("Deleting document", ['documentId' => $documentId, 'category' => 'document']);
 
             // Replace raw PDO prepare with DatabaseHelper query
             $document = $this->db->table('documents')->where('id', $documentId)->first();
@@ -178,7 +177,7 @@ class DocumentService
             }
             return (array)$record;
         } catch (Exception $e) {
-            $this->logger->error("[DocumentService] Database error: " . $e->getMessage());
+            $this->logger->error("[DocumentService] Database error: " . $e->getMessage(), ['category' => 'database']);
             throw $e;
         }
     }
@@ -188,7 +187,7 @@ class DocumentService
      */
     private function handleException(string $message, Exception $e): void
     {
-        $this->logger->error($message, ['error' => $e->getMessage()]);
+        $this->logger->error($message, ['error' => $e->getMessage(), 'category' => 'document']);
         throw new Exception($message . " " . $e->getMessage());
     }
 }

@@ -15,10 +15,10 @@ class ReportService
     private LoggerInterface $logger;
 
     // Constructor updated to initialize DatabaseHelper and Logger.
-    public function __construct(LoggerInterface $logger)
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db)
     {
         $this->logger = $logger;
-        $this->db = DatabaseHelper::getInstance();
+        $this->db = $db;
     }    
 
     /**
@@ -69,10 +69,10 @@ class ReportService
             if (!empty($filters['status'])) {
                 $query->where('status', $filters['status']);
             }
-            $this->logger->info("[ReportService] Fetched booking report data");
+            $this->logger->info("[ReportService] Fetched booking report data", ['category' => 'report']);
             return $query->get();
         } catch (\Exception $e) {
-            $this->logger->error("[ReportService] Database error (booking): " . $e->getMessage());
+            $this->logger->error("[ReportService] Database error (booking): " . $e->getMessage(), ['category' => 'db']);
             throw $e;
         }
     }

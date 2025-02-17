@@ -46,7 +46,7 @@ class AuthService
         $user = User::where('email', $email)->first();
         // Use PHP's password_verify() instead of Hash::check()
         if (!$user || !password_verify($password, $user->password_hash)) {
-            $this->logger->warning("Failed login attempt for email: " . $email);
+            $this->logger->warning("Failed login attempt for email: " . $email, ['category' => 'auth']);
             throw new Exception("Invalid credentials");
         }
 
@@ -80,7 +80,7 @@ class AuthService
     {
         $user = User::where('email', $email)->first();
         if (!$user) {
-            $this->logger?->error("[AuthService] Password reset failed: email not found ($email)");
+            $this->logger?->error("[AuthService] Password reset failed: email not found ($email)", ['category' => 'auth']);
             throw new Exception("Email not found.");
         }
 
@@ -94,9 +94,9 @@ class AuthService
                 'token'      => password_hash($token, PASSWORD_BCRYPT),
                 'expires_at' => $expiresAt,
             ]);
-            $this->logger->info("[AuthService] Password reset requested for {$email}");
+            $this->logger->info("[AuthService] Password reset requested for {$email}", ['category' => 'auth']);
         } catch (Exception $e) {
-            $this->logger?->error("[AuthService] Failed to insert password reset: " . $e->getMessage());
+            $this->logger?->error("[AuthService] Failed to insert password reset: " . $e->getMessage(), ['category' => 'auth']);
             throw $e;
         }
 
@@ -112,7 +112,7 @@ class AuthService
             $decoded = JWT::decode($token, new Key($this->tokenService->jwtSecret, 'HS256'));
             return (array)$decoded;
         } catch (Exception $e) {
-            $this->logger->error("[AuthService] Invalid token: " . $e->getMessage());
+            $this->logger->error("[AuthService] Invalid token: " . $e->getMessage(), ['category' => 'auth']);
             return false;
         }
     }

@@ -14,7 +14,7 @@ class Validator
     private array $errors = [];
     private LoggerInterface $logger;
     
-    // Added constructor for dependency injection
+    // Constructor for dependency injection
     public function __construct(LoggerInterface $logger)
     {
         $this->logger = $logger;

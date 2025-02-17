@@ -13,13 +13,13 @@ class NotificationQueue
     private const MAX_RETRY_ATTEMPTS = 3;
 
     public function __construct(
+        LoggerInterface $logger,
         NotificationService $notificationService,
-        string $queueFile,
-        LoggerInterface $logger
+        string $queueFile
     ) {
+        $this->logger = $logger;
         $this->notificationService = $notificationService;
         $this->queueFile = $queueFile;
-        $this->logger = $logger;
     }
 
     /**

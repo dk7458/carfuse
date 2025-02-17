@@ -18,11 +18,11 @@ class NotificationService
     private array $config;
     private $db;
 
-    public function __construct(LoggerInterface $logger, array $config)
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, array $config)
     {
         $this->logger = $logger;
+        $this->db = $db;
         $this->config = $config;
-        $this->db = DatabaseHelper::getInstance();
     }
 
     /**
@@ -53,9 +53,9 @@ class NotificationService
                 'sent_at' => date('Y-m-d H:i:s'),
                 'is_read' => false,
             ]);
-            $this->logger->info("[NotificationService] Notification stored for user {$userId}");
+            $this->logger->info("[NotificationService] Notification stored for user {$userId}", ['category' => 'notification']);
         } catch (\Exception $e) {
-            $this->logger->error("[NotificationService] Database error (storeNotification): " . $e->getMessage());
+            $this->logger->error("[NotificationService] Database error (storeNotification): " . $e->getMessage(), ['category' => 'db']);
             throw $e;
         }
     }

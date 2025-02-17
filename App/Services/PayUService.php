@@ -114,13 +114,13 @@ class PayUService
                 'type'       => 'refund',
                 'status'     => 'completed'
             ]);
-            $this->logger->info("[PayUService] Refund logged for transaction {$transactionId}");
+            $this->logger->info("[PayUService] Refund logged for transaction {$transactionId}", ['category' => 'payment']);
             return [
                 'status' => 'success',
                 'data'   => $response->json()
             ];
         } catch (Exception $e) {
-            $this->logger->error("[PayUService] Refund processing error: " . $e->getMessage());
+            $this->logger->error("[PayUService] Refund processing error: " . $e->getMessage(), ['category' => 'payment']);
             return [
                 'status' => 'error',
                 'message' => 'Refund processing failed'

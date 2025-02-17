@@ -12,11 +12,11 @@ class DocumentQueue
     private LoggerInterface $logger;
     private const MAX_RETRY_ATTEMPTS = 3;
 
-    public function __construct(FileStorage $fileStorage, string $queueFile, LoggerInterface $logger)
+    public function __construct(LoggerInterface $logger, FileStorage $fileStorage, string $queueFile)
     {
+        $this->logger = $logger;
         $this->fileStorage = $fileStorage;
         $this->queueFile = $queueFile;
-        $this->logger = $logger;
     }
 
     public function push(array $document): void

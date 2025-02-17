@@ -13,10 +13,10 @@ class RevenueService
     private LoggerInterface $logger;
 
     // Assume dependency injection now supplies the logger.
-    public function __construct(LoggerInterface $logger)
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db)
     {
         $this->logger = $logger;
-        $this->db = DatabaseHelper::getInstance();
+        $this->db = $db;
     }
 
     public function getMonthlyRevenueTrends(): array
@@ -47,10 +47,10 @@ class RevenueService
             $total = $this->db->table('transaction_logs')
                 ->where('type', 'payment')
                 ->sum('amount');
-            $this->logger->info("[RevenueService] Retrieved total revenue");
+            $this->logger->info("[RevenueService] Retrieved total revenue", ['category' => 'revenue']);
             return (float) $total;
         } catch (\Exception $e) {
-            $this->logger->error("[RevenueService] Database error: " . $e->getMessage());
+            $this->logger->error("[RevenueService] Database error: " . $e->getMessage(), ['category' => 'db']);
             throw $e;
         }
     }

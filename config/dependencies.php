@@ -80,26 +80,22 @@ $container->set('db', $database);
 $container->set('secure_db', $secure_database);
 
 // Register Services with logger as the first parameter.
-$container->set(Validator::class, fn() => new Validator($container->get(Psr\Log\LoggerInterface::class)));
+$container->set(Validator::class, fn() => new Validator($logger));
 
 $container->set(RateLimiter::class, new RateLimiter($logger, $database));
 
 $container->set(AuditService::class, new AuditService($logger));
 
-// Reorder parameters: logger comes first.
 $container->set(TokenService::class, new TokenService(
     $_ENV['JWT_SECRET'] ?: '',
     $_ENV['JWT_REFRESH_SECRET'] ?: '',
     $logger
 ));
 
-// NotificationService already had logger first.
 $container->set(NotificationService::class, new NotificationService($logger, $config['notifications'] ?? [], $database));
 
-// Ensure logger first.
 $container->set(UserService::class, new UserService($logger, $config['encryption']['jwt_secret'] ?? ''));
 
-// PaymentService: logger, then db, then other dependencies.
 $container->set(PaymentService::class, new PaymentService(
     $logger,
     $database,
@@ -108,30 +104,23 @@ $container->set(PaymentService::class, new PaymentService(
     getenv('PAYU_API_SECRET') ?: ''
 ));
 
-// BookingService: updated to pass logger first.
 $container->set(BookingService::class, new BookingService($logger, $database));
 
-// MetricsService: add logger as first argument.
 $container->set(MetricsService::class, new MetricsService($logger, $database));
 
-// ReportService: add logger as first argument.
 $container->set(ReportService::class, new ReportService($logger, $database));
 
-// RevenueService: add logger as first argument.
 $container->set(RevenueService::class, new RevenueService($logger, $database));
 
-// For SignatureService, pass an empty array as the $config.
 $container->set(SignatureService::class, new SignatureService(
-    $config['signature'],             // $config array
-    $fileStorage,   // fileStorage should be second
-    $encryptionService, // third parameter (EncryptionService instance)
-    $logger         // fourth parameter (logger)
+    $logger,
+    $config['signature'],             
+    $fileStorage,   
+    $encryptionService
 ));
 
-// TemplateService: now include logger first.
 $container->set(TemplateService::class, new TemplateService($logger, __DIR__ . '/../storage/templates'));
 
-// KeyManager: update to pass logger as first parameter.
 $container->set(KeyManager::class, new KeyManager($logger, $config['keymanager']['keys'] ?? []));
 
 // Return the DI container.

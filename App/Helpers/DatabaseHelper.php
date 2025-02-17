@@ -7,8 +7,7 @@ use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use Dotenv\Dotenv;
 use Exception;
-use Monolog\Logger;
-use Monolog\Handler\StreamHandler;
+use Psr\Log\LoggerInterface;
 
 class DatabaseHelper
 {
@@ -16,8 +15,14 @@ class DatabaseHelper
     private static $secureCapsule = null;
     private static $initialized = false;
     private static $envLoaded = false;
+    private static $logger;
 
     private function __construct() {}
+
+    public static function setLogger(LoggerInterface $logger)
+    {
+        self::$logger = $logger;
+    }
 
     private static function loadEnv()
     {
@@ -102,10 +107,11 @@ class DatabaseHelper
 
     private static function logEvent($category, $message)
     {
-        $logFilePath = __DIR__ . "/../../logs/{$category}.log";
-        $log = new Logger('database');
-        $log->pushHandler(new StreamHandler($logFilePath, Logger::DEBUG));
-        $log->info($message);
+        if (self::$logger) {
+            self::$logger->info("[$category] $message");
+        } else {
+            error_log("[$category] $message");
+        }
     }
 
     /**

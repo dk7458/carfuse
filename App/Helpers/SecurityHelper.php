@@ -32,7 +32,7 @@ const SESSION_CONFIG = [
 
 // ✅ Standardized Logging Function
 if (!function_exists('securityLog')) {
-    function securityLog($logger, $message, $level = 'info') {
+    function securityLog(LoggerInterface $logger, $message, $level = 'info') {
         // Use logger if available; fall back to error_log
         if ($logger && method_exists($logger, 'log')) {
             $logger->log($level, "[Security] $message");
@@ -166,7 +166,7 @@ function generateSecureToken($length = 64)
 
 // ✅ Secure Session Destruction using native PHP
 if (!function_exists('destroySession')) {
-    function destroySession($logger) {
+    function destroySession(LoggerInterface $logger) {
         securityLog($logger, 'Destroying session', 'info');
         $_SESSION = [];
         if (ini_get('session.use_cookies')) {

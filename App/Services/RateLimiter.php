@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-// ...existing imports removed (no RateLimiter or Log) ...
+use Psr\Log\LoggerInterface;
 
 /**
  * Rate Limiter Service
@@ -11,7 +11,12 @@ namespace App\Services;
  */
 class RateLimiter
 {
-    // Removed PDO dependency
+    private LoggerInterface $logger;
+
+    public function __construct(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+    }
 
     public function isRateLimited(string $ip): bool
     {
@@ -23,7 +28,7 @@ class RateLimiter
         }
         $attempts = $_SESSION['rate_limit'][$ip] ?? 0;
         if ($attempts >= 5) {
-            error_log("[RateLimit] Rate limit exceeded for IP: {$ip}");
+            $this->logger->warning("[RateLimit] Rate limit exceeded for IP: {$ip}", ['category' => 'auth']);
             return true;
         }
         return false;
@@ -38,6 +43,6 @@ class RateLimiter
             $_SESSION['rate_limit'] = [];
         }
         $_SESSION['rate_limit'][$ip] = ($_SESSION['rate_limit'][$ip] ?? 0) + 1;
-        error_log("[RateLimit] Recorded failed attempt for IP: {$ip}");
+        $this->logger->info("[RateLimit] Recorded failed attempt for IP: {$ip}", ['category' => 'auth']);
     }
 }

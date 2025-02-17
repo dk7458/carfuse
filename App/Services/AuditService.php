@@ -37,9 +37,9 @@ class AuditService
                 'ip_address' => $ipAddress,
                 'created_at' => now()
             ]);
-            $this->logger->info("[AuditService] Logged action: {$action}");
+            $this->logger->info("[AuditService] Logged action: {$action}", ['category' => 'audit']);
         } catch (Exception $e) {
-            $this->logger->error("[AuditService] Error logging action: " . $e->getMessage());
+            $this->logger->error("[AuditService] Error logging action: " . $e->getMessage(), ['category' => 'audit']);
             throw new Exception('Failed to log action: ' . $e->getMessage());
         }
     }
@@ -68,7 +68,7 @@ class AuditService
             }
             return $query->orderBy('created_at', 'desc')->paginate(10);
         } catch (Exception $e) {
-            $this->logger->error("[AuditService] Error retrieving logs: " . $e->getMessage());
+            $this->logger->error("[AuditService] Error retrieving logs: " . $e->getMessage(), ['category' => 'audit']);
             throw $e;
         }
     }
@@ -85,7 +85,7 @@ class AuditService
             }
             return $log;
         } catch (Exception $e) {
-            $this->logger->error("[AuditService] Error retrieving log id {$logId}: " . $e->getMessage());
+            $this->logger->error("[AuditService] Error retrieving log id {$logId}: " . $e->getMessage(), ['category' => 'audit']);
             throw $e;
         }
     }
@@ -112,12 +112,11 @@ class AuditService
             if (!empty($filters['end_date'])) {
                 $query->where('created_at', '<=', $filters['end_date']);
             }
-            // Assuming soft deletes are handled by marking entries as deleted.
             $deleted = $query->delete();
-            $this->logger->info("[AuditService] Deleted logs with filters: " . json_encode($filters));
+            $this->logger->info("[AuditService] Deleted logs with filters: " . json_encode($filters), ['category' => 'audit']);
             return $deleted;
         } catch (Exception $e) {
-            $this->logger->error("[AuditService] Error deleting logs: " . $e->getMessage());
+            $this->logger->error("[AuditService] Error deleting logs: " . $e->getMessage(), ['category' => 'audit']);
             throw new Exception('Failed to delete logs: ' . $e->getMessage());
         }
     }

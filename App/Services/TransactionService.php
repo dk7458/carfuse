@@ -10,10 +10,11 @@ class TransactionService
     private $db;
     private LoggerInterface $logger;
 
-    public function __construct(LoggerInterface $logger)
+    // Constructor for dependency injection
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db)
     {
-        $this->db = DatabaseHelper::getInstance();
         $this->logger = $logger;
+        $this->db = $db;
     }
 
     public function getByUserId(int $userId): array

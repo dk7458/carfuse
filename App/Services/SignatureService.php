@@ -7,7 +7,7 @@ use GuzzleHttp\Client;
 use Psr\Log\LoggerInterface;
 use App\Services\FileStorage;
 use App\Services\EncryptionService;
-use App\Helpers\DatabaseHelper; // new import
+use App\Helpers\DatabaseHelper;
 
 /**
  * Signature Service
@@ -16,29 +16,30 @@ use App\Helpers\DatabaseHelper; // new import
  */
 class SignatureService
 {
+    private LoggerInterface $logger;
+    private $db;
     private string $apiEndpoint;
     private string $apiKey;
     private FileStorage $fileStorage;
     private EncryptionService $encryptionService;
-    private LoggerInterface $logger;
-    private $db; // DatabaseHelper instance
 
     public function __construct(
+        LoggerInterface $logger,
+        DatabaseHelper $db,
         array $config,
         FileStorage $fileStorage,
-        EncryptionService $encryptionService,
-        LoggerInterface $logger
+        EncryptionService $encryptionService
     ) {
         if (empty($config['api_endpoint']) || empty($config['api_key'])) {
             throw new Exception('AES API configuration is incomplete.');
         }
 
+        $this->logger = $logger;
+        $this->db = $db;
         $this->apiEndpoint = $config['api_endpoint'];
         $this->apiKey = $config['api_key'];
         $this->fileStorage = $fileStorage;
         $this->encryptionService = $encryptionService;
-        $this->logger = $logger;
-        $this->db = DatabaseHelper::getInstance();
     }
 
     /**
@@ -52,7 +53,6 @@ class SignatureService
         $fileName = uniqid() . '.' . pathinfo($filePath, PATHINFO_EXTENSION);
         $storagePath = $this->fileStorage->storeFile("signatures/{$userId}", $fileName, $encryptedContent, false);
 
-        // Replace direct Eloquent call with DatabaseHelper, wrapped in try–catch.
         try {
             $this->db->table('signatures')->insert([
                 'user_id'   => $userId,
@@ -60,12 +60,12 @@ class SignatureService
                 'encrypted' => true,
                 'created_at'=> date('Y-m-d H:i:s'),
             ]);
-            $this->logger->info("[SignatureService] Signature record created for user {$userId}");
+            $this->logger->info("[SignatureService] Signature record created for user {$userId}", ['category' => 'signature']);
         } catch (Exception $e) {
-            $this->logger->error("[SignatureService] Database error: " . $e->getMessage());
+            $this->logger->error("[SignatureService] Database error: " . $e->getMessage(), ['category' => 'db']);
             throw $e;
         }
-        $this->logger->info("[SignatureService] Signature uploaded for user {$userId} at {$storagePath}");
+        $this->logger->info("[SignatureService] Signature uploaded for user {$userId} at {$storagePath}", ['category' => 'signature']);
         return $storagePath;
     }
 

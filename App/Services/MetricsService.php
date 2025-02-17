@@ -11,10 +11,10 @@ class MetricsService
     private $db;
     private LoggerInterface $logger;
 
-    public function __construct(LoggerInterface $logger)
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db)
     {
-        $this->db = DatabaseHelper::getInstance();
         $this->logger = $logger;
+        $this->db = $db;
     }
 
     public function getDashboardMetrics(): array
@@ -41,10 +41,10 @@ class MetricsService
                 'total_refunds'       => $totalRefunds,
             ];
             $metrics['net_revenue'] = $totalRevenue - $totalRefunds;
-            $this->logger->info("[MetricsService] Dashboard metrics retrieved successfully");
+            $this->logger->info("[MetricsService] Dashboard metrics retrieved successfully", ['category' => 'metrics']);
             return $metrics;
         } catch (Exception $e) {
-            $this->logger->error("[MetricsService] Database error while retrieving metrics: " . $e->getMessage());
+            $this->logger->error("[MetricsService] Database error while retrieving metrics: " . $e->getMessage(), ['category' => 'db']);
             return [];
         }
     }

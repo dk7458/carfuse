@@ -15,12 +15,12 @@ class UserService
     private string $jwtSecret;
     private $db; // DatabaseHelper instance
 
-    // Modified constructor to use DatabaseHelper exclusively
-    public function __construct(LoggerInterface $logger, string $jwtSecret)
+    // Constructor for dependency injection
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, string $jwtSecret)
     {
         $this->logger = $logger;
+        $this->db = $db;
         $this->jwtSecret = $jwtSecret;
-        $this->db = DatabaseHelper::getInstance();
         $this->logger->info("[UserService] Initialized.");
     }
 

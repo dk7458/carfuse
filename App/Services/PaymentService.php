@@ -2,30 +2,29 @@
 
 namespace App\Services;
 
-use App\Helpers\DatabaseHelper; // new import
+use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
 
 class PaymentService
 {
     private LoggerInterface $logger;
     private $db;
-    // Removed direct model dependency
 
-    public function __construct(LoggerInterface $logger)
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db)
     {
         $this->logger = $logger;
-        $this->db = DatabaseHelper::getInstance();
+        $this->db = $db;
     }
 
     public function processPayment($user, array $paymentData)
     {
         if (empty($user) || empty($user['authenticated']) || !$user['authenticated']) {
-            $this->logger->error("[PaymentService] Unauthenticated payment attempt");
+            $this->logger->error("[PaymentService] Unauthenticated payment attempt", ['category' => 'auth']);
             return ['status' => 'error', 'message' => 'User not authenticated'];
         }
 
         if (!empty($paymentData['adminOnly']) && $paymentData['adminOnly'] === true && $user['role'] !== 'admin') {
-            $this->logger->error("[PaymentService] Unauthorized admin transaction");
+            $this->logger->error("[PaymentService] Unauthorized admin transaction", ['category' => 'auth']);
             return ['status' => 'error', 'message' => 'Admin privileges required'];
         }
 
@@ -60,10 +59,10 @@ class PaymentService
                     'created_at' => now()
                 ]);
             });
-            $this->logger->info("[PaymentService] Payment processed for booking {$paymentData['bookingId']}");
+            $this->logger->info("[PaymentService] Payment processed for booking {$paymentData['bookingId']}", ['category' => 'payment']);
             return ['status' => 'success', 'message' => 'Payment processed successfully'];
         } catch (\Exception $e) {
-            $this->logger->error("[PaymentService] Database error: " . $e->getMessage());
+            $this->logger->error("[PaymentService] Database error: " . $e->getMessage(), ['category' => 'db']);
             return ['status' => 'error', 'message' => 'Payment processing failed'];
         }
     }

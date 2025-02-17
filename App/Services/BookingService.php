@@ -28,10 +28,10 @@ class BookingService
             if (!$booking) {
                 throw new Exception("Booking not found.");
             }
-            $this->logger->info("[BookingService] Retrieved booking with id: {$id}");
+            $this->logger->info("[BookingService] Retrieved booking with id: {$id}", ['category' => 'booking']);
             return (array)$booking;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving booking id {$id}: " . $e->getMessage());
+            $this->logger->error("[BookingService] Error retrieving booking id {$id}: " . $e->getMessage(), ['category' => 'booking']);
             throw $e;
         }
     }
@@ -50,9 +50,9 @@ class BookingService
             if (!$updated) {
                 throw new Exception("Failed to update booking.");
             }
-            $this->logger->info("[BookingService] Rescheduled booking id: {$id}");
+            $this->logger->info("[BookingService] Rescheduled booking id: {$id}", ['category' => 'booking']);
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error rescheduling booking id {$id}: " . $e->getMessage());
+            $this->logger->error("[BookingService] Error rescheduling booking id {$id}: " . $e->getMessage(), ['category' => 'booking']);
             throw $e;
         }
     }
@@ -71,11 +71,11 @@ class BookingService
             if (!$updated) {
                 throw new Exception("Failed to update booking status.");
             }
-            $this->logger->info("[BookingService] Canceled booking id: {$id}");
+            $this->logger->info("[BookingService] Canceled booking id: {$id}", ['category' => 'booking']);
             // Assuming refund amount is a field in the booking record.
             return isset($booking->refund_amount) ? $booking->refund_amount : 0.0;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error canceling booking id {$id}: " . $e->getMessage());
+            $this->logger->error("[BookingService] Error canceling booking id {$id}: " . $e->getMessage(), ['category' => 'booking']);
             throw $e;
         }
     }
@@ -90,10 +90,10 @@ class BookingService
             if (!$record || !isset($record->user_id)) {
                 throw new Exception("User not found for booking.");
             }
-            $this->logger->info("[BookingService] Retrieved user id for booking id: {$id}");
+            $this->logger->info("[BookingService] Retrieved user id for booking id: {$id}", ['category' => 'booking']);
             return $record->user_id;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving user id for booking id {$id}: " . $e->getMessage());
+            $this->logger->error("[BookingService] Error retrieving user id for booking id {$id}: " . $e->getMessage(), ['category' => 'booking']);
             throw $e;
         }
     }
@@ -108,10 +108,10 @@ class BookingService
                                ->selectRaw('MONTH(created_at) AS month, COUNT(*) AS total')
                                ->groupBy('month')
                                ->get();
-            $this->logger->info("[BookingService] Retrieved monthly booking trends");
+            $this->logger->info("[BookingService] Retrieved monthly booking trends", ['category' => 'booking']);
             return $trends;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving monthly booking trends: " . $e->getMessage());
+            $this->logger->error("[BookingService] Error retrieving monthly booking trends: " . $e->getMessage(), ['category' => 'booking']);
             throw $e;
         }
     }
@@ -123,10 +123,10 @@ class BookingService
     {
         try {
             $total = $this->db->table('bookings')->count();
-            $this->logger->info("[BookingService] Retrieved total number of bookings");
+            $this->logger->info("[BookingService] Retrieved total number of bookings", ['category' => 'booking']);
             return $total;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving total number of bookings: " . $e->getMessage());
+            $this->logger->error("[BookingService] Error retrieving total number of bookings: " . $e->getMessage(), ['category' => 'booking']);
             throw $e;
         }
     }
@@ -138,10 +138,10 @@ class BookingService
     {
         try {
             $completed = $this->db->table('bookings')->where('status', 'completed')->count();
-            $this->logger->info("[BookingService] Retrieved number of completed bookings");
+            $this->logger->info("[BookingService] Retrieved number of completed bookings", ['category' => 'booking']);
             return $completed;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving number of completed bookings: " . $e->getMessage());
+            $this->logger->error("[BookingService] Error retrieving number of completed bookings: " . $e->getMessage(), ['category' => 'booking']);
             throw $e;
         }
     }
@@ -153,10 +153,10 @@ class BookingService
     {
         try {
             $canceled = $this->db->table('bookings')->where('status', 'canceled')->count();
-            $this->logger->info("[BookingService] Retrieved number of canceled bookings");
+            $this->logger->info("[BookingService] Retrieved number of canceled bookings", ['category' => 'booking']);
             return $canceled;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving number of canceled bookings: " . $e->getMessage());
+            $this->logger->error("[BookingService] Error retrieving number of canceled bookings: " . $e->getMessage(), ['category' => 'booking']);
             throw $e;
         }
     }
@@ -171,10 +171,10 @@ class BookingService
                              ->where('booking_id', $bookingId)
                              ->orderBy('created_at', 'desc')
                              ->get();
-            $this->logger->info("[BookingService] Retrieved logs for booking id: {$bookingId}");
+            $this->logger->info("[BookingService] Retrieved logs for booking id: {$bookingId}", ['category' => 'booking']);
             return $logs;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving logs for booking id {$bookingId}: " . $e->getMessage());
+            $this->logger->error("[BookingService] Error retrieving logs for booking id {$bookingId}: " . $e->getMessage(), ['category' => 'booking']);
             throw $e;
         }
     }
@@ -190,10 +190,10 @@ class BookingService
                                   ->where('vehicle_id', $vehicleId)
                                   ->whereBetween('pickup_date', [$pickupDate, $dropoffDate])
                                   ->count() === 0;
-            $this->logger->info("[BookingService] Checked availability for vehicle id: {$vehicleId}");
+            $this->logger->info("[BookingService] Checked availability for vehicle id: {$vehicleId}", ['category' => 'booking']);
             return $available;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error checking availability for vehicle id {$vehicleId}: " . $e->getMessage());
+            $this->logger->error("[BookingService] Error checking availability for vehicle id {$vehicleId}: " . $e->getMessage(), ['category' => 'booking']);
             throw $e;
         }
     }
@@ -209,6 +209,7 @@ class BookingService
                 'vehicle_id' => $vehicleId,
                 'pickup_date' => $pickupDate,
                 'dropoff_date' => $dropoffDate,
+                'category' => 'booking'
             ]);
             return ['status' => 'error', 'message' => 'Vehicle not available for the selected dates'];
         }
@@ -228,6 +229,7 @@ class BookingService
                 'vehicle_id' => $vehicleId,
                 'pickup_date' => $pickupDate,
                 'dropoff_date' => $dropoffDate,
+                'category' => 'booking'
             ]);
 
             return ['status' => 'success', 'message' => 'Booking created successfully'];
@@ -237,6 +239,7 @@ class BookingService
                 'vehicle_id' => $vehicleId,
                 'pickup_date' => $pickupDate,
                 'dropoff_date' => $dropoffDate,
+                'category' => 'booking'
             ]);
             return ['status' => 'error', 'message' => 'Failed to create booking'];
         }
