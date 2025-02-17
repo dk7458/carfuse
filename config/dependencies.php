@@ -92,7 +92,7 @@ $container->set(TokenService::class, new TokenService(
     $logger
 ));
 // Fixed NotificationService registration: pass $logger as first argument, $database as second.
-$container->set(NotificationService::class, new NotificationService($logger, $database, $config['notifications'] ?? []));
+$container->set(NotificationService::class, new NotificationService($logger, $config['notifications'] ?? [], $database, ));
 $container->set(NotificationQueue::class, new NotificationQueue($container->get(NotificationService::class), __DIR__ . '/../storage/notification_queue.json', $logger));
 $container->set(UserService::class, new UserService($logger, $config['encryption']['jwt_secret'] ?? ''));
 $container->set(Payment::class, new Payment());
