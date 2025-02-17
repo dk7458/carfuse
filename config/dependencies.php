@@ -79,23 +79,27 @@ try {
 $container->set('db', $database);
 $container->set('secure_db', $secure_database);
 
-// Register Services.
+// Register Services with logger as the first parameter.
 $container->set(Validator::class, fn() => new Validator($container->get(Psr\Log\LoggerInterface::class)));
-$container->set(RateLimiter::class, new RateLimiter($database));
-$container->set(AuditService::class, new AuditService($logger));
-$container->set(TokenService::class, new TokenService(
-    //getenv('JWT_SECRET') ?: '',
-    $_ENV['JWT_SECRET'] ?: '',
-    $_ENV['JWT_REFRESH_SECRET'] ?: '',
-    //getenv('JWT_REFRESH_SECRET') ?: '',
 
-    $logger
+$container->set(RateLimiter::class, new RateLimiter($logger, $database));
+
+$container->set(AuditService::class, new AuditService($logger));
+
+// Reorder parameters: logger comes first.
+$container->set(TokenService::class, new TokenService(
+    $logger,
+    $_ENV['JWT_SECRET'] ?: '',
+    $_ENV['JWT_REFRESH_SECRET'] ?: ''
 ));
-// Fixed NotificationService registration: pass $logger as first argument, $database as second.
-$container->set(NotificationService::class, new NotificationService($logger, $config['notifications'] ?? [], $database, ));
-$container->set(NotificationQueue::class, new NotificationQueue($container->get(NotificationService::class), __DIR__ . '/../storage/notification_queue.json', $logger));
+
+// NotificationService already had logger first.
+$container->set(NotificationService::class, new NotificationService($logger, $config['notifications'] ?? [], $database));
+
+// Ensure logger first.
 $container->set(UserService::class, new UserService($logger, $config['encryption']['jwt_secret'] ?? ''));
-$container->set(Payment::class, new Payment());
+
+// PaymentService: logger, then db, then other dependencies.
 $container->set(PaymentService::class, new PaymentService(
     $logger,
     $database,
@@ -103,19 +107,33 @@ $container->set(PaymentService::class, new PaymentService(
     getenv('PAYU_API_KEY') ?: '',
     getenv('PAYU_API_SECRET') ?: ''
 ));
+
+// BookingService: updated to pass logger first.
 $container->set(BookingService::class, new BookingService($logger, $database));
-$container->set(MetricsService::class, new MetricsService($database));
-$container->set(ReportService::class, new ReportService($database));
-$container->set(RevenueService::class, new RevenueService($database));
+
+// MetricsService: add logger as first argument.
+$container->set(MetricsService::class, new MetricsService($logger, $database));
+
+// ReportService: add logger as first argument.
+$container->set(ReportService::class, new ReportService($logger, $database));
+
+// RevenueService: add logger as first argument.
+$container->set(RevenueService::class, new RevenueService($logger, $database));
+
+// For SignatureService, move logger to be the first parameter.
 $container->set(SignatureService::class, new SignatureService(
+    $logger,
     new Client(),
     [],
     $fileStorage,
-    $encryptionService,
-    $logger
+    $encryptionService
 ));
-$container->set(TemplateService::class, new TemplateService(__DIR__ . '/../storage/templates'));
-$container->set(KeyManager::class, new KeyManager($config['keymanager']['keys'] ?? [], $logger));
+
+// TemplateService: now include logger first.
+$container->set(TemplateService::class, new TemplateService($logger, __DIR__ . '/../storage/templates'));
+
+// KeyManager: update to pass logger as first parameter.
+$container->set(KeyManager::class, new KeyManager($logger, $config['keymanager']['keys'] ?? []));
 
 // Return the DI container.
 return $container;
