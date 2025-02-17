@@ -122,7 +122,7 @@ $container->set(RevenueService::class, new RevenueService($logger, $database));
 
 // For SignatureService, pass an empty array as the $config.
 $container->set(SignatureService::class, new SignatureService(
-    [],             // $config array
+    $config['signature'],             // $config array
     $fileStorage,   // fileStorage should be second
     $encryptionService, // third parameter (EncryptionService instance)
     $logger         // fourth parameter (logger)
