@@ -21,8 +21,15 @@ require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 $container = require_once __DIR__ . '/config/dependencies.php';
 
 // Load Logger from logger.php and bind LoggerInterface
-use Psr\Log\LoggerInterface;
 $logger = require_once __DIR__ . '/logger.php';
+
+// ✅ Ensure Logger is Valid Before Registering It
+if (!$logger || !$logger instanceof LoggerInterface) {
+    error_log("❌ [BOOTSTRAP] Logger initialization failed. Using fallback logger.");
+    $logger = new Monolog\Logger('fallback');
+}
+
+// ✅ Bind Logger to DI Container
 $container->set(LoggerInterface::class, fn() => $logger);
 
 // Remove redundant DatabaseHelper initialization
