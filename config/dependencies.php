@@ -124,9 +124,8 @@ $container->set(RevenueService::class, new RevenueService($logger, $database));
 $container->set(SignatureService::class, new SignatureService(
     [],             // $config array
     $fileStorage,   // fileStorage should be second
-    new Client(),   // third parameter (Client instance)
-    $logger,        // fourth parameter (logger)
-    $encryptionService  // fifth parameter
+    $encryptionService, // third parameter (EncryptionService instance)
+    $logger         // fourth parameter (logger)
 ));
 
 // TemplateService: now include logger first.
