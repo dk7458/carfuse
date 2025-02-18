@@ -4,13 +4,10 @@ RewriteEngine On
 RewriteCond %{REQUEST_URI} ^/api/ [NC]
 RewriteRule ^api/(.*)$ index.php?route=api/$1 [QSA,L]
 
-# ✅ Ensure static files load correctly
-RewriteCond %{REQUEST_URI} ^/(css|js|images|uploads|assets)/(.*)$ [OR]
-RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
-RewriteRule ^(css|js|images|uploads|assets)/(.*)$ /public/$1/$2 [L]
-
 # ✅ Block direct access to backend directories
 RewriteRule ^(App/Controllers|App/Services|config|vendor|logs) - [F,L]
 
-# ✅ Forward remaining requests to index.php
+# ✅ Forward remaining requests (only if the file or directory doesn't exist)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.php [QSA,L]
