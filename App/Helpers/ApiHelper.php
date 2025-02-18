@@ -14,7 +14,7 @@ class ApiHelper
     {
         $timestamp = date('Y-m-d H:i:s');
         $logFile = __DIR__ . '/../../logs/api.log';
-        file_put_contents($logFile, "[API] {$timestamp} - {$message}\n", FILE_APPEND);
+        file_put_contents($logFile, "{$timestamp} - {$message}\n", FILE_APPEND);
     }
 
     /**
@@ -26,5 +26,17 @@ class ApiHelper
         header('Content-Type: application/json');
         echo json_encode(['status' => $status, 'message' => $message, 'data' => $data]);
         exit();
+    }
+
+    /**
+     * ✅ Extract JWT from Authorization Header or Cookie
+     */
+    public static function getJWT()
+    {
+        $headers = getallheaders();
+        if (isset($headers['Authorization']) && preg_match('/Bearer\s(\S+)/', $headers['Authorization'], $matches)) {
+            return $matches[1];
+        }
+        return $_COOKIE['jwt'] ?? null;
     }
 }

@@ -2,7 +2,8 @@
 
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
-use App\Middleware\AuthMiddleware;
+use App\Helpers\SecurityHelper;
+use App\Helpers\ApiHelper;
 
 // ✅ Define the FastRoute Dispatcher
 return simpleDispatcher(function (RouteCollector $router) {
