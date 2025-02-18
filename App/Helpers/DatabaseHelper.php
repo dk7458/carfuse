@@ -8,6 +8,7 @@ use Illuminate\Container\Container;
 use Dotenv\Dotenv;
 use Exception;
 use Psr\Log\LoggerInterface;
+use App\Helpers\ApiHelper;
 
 class DatabaseHelper
 {
@@ -125,13 +126,13 @@ class DatabaseHelper
             logApiError("Database Query Error: " . $e->getMessage());
 
             if ($e->getCode() == "23000") {
-                sendJsonResponse('error', 'Duplicate entry error', [], 400);
+                ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
             }
 
-            sendJsonResponse('error', 'Database query error', [], 500);
+            ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         } catch (\Exception $e) {
             logApiError("Database Query Error: " . $e->getMessage());
-            sendJsonResponse('error', 'Database query error', [], 500);
+            ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         }
     }
 
