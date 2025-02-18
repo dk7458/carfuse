@@ -2,69 +2,104 @@
 
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
+use App\Middleware\AuthMiddleware;
 use App\Helpers\SecurityHelper;
 use App\Helpers\ApiHelper;
 
-// ✅ Define the FastRoute Dispatcher
 return simpleDispatcher(function (RouteCollector $router) {
 
-    // ✅ Define Explicit View Routes
-    $viewRoutes = [
-        '/' => 'views/home.php',
-        '/dashboard' => 'views/dashboard.php',
-        '/profile' => 'views/user/profile.php',
-        '/reports' => 'views/user/reports.php',
-        '/auth/login' => 'views/auth/login.php',
-        '/auth/register' => 'views/auth/register.php',
-        '/auth/password_reset' => 'views/auth/password_reset.php',
-        '/documents/signing_page' => 'views/documents/signing_page.php',
-    ];
+    // ✅ Define Public View Routes
+    $router->addRoute(['GET'], '/', fn() => require '../public/views/home.php');
+    $router->addRoute(['GET'], '/dashboard', fn() => require '../public/views/dashboard.php');
+    $router->addRoute(['GET'], '/profile', fn() => require '../public/views/user/profile.php');
+    $router->addRoute(['GET'], '/reports', fn() => require '../public/views/user/reports.php');
+    $router->addRoute(['GET'], '/auth/login', fn() => require '../public/views/auth/login.php');
+    $router->addRoute(['GET'], '/auth/register', fn() => require '../public/views/auth/register.php');
+    $router->addRoute(['GET'], '/auth/password_reset', fn() => require '../public/views/auth/password_reset.php');
+    $router->addRoute(['GET'], '/documents/signing_page', fn() => require '../public/views/documents/signing_page.php');
 
-    foreach ($viewRoutes as $route => $filePath) {
-        $router->addRoute(['GET', 'POST'], $route, function () use ($filePath) {
-            require __DIR__ . '/../public/' . $filePath;
-        });
-    }
+    // ✅ Define API Routes with Authentication and Middleware
+    $router->addRoute(['POST'], '/api/auth/login', 'App\Controllers\AuthController@login');
+    $router->addRoute(['POST'], '/api/auth/register', 'App\Controllers\AuthController@register');
+    $router->addRoute(['POST'], '/api/auth/refresh', 'App\Controllers\AuthController@refresh');
+    $router->addRoute(['POST'], '/api/auth/logout', 'App\Controllers\AuthController@logout');
 
-    // ✅ Define API Routes with Authentication
-    $apiRoutes = [
-        '/api/auth/login' => 'api/auth/login.php',
-        '/api/auth/register' => 'api/auth/register.php',
-        '/api/auth/refresh' => 'api/auth/refresh.php',
-        '/api/auth/logout' => 'api/auth/logout.php',
-        '/api/user/profile' => 'api/user/profile.php',
-        '/api/user/settings' => 'api/user/settings.php',
-        '/api/user/notifications' => 'api/user/notifications.php',
-        '/api/dashboard/metrics' => 'api/dashboard/metrics.php',
-        '/api/dashboard/reports' => 'api/dashboard/reports.php',
-        '/api/bookings/create' => 'api/bookings/create.php',
-        '/api/bookings/view' => 'api/bookings/view.php',
-        '/api/bookings/cancel' => 'api/bookings/cancel.php',
-        '/api/bookings/reschedule' => 'api/bookings/reschedule.php',
-        '/api/payments/process' => 'api/payments/process.php',
-        '/api/payments/refund' => 'api/payments/refund.php',
-        '/api/payments/history' => 'api/payments/history.php',
-        '/api/reports/generate' => 'api/reports/generate.php',
-        '/api/reports/view' => 'api/reports/view.php',
-        '/api/admin/users' => 'api/admin/users.php',
-        '/api/admin/dashboard' => 'api/admin/dashboard.php',
-        '/api/admin/logs' => 'api/admin/logs.php',
-        '/api/documents/upload' => 'api/documents/upload.php',
-        '/api/documents/sign' => 'api/documents/sign.php',
-        '/api/documents/view' => 'api/documents/view.php',
-        '/api/system/logs' => 'api/system/logs.php',
-        '/api/system/status' => 'api/system/status.php',
-    ];
+    // ✅ Protected API Routes (Require Authentication)
+    $router->addRoute(['GET'], '/api/user/profile', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/user/profile.php';
+    });
 
-    foreach ($apiRoutes as $route => $filePath) {
-        $router->addRoute(['GET', 'POST'], $route, function () use ($filePath) {
-            require __DIR__ . '/../public/' . $filePath;
-        });
-    }
+    $router->addRoute(['GET'], '/api/user/settings', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/user/settings.php';
+    });
 
-    // ✅ Default Route for Unmatched Requests
+    $router->addRoute(['GET'], '/api/user/notifications', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/user/notifications.php';
+    });
+
+    $router->addRoute(['GET'], '/api/dashboard/metrics', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/dashboard/metrics.php';
+    });
+
+    $router->addRoute(['GET'], '/api/dashboard/reports', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/dashboard/reports.php';
+    });
+
+    // ✅ Booking API Routes
+    $router->addRoute(['POST'], '/api/bookings/create', 'App\Controllers\BookingController@createBooking');
+    $router->addRoute(['GET'], '/api/bookings/view/{id:\d+}', 'App\Controllers\BookingController@viewBooking');
+    $router->addRoute(['POST'], '/api/bookings/cancel/{id:\d+}', 'App\Controllers\BookingController@cancelBooking');
+    $router->addRoute(['POST'], '/api/bookings/reschedule/{id:\d+}', 'App\Controllers\BookingController@rescheduleBooking');
+
+    // ✅ Payment API Routes
+    $router->addRoute(['POST'], '/api/payments/process', 'App\Controllers\PaymentController@processPayment');
+    $router->addRoute(['POST'], '/api/payments/refund/{id:\d+}', 'App\Controllers\PaymentController@refundPayment');
+    $router->addRoute(['GET'], '/api/payments/history', 'App\Controllers\PaymentController@paymentHistory');
+
+    // ✅ Report API Routes
+    $router->addRoute(['POST'], '/api/reports/generate', 'App\Controllers\ReportController@generateReport');
+    $router->addRoute(['GET'], '/api/reports/view/{id:\d+}', 'App\Controllers\ReportController@viewReport');
+
+    // ✅ Admin API Routes
+    $router->addRoute(['GET'], '/api/admin/users', function () {
+        AuthMiddleware::requireAdmin();
+        require '../public/api/admin/users.php';
+    });
+
+    $router->addRoute(['GET'], '/api/admin/dashboard', function () {
+        AuthMiddleware::requireAdmin();
+        require '../public/api/admin/dashboard.php';
+    });
+
+    $router->addRoute(['GET'], '/api/admin/logs', function () {
+        AuthMiddleware::requireAdmin();
+        require '../public/api/admin/logs.php';
+    });
+
+    // ✅ Document API Routes
+    $router->addRoute(['POST'], '/api/documents/upload', 'App\Controllers\DocumentController@uploadDocument');
+    $router->addRoute(['POST'], '/api/documents/sign', 'App\Controllers\DocumentController@signDocument');
+    $router->addRoute(['GET'], '/api/documents/view/{id:\d+}', 'App\Controllers\DocumentController@viewDocument');
+
+    // ✅ System API Routes
+    $router->addRoute(['GET'], '/api/system/logs', function () {
+        AuthMiddleware::requireAdmin();
+        require '../public/api/system/logs.php';
+    });
+
+    $router->addRoute(['GET'], '/api/system/status', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/system/status.php';
+    });
+
+    // ✅ Catch-All for Unmatched Requests
     $router->addRoute(['GET', 'POST'], '/{any:.+}', function () {
         http_response_code(404);
-        echo json_encode(["error" => "Page not found"]);
+        echo json_encode(["error" => "Not Found"]);
     });
 });

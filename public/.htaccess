@@ -11,7 +11,7 @@ RewriteCond %{REQUEST_URI} ^/(css|js|images|views|uploads|assets)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images|views|uploads|assets)/(.*)$ /public/$1/$2 [L]
 
-# ✅ Route API requests to index.php for unified handling
+# ✅ Route API requests through index.php for unified handling
 RewriteCond %{REQUEST_URI} ^/api/ [NC]
 RewriteRule ^api/(.*)$ index.php?route=api/$1 [QSA,L]
 

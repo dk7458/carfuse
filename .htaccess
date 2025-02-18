@@ -1,19 +1,19 @@
 RewriteEngine On
 
-# ✅ Forward Authorization header to PHP
+# ✅ Forward Authorization Header
 SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
 
-# ✅ Allow direct access to static files
-RewriteCond %{REQUEST_URI} ^/(css|js|images|views|uploads|assets)/(.*)$ [OR]
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
-
-# ✅ Route API requests through index.php for unified handling
+# ✅ Redirect API Requests to `index.php`
 RewriteCond %{REQUEST_URI} ^/api/ [NC]
-RewriteRule ^api/(.*)$ index.php?route=api/$1 [QSA,L]
+RewriteRule ^ index.php [QSA,L]
 
-# ✅ Prevent direct access to backend directories
+# ✅ Serve Static Assets (CSS, JS, Images, etc.)
+RewriteCond %{REQUEST_URI} ^/(css|js|images|uploads|assets)/(.*)$
+RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
+RewriteRule ^(css|js|images|uploads|assets)/(.*)$ /public/$1/$2 [L]
+
+# ✅ Block Direct Access to Backend Folders
 RewriteRule ^(App/Controllers|App/Services|config|vendor|logs) - [F,L]
 
-# ✅ Forward remaining requests to public/index.php for FastRoute
+# ✅ Forward Remaining Requests to `index.php`
 RewriteRule ^ index.php [QSA,L]

@@ -8,7 +8,7 @@ use Firebase\JWT\Key;
 use Psr\Log\LoggerInterface;
 
 /**
- * AuthMiddleware - Handles authentication for API requests.
+ * AuthMiddleware - Handles authentication and authorization for API requests.
  * Ensures valid JWT tokens and role-based access control.
  */
 class AuthMiddleware
@@ -35,41 +35,46 @@ class AuthMiddleware
 
     /**
      * Handle authentication and authorization.
-     *
+     * 
      * @param callable $next The next middleware function.
      * @param array $roles Required roles (e.g., 'admin').
      */
-    public function handle($next, ...$roles)
+    public function handle(callable $next, ...$roles)
     {
-        // Ensure Authorization header exists
+        // ✅ Ensure session is active before setting user data
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        // ✅ Ensure Authorization header exists
         $headers = getallheaders();
         if (!isset($headers['Authorization']) || !str_starts_with($headers['Authorization'], 'Bearer ')) {
-            $this->logger->warning("[AuthMiddleware] Unauthorized access attempt: Missing Authorization header.");
+            $this->logAuthEvent('Unauthorized access attempt: Missing Authorization header', 'warning');
             http_response_code(401);
             exit(json_encode(['error' => 'Unauthorized']));
         }
 
-        // Extract and validate JWT token
+        // ✅ Extract and validate JWT token
         $token = substr($headers['Authorization'], 7);
         $decoded = $this->validateToken($token);
         if (!$decoded) {
-            $this->logger->warning("[AuthMiddleware] Invalid token detected.");
+            $this->logAuthEvent('Invalid token detected', 'warning');
             http_response_code(401);
             exit(json_encode(['error' => 'Invalid token']));
         }
 
-        // Extract user details
+        // ✅ Store user details in session
         $_SESSION['user_id'] = $decoded['sub'] ?? null;
         $_SESSION['user_role'] = $decoded['role'] ?? 'guest';
 
-        // Check role-based access control
+        // ✅ Enforce role-based access control
         if (!empty($roles) && !in_array($_SESSION['user_role'], $roles)) {
-            $this->logger->warning("[AuthMiddleware] User {$_SESSION['user_id']} attempted unauthorized access.");
+            $this->logAuthEvent("User {$_SESSION['user_id']} attempted unauthorized access", 'warning');
             http_response_code(403);
             exit(json_encode(['error' => 'Forbidden']));
         }
 
-        // Proceed with the request
+        // ✅ Proceed with the request
         return $next();
     }
 
@@ -82,8 +87,47 @@ class AuthMiddleware
             $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
             return (array) $decoded;
         } catch (\Exception $e) {
-            $this->logger->error("[AuthMiddleware] Token validation failed: " . $e->getMessage());
+            $this->logAuthEvent("Token validation failed: " . $e->getMessage(), 'error');
             return false;
+        }
+    }
+
+    /**
+     * Log authentication-related events.
+     * @param string $message
+     * @param string $level (default: info)
+     */
+    private function logAuthEvent(string $message, string $level = 'info')
+    {
+        $userId = $_SESSION['user_id'] ?? 'guest';
+        $logMessage = "[Auth][{$level}] User: {$userId} - {$message}";
+        $this->logger->log($level, $logMessage);
+    }
+
+    /**
+     * Static method to enforce authentication without middleware.
+     */
+    public static function requireAuth()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        if (!isset($_SESSION['user_id'])) {
+            http_response_code(401);
+            exit(json_encode(['error' => 'Unauthorized']));
+        }
+    }
+
+    /**
+     * Static method to enforce admin authentication.
+     */
+    public static function requireAdmin()
+    {
+        self::requireAuth();
+        if ($_SESSION['user_role'] !== 'admin') {
+            http_response_code(403);
+            exit(json_encode(['error' => 'Forbidden']));
         }
     }
 }

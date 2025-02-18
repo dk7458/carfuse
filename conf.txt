@@ -1,0 +1,748 @@
+=== config/filestorage.php ===
+<?php
+/**
+ * File: filestorage.php
+ * Purpose: Configuration file for the FileStorage service in DocumentManager.
+ * Path: DocumentManager/config/filestorage.php
+ *
+ * Changelog:
+ * - [2025-01-28] Initial creation of the file.
+ */
+
+return [
+    // General file storage settings
+    'base_directory' => __DIR__ . '/../Storage', // Base directory for storing files
+
+    // Storage structure
+    'directories' => [
+        'templates' => 'Templates', // Directory for storing document templates
+        'users' => 'Users', // Directory for user-specific documents
+        'logs' => '../logs', // Directory for storing logs (relative to base)
+    ],
+
+    // File security settings
+    'security' => [
+        'allowed_extensions' => ['pdf', 'docx', 'html'], // Allowed file extensions
+        'max_file_size' => 10 * 1024 * 1024, // Max file size (10 MB in bytes)
+        'encryption' => [
+            'enabled' => true, // Enable encryption for stored files
+        ],
+        'permissions' => [
+            'default' => 0640, // Default file permissions (read/write for owner, read for group)
+        ],
+    ],
+
+    // Temporary storage settings
+    'temporary' => [
+        'enabled' => true, // Enable temporary storage
+        'directory' => __DIR__ . '/../Storage/Temp', // Temp directory path
+        'cleanup_interval' => 86400, // Time in seconds to clean up old temp files (24 hours)
+    ],
+
+    // Error handling and logging
+    'error_handling' => [
+        'log_errors' => true, // Log errors related to file storage
+        'log_file' => __DIR__ . '/../logs/filestorage.log', // Log file for file storage errors
+    ],
+];
+=== config/encryption.php ===
+<?php
+
+$logFile = __DIR__ . '/../logs/errors.log';
+
+try {
+    // ✅ Load Environment Variables (If `.env` Exists)
+    if (file_exists(__DIR__ . '/../.env')) {
+        $env = parse_ini_file(__DIR__ . '/../.env');
+    } else {
+        $env = [];
+    }
+
+    // ✅ Retrieve Secure Keys from `.env` or Use Safe Fallbacks
+    $jwtSecret = $env['JWT_SECRET'] ?? getenv('JWT_SECRET') ?: 'default_secure_fallback_key_32_characters_long';
+    $jwtRefreshSecret = $env['JWT_REFRESH_SECRET'] ?? getenv('JWT_REFRESH_SECRET') ?: 'your-secure-refresh-jwt-secret';
+    $encryptionKey = $env['ENCRYPTION_KEY'] ?? getenv('ENCRYPTION_KEY') ?: 'default_fallback_encryption_key_32+characters_long';
+
+    // ✅ Validate JWT & Encryption Key Lengths
+    if (strlen($jwtSecret) < 32) {
+        throw new Exception('JWT secret key must be at least 32 characters long.');
+    }
+    if (strlen($jwtRefreshSecret) < 32) {
+        throw new Exception('JWT refresh secret key must be at least 32 characters long.');
+    }
+    if (strlen($encryptionKey) < 32) {
+        throw new Exception('Encryption key must be at least 32 characters long.');
+    }
+
+    // ✅ Return Secure Configuration
+    return [
+        'encryption_key' => $encryptionKey,
+        'cipher' => 'AES-256-CBC',
+        'jwt_secret' => $jwtSecret,
+        'jwt_refresh_secret' => $jwtRefreshSecret,
+    ];
+} catch (Exception $e) {
+    $timestamp = date('Y-m-d H:i:s');
+    error_log("[$timestamp][error] Encryption configuration error: " . $e->getMessage() . "\n", 3, $logFile);
+    
+    // ✅ Prevent Information Leakage
+    http_response_code(500);
+    exit('Internal Server Error');
+}
+?>
+=== config/app.php ===
+<?php
+
+/**
+ * General Application Configuration
+ */
+
+return [
+    'name' => 'CarFuse',
+    'env' => 'development',  // Options: development, staging, production
+    'debug' => false,  // Set to true for debugging
+    'timezone' => 'UTC',
+];
+=== config/dependencies.php ===
+<?php
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use DI\Container;
+use App\Helpers\DatabaseHelper;
+use App\Services\Validator;
+use App\Services\RateLimiter;
+use App\Services\Auth\TokenService;
+use App\Services\Auth\AuthService;
+use App\Services\NotificationService;
+use App\Services\UserService;
+use App\Services\PaymentService;
+use App\Services\BookingService;
+use App\Services\MetricsService;
+use App\Services\ReportService;
+use App\Services\RevenueService;
+use App\Services\EncryptionService;
+use App\Services\Security\KeyManager;
+use App\Queues\NotificationQueue;
+use App\Queues\DocumentQueue;
+use App\Services\DocumentService;
+use App\Services\FileStorage;
+use App\Services\TemplateService;
+use App\Services\SignatureService;
+use App\Services\AuditService;
+use App\Models\Payment;
+use Psr\Log\LoggerInterface;
+use GuzzleHttp\Client;
+
+// ✅ Initialize PHP-DI container.
+$container = new Container();
+
+// ✅ Load configuration files.
+$configDirectory = __DIR__;
+$config = [];
+foreach (glob("{$configDirectory}/*.php") as $filePath) {
+    $fileName = basename($filePath, '.php');
+    if ($fileName !== 'dependencies') {
+        $config[$fileName] = require $filePath;
+    }
+}
+
+// ✅ Ensure required directories exist.
+$templateDirectory = __DIR__ . '/../storage/templates';
+$fileStorageConfig = $config['filestorage'] ?? [];
+if (!is_dir($templateDirectory)) {
+    mkdir($templateDirectory, 0775, true);
+}
+if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['base_directory'])) {
+    mkdir($fileStorageConfig['base_directory'], 0775, true);
+}
+
+// ✅ Initialize Logger (Monolog) from logger.php.
+$logger = require_once __DIR__ . '/../logger.php';
+$container->set(LoggerInterface::class, fn() => $logger);
+
+// ✅ Initialize EncryptionService.
+$encryptionService = new EncryptionService($config['encryption']['encryption_key'] ?? '');
+$container->set(EncryptionService::class, fn() => $encryptionService);
+
+// ✅ Initialize FileStorage.
+$fileStorage = new FileStorage($logger, $fileStorageConfig, $encryptionService);
+$container->set(FileStorage::class, fn() => $fileStorage);
+
+// ✅ Load key manager configuration.
+$config['keymanager'] = require __DIR__ . '/keymanager.php';
+
+// ✅ Initialize DatabaseHelper instances.
+try {
+    $database = DatabaseHelper::getInstance();
+    $secure_database = DatabaseHelper::getSecureInstance();
+    $logger->info("✅ Both databases initialized successfully.");
+} catch (Exception $e) {
+    $logger->error("❌ Database initialization failed: " . $e->getMessage());
+    die("❌ Database initialization failed. Check logs for details.\n");
+}
+$container->set('db', fn() => $database);
+$container->set('secure_db', fn() => $secure_database);
+
+// ✅ Register Services with logger as the first parameter.
+$container->set(Validator::class, fn() => new Validator($logger));
+$container->set(RateLimiter::class, fn() => new RateLimiter($logger, $database));
+$container->set(AuditService::class, fn() => new AuditService($logger));
+$container->set(TokenService::class, fn() => new TokenService($_ENV['JWT_SECRET'] ?? '', $_ENV['JWT_REFRESH_SECRET'] ?? '', $logger));
+$container->set(NotificationService::class, fn() => new NotificationService($logger, $config['notifications'] ?? [], $database));
+$container->set(UserService::class, fn() => new UserService($logger, $database, $config['encryption']['jwt_secret'] ?? ''));
+$container->set(PaymentService::class, fn() => new PaymentService($logger, $database, new Payment(), getenv('PAYU_API_KEY') ?: '', getenv('PAYU_API_SECRET') ?: ''));
+$container->set(BookingService::class, fn() => new BookingService($logger, $database));
+$container->set(MetricsService::class, fn() => new MetricsService($logger, $database));
+$container->set(ReportService::class, fn() => new ReportService($logger, $database));
+$container->set(RevenueService::class, fn() => new RevenueService($logger, $database));
+
+// ✅ For SignatureService, pass an empty array as the $config.
+$container->set(SignatureService::class, fn() => new SignatureService($config['signature'], $fileStorage, $encryptionService, $logger));
+
+// ✅ Register DocumentService.
+$container->set(DocumentService::class, fn() => new DocumentService(
+    $logger,
+    $container->get(AuditService::class),
+    $fileStorage,
+    $encryptionService,
+    $container->get(TemplateService::class)
+));
+
+// ✅ Register AuthService.
+$container->set(AuthService::class, fn() => new AuthService($logger, $database, $config['encryption']));
+
+// ✅ Register KeyManager.
+$container->set(KeyManager::class, fn() => new KeyManager($logger, $config['keymanager']['keys'] ?? []));
+
+// ✅ Return the DI container.
+return $container;
+=== config/database.php ===
+<?php
+use Dotenv\Dotenv;
+
+// Ensure `.env` is loaded before accessing database credentials
+$dotenvPath = __DIR__ . '/../';
+if (file_exists($dotenvPath . '.env')) {
+    $dotenv = Dotenv::createImmutable($dotenvPath);
+    $dotenv->safeLoad();
+}
+var_dump(getenv('DB_HOST'));
+
+// This file must return an array of database configurations
+return [
+    'app_database' => [
+        'driver'    => 'mysql',
+        'host'      => $_ENV['DB_HOST'] ?? '',
+        'database'  => $_ENV['DB_DATABASE'] ?? '',
+        'username'  => $_ENV['DB_USERNAME'] ?? '',
+        'password'  => $_ENV['DB_PASSWORD'] ?? '',
+        'charset'   => 'utf8mb4',
+        'collation' => 'utf8mb4_unicode_ci',
+        'prefix'    => '',
+    ],
+    'secure_database' => [
+        'driver'    => 'mysql',
+        'host'      => getenv('SECURE_DB_HOST'),
+        'database'  => getenv('SECURE_DB_DATABASE'),
+        'username'  => getenv('SECURE_DB_USERNAME'),
+        'password'  => getenv('SECURE_DB_PASSWORD'),
+        'charset'   => 'utf8mb4',
+        'collation' => 'utf8mb4_unicode_ci',
+        'prefix'    => '',
+    ]
+];
+=== config/setup_secure_database.php ===
+<?php
+
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
+
+use Illuminate\Database\Capsule\Manager as Capsule;
+use App\Helpers\DatabaseHelper;
+
+// ✅ Initialize Secure Database
+DatabaseHelper::getSecureInstance();
+
+// ✅ Log Setup
+$logFilePath = __DIR__ . '/../logs/secure_db_setup.log';
+file_put_contents($logFilePath, "🚀 Secure Database Setup Started at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
+
+// ✅ Define Secure Tables (No Cross-Database Foreign Keys)
+$tables = [
+    "consent_logs" => "
+        CREATE TABLE IF NOT EXISTS consent_logs (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_reference VARCHAR(255) NOT NULL,
+            ip_address VARCHAR(45) NOT NULL,
+            consent_given TINYINT(1) DEFAULT 0,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
+
+    "logs" => "
+        CREATE TABLE IF NOT EXISTS logs (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_reference BIGINT UNSIGNED NOT NULL,
+            action VARCHAR(255) NOT NULL,
+            details TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
+
+    "audit_trails" => "
+        CREATE TABLE IF NOT EXISTS audit_trails (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            action VARCHAR(255) NOT NULL,
+            details TEXT NOT NULL,
+            user_reference BIGINT UNSIGNED NULL,
+            booking_reference BIGINT UNSIGNED NULL,
+            ip_address VARCHAR(45),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
+
+    "contracts" => "
+        CREATE TABLE IF NOT EXISTS contracts (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            booking_reference BIGINT UNSIGNED NOT NULL,
+            user_reference BIGINT UNSIGNED NOT NULL,
+            contract_pdf VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    "
+];
+
+// ✅ Execute Table Creation with Error Handling
+foreach ($tables as $tableName => $sql) {
+    try {
+        Capsule::connection('secure')->statement($sql);
+        file_put_contents($logFilePath, "[✅] Secure Table `{$tableName}` created successfully.\n", FILE_APPEND);
+    } catch (Exception $e) {
+        file_put_contents($logFilePath, "[❌] Error creating `{$tableName}`: " . $e->getMessage() . "\n", FILE_APPEND);
+    }
+}
+
+file_put_contents($logFilePath, "✅ Secure Database Setup Completed Successfully.\n", FILE_APPEND);
+echo "[🚀] Secure database setup completed. Check `logs/secure_db_setup.log` for details.\n";
+=== config/payu.php ===
+<?php
+return [
+    'api_key' => 'your-payu-api-key',
+    'api_secret' => 'your-payu-api-secret',
+    'endpoint' => 'https://secure.payu.com/api',
+    'merchant_key' => 'your-merchant-key',
+    'merchant_salt' => 'your-merchant-salt',
+];
+=== config/signature.php ===
+<?php
+
+return [
+    'api_endpoint' => 'https://api.example.com',
+    'api_key' => 'your-api',
+];=== config/storage.php ===
+<?php
+
+return [
+    'base_directory' => __DIR__ . '/../storage/',
+
+    'security' => [
+        'permissions' => [
+            'default' => 0640,  // Default file permissions (owner read/write)
+            'directory' => 0755, // Default directory permissions
+        ],
+        'max_file_size' => 5 * 1024 * 1024, // Max file size (5MB)
+        'allowed_extensions' => ['png', 'jpg', 'svg', 'pdf', 'docx'],
+    ],
+
+    'encryption' => [
+        'enabled' => true,
+    ],
+];
+=== config/logs.php ===
+<?php
+
+/**
+ * Logging Configuration
+ */
+
+return [
+    'log_channel' => 'daily',  // Options: single, daily, syslog
+    'log_path' => __DIR__ . '/../logs/app.log',
+    'log_level' => 'debug',  // Options: debug, info, notice, warning, error, critical, alert, emergency
+];
+=== config/notifications.php ===
+<?php
+
+return [
+    'smtp_host' => 'smtp.example.com',
+    'smtp_user' => 'user@example.com',
+    'smtp_password' => 'password',
+    'smtp_secure' => 'tls',
+    'smtp_port' => 587,
+    'from_email' => 'no-reply@example.com',
+    'from_name' => 'CarFuse Notifications',
+    'fcm_api_key' => 'YOUR_FCM_API_KEY_HERE'
+];
+=== config/keymanager.php ===
+<?php
+
+return [
+    'keys' => [
+        'default' => 'your-default-key-here',
+        'encryption' => getenv('ENCRYPTION_KEY') ?: 'fallback-encryption-key-32chars',
+        'jwt_signing' => getenv('JWT_SECRET') ?: 'fallback-jwt-secret-32chars',
+    ]
+];
+=== config/routes.php ===
+<?php
+
+use FastRoute\RouteCollector;
+use function FastRoute\simpleDispatcher;
+use App\Helpers\SecurityHelper;
+use App\Helpers\ApiHelper;
+
+// ✅ Define the FastRoute Dispatcher
+return simpleDispatcher(function (RouteCollector $router) {
+
+    // ✅ Define Explicit View Routes
+    $viewRoutes = [
+        '/dashboard' => 'views/dashboard.php',
+        '/profile' => 'views/user/profile.php',
+        '/reports' => 'views/user/reports.php',
+        '/auth/login' => 'views/auth/login.php',
+        '/auth/register' => 'views/auth/register.php',
+        '/auth/password_reset' => 'views/auth/password_reset.php',
+        '/documents/signing_page' => 'views/documents/signing_page.php',
+    ];
+
+    foreach ($viewRoutes as $route => $filePath) {
+        $router->addRoute(['GET', 'POST'], $route, function () use ($filePath) {
+            require __DIR__ . '/../public/' . $filePath;
+        });
+    }
+
+    // ✅ Define API Routes with Authentication
+    $apiRoutes = [
+        '/api/auth/login' => 'api/auth/login.php',
+        '/api/auth/register' => 'api/auth/register.php',
+        '/api/auth/refresh' => 'api/auth/refresh.php',
+        '/api/auth/logout' => 'api/auth/logout.php',
+        '/api/user/profile' => 'api/user/profile.php',
+        '/api/user/settings' => 'api/user/settings.php',
+        '/api/user/notifications' => 'api/user/notifications.php',
+        '/api/dashboard/metrics' => 'api/dashboard/metrics.php',
+        '/api/dashboard/reports' => 'api/dashboard/reports.php',
+        '/api/bookings/create' => 'api/bookings/create.php',
+        '/api/bookings/view' => 'api/bookings/view.php',
+        '/api/bookings/cancel' => 'api/bookings/cancel.php',
+        '/api/bookings/reschedule' => 'api/bookings/reschedule.php',
+        '/api/payments/process' => 'api/payments/process.php',
+        '/api/payments/refund' => 'api/payments/refund.php',
+        '/api/payments/history' => 'api/payments/history.php',
+        '/api/reports/generate' => 'api/reports/generate.php',
+        '/api/reports/view' => 'api/reports/view.php',
+        '/api/admin/users' => 'api/admin/users.php',
+        '/api/admin/dashboard' => 'api/admin/dashboard.php',
+        '/api/admin/logs' => 'api/admin/logs.php',
+        '/api/documents/upload' => 'api/documents/upload.php',
+        '/api/documents/sign' => 'api/documents/sign.php',
+        '/api/documents/view' => 'api/documents/view.php',
+        '/api/system/logs' => 'api/system/logs.php',
+        '/api/system/status' => 'api/system/status.php',
+    ];
+
+    foreach ($apiRoutes as $route => $filePath) {
+        $router->addRoute(['GET', 'POST'], $route, function () use ($filePath) {
+            require __DIR__ . '/../public/' . $filePath;
+        });
+    }
+
+    // ✅ Default Route for Unmatched Requests
+    $router->addRoute(['GET', 'POST'], '/{any:.+}', function () {
+        http_response_code(404);
+        echo json_encode(["error" => "Page not found"]);
+    });
+});
+=== config/document.php ===
+<?php
+
+return [
+    'encryption' => [
+        'enabled' => true, // Toggle document encryption
+    ],
+    'storage' => [
+        'contracts' => 'contracts/',
+        'templates' => 'templates/',
+        'terms' => 'templates/terms_and_conditions.html',
+    ],
+];
+=== config/documents.php ===
+<?php
+/**
+ * File: config/documents.php
+ * Purpose: Configuration for the Document Management System.
+ */
+
+return [
+    // Storage Paths
+    'storage' => [
+        'user_documents' => __DIR__ . '/../../storage/documents/users/', // Path for user-specific documents
+        'templates' => __DIR__ . '/../../storage/documents/templates/', // Path for document templates
+        'terms_and_conditions' => __DIR__ . '/../../storage/documents/terms/', // Path for T&C documents
+    ],
+
+    // Encryption Settings
+    'encryption' => [
+        'aes_key' => getenv('DOCUMENT_AES_KEY') ?: 'default_secure_key', // AES Encryption Key
+    ],
+
+    // Document Types
+    'allowed_types' => ['pdf', 'docx'], // Allowed document file types
+
+    // Naming Conventions
+    'naming' => [
+        'contract_format' => 'contract_booking_{booking_id}_{timestamp}.pdf', // Format for contract names
+        'invoice_format' => 'invoice_booking_{booking_id}_{timestamp}.pdf',  // Format for invoice names
+    ],
+
+    // Retention Policy
+    'retention_policy' => [
+        'contracts' => '10 years', // Retention period for contracts
+        'invoices' => '7 years',   // Retention period for invoices
+    ],
+];
+=== config/setup_database.php ===
+<?php
+
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
+
+use Illuminate\Database\Capsule\Manager as Capsule;
+use App\Helpers\DatabaseHelper;
+
+// ✅ Initialize Application Database
+DatabaseHelper::getInstance();
+
+// ✅ Define Tables (Ensuring Correct Creation Order)
+$tables = [
+
+    // ✅ Ensure `fleet` exists before any table references it
+    "fleet" => "
+        CREATE TABLE IF NOT EXISTS fleet (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            make VARCHAR(255) NOT NULL,
+            model VARCHAR(255) NOT NULL,
+            registration_number VARCHAR(20) NOT NULL UNIQUE,
+            availability TINYINT(1) DEFAULT 1,
+            last_maintenance_date DATE DEFAULT NULL,
+            next_maintenance_date DATE DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
+
+    "users" => "
+        CREATE TABLE IF NOT EXISTS users (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            surname VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL UNIQUE,
+            phone VARCHAR(15),
+            address TEXT,
+            pesel_or_id VARCHAR(20),
+            updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            password_hash VARCHAR(255) NOT NULL,
+            role ENUM('user', 'admin') DEFAULT 'user',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            email_notifications TINYINT(1) DEFAULT 0,
+            sms_notifications TINYINT(1) DEFAULT 0,
+            active TINYINT(1) DEFAULT 1,
+            deleted_at TIMESTAMP NULL DEFAULT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
+
+    "bookings" => "
+        CREATE TABLE IF NOT EXISTS bookings (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_reference BIGINT UNSIGNED NOT NULL,
+            vehicle_id BIGINT UNSIGNED NOT NULL,
+            pickup_date DATE NOT NULL,
+            dropoff_date DATE NOT NULL,
+            total_price DECIMAL(10,2) NOT NULL,
+            status ENUM('active', 'canceled') DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_reference) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (vehicle_id) REFERENCES fleet(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
+
+    "notifications" => "
+        CREATE TABLE IF NOT EXISTS notifications (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_reference BIGINT UNSIGNED NOT NULL,
+            type ENUM('email','sms') NOT NULL,
+            message TEXT NOT NULL,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_read TINYINT(1) DEFAULT 0,
+            FOREIGN KEY (user_reference) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
+
+    "admin_notification_settings" => "
+        CREATE TABLE IF NOT EXISTS admin_notification_settings (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            admin_reference BIGINT UNSIGNED NOT NULL,
+            contract_alerts TINYINT(1) DEFAULT 0,
+            maintenance_alerts TINYINT(1) DEFAULT 0,
+            booking_reminders TINYINT(1) DEFAULT 0,
+            FOREIGN KEY (admin_reference) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
+
+    "maintenance_logs" => "
+        CREATE TABLE IF NOT EXISTS maintenance_logs (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id BIGINT UNSIGNED NOT NULL,
+            description TEXT NOT NULL,
+            maintenance_date DATE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (vehicle_id) REFERENCES fleet(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
+
+    "availability" => "
+        CREATE TABLE IF NOT EXISTS availability (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id BIGINT UNSIGNED NOT NULL,
+            date DATE NOT NULL,
+            status ENUM('available','unavailable') DEFAULT 'available',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (vehicle_id, date),
+            FOREIGN KEY (vehicle_id) REFERENCES fleet(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ",
+        "password_resets" => "
+        CREATE TABLE IF NOT EXISTS password_resets (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        token VARCHAR(255) NOT NULL,
+        ip_address VARCHAR(45),
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_email (email),
+        INDEX idx_token (token)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    "
+];
+
+// ✅ Execute Table Creation with Error Handling
+$logFilePath = __DIR__ . '/../logs/database_setup.log';
+file_put_contents($logFilePath, "🚀 Database Setup Started at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
+
+foreach ($tables as $tableName => $sql) {
+    try {
+        Capsule::statement($sql);
+        file_put_contents($logFilePath, "[✅] Table `{$tableName}` created successfully.\n", FILE_APPEND);
+    } catch (Exception $e) {
+        file_put_contents($logFilePath, "[❌] Error creating `{$tableName}`: " . $e->getMessage() . "\n", FILE_APPEND);
+    }
+}
+
+file_put_contents($logFilePath, "✅ Database setup completed successfully.\n", FILE_APPEND);
+echo "[🚀] Application database setup completed. Check `logs/database_setup.log` for details.\n";
+=== config/audit.php ===
+<?php
+/**
+ * File: audit.php
+ * Purpose: Configuration file for the Audit Manager module.
+ * Path: audit_manager/config/audit.php
+ * 
+ * Changelog:
+ * - [2025-01-25] Initial creation of the file.
+ * - [2025-01-27] Added logging level configuration and encryption details.
+ * - [2025-01-28] Updated access control and notification settings.
+ */
+
+return [
+    // General settings
+    'enabled' => true, // Enable or disable the audit manager
+
+    // Log file storage settings
+    'storage' => [
+        'directory' => __DIR__ . '/../logs', // Directory where logs will be stored
+        'file_prefix' => 'audit_', // Prefix for log files
+        'rotation' => [
+            'enabled' => true, // Enable log rotation
+            'frequency' => 'daily', // Rotate logs daily
+            'max_files' => 30, // Keep logs for the last 30 days
+        ],
+    ],
+
+    // Logging levels
+    'log_levels' => [
+        'info' => true, // Log informational messages
+        'warning' => true, // Log warnings
+        'error' => true, // Log errors
+        'critical' => true, // Log critical system events
+    ],
+
+    // Encryption settings
+    'encryption' => [
+        'enabled' => true, // Enable AES encryption for sensitive log entries
+        'key' => $_ENV['ENCRYPTION_KEY'] ?? 'your-encryption-key-here', // AES encryption key (store securely)
+        'cipher' => 'AES-256-CBC', // Cipher method
+    ],
+
+    // Filters for accessing logs
+    'filters' => [
+        'by_user' => true, // Enable filtering logs by user ID
+        'by_booking' => true, // Enable filtering logs by booking ID
+        'by_date' => true, // Enable filtering logs by date range
+    ],
+
+    // Access control
+    'access' => [
+        'allowed_roles' => ['admin', 'audit_manager'], // Roles allowed to access the logs
+    ],
+
+    // Notification settings
+    'notifications' => [
+        'enabled' => true, // Enable email notifications for critical events
+        'email_recipients' => explode(',', $_ENV['AUDIT_NOTIFICATION_EMAILS'] ?? 'admin@example.com'), // Recipients for critical event notifications
+    ],
+];
+=== config/Migrations/crete_audit_trail_table.php ===
+<?php
+/**
+ * File: create_audit_trail_table.php
+ * Purpose: Creates the `audit_trails` table for recording audit trail logs.
+ */
+
+require_once __DIR__ . '/../../bootstrap.php'; // Ensure this points to the correct path for database initialization.
+
+try {
+    $pdo = new PDO(DB_DSN, DB_USER, DB_PASS, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    ]);
+
+    echo "Connected to the database successfully.\n";
+
+    $query = "
+        CREATE TABLE IF NOT EXISTS audit_trails (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            action VARCHAR(255) NOT NULL,
+            details TEXT NOT NULL,
+            user_id INT NULL,
+            booking_id INT NULL,
+            ip_address VARCHAR(45),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    ";
+
+    $pdo->exec($query);
+    echo "Table `audit_trails` created successfully.\n";
+
+} catch (PDOException $e) {
+    echo "Database error: " . $e->getMessage() . "\n";
+    exit(1);
+}
