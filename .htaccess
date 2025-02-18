@@ -1,19 +1,24 @@
 RewriteEngine On
 
-# ✅ Forward Authorization Header
+# ✅ Forward Authorization Header to PHP (For APIs using Bearer Tokens)
 SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
 
-# ✅ Redirect API Requests to `index.php`
+# ✅ Ensure API Requests Route Correctly to index.php
 RewriteCond %{REQUEST_URI} ^/api/ [NC]
-RewriteRule ^ index.php [QSA,L]
+RewriteRule ^api/(.*)$ index.php?route=api/$1 [QSA,L]
 
-# ✅ Serve Static Assets (CSS, JS, Images, etc.)
-RewriteCond %{REQUEST_URI} ^/(css|js|images|uploads|assets)/(.*)$
+# ✅ Serve Static Assets (CSS, JS, Images, Uploads, Assets)
+RewriteCond %{REQUEST_URI} ^/(css|js|images|uploads|assets)/(.*)$ [OR]
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images|uploads|assets)/(.*)$ /public/$1/$2 [L]
 
-# ✅ Block Direct Access to Backend Folders
+# ✅ Block Direct Access to Backend Directories
 RewriteRule ^(App/Controllers|App/Services|config|vendor|logs) - [F,L]
 
-# ✅ Forward Remaining Requests to `index.php`
+# ✅ Prevent Direct Execution of PHP Files (Except `index.php`)
+RewriteCond %{REQUEST_URI} \.php$ [NC]
+RewriteCond %{REQUEST_URI} !/index.php$ [NC]
+RewriteRule ^ - [F,L]
+
+# ✅ Forward All Remaining Requests to FastRoute in `index.php`
 RewriteRule ^ index.php [QSA,L]
