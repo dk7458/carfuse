@@ -16,7 +16,7 @@ class AuthController extends Controller
 
     public function __construct()
     {
-        startSecureSession();
+        SecurityHelper::startSecureSession();
         $this->authService = new AuthService(new NullLogger());
 
         $configPath = __DIR__ . '/../../config/encryption.php';
