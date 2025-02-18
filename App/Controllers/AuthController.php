@@ -8,7 +8,7 @@ use Exception;
 use App\Helpers\DatabaseHelper;
 use Psr\Log\NullLogger;
 use App\Services\Validator;
-
+use App\Helpers\SecurityHelper;
 class AuthController extends Controller
 {
     protected $authService;
