@@ -23,6 +23,15 @@ switch ($routeInfo[0]) {
 
         if (is_callable($handler)) {
             call_user_func($handler, $vars);
+        } elseif (is_string($handler) && strpos($handler, '@') !== false) {
+            list($class, $method) = explode('@', $handler, 2);
+            $controller = $container->get($class);
+            if (method_exists($controller, $method)) {
+                $controller->{$method}($vars);
+            } else {
+                http_response_code(500);
+                echo json_encode(["error" => "Controller method not found"]);
+            }
         } else {
             http_response_code(500);
             echo json_encode(["error" => "Handler not callable"]);
