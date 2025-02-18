@@ -1,13 +1,13 @@
 RewriteEngine On
-
-# ✅ Route API requests through index.php for FastRoute
-RewriteCond %{REQUEST_URI} ^/api/ [NC]
-RewriteRule ^api/(.*)$ index.php?route=api/$1 [QSA,L]
+RewriteBase /
 
 # ✅ Block direct access to backend directories
 RewriteRule ^(App/Controllers|App/Services|config|vendor|logs) - [F,L]
 
-# ✅ Forward remaining requests (only if the file or directory doesn't exist)
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^ index.php [QSA,L]
+# ✅ Serve static content from the public folder if it exists
+RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -f [OR]
+RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -d
+RewriteRule ^(.*)$ /public/$1 [L]
+
+# ✅ Forward remaining requests to public/index.php for routing
+RewriteRule ^(.*)$ /public/index.php [QSA,L]
