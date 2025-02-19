@@ -27,32 +27,33 @@ use App\Services\AuditService;
 use App\Models\Payment;
 use GuzzleHttp\Client;
 
-// ✅ Initialize PHP-DI container.
+// Step 1: Log before DI container initialization
+$logger = getLogger('system');
+$logger->info("Step 1: Starting DI container initialization.");
+
+// Step 2: Initialize DI Container
 try {
     $container = new Container();
+    $logger->info("Step 2: DI Container created successfully.");
 } catch (Exception $e) {
-    error_log("❌ [DI] Failed to initialize DI container: " . $e->getMessage());
+    $logger->error("❌ [DI] Failed to initialize DI container: " . $e->getMessage());
     die("❌ Dependency Injection container failed: " . $e->getMessage() . "\n");
 }
-
-// ✅ Directly Call `getLogger()` Without `use function`
-$logger = getLogger('system');
 $container->set('logger', fn() => $logger);
 
-// ✅ Debug Log
-$logger->info("✅ DI Container initialized successfully.");
-
-// ✅ Load configuration files.
+// Step 3: Load configuration files.
+$logger->info("Step 3: Loading configuration files.");
 $configDirectory = __DIR__;
 $config = [];
 foreach (glob("{$configDirectory}/*.php") as $filePath) {
     $fileName = basename($filePath, '.php');
     if ($fileName !== 'dependencies') {
         $config[$fileName] = require $filePath;
+        $logger->info("Configuration file loaded: {$fileName}.php");
     }
 }
 
-// ✅ Ensure required directories exist.
+// Step 4: Ensure required directories exist.
 $templateDirectory = __DIR__ . '/../storage/templates';
 $fileStorageConfig = $config['filestorage'] ?? [];
 if (!is_dir($templateDirectory)) {
@@ -61,19 +62,23 @@ if (!is_dir($templateDirectory)) {
 if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['base_directory'])) {
     mkdir($fileStorageConfig['base_directory'], 0775, true);
 }
+$logger->info("Step 4: Required directories verified.");
 
-// ✅ Initialize EncryptionService.
+// Step 5: Initialize EncryptionService.
 $encryptionService = new EncryptionService($config['encryption']['encryption_key'] ?? '');
 $container->set(EncryptionService::class, fn() => $encryptionService);
+$logger->info("Step 5: EncryptionService registered.");
 
-// ✅ Initialize FileStorage using centralized logger for its logging needs.
+// Step 6: Initialize FileStorage using centralized logger.
 $fileStorage = new FileStorage(getLogger('api'), $fileStorageConfig, $encryptionService);
 $container->set(FileStorage::class, fn() => $fileStorage);
+$logger->info("Step 6: FileStorage registered.");
 
-// ✅ Load key manager configuration.
+// Step 7: Load key manager configuration.
 $config['keymanager'] = require __DIR__ . '/keymanager.php';
+$logger->info("Step 7: Key Manager configuration loaded.");
 
-// ✅ Initialize DatabaseHelper instances.
+// Step 8: Initialize DatabaseHelper instances.
 try {
     $database = DatabaseHelper::getInstance();
     $secure_database = DatabaseHelper::getSecureInstance();
@@ -84,8 +89,9 @@ try {
 }
 $container->set('db', fn() => $database);
 $container->set('secure_db', fn() => $secure_database);
+$logger->info("Step 8: Database services registered.");
 
-// ✅ Register Services with centralized logger calls.
+// Step 9: Register services with centralized logger calls.
 $container->set(Validator::class, fn() => new Validator(getLogger('api')));
 $container->set(RateLimiter::class, fn() => new RateLimiter(getLogger('db'), $database));
 $container->set(AuditService::class, fn() => new AuditService(getLogger('security')));
@@ -97,10 +103,7 @@ $container->set(BookingService::class, fn() => new BookingService(getLogger('api
 $container->set(MetricsService::class, fn() => new MetricsService(getLogger('api'), $database));
 $container->set(ReportService::class, fn() => new ReportService(getLogger('api'), $database));
 $container->set(RevenueService::class, fn() => new RevenueService(getLogger('db'), $database));
-
 $container->set(SignatureService::class, fn() => new SignatureService($config['signature'], $fileStorage, $encryptionService, getLogger('security')));
-
-// ✅ Register DocumentService.
 $container->set(DocumentService::class, fn() => new DocumentService(
     getLogger('api'),
     $container->get(AuditService::class),
@@ -108,12 +111,8 @@ $container->set(DocumentService::class, fn() => new DocumentService(
     $encryptionService,
     $container->get(TemplateService::class)
 ));
-
-// ✅ Register AuthService.
 $container->set(AuthService::class, fn() => new AuthService(getLogger('auth'), $database, $config['encryption']));
-
-// ✅ Register KeyManager.
 $container->set(KeyManager::class, fn() => new KeyManager(getLogger('security'), $config['keymanager']['keys'] ?? []));
+$logger->info("Step 9: Service registration completed.");
 
-// ✅ Return the DI container.
 return $container;
