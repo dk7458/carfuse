@@ -1,6 +1,7 @@
 === public/profile.php ===
 === public/.htaccess ===
 RewriteEngine On
+RewriteBase /
 
 # ✅ Allow guest access to public views (without requiring authentication)
 RewriteRule ^(home|auth/login|vehicles|auth/register)$ views/$1.php [L]
@@ -13,9 +14,9 @@ RewriteCond %{REQUEST_URI} ^/(css|js|images|views|uploads|assets)/(.*)$
 RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
 RewriteRule ^(css|js|images|views|uploads|assets)/(.*)$ /public/$1/$2 [L]
 
-# ✅ Route API requests through index.php for unified handling
-RewriteCond %{REQUEST_URI} ^/api/ [NC]
-RewriteRule ^api/(.*)$ index.php?route=api/$1 [QSA,L]
+# Removed API-specific rewrite to let fallback handle API routes
+# RewriteCond %{REQUEST_URI} ^/api/ [NC]
+# RewriteRule ^api/(.*)$ index.php?route=api/$1 [QSA,L]
 
 # ✅ Prevent direct access to api.php
 RewriteRule ^api.php - [F,L]
@@ -60,37 +61,21 @@ require_once __DIR__ . '/../../../App/Controllers/AuthController.php';
 
 use App\Controllers\AuthController;
 
-// ✅ Set Headers
-header('Content-Type: application/json');
-
-// ✅ Check for POST Request
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    sendJsonResponse('error', 'Method Not Allowed', [], 405);
-    exit;
+// ✅ Ensure this script is executed within FastRoute
+if (php_sapi_name() !== 'cli-server' && !defined('FASTROUTE_EXECUTION')) {
+    http_response_code(400);
+    exit(json_encode(['error' => 'Invalid execution context']));
 }
 
 // ✅ Retrieve JSON Input
 $data = json_decode(file_get_contents("php://input"), true);
+file_put_contents(__DIR__ . '/../../../logs/debug.log', "[REGISTER] Raw JSON Input: " . file_get_contents("php://input") . "\n", FILE_APPEND);
 
 // ✅ Initialize AuthController
 $authController = new AuthController();
 
-try {
-    $result = $authController->register($data);
-    sendJsonResponse('success', 'User registered successfully', ['user_id' => $result->id], 201);
-} catch (\PDOException $e) {  // ✅ FIX: No need to import PDOException, use \PDOException directly
-    logApiError("Database Error: " . $e->getMessage());
-
-    // ✅ Check for Duplicate Entry using SQLSTATE Code
-    if ($e->getCode() == "23000") {
-        sendJsonResponse('error', 'User already exists', [], 400);
-    }
-
-    sendJsonResponse('error', 'Internal Server Error', [], 500);
-} catch (\Exception $e) {
-    logApiError("Application Error: " . $e->getMessage());
-    sendJsonResponse('error', 'Internal Server Error', [], 500);
-}
+// ✅ Process Registration
+$authController->register($data);
 === public/api/auth/refresh.php ===
 === public/api/auth/login.php ===
 <?php
@@ -158,19 +143,13 @@ $authController->resetPasswordRequest($data);
 === public/api/BaseApi.php ===
 <?php
 // ✅ Standardized API Utilities
-
 require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/../../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../../App/Helpers/ApiHelper.php';
+
+use App\Helpers\ApiHelper;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-
-// ✅ Unified JSON Response Format
-function sendJsonResponse($status, $message, $data = [], $httpCode = 200) {
-    http_response_code($httpCode);
-    header('Content-Type: application/json');
-    echo json_encode(['status' => $status, 'message' => $message, 'data' => $data]);
-    exit();
-}
 
 // ✅ API Error Logging
 function logApiError($message) {
@@ -179,11 +158,7 @@ function logApiError($message) {
 
 // ✅ Extract JWT from Headers or Cookies
 function getJWT() {
-    $headers = getallheaders();
-    if (isset($headers['X-Auth-Token']) && preg_match('/Bearer\s+(\S+)/', $headers['X-Auth-Token'], $matches)) {
-        return $matches[1];
-    }
-    return $_COOKIE['jwt'] ?? null;
+    return ApiHelper::getJWT();
 }
 
 // ✅ Validate JWT and Decode User Info
@@ -193,14 +168,14 @@ function validateToken() {
     $jwt = getJWT();
     if (!$jwt) {
         logApiError("Missing JWT");
-        sendJsonResponse('error', 'Unauthorized: Missing token', [], 401);
+        ApiHelper::sendJsonResponse('error', 'Unauthorized: Missing token', [], 401);
     }
 
     try {
         return (array) JWT::decode($jwt, new Key($jwtSecret, 'HS256'));
     } catch (Exception $e) {
         logApiError("Invalid JWT: " . $e->getMessage());
-        sendJsonResponse('error', 'Unauthorized: Invalid token', [], 401);
+        ApiHelper::sendJsonResponse('error', 'Unauthorized: Invalid token', [], 401);
     }
 }
 === public/api/transactions/logs.php ===
@@ -2354,35 +2329,25 @@ body {
 }
 === public/index.php ===
 <?php
-// ✅ Enable error reporting for debugging
+use function getLogger;
+
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// ✅ Load Bootstrap & Dependencies
+// ✅ Load Bootstrap (Dependencies, Configs, Logger, DB)
 $bootstrap = require_once __DIR__ . '/../bootstrap.php';
+// Replace bootstrap logger with centralized logger
+$logger = getLogger('api');
+$container = $bootstrap['container'];
 
-// ✅ Ensure Logger is Set
-if (!isset($bootstrap['logger']) || !$bootstrap['logger'] instanceof Psr\Log\LoggerInterface) {
-    die("❌ Fatal Error: Logger must be an instance of LoggerInterface.");
-}
-$logger = $bootstrap['logger'];
-
-// ✅ Get Requested URI & Log Request
+// ✅ Get Requested URI & HTTP Method
 $requestUri = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
-$logger->info("[ROUTER] Incoming request: /$requestUri");
+$requestMethod = $_SERVER['REQUEST_METHOD'];
 
-// ✅ Load FastRoute Dispatcher
+// ✅ Route API Requests Using FastRoute
 $dispatcher = require __DIR__ . '/../config/routes.php';
-
-// ✅ Ensure Dispatcher is Valid
-if (!$dispatcher instanceof FastRoute\Dispatcher) {
-    $logger->error("FastRoute dispatcher is not valid.");
-    die("❌ FastRoute dispatcher is not valid.");
-}
-
-// ✅ Route Request
-$routeInfo = $dispatcher->dispatch($_SERVER['REQUEST_METHOD'], "/$requestUri");
+$routeInfo = $dispatcher->dispatch($requestMethod, "/$requestUri");
 
 switch ($routeInfo[0]) {
     case FastRoute\Dispatcher::FOUND:
@@ -2390,27 +2355,33 @@ switch ($routeInfo[0]) {
         $vars = $routeInfo[2];
 
         if (is_callable($handler)) {
-            $logger->info("Executing handler for route: /$requestUri");
             call_user_func($handler, $vars);
+        } elseif (is_string($handler) && strpos($handler, '@') !== false) {
+            list($class, $method) = explode('@', $handler, 2);
+            $controller = $container->get($class);
+            if (method_exists($controller, $method)) {
+                $controller->{$method}($vars);
+            } else {
+                http_response_code(500);
+                echo json_encode(["error" => "Controller method not found"]);
+            }
         } else {
             http_response_code(500);
-            $logger->error("Handler not callable for route: /$requestUri");
-            require __DIR__ . "/../public/views/errors/500.php";
+            echo json_encode(["error" => "Handler not callable"]);
         }
-        exit;
+        break;
 
     case FastRoute\Dispatcher::NOT_FOUND:
         http_response_code(404);
-        $logger->error("404 Not Found: /$requestUri");
-        require __DIR__ . "/../public/views/errors/404.php";
-        exit;
+        echo json_encode(["error" => "Route not found"]);
+        break;
 
     case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
         http_response_code(405);
-        $logger->error("405 Method Not Allowed: /$requestUri");
         echo json_encode(["error" => "Method Not Allowed"]);
-        exit;
+        break;
 }
+?>
 === public/views/auth/register.php ===
 <?php
 /*

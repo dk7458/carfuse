@@ -40,7 +40,6 @@ try {
     $container->set('security_logger', fn() => getLogger('security'));
     $container->get('logger')->info("Step 1: DI Container created and loggers registered.");
 } catch (Exception $e) {
-    // Using system logger for early error logging.
     getLogger('system')->error("❌ [DI] Failed to initialize DI container: " . $e->getMessage());
     die("❌ Dependency Injection container failed: " . $e->getMessage() . "\n");
 }
@@ -82,7 +81,7 @@ $container->get('logger')->info("Step 5: FileStorage registered.");
 $config['keymanager'] = require __DIR__ . '/keymanager.php';
 $container->get('logger')->info("Step 6: Key Manager configuration loaded.");
 
-// Step 7: Initialize DatabaseHelper instances.
+// Step 7: Initialize DatabaseHelper instances BEFORE services that depend on them.
 try {
     $database = DatabaseHelper::getInstance();
     $secure_database = DatabaseHelper::getSecureInstance();
@@ -95,24 +94,61 @@ $container->set('db', fn() => $database);
 $container->set('secure_db', fn() => $secure_database);
 $container->get('logger')->info("Step 7: Database services registered.");
 
-// Step 8: Register services with proper logger injections.
+// Step 8: Register services with proper dependency order.
 $container->set(Validator::class, fn() => new Validator($container->get('api_logger')));
-$container->set(RateLimiter::class, fn() => new RateLimiter($container->get('db_logger'), $database));
+$container->set(RateLimiter::class, fn() => new RateLimiter($container->get('db_logger'), $container->get('db')));
 $container->set(AuditService::class, fn() => new AuditService($container->get('security_logger')));
 $container->set(TokenService::class, fn() => new TokenService(
     $_ENV['JWT_SECRET'] ?? '',
     $_ENV['JWT_REFRESH_SECRET'] ?? '',
     $container->get('auth_logger')
 ));
-$container->set(AuthService::class, fn() => new AuthService($container->get('auth_logger'), $database, $config['encryption']));
-$container->set(NotificationService::class, fn() => new NotificationService($container->get('api_logger'), $config['notifications'] ?? [], $database));
-$container->set(UserService::class, fn() => new UserService($container->get('auth_logger'), $database, $config['encryption']['jwt_secret'] ?? ''));
-$container->set(PaymentService::class, fn() => new PaymentService($container->get('db_logger'), $database, new Payment(), getenv('PAYU_API_KEY') ?: '', getenv('PAYU_API_SECRET') ?: ''));
-$container->set(BookingService::class, fn() => new BookingService($container->get('api_logger'), $database));
-$container->set(MetricsService::class, fn() => new MetricsService($container->get('api_logger'), $database));
-$container->set(ReportService::class, fn() => new ReportService($container->get('api_logger'), $database));
-$container->set(RevenueService::class, fn() => new RevenueService($container->get('db_logger'), $database));
-$container->set(SignatureService::class, fn() => new SignatureService($config['signature'], $fileStorage, $encryptionService, $container->get('security_logger')));
+// Ensure AuthService is passed the container-registered database.
+$container->set(AuthService::class, fn() => new AuthService(
+    $container->get('auth_logger'),
+    $container->get('db'),
+    $config['encryption']
+));
+$container->set(UserService::class, fn() => new UserService(
+    $container->get('auth_logger'),
+    $container->get('db'),
+    $config['encryption']['jwt_secret'] ?? ''
+));
+// Register external API–dependent services after core ones.
+$container->set(NotificationService::class, fn() => new NotificationService(
+    $container->get('api_logger'),
+    $config['notifications'] ?? [],
+    $container->get('db')
+));
+$container->set(PaymentService::class, fn() => new PaymentService(
+    $container->get('db_logger'),
+    $container->get('db'),
+    new Payment(),
+    getenv('PAYU_API_KEY') ?: '',
+    getenv('PAYU_API_SECRET') ?: ''
+));
+$container->set(BookingService::class, fn() => new BookingService(
+    $container->get('api_logger'),
+    $container->get('db')
+));
+$container->set(MetricsService::class, fn() => new MetricsService(
+    $container->get('api_logger'),
+    $container->get('db')
+));
+$container->set(ReportService::class, fn() => new ReportService(
+    $container->get('api_logger'),
+    $container->get('db')
+));
+$container->set(RevenueService::class, fn() => new RevenueService(
+    $container->get('db_logger'),
+    $container->get('db')
+));
+$container->set(SignatureService::class, fn() => new SignatureService(
+    $config['signature'],
+    $fileStorage,
+    $encryptionService,
+    $container->get('security_logger')
+));
 $container->set(DocumentService::class, fn() => new DocumentService(
     $container->get('api_logger'),
     $container->get(AuditService::class),
@@ -141,4 +177,12 @@ foreach ($requiredServices as $service) {
     }
 }
 
-return $container;
+// Ensure container integrity before return.
+return [
+    'db'                => $container->get('db'),
+    'secure_db'         => $container->get('secure_db'),
+    'logger'            => $container->get('logger'),
+    'auditService'      => $container->get(AuditService::class),
+    'encryptionService' => $container->get(EncryptionService::class),
+    'container'         => $container,
+];

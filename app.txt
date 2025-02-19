@@ -652,8 +652,9 @@ use App\Services\Auth\TokenService;
 use App\Services\Auth\AuthService;
 use Exception;
 use App\Helpers\DatabaseHelper;
-use Psr\Log\NullLogger;
 use App\Services\Validator;
+use App\Helpers\SecurityHelper;
+use App\Helpers\ApiHelper;
 
 class AuthController extends Controller
 {
@@ -662,8 +663,9 @@ class AuthController extends Controller
 
     public function __construct()
     {
-        startSecureSession();
-        $this->authService = new AuthService(new NullLogger());
+        SecurityHelper::startSecureSession();
+        // Updated: Remove NullLogger and use parameterless constructor.
+        $this->authService = new AuthService();
 
         $configPath = __DIR__ . '/../../config/encryption.php';
         if (!file_exists($configPath)) {
@@ -673,10 +675,10 @@ class AuthController extends Controller
         if (!isset($encryptionConfig['jwt_secret'], $encryptionConfig['jwt_refresh_secret'])) {
             throw new Exception("JWT configuration missing in encryption.php.");
         }
+        // Updated: Remove NullLogger from TokenService
         $this->tokenService = new TokenService(
             $encryptionConfig['jwt_secret'],
-            $encryptionConfig['jwt_refresh_secret'],
-            new NullLogger()
+            $encryptionConfig['jwt_refresh_secret']
         );
         // Initialize DatabaseHelper (handles DB setup via safeQuery)
         DatabaseHelper::getInstance();
@@ -692,13 +694,13 @@ class AuthController extends Controller
         view('auth/register');
     }
 
-    public function login($request)
+    public function login($request = null)
     {
-        if (!is_array($request)) {
-            sendJsonResponse('error', 'Invalid JSON input', [], 400);
+        $data = json_decode(file_get_contents("php://input"), true);
+        if (!$data || !is_array($data)) {
+            ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         
-        $data = $request;
         $email = $data['email'] ?? '';
         $password = $data['password'] ?? '';
         
@@ -717,17 +719,18 @@ class AuthController extends Controller
             "httponly" => true,
             "samesite" => "Strict"
         ]);
-        sendJsonResponse('success', 'User logged in', [], 200);
+        ApiHelper::sendJsonResponse('success', 'User logged in', [], 200);
     }
 
-    public function register($request)
+    public function register($request = null)
     {
-        if (!is_array($request)) {
-            sendJsonResponse('error', 'Invalid JSON input', [], 400);
+        $data = json_decode(file_get_contents("php://input"), true);
+        if (!$data || !is_array($data)) {
+            ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         
-        $data = $request;
-        $validator = new Validator(new NullLogger());
+        // Updated: Remove NullLogger from Validator constructor.
+        $validator = new Validator();
         $rules = [
             'name'             => 'required',
             'email'            => 'required|email',
@@ -735,10 +738,10 @@ class AuthController extends Controller
             'confirm_password' => 'required'
         ];
         if (!$validator->validate($data, $rules)) {
-            sendJsonResponse('error', 'Validation failed', $validator->errors(), 400);
+            ApiHelper::sendJsonResponse('error', 'Validation failed', $validator->errors(), 400);
         }
         if ($data['password'] !== $data['confirm_password']) {
-            sendJsonResponse('error', 'Password and confirm password do not match', [], 400);
+            ApiHelper::sendJsonResponse('error', 'Password and confirm password do not match', [], 400);
         }
         
         $registrationData = [
@@ -751,25 +754,28 @@ class AuthController extends Controller
         ];
 
         $result = $this->authService->registerUser($registrationData);
-        sendJsonResponse('success', 'User registered', $result, 201);
+        ApiHelper::sendJsonResponse('success', 'User registered', $result, 201);
     }
 
-    public function resetPasswordRequest($request)
+    public function resetPasswordRequest($request = null)
     {
-        $data = $_POST;
+        $data = json_decode(file_get_contents("php://input"), true);
+        if (!$data || !is_array($data)) {
+            ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
+        }
         $email = $data['email'] ?? '';
         $result = $this->authService->resetPasswordRequest($email);
-        sendJsonResponse('success', 'Password reset request processed', $result, 200);
+        ApiHelper::sendJsonResponse('success', 'Password reset request processed', $result, 200);
     }
 
     public function refresh()
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            sendJsonResponse('error', 'Method Not Allowed', [], 405);
+            ApiHelper::sendJsonResponse('error', 'Method Not Allowed', [], 405);
         }
         $refreshToken = $_COOKIE['refresh_token'] ?? null;
         if (!$refreshToken) {
-            sendJsonResponse('error', 'Refresh token is required', [], 400);
+            ApiHelper::sendJsonResponse('error', 'Refresh token is required', [], 400);
         }
         $newToken = $this->tokenService->refreshToken($refreshToken);
         if ($newToken) {
@@ -780,13 +786,13 @@ class AuthController extends Controller
                 "httponly" => true,
                 "samesite" => "Strict"
             ]);
-            sendJsonResponse('success', 'Token refreshed', [], 200);
+            ApiHelper::sendJsonResponse('success', 'Token refreshed', [], 200);
         } else {
-            sendJsonResponse('error', 'Invalid refresh token', [], 401);
+            ApiHelper::sendJsonResponse('error', 'Invalid refresh token', [], 401);
         }
     }
 
-    public function logout($request)
+    public function logout($request = null)
     {
         $this->authService->logout();
         setcookie("jwt", "", [
@@ -803,17 +809,17 @@ class AuthController extends Controller
             "httponly" => true,
             "samesite" => "Strict"
         ]);
-        sendJsonResponse('success', 'User logged out', [], 200);
+        ApiHelper::sendJsonResponse('success', 'User logged out', [], 200);
     }
 
-    public function userDetails($request)
+    public function userDetails($request = null)
     {
         $token = $_COOKIE['jwt'] ?? '';
         if (!$this->authService->validateToken($token)) {
-            sendJsonResponse('error', 'Invalid token', [], 400);
+            ApiHelper::sendJsonResponse('error', 'Invalid token', [], 400);
         }
         $userData = $this->authService->getUserFromToken($token);
-        sendJsonResponse('success', 'User details fetched', $userData, 200);
+        ApiHelper::sendJsonResponse('success', 'User details fetched', $userData, 200);
     }
 
     private function refreshToken()
@@ -4009,7 +4015,8 @@ class UserService
 
 namespace App\Services;
 
-use Psr\Log\LoggerInterface;
+use App\Helpers\DatabaseHelper;
+use function getLogger;
 
 /**
  * Validator Service
@@ -4019,13 +4026,8 @@ use Psr\Log\LoggerInterface;
 class Validator
 {
     private array $errors = [];
-    private LoggerInterface $logger;
     
-    // Constructor for dependency injection
-    public function __construct(LoggerInterface $logger)
-    {
-        $this->logger = $logger;
-    }
+    // Removed constructor with LoggerInterface dependency.
 
     /**
      * Validate data against rules.
@@ -4033,14 +4035,15 @@ class Validator
     public function validate(array $data, array $rules): bool
     {
         $this->errors = [];
-
         foreach ($rules as $field => $ruleSet) {
             $rulesArray = explode('|', $ruleSet);
             foreach ($rulesArray as $rule) {
-                $this->applyRule($field, $data[$field] ?? null, $rule);
+                $this->applyRule($field, $data[$field] ?? null, $rule, $data);
             }
         }
-
+        if (!empty($this->errors)) {
+            getLogger('validation')->warning("[Validation] Failed validation", ['errors' => $this->errors]);
+        }
         return empty($this->errors);
     }
 
@@ -4055,14 +4058,19 @@ class Validator
     /**
      * Apply a validation rule to a field.
      */
-    private function applyRule(string $field, $value, string $rule): void
+    private function applyRule(string $field, $value, string $rule, array $data): void
     {
         if ($rule === 'required' && empty($value)) {
             $this->errors[$field][] = 'This field is required.';
         } elseif (str_starts_with($rule, 'max:')) {
             $maxLength = (int)explode(':', $rule)[1];
-            if (strlen($value) > $maxLength) {
+            if (!empty($value) && strlen($value) > $maxLength) {
                 $this->errors[$field][] = "Maximum length is $maxLength characters.";
+            }
+        } elseif (str_starts_with($rule, 'min:')) {
+            $minLength = (int)explode(':', $rule)[1];
+            if (empty($value) || strlen($value) < $minLength) {
+                $this->errors[$field][] = "Minimum length is $minLength characters.";
             }
         } elseif ($rule === 'email' && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
             $this->errors[$field][] = 'Invalid email address.';
@@ -4070,6 +4078,18 @@ class Validator
             $pattern = substr($rule, 6);
             if (!preg_match($pattern, $value)) {
                 $this->errors[$field][] = 'Invalid format.';
+            }
+        } elseif (str_starts_with($rule, 'same:')) {
+            $otherField = substr($rule, 5);
+            if (($value ?? '') !== ($data[$otherField] ?? '')) {
+                $this->errors[$field][] = "This field must match {$otherField}.";
+            }
+        } elseif (str_starts_with($rule, 'unique:')) {
+            [$table, $column] = explode(',', substr($rule, 7));
+            $db = DatabaseHelper::getInstance();
+            // Assuming DatabaseHelper supports a where()->exists() query.
+            if ($db->table($table)->where($column, $value)->exists()) {
+                $this->errors[$field][] = "The {$field} must be unique.";
             }
         }
     }
@@ -4081,17 +4101,17 @@ namespace App\Services;
 
 use App\Models\Booking;
 use Exception;
-use Psr\Log\LoggerInterface;
 use App\Helpers\DatabaseHelper;
 
 class BookingService
 {
-    private LoggerInterface $logger;
-    private $db; // added
+    // Removed LoggerInterface type hint and parameter dependency
+    private $logger;
+    private $db;
 
-    public function __construct(LoggerInterface $logger)
+    public function __construct()
     {
-        $this->logger = $logger;
+        $this->logger = getLogger('booking.log');
         $this->db = DatabaseHelper::getInstance();
     }
 
@@ -4105,10 +4125,10 @@ class BookingService
             if (!$booking) {
                 throw new Exception("Booking not found.");
             }
-            $this->logger->info("[BookingService] Retrieved booking with id: {$id}", ['category' => 'booking']);
+            $this->logger->info("✅ [BookingService] Retrieved booking (id: {$id}).");
             return (array)$booking;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving booking id {$id}: " . $e->getMessage(), ['category' => 'booking']);
+            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -4120,16 +4140,16 @@ class BookingService
     {
         try {
             $updated = $this->db->table('bookings')->where('id', $id)->update([
-                'pickup_date' => $pickupDate,
+                'pickup_date'  => $pickupDate,
                 'dropoff_date' => $dropoffDate,
-                'status' => 'rescheduled'
+                'status'       => 'rescheduled'
             ]);
             if (!$updated) {
                 throw new Exception("Failed to update booking.");
             }
-            $this->logger->info("[BookingService] Rescheduled booking id: {$id}", ['category' => 'booking']);
+            $this->logger->info("✅ [BookingService] Rescheduled booking (id: {$id}).");
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error rescheduling booking id {$id}: " . $e->getMessage(), ['category' => 'booking']);
+            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -4148,11 +4168,10 @@ class BookingService
             if (!$updated) {
                 throw new Exception("Failed to update booking status.");
             }
-            $this->logger->info("[BookingService] Canceled booking id: {$id}", ['category' => 'booking']);
-            // Assuming refund amount is a field in the booking record.
+            $this->logger->info("✅ [BookingService] Canceled booking (id: {$id}).");
             return isset($booking->refund_amount) ? $booking->refund_amount : 0.0;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error canceling booking id {$id}: " . $e->getMessage(), ['category' => 'booking']);
+            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -4167,10 +4186,10 @@ class BookingService
             if (!$record || !isset($record->user_id)) {
                 throw new Exception("User not found for booking.");
             }
-            $this->logger->info("[BookingService] Retrieved user id for booking id: {$id}", ['category' => 'booking']);
+            $this->logger->info("✅ [BookingService] Retrieved user id for booking (id: {$id}).");
             return $record->user_id;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving user id for booking id {$id}: " . $e->getMessage(), ['category' => 'booking']);
+            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -4185,10 +4204,10 @@ class BookingService
                                ->selectRaw('MONTH(created_at) AS month, COUNT(*) AS total')
                                ->groupBy('month')
                                ->get();
-            $this->logger->info("[BookingService] Retrieved monthly booking trends", ['category' => 'booking']);
+            $this->logger->info("✅ [BookingService] Retrieved monthly booking trends.");
             return $trends;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving monthly booking trends: " . $e->getMessage(), ['category' => 'booking']);
+            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -4200,10 +4219,10 @@ class BookingService
     {
         try {
             $total = $this->db->table('bookings')->count();
-            $this->logger->info("[BookingService] Retrieved total number of bookings", ['category' => 'booking']);
+            $this->logger->info("✅ [BookingService] Retrieved total bookings.");
             return $total;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving total number of bookings: " . $e->getMessage(), ['category' => 'booking']);
+            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -4215,10 +4234,10 @@ class BookingService
     {
         try {
             $completed = $this->db->table('bookings')->where('status', 'completed')->count();
-            $this->logger->info("[BookingService] Retrieved number of completed bookings", ['category' => 'booking']);
+            $this->logger->info("✅ [BookingService] Retrieved completed bookings.");
             return $completed;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving number of completed bookings: " . $e->getMessage(), ['category' => 'booking']);
+            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -4230,10 +4249,10 @@ class BookingService
     {
         try {
             $canceled = $this->db->table('bookings')->where('status', 'canceled')->count();
-            $this->logger->info("[BookingService] Retrieved number of canceled bookings", ['category' => 'booking']);
+            $this->logger->info("✅ [BookingService] Retrieved canceled bookings.");
             return $canceled;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving number of canceled bookings: " . $e->getMessage(), ['category' => 'booking']);
+            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -4248,10 +4267,10 @@ class BookingService
                              ->where('booking_id', $bookingId)
                              ->orderBy('created_at', 'desc')
                              ->get();
-            $this->logger->info("[BookingService] Retrieved logs for booking id: {$bookingId}", ['category' => 'booking']);
+            $this->logger->info("✅ [BookingService] Retrieved logs for booking (id: {$bookingId}).");
             return $logs;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error retrieving logs for booking id {$bookingId}: " . $e->getMessage(), ['category' => 'booking']);
+            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -4267,10 +4286,10 @@ class BookingService
                                   ->where('vehicle_id', $vehicleId)
                                   ->whereBetween('pickup_date', [$pickupDate, $dropoffDate])
                                   ->count() === 0;
-            $this->logger->info("[BookingService] Checked availability for vehicle id: {$vehicleId}", ['category' => 'booking']);
+            $this->logger->info("✅ [BookingService] Checked availability for vehicle (id: {$vehicleId}).");
             return $available;
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Error checking availability for vehicle id {$vehicleId}: " . $e->getMessage(), ['category' => 'booking']);
+            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -4281,42 +4300,40 @@ class BookingService
     public function createBooking(int $userId, int $vehicleId, string $pickupDate, string $dropoffDate): array
     {
         if (!$this->isBookingAvailable($vehicleId, $pickupDate, $dropoffDate)) {
-            $this->logger->warning("[BookingService] Booking attempt failed: vehicle not available", [
-                'user_id' => $userId,
+            $this->logger->warning("❌ [BookingService] Booking failed: vehicle not available.", [
+                'user_id'    => $userId,
                 'vehicle_id' => $vehicleId,
-                'pickup_date' => $pickupDate,
-                'dropoff_date' => $dropoffDate,
-                'category' => 'booking'
+                'pickup'     => $pickupDate,
+                'dropoff'    => $dropoffDate
             ]);
             return ['status' => 'error', 'message' => 'Vehicle not available for the selected dates'];
         }
 
         try {
             $booking = $this->db->table('bookings')->insertGetId([
-                'user_id' => $userId,
-                'vehicle_id' => $vehicleId,
+                'user_id'     => $userId,
+                'vehicle_id'  => $vehicleId,
                 'pickup_date' => $pickupDate,
-                'dropoff_date' => $dropoffDate,
-                'status' => 'booked',
-                'created_at' => now(),
-                'updated_at' => now()
+                'dropoff_date'=> $dropoffDate,
+                'status'      => 'booked',
+                'created_at'  => now(),
+                'updated_at'  => now()
             ]);
-            $this->logger->info("[BookingService] Booking created successfully", [
-                'user_id' => $userId,
-                'vehicle_id' => $vehicleId,
+            $this->logger->info("✅ [BookingService] Booking created successfully.", [
+                'user_id'     => $userId,
+                'vehicle_id'  => $vehicleId,
                 'pickup_date' => $pickupDate,
-                'dropoff_date' => $dropoffDate,
-                'category' => 'booking'
+                'dropoff_date'=> $dropoffDate
             ]);
 
             return ['status' => 'success', 'message' => 'Booking created successfully'];
         } catch (Exception $e) {
-            $this->logger->error("[BookingService] Failed to create booking: " . $e->getMessage(), [
-                'user_id' => $userId,
-                'vehicle_id' => $vehicleId,
+            $this->logger->error("❌ [BookingService] Failed to create booking: " . $e->getMessage(), [
+                'user_id'     => $userId,
+                'vehicle_id'  => $vehicleId,
                 'pickup_date' => $pickupDate,
-                'dropoff_date' => $dropoffDate,
-                'category' => 'booking'
+                'dropoff_date'=> $dropoffDate,
+                'trace'       => $e->getTraceAsString()
             ]);
             return ['status' => 'error', 'message' => 'Failed to create booking'];
         }
@@ -4329,16 +4346,14 @@ namespace App\Services\Auth;
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-// Removed: use Illuminate\Support\Facades\Cache;
-use Psr\Log\LoggerInterface;
 
 class TokenService
 {
     private string $secretKey;
     private string $refreshSecretKey;
-    private LoggerInterface $logger;
+    private $logger;
 
-    public function __construct(string $secretKey, string $refreshSecretKey, LoggerInterface $logger)
+    public function __construct(string $secretKey, string $refreshSecretKey)
     {
         if (empty($secretKey) || empty($refreshSecretKey)) {
             throw new \RuntimeException('❌ JWT secrets are missing.');
@@ -4346,7 +4361,7 @@ class TokenService
 
         $this->secretKey = $secretKey;
         $this->refreshSecretKey = $refreshSecretKey;
-        $this->logger = $logger;
+        $this->logger = getLogger('auth.log');
     }
 
     public function generateToken($user): string
@@ -4357,7 +4372,7 @@ class TokenService
             'iat' => time(),
             'exp' => time() + 3600
         ];
-        $this->logger->info("[TokenService] Generated token for user id: {$user->id}");
+        $this->logger->info("✅ [TokenService] Generated token for user (id: {$user->id}).");
         return JWT::encode($payload, $this->secretKey, 'HS256');
     }
 
@@ -4367,6 +4382,7 @@ class TokenService
             $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
             return (array) $decoded;
         } catch (\Exception $e) {
+            $this->logger->error("❌ [TokenService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return null;
         }
     }
@@ -4376,12 +4392,12 @@ class TokenService
         try {
             $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
             if ($decoded->exp < time()) {
-                error_log("Expired token for user id: " . ($decoded->sub ?? 'unknown'));
+                $this->logger->error("❌ [TokenService] Expired token for user (id: " . ($decoded->sub ?? 'unknown') . ").");
                 return null;
             }
             return (array)$decoded;
         } catch (\Exception $e) {
-            error_log("Token validation failed: " . $e->getMessage());
+            $this->logger->error("❌ [TokenService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return null;
         }
     }
@@ -4394,7 +4410,6 @@ class TokenService
             'iat' => time(),
             'exp' => time() + 604800
         ];
-
         return JWT::encode($payload, $this->refreshSecretKey, 'HS256');
     }
 
@@ -4403,12 +4418,10 @@ class TokenService
         $decoded = $this->verifyToken($refreshToken);
         if ($decoded) {
             $userId = $decoded['sub'];
-
             if (apcu_exists("revoked_refresh_token_$refreshToken")) {
                 return null;
             }
-
-            return $this->generateToken((object) ['id' => $userId]);
+            return $this->generateToken((object)['id' => $userId]);
         }
         return null;
     }
@@ -4418,16 +4431,16 @@ class TokenService
         try {
             $decoded = JWT::decode($refreshToken, new Key($this->refreshSecretKey, 'HS256'));
             if ($decoded->exp < time()) {
-                error_log("Expired refresh token for user id: " . ($decoded->sub ?? 'unknown'));
+                $this->logger->error("❌ [TokenService] Expired refresh token for user (id: " . ($decoded->sub ?? 'unknown') . ").");
                 return null;
             }
             if (apcu_exists("revoked_refresh_token_$refreshToken")) {
-                error_log("Revoked refresh token attempted for user id: " . ($decoded->sub ?? 'unknown'));
+                $this->logger->error("❌ [TokenService] Revoked refresh token attempted for user (id: " . ($decoded->sub ?? 'unknown') . ").");
                 return null;
             }
             return $this->generateToken((object)['id' => $decoded->sub]);
         } catch (\Exception $e) {
-            error_log("Refresh token validation failed: " . $e->getMessage());
+            $this->logger->error("❌ [TokenService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return null;
         }
     }
@@ -4435,6 +4448,7 @@ class TokenService
     public function revokeToken(string $token): void
     {
         apcu_store("revoked_refresh_token_$token", true, 604800);
+        $this->logger->info("✅ [TokenService] Revoked refresh token.");
     }
 }
 === App/Services/Auth/AuthService.php ===
@@ -4446,21 +4460,18 @@ use App\Models\User;
 use App\Helpers\DatabaseHelper;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-// Removed: use Illuminate\Support\Facades\Hash;
 use Exception;
-use Psr\Log\LoggerInterface;
-use App\Helpers\SecurityHelper; // ✅ Updated: use correct namespace
+use App\Helpers\SecurityHelper;
+use function getLogger;
 
 class AuthService
 {
     private $tokenService;
     private $db;
-    private LoggerInterface $logger; // added
 
-    // Modified constructor to accept LoggerInterface via dependency injection.
-    public function __construct(LoggerInterface $logger)
+    // Removed logger property and dependency injection.
+    public function __construct()
     {
-        $this->logger = $logger;
         $configPath = __DIR__ . '/../../../config/encryption.php';
         if (!file_exists($configPath)) {
             throw new Exception("Encryption configuration missing.");
@@ -4475,33 +4486,32 @@ class AuthService
         $this->tokenService = new TokenService(
             $encryptionConfig['jwt_secret'],
             $encryptionConfig['jwt_refresh_secret'],
-            $this->logger // now injected logger
+            // Use category-based logging
+            getLogger('auth')
         );
-        // Initialize DatabaseHelper for raw password reset operations
         $this->db = DatabaseHelper::getInstance();
     }
 
     public function login($email, $password)
     {
         $user = User::where('email', $email)->first();
-        // Use PHP's password_verify() instead of Hash::check()
         if (!$user || !password_verify($password, $user->password_hash)) {
-            $this->logger->warning("Failed login attempt for email: " . $email, ['category' => 'auth']);
+            getLogger('auth')->warning("[Auth] Failed login attempt for email: {$email}");
             throw new Exception("Invalid credentials");
         }
 
-        // Ensure session is started and set session variables
         if(session_status() === PHP_SESSION_NONE) {
             session_start();
         }
-        $_SESSION['user_id'] = $user->id;
+        session_regenerate_id(true);
+        $_SESSION['user_id']   = $user->id;
         $_SESSION['user_role'] = $user->role ?? 'user';
 
         $token = $this->tokenService->generateToken($user);
         $refreshToken = $this->tokenService->generateRefreshToken($user);
 
         return [
-            'token' => $token,
+            'token'         => $token,
             'refresh_token' => $refreshToken
         ];
     }
@@ -4512,7 +4522,7 @@ class AuthService
         if (!$user) {
             throw new Exception("User registration failed");
         }
-
+        getLogger('auth')->info("[Auth] ✅ User successfully registered (Email: {$data['email']})");
         return $user;
     }
 
@@ -4520,23 +4530,23 @@ class AuthService
     {
         $user = User::where('email', $email)->first();
         if (!$user) {
-            $this->logger?->error("[AuthService] Password reset failed: email not found ($email)", ['category' => 'auth']);
+            getLogger('auth')->error("[Auth] Password reset failed: email not found ({$email})");
             throw new Exception("Email not found.");
         }
 
         $token = bin2hex(random_bytes(32));
+        $hashedToken = password_hash($token, PASSWORD_BCRYPT);
         $expiresAt = now()->addHour();
 
         try {
-            // Replace Eloquent insert with DatabaseHelper insert
             $this->db->table('password_resets')->insert([
                 'email'      => $email,
-                'token'      => password_hash($token, PASSWORD_BCRYPT),
+                'token'      => $hashedToken,
                 'expires_at' => $expiresAt,
             ]);
-            $this->logger->info("[AuthService] Password reset requested for {$email}", ['category' => 'auth']);
+            getLogger('auth')->info("[Auth] Password reset requested for {$email}");
         } catch (Exception $e) {
-            $this->logger?->error("[AuthService] Failed to insert password reset: " . $e->getMessage(), ['category' => 'auth']);
+            getLogger('auth')->error("[Auth] Failed to insert password reset: " . $e->getMessage());
             throw $e;
         }
 
@@ -4552,7 +4562,7 @@ class AuthService
             $decoded = JWT::decode($token, new Key($this->tokenService->jwtSecret, 'HS256'));
             return (array)$decoded;
         } catch (Exception $e) {
-            $this->logger->error("[AuthService] Invalid token: " . $e->getMessage(), ['category' => 'auth']);
+            getLogger('auth')->error("[Auth] Invalid token: " . $e->getMessage());
             return false;
         }
     }
@@ -4599,7 +4609,8 @@ use Psr\Log\LoggerInterface;
  */
 class DocumentService
 {
-    private LoggerInterface $logger;
+    // Removed LoggerInterface type hint
+    private $logger;
     private $db;
     private AuditService $auditService;
     private FileStorage $fileStorage;
@@ -4607,13 +4618,12 @@ class DocumentService
     private TemplateService $templateService;
 
     public function __construct(
-        LoggerInterface $logger,
         AuditService $auditService,
         FileStorage $fileStorage,
         EncryptionService $encryptionService,
         TemplateService $templateService
     ) {
-        $this->logger = $logger;
+        $this->logger = getLogger('document.log');
         $this->db = DatabaseHelper::getInstance();
         $this->auditService = $auditService;
         $this->fileStorage = $fileStorage;
@@ -4643,12 +4653,13 @@ class DocumentService
     private function processTemplate(string $name, string $content, string $logAction): void
     {
         try {
-            $this->logger->info("Uploading template: {$name}", ['category' => 'document']);
+            $this->logger->info("✅ Uploading template: {$name}", ['template' => $name]);
             $encryptedContent = $this->encryptionService->encrypt($content);
             $this->templateService->saveTemplate("{$name}.html", $encryptedContent);
-            $this->auditService->log($logAction, ['name' => $name]);
+            $this->auditService->log($logAction, ['template' => $name]);
         } catch (Exception $e) {
-            $this->handleException("Failed to upload template: {$name}", $e);
+            $this->logger->error("❌ Exception occurred: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            throw new Exception("Failed to upload template: {$name} " . $e->getMessage());
         }
     }
 
@@ -4658,7 +4669,7 @@ class DocumentService
     public function generateContract(int $bookingId, int $userId): string
     {
         try {
-            $this->logger->info("[DocumentService] Generating contract", ['bookingId' => $bookingId, 'userId' => $userId, 'category' => 'document']);
+            $this->logger->info("✅ [DocumentService] Generating contract.", ['bookingId' => $bookingId, 'userId' => $userId]);
 
             $templateContent = $this->templateService->loadTemplate('rental_contract.html');
             $data = array_merge($this->fetchUserData($userId), $this->fetchBookingData($bookingId));
@@ -4679,7 +4690,7 @@ class DocumentService
 
             return $filePath;
         } catch (Exception $e) {
-            $this->logger->error("[DocumentService] Failed to generate contract: " . $e->getMessage(), ['category' => 'document']);
+            $this->logger->error("❌ Exception occurred: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -4690,7 +4701,7 @@ class DocumentService
     public function retrieveDocument(string $filePath): string
     {
         try {
-            $this->logger->info("Retrieving document", ['filePath' => $filePath, 'category' => 'document']);
+            $this->logger->info("✅ Retrieving document.", ['filePath' => $filePath]);
 
             $encryptedContent = $this->fileStorage->retrieveFile($filePath);
             $decryptedContent = $this->encryptionService->decrypt($encryptedContent);
@@ -4699,7 +4710,8 @@ class DocumentService
 
             return $decryptedContent;
         } catch (Exception $e) {
-            $this->handleException("Failed to retrieve document", $e);
+            $this->logger->error("❌ Exception occurred: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            throw new Exception("Failed to retrieve document " . $e->getMessage());
         }
     }
 
@@ -4709,7 +4721,7 @@ class DocumentService
     public function deleteDocument(int $documentId): void
     {
         try {
-            $this->logger->info("Deleting document", ['documentId' => $documentId, 'category' => 'document']);
+            $this->logger->info("✅ Deleting document.", ['documentId' => $documentId]);
 
             // Replace raw PDO prepare with DatabaseHelper query
             $document = $this->db->table('documents')->where('id', $documentId)->first();
@@ -4723,7 +4735,8 @@ class DocumentService
 
             $this->auditService->log('document_deleted', ['document_id' => $documentId]);
         } catch (Exception $e) {
-            $this->handleException("Failed to delete document", $e);
+            $this->logger->error("❌ Exception occurred: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            throw new Exception("Failed to delete document " . $e->getMessage());
         }
     }
 
@@ -5024,12 +5037,12 @@ use Psr\Log\LoggerInterface;
 class AuditService
 {
     private $db;
-    private LoggerInterface $logger;
+    private $logger;
 
-    public function __construct(LoggerInterface $logger)
+    public function __construct()
     {
         $this->db = DatabaseHelper::getInstance();
-        $this->logger = $logger;
+        $this->logger = getLogger('audit.log');
     }
 
     /**
@@ -5051,9 +5064,9 @@ class AuditService
                 'ip_address' => $ipAddress,
                 'created_at' => now()
             ]);
-            $this->logger->info("[AuditService] Logged action: {$action}", ['category' => 'audit']);
+            $this->logger->info("✅ [AuditService] Logged action: {$action}");
         } catch (Exception $e) {
-            $this->logger->error("[AuditService] Error logging action: " . $e->getMessage(), ['category' => 'audit']);
+            $this->logger->error("❌ [AuditService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw new Exception('Failed to log action: ' . $e->getMessage());
         }
     }
@@ -5082,7 +5095,7 @@ class AuditService
             }
             return $query->orderBy('created_at', 'desc')->paginate(10);
         } catch (Exception $e) {
-            $this->logger->error("[AuditService] Error retrieving logs: " . $e->getMessage(), ['category' => 'audit']);
+            $this->logger->error("❌ [AuditService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -5099,7 +5112,7 @@ class AuditService
             }
             return $log;
         } catch (Exception $e) {
-            $this->logger->error("[AuditService] Error retrieving log id {$logId}: " . $e->getMessage(), ['category' => 'audit']);
+            $this->logger->error("❌ [AuditService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -5127,10 +5140,10 @@ class AuditService
                 $query->where('created_at', '<=', $filters['end_date']);
             }
             $deleted = $query->delete();
-            $this->logger->info("[AuditService] Deleted logs with filters: " . json_encode($filters), ['category' => 'audit']);
+            $this->logger->info("✅ [AuditService] Deleted logs with filters: " . json_encode($filters));
             return $deleted;
         } catch (Exception $e) {
-            $this->logger->error("[AuditService] Error deleting logs: " . $e->getMessage(), ['category' => 'audit']);
+            $this->logger->error("❌ [AuditService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw new Exception('Failed to delete logs: ' . $e->getMessage());
         }
     }
@@ -5289,35 +5302,20 @@ class EncryptionService
 namespace App\Services;
 
 use Exception;
-use Psr\Log\LoggerInterface;
 use App\Services\EncryptionService;
 
-/**
- * FileStorage Service
- *
- * Handles secure storage, retrieval, and deletion of files with support for encryption,
- * logging, and temporary file management.
- */
 class FileStorage
 {
     private string $basePath;
     private array $config;
-    private LoggerInterface $logger;
+    private $logger;
     private EncryptionService $encryptionService;
 
-    /**
-     * Constructor
-     *
-     * @param LoggerInterface $logger Logger instance for logging file operations.
-     * @param array $config Configuration for the FileStorage service.
-     * @param EncryptionService $encryptionService Service for encrypting file contents.
-     */
-    public function __construct(LoggerInterface $logger, array $config, EncryptionService $encryptionService)
+    public function __construct(array $config, EncryptionService $encryptionService)
     {
-        $this->logger = $logger;
+        $this->logger = getLogger('file.log');
         $this->config = $config;
         $this->encryptionService = $encryptionService;
-
         $this->basePath = rtrim($config['base_directory'], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 
         if (!is_dir($this->basePath) || !is_writable($this->basePath)) {
@@ -5325,9 +5323,6 @@ class FileStorage
         }
     }
 
-    /**
-     * Store a file securely with optional encryption.
-     */
     public function storeFile(string $directory, string $fileName, string $content, bool $encrypt = false): string
     {
         $safeDirectory = $this->getDirectoryPath($directory);
@@ -5339,29 +5334,26 @@ class FileStorage
         }
 
         if (file_put_contents($filePath, $content) === false) {
-            $this->logger->error("[FileStorage] Failed to store file", ['file' => $fileName, 'path' => $filePath, 'category' => 'file']);
+            $this->logger->error("❌ [FileStorage] Failed to store file.", ['file' => $fileName, 'path' => $filePath, 'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)]);
             throw new Exception("Failed to store file: $fileName");
         }
 
         chmod($filePath, $this->config['security']['permissions']['default']);
-        $this->logger->info("[FileStorage] File stored successfully", ['file' => $fileName, 'path' => $filePath, 'category' => 'file']);
+        $this->logger->info("✅ [FileStorage] File stored successfully.", ['file' => $fileName, 'path' => $filePath]);
 
         return $filePath;
     }
 
-    /**
-     * Retrieve a file's content with optional decryption.
-     */
     public function retrieveFile(string $filePath, bool $decrypt = false): string
     {
         if (!file_exists($filePath) || !is_readable($filePath)) {
-            $this->logger->error("File not found or not readable", ['path' => $filePath, 'category' => 'file']);
+            $this->logger->error("❌ File not found or not readable.", ['path' => $filePath, 'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)]);
             throw new Exception("File not found or not readable: $filePath");
         }
 
         $content = file_get_contents($filePath);
         if ($content === false) {
-            $this->logger->error("[FileStorage] Failed to retrieve file", ['path' => $filePath, 'category' => 'file']);
+            $this->logger->error("❌ [FileStorage] Failed to retrieve file.", ['path' => $filePath, 'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)]);
             throw new Exception("Failed to retrieve file: $filePath");
         }
 
@@ -5372,50 +5364,41 @@ class FileStorage
             }
         }
 
-        $this->logger->info("[FileStorage] File retrieved successfully", ['path' => $filePath, 'category' => 'file']);
+        $this->logger->info("✅ [FileStorage] File retrieved successfully.", ['path' => $filePath]);
         return $content;
     }
 
-    /**
-     * Delete a file securely.
-     */
     public function deleteFile(string $filePath): void
     {
         if (!file_exists($filePath)) {
-            $this->logger->error("File not found", ['path' => $filePath, 'category' => 'file']);
+            $this->logger->error("❌ File not found.", ['path' => $filePath, 'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)]);
             throw new Exception("File not found: $filePath");
         }
 
         if (!unlink($filePath)) {
-            $this->logger->error("[FileStorage] Failed to delete file", ['path' => $filePath, 'category' => 'file']);
+            $this->logger->error("❌ [FileStorage] Failed to delete file.", ['path' => $filePath, 'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)]);
             throw new Exception("Failed to delete file: $filePath");
         }
 
-        $this->logger->info("[FileStorage] File deleted successfully", ['path' => $filePath, 'category' => 'file']);
+        $this->logger->info("✅ [FileStorage] File deleted successfully.", ['path' => $filePath]);
     }
 
-    /**
-     * Sanitize the file name to prevent directory traversal attacks.
-     */
     private function sanitizeFileName(string $fileName): string
     {
         return preg_replace('/[^a-zA-Z0-9_\.-]/', '_', $fileName);
     }
 
-    /**
-     * Get the full directory path, creating it if it doesn't exist.
-     */
     private function getDirectoryPath(string $directory): string
     {
         $path = $this->basePath . trim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 
         if (!is_dir($path) && !mkdir($path, 0755, true)) {
-            $this->logger->error("Failed to create directory", ['path' => $path, 'category' => 'file']);
+            $this->logger->error("❌ Failed to create directory.", ['path' => $path, 'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)]);
             throw new Exception("Failed to create directory: $path");
         }
 
         if (!is_writable($path)) {
-            $this->logger->error("Directory is not writable", ['path' => $path, 'category' => 'file']);
+            $this->logger->error("❌ Directory is not writable.", ['path' => $path, 'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)]);
             throw new Exception("Directory is not writable: $path");
         }
 
@@ -5554,16 +5537,17 @@ class RevenueService
 namespace App\Services\Security;
 
 use Exception;
-use Psr\Log\LoggerInterface;
 
 class KeyManager
 {
+    // Removed LoggerInterface property declaration 
+    private $logger;
     private array $keys;
-    private LoggerInterface $logger;
 
-    public function __construct(LoggerInterface $logger, array $keys)
+    // Removed $logger parameter and initialize logger directly
+    public function __construct(array $keys)
     {
-        $this->logger = $logger;
+        $this->logger = getLogger('security.log');
         $this->keys = $keys;
     }
 
@@ -5572,7 +5556,7 @@ class KeyManager
         $keyName = 'encryption_key_' . strtolower($identifier);
 
         if (!isset($this->keys[$keyName]) || empty($this->keys[$keyName])) {
-            $this->logger->error("[KeyManager] Encryption key for {$identifier} not found.", ['category' => 'security']);
+            $this->logger->error("❌ [KeyManager] Encryption key for {$identifier} not found.", ['identifier' => $identifier, 'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)]);
             throw new Exception("Encryption key for {$identifier} not found.");
         }
 
@@ -5586,7 +5570,7 @@ class KeyManager
 
     public function storeKey(string $identifier, string $key): void
     {
-        $this->logger->info("[KeyManager] Storing key for {$identifier}", ['category' => 'security']);
+        $this->logger->info("✅ [KeyManager] Storing key for {$identifier}", ['identifier' => $identifier]);
         // Implementation for storing key securely (e.g., database, key vault)
     }
 
@@ -5594,12 +5578,12 @@ class KeyManager
     {
         $newKey = $this->generateKey();
         $this->storeKey($identifier, $newKey);
-        $this->logger->info("[KeyManager] Rotated key for {$identifier}", ['category' => 'security']);
+        $this->logger->info("✅ [KeyManager] Rotated key for {$identifier}", ['identifier' => $identifier]);
     }
 
     public function revokeKey(string $identifier): void
     {
-        $this->logger->info("[KeyManager] Revoking key for {$identifier}", ['category' => 'security']);
+        $this->logger->info("✅ [KeyManager] Revoking key for {$identifier}", ['identifier' => $identifier]);
         // Implementation for revoking key securely
     }
 }
@@ -6334,7 +6318,7 @@ use Firebase\JWT\Key;
 use Psr\Log\LoggerInterface;
 
 /**
- * AuthMiddleware - Handles authentication for API requests.
+ * AuthMiddleware - Handles authentication and authorization for API requests.
  * Ensures valid JWT tokens and role-based access control.
  */
 class AuthMiddleware
@@ -6361,41 +6345,46 @@ class AuthMiddleware
 
     /**
      * Handle authentication and authorization.
-     *
+     * 
      * @param callable $next The next middleware function.
      * @param array $roles Required roles (e.g., 'admin').
      */
-    public function handle($next, ...$roles)
+    public function handle(callable $next, ...$roles)
     {
-        // Ensure Authorization header exists
+        // ✅ Ensure session is active before setting user data
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        // ✅ Ensure Authorization header exists
         $headers = getallheaders();
         if (!isset($headers['Authorization']) || !str_starts_with($headers['Authorization'], 'Bearer ')) {
-            $this->logger->warning("[AuthMiddleware] Unauthorized access attempt: Missing Authorization header.");
+            $this->logAuthEvent('Unauthorized access attempt: Missing Authorization header', 'warning');
             http_response_code(401);
             exit(json_encode(['error' => 'Unauthorized']));
         }
 
-        // Extract and validate JWT token
+        // ✅ Extract and validate JWT token
         $token = substr($headers['Authorization'], 7);
         $decoded = $this->validateToken($token);
         if (!$decoded) {
-            $this->logger->warning("[AuthMiddleware] Invalid token detected.");
+            $this->logAuthEvent('Invalid token detected', 'warning');
             http_response_code(401);
             exit(json_encode(['error' => 'Invalid token']));
         }
 
-        // Extract user details
+        // ✅ Store user details in session
         $_SESSION['user_id'] = $decoded['sub'] ?? null;
         $_SESSION['user_role'] = $decoded['role'] ?? 'guest';
 
-        // Check role-based access control
+        // ✅ Enforce role-based access control
         if (!empty($roles) && !in_array($_SESSION['user_role'], $roles)) {
-            $this->logger->warning("[AuthMiddleware] User {$_SESSION['user_id']} attempted unauthorized access.");
+            $this->logAuthEvent("User {$_SESSION['user_id']} attempted unauthorized access", 'warning');
             http_response_code(403);
             exit(json_encode(['error' => 'Forbidden']));
         }
 
-        // Proceed with the request
+        // ✅ Proceed with the request
         return $next();
     }
 
@@ -6408,8 +6397,47 @@ class AuthMiddleware
             $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
             return (array) $decoded;
         } catch (\Exception $e) {
-            $this->logger->error("[AuthMiddleware] Token validation failed: " . $e->getMessage());
+            $this->logAuthEvent("Token validation failed: " . $e->getMessage(), 'error');
             return false;
+        }
+    }
+
+    /**
+     * Log authentication-related events.
+     * @param string $message
+     * @param string $level (default: info)
+     */
+    private function logAuthEvent(string $message, string $level = 'info')
+    {
+        $userId = $_SESSION['user_id'] ?? 'guest';
+        $logMessage = "[Auth][{$level}] User: {$userId} - {$message}";
+        $this->logger->log($level, $logMessage);
+    }
+
+    /**
+     * Static method to enforce authentication without middleware.
+     */
+    public static function requireAuth()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        if (!isset($_SESSION['user_id'])) {
+            http_response_code(401);
+            exit(json_encode(['error' => 'Unauthorized']));
+        }
+    }
+
+    /**
+     * Static method to enforce admin authentication.
+     */
+    public static function requireAdmin()
+    {
+        self::requireAuth();
+        if ($_SESSION['user_role'] !== 'admin') {
+            http_response_code(403);
+            exit(json_encode(['error' => 'Forbidden']));
         }
     }
 }
@@ -6775,7 +6803,10 @@ use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use Dotenv\Dotenv;
 use Exception;
-use Psr\Log\LoggerInterface;
+use App\Helpers\ApiHelper;
+// Removed: use Psr\Log\LoggerInterface;
+// Added dynamic logger usage:
+use function getLogger;
 
 class DatabaseHelper
 {
@@ -6783,14 +6814,10 @@ class DatabaseHelper
     private static $secureCapsule = null;
     private static $initialized = false;
     private static $envLoaded = false;
-    private static $logger;
+    
+    // ...existing code...
 
-    private function __construct() {}
-
-    public static function setLogger(LoggerInterface $logger)
-    {
-        self::$logger = $logger;
-    }
+    // Removed setLogger() method
 
     private static function loadEnv()
     {
@@ -6822,17 +6849,19 @@ class DatabaseHelper
                     self::$initialized = true;
                 }
 
-                self::logEvent('database', "✅ {$connectionName} Database connected successfully.");
+                // Log successful connection with proper category
+                getLogger('db')->info("✅ {$connectionName} Database connected successfully");
             } catch (Exception $e) {
-                self::handleDatabaseError($connectionName, $e);
+                getLogger('db')->error("❌ {$connectionName} Database connection failed: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+                die("{$connectionName} database connection failed");
             }
         }
     }
 
     private static function handleDatabaseError(string $connectionName, Exception $e)
     {
-        self::logEvent('errors', "❌ {$connectionName} Database connection failed: " . $e->getMessage());
-        die(json_encode(["error" => "{$connectionName} database connection failed"]));
+        getLogger('db')->error("❌ {$connectionName} Database connection error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+        die("{$connectionName} database connection failed");
     }
 
     public static function getInstance(): Capsule
@@ -6873,14 +6902,7 @@ class DatabaseHelper
         return self::$secureCapsule;
     }
 
-    private static function logEvent($category, $message)
-    {
-        if (self::$logger) {
-            self::$logger->info("[$category] $message");
-        } else {
-            error_log("[$category] $message");
-        }
-    }
+    // Removed logEvent() wrapper in favor of direct getLogger() calls
 
     /**
      * ✅ Safe Query Execution with Exception Handling
@@ -6890,16 +6912,16 @@ class DatabaseHelper
         try {
             return $query(self::getInstance());
         } catch (\PDOException $e) {
-            logApiError("Database Query Error: " . $e->getMessage());
+            getLogger('db')->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             if ($e->getCode() == "23000") {
-                sendJsonResponse('error', 'Duplicate entry error', [], 400);
+                ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
             }
 
-            sendJsonResponse('error', 'Database query error', [], 500);
+            ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         } catch (\Exception $e) {
-            logApiError("Database Query Error: " . $e->getMessage());
-            sendJsonResponse('error', 'Database query error', [], 500);
+            getLogger('db')->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         }
     }
 
