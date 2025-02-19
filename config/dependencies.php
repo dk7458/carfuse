@@ -29,7 +29,19 @@ use GuzzleHttp\Client;
 use function getLogger;  // Use centralized logger
 
 // ✅ Initialize PHP-DI container.
-$container = new Container();
+try {
+    $container = new Container();
+} catch (Exception $e) {
+    error_log("❌ [DI] Failed to initialize DI container: " . $e->getMessage());
+    die("❌ Dependency Injection container failed: " . $e->getMessage() . "\n");
+}
+
+// ✅ Directly Call `getLogger()` Without `use function`
+$logger = getLogger('system');
+$container->set('logger', fn() => $logger);
+
+// ✅ Debug Log
+$logger->info("✅ DI Container initialized successfully.");
 
 // ✅ Load configuration files.
 $configDirectory = __DIR__;
