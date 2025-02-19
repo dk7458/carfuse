@@ -1,11 +1,14 @@
 <?php
+use function getLogger;
+
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 // ✅ Load Bootstrap (Dependencies, Configs, Logger, DB)
 $bootstrap = require_once __DIR__ . '/../bootstrap.php';
-$logger = $bootstrap['logger'];
+// Replace bootstrap logger with centralized logger
+$logger = getLogger('api');
 $container = $bootstrap['container'];
 
 // ✅ Get Requested URI & HTTP Method

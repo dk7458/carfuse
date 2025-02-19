@@ -1,15 +1,10 @@
 <?php
-// Ensure secure native PHP sessions
-ini_set('session.use_only_cookies', 1);
-ini_set('session.use_strict_mode', 1);
-ini_set('session.cookie_httponly', 1);
-ini_set('session.cookie_samesite', 'Lax');
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// 1. Initialize Logger First
+require_once __DIR__ . '/logger.php';
+use function getLogger;
+$logger = getLogger('system');
 
-// Load environment variables before anything else
-require_once __DIR__ . '/vendor/autoload.php';
+// 2. Load Environment Variables AFTER Logger initialization
 use Dotenv\Dotenv;
 $dotenv = Dotenv::createImmutable(__DIR__);
 $dotenv->load();
@@ -17,20 +12,10 @@ $dotenv->load();
 // Include autoloader and SecurityHelper only once
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 
-// Load Dependency Container from dependencies.php
-$container = require_once __DIR__ . '/config/dependencies.php';
-
-// Load Logger from logger.php and bind LoggerInterface
-$logger = require_once __DIR__ . '/logger.php';
-
-// ✅ Ensure Logger is Valid Before Registering It
-if (!$logger || !$logger instanceof LoggerInterface) {
-    error_log("❌ [BOOTSTRAP] Logger initialization failed. Using fallback logger.");
-    $logger = new Monolog\Logger('fallback');
-}
-
-// ✅ Bind Logger to DI Container
-$container->set(LoggerInterface::class, fn() => $logger);
+// 3. Initialize DI Container
+$container = new \DI\Container();
+// Bind logger immediately.
+$container->set('logger', fn() => getLogger('system'));
 
 // Remove redundant DatabaseHelper initialization
 // Ensure DatabaseHelper is available globally.
@@ -45,8 +30,8 @@ $config = [];
 foreach ($configFiles as $file) {
     $path = BASE_PATH . "/config/{$file}.php";
     if (!file_exists($path)) {
-        $logger->error("❌ Missing configuration file: {$file}.php");
-        die("❌ Error: Missing required configuration file: {$file}.php\n");
+        $logger->critical("❌ Missing configuration file: {$file}.php");
+        continue;
     }
     $config[$file] = require $path;
 }
@@ -85,6 +70,11 @@ if (!empty($missingDependencies)) {
     $logger->warning("⚠️ Missing dependencies: " . implode(', ', $missingDependencies));
     echo "⚠️ Missing dependencies: " . implode(', ', $missingDependencies) . "\n";
     echo "⚠️ Ensure dependencies are correctly registered in config/dependencies.php.\n";
+}
+
+// 5. Secure Session Initialization Happens Last
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
 // Final configuration return for application use

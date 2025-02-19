@@ -25,8 +25,8 @@ use App\Services\TemplateService;
 use App\Services\SignatureService;
 use App\Services\AuditService;
 use App\Models\Payment;
-use Psr\Log\LoggerInterface;
 use GuzzleHttp\Client;
+use function getLogger;  // Use centralized logger
 
 // ✅ Initialize PHP-DI container.
 $container = new Container();
@@ -51,16 +51,12 @@ if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['
     mkdir($fileStorageConfig['base_directory'], 0775, true);
 }
 
-// ✅ Initialize Logger (Monolog) from logger.php.
-$logger = require_once __DIR__ . '/../logger.php';
-$container->set(LoggerInterface::class, fn() => $logger);
-
 // ✅ Initialize EncryptionService.
 $encryptionService = new EncryptionService($config['encryption']['encryption_key'] ?? '');
 $container->set(EncryptionService::class, fn() => $encryptionService);
 
-// ✅ Initialize FileStorage.
-$fileStorage = new FileStorage($logger, $fileStorageConfig, $encryptionService);
+// ✅ Initialize FileStorage using centralized logger for its logging needs.
+$fileStorage = new FileStorage(getLogger('api'), $fileStorageConfig, $encryptionService);
 $container->set(FileStorage::class, fn() => $fileStorage);
 
 // ✅ Load key manager configuration.
@@ -70,33 +66,32 @@ $config['keymanager'] = require __DIR__ . '/keymanager.php';
 try {
     $database = DatabaseHelper::getInstance();
     $secure_database = DatabaseHelper::getSecureInstance();
-    $logger->info("✅ Both databases initialized successfully.");
+    getLogger('db')->info("✅ Both databases initialized successfully.");
 } catch (Exception $e) {
-    $logger->error("❌ Database initialization failed: " . $e->getMessage());
+    getLogger('db')->error("❌ Database initialization failed: " . $e->getMessage());
     die("❌ Database initialization failed. Check logs for details.\n");
 }
 $container->set('db', fn() => $database);
 $container->set('secure_db', fn() => $secure_database);
 
-// ✅ Register Services with logger as the first parameter.
-$container->set(Validator::class, fn() => new Validator($logger));
-$container->set(RateLimiter::class, fn() => new RateLimiter($logger, $database));
-$container->set(AuditService::class, fn() => new AuditService($logger));
-$container->set(TokenService::class, fn() => new TokenService($_ENV['JWT_SECRET'] ?? '', $_ENV['JWT_REFRESH_SECRET'] ?? '', $logger));
-$container->set(NotificationService::class, fn() => new NotificationService($logger, $config['notifications'] ?? [], $database));
-$container->set(UserService::class, fn() => new UserService($logger, $database, $config['encryption']['jwt_secret'] ?? ''));
-$container->set(PaymentService::class, fn() => new PaymentService($logger, $database, new Payment(), getenv('PAYU_API_KEY') ?: '', getenv('PAYU_API_SECRET') ?: ''));
-$container->set(BookingService::class, fn() => new BookingService($logger, $database));
-$container->set(MetricsService::class, fn() => new MetricsService($logger, $database));
-$container->set(ReportService::class, fn() => new ReportService($logger, $database));
-$container->set(RevenueService::class, fn() => new RevenueService($logger, $database));
+// ✅ Register Services with centralized logger calls.
+$container->set(Validator::class, fn() => new Validator(getLogger('api')));
+$container->set(RateLimiter::class, fn() => new RateLimiter(getLogger('db'), $database));
+$container->set(AuditService::class, fn() => new AuditService(getLogger('security')));
+$container->set(TokenService::class, fn() => new TokenService($_ENV['JWT_SECRET'] ?? '', $_ENV['JWT_REFRESH_SECRET'] ?? '', getLogger('auth')));
+$container->set(NotificationService::class, fn() => new NotificationService(getLogger('api'), $config['notifications'] ?? [], $database));
+$container->set(UserService::class, fn() => new UserService(getLogger('auth'), $database, $config['encryption']['jwt_secret'] ?? ''));
+$container->set(PaymentService::class, fn() => new PaymentService(getLogger('db'), $database, new Payment(), getenv('PAYU_API_KEY') ?: '', getenv('PAYU_API_SECRET') ?: ''));
+$container->set(BookingService::class, fn() => new BookingService(getLogger('api'), $database));
+$container->set(MetricsService::class, fn() => new MetricsService(getLogger('api'), $database));
+$container->set(ReportService::class, fn() => new ReportService(getLogger('api'), $database));
+$container->set(RevenueService::class, fn() => new RevenueService(getLogger('db'), $database));
 
-// ✅ For SignatureService, pass an empty array as the $config.
-$container->set(SignatureService::class, fn() => new SignatureService($config['signature'], $fileStorage, $encryptionService, $logger));
+$container->set(SignatureService::class, fn() => new SignatureService($config['signature'], $fileStorage, $encryptionService, getLogger('security')));
 
 // ✅ Register DocumentService.
 $container->set(DocumentService::class, fn() => new DocumentService(
-    $logger,
+    getLogger('api'),
     $container->get(AuditService::class),
     $fileStorage,
     $encryptionService,
@@ -104,10 +99,10 @@ $container->set(DocumentService::class, fn() => new DocumentService(
 ));
 
 // ✅ Register AuthService.
-$container->set(AuthService::class, fn() => new AuthService($logger, $database, $config['encryption']));
+$container->set(AuthService::class, fn() => new AuthService(getLogger('auth'), $database, $config['encryption']));
 
 // ✅ Register KeyManager.
-$container->set(KeyManager::class, fn() => new KeyManager($logger, $config['keymanager']['keys'] ?? []));
+$container->set(KeyManager::class, fn() => new KeyManager(getLogger('security'), $config['keymanager']['keys'] ?? []));
 
 // ✅ Return the DI container.
 return $container;
