@@ -7,8 +7,10 @@ use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use Dotenv\Dotenv;
 use Exception;
-use Psr\Log\LoggerInterface;
 use App\Helpers\ApiHelper;
+// Removed: use Psr\Log\LoggerInterface;
+// Added dynamic logger usage:
+use function getLogger;
 
 class DatabaseHelper
 {
@@ -16,14 +18,10 @@ class DatabaseHelper
     private static $secureCapsule = null;
     private static $initialized = false;
     private static $envLoaded = false;
-    private static $logger;
+    
+    // ...existing code...
 
-    private function __construct() {}
-
-    public static function setLogger(LoggerInterface $logger)
-    {
-        self::$logger = $logger;
-    }
+    // Removed setLogger() method
 
     private static function loadEnv()
     {
@@ -55,17 +53,19 @@ class DatabaseHelper
                     self::$initialized = true;
                 }
 
-                self::logEvent('database', "✅ {$connectionName} Database connected successfully.");
+                // Log successful connection with proper category
+                getLogger('db')->info("✅ {$connectionName} Database connected successfully");
             } catch (Exception $e) {
-                self::handleDatabaseError($connectionName, $e);
+                getLogger('db')->error("❌ {$connectionName} Database connection failed: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+                die("{$connectionName} database connection failed");
             }
         }
     }
 
     private static function handleDatabaseError(string $connectionName, Exception $e)
     {
-        self::logEvent('errors', "❌ {$connectionName} Database connection failed: " . $e->getMessage());
-        die(json_encode(["error" => "{$connectionName} database connection failed"]));
+        getLogger('db')->error("❌ {$connectionName} Database connection error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+        die("{$connectionName} database connection failed");
     }
 
     public static function getInstance(): Capsule
@@ -106,14 +106,7 @@ class DatabaseHelper
         return self::$secureCapsule;
     }
 
-    private static function logEvent($category, $message)
-    {
-        if (self::$logger) {
-            self::$logger->info("[$category] $message");
-        } else {
-            error_log("[$category] $message");
-        }
-    }
+    // Removed logEvent() wrapper in favor of direct getLogger() calls
 
     /**
      * ✅ Safe Query Execution with Exception Handling
@@ -123,7 +116,7 @@ class DatabaseHelper
         try {
             return $query(self::getInstance());
         } catch (\PDOException $e) {
-            logApiError("Database Query Error: " . $e->getMessage());
+            getLogger('db')->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             if ($e->getCode() == "23000") {
                 ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
@@ -131,7 +124,7 @@ class DatabaseHelper
 
             ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         } catch (\Exception $e) {
-            logApiError("Database Query Error: " . $e->getMessage());
+            getLogger('db')->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         }
     }

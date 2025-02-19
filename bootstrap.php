@@ -1,61 +1,52 @@
 <?php
-// ✅ 2. Initialize Logger First
+// Step 1: Initialize Logger First
 require_once __DIR__ . '/logger.php';
 $logger = getLogger('system');
-
-// ✅ 3. Ensure Logger is Valid Before Continuing
 if (!$logger instanceof Monolog\Logger) {
     error_log("❌ [BOOTSTRAP] Logger initialization failed. Using fallback logger.");
     $logger = new Monolog\Logger('fallback');
 }
+$logger->info("🔄 Logger initialized successfully.");
 
-// ✅ 4. Load Environment Variables
+// Step 2: Load Environment Variables AFTER Logger Initialization
 use Dotenv\Dotenv;
 $dotenv = Dotenv::createImmutable(__DIR__);
 $dotenv->load();
+$logger->info("🔄 Environment variables loaded.");
 
+// Step 3: Initialize Dependency Injection Container (Load Once)
 try {
     $container = require_once __DIR__ . '/config/dependencies.php';
     if (!$container instanceof \DI\Container) {
-        throw new Exception("Dependency injection container initialization failed.");
+        throw new Exception("DI container initialization failed.");
     }
-    $logger->info("✅ Dependencies initialized successfully.");
+    $logger->info("🔄 Dependencies initialized successfully.");
 } catch (Exception $e) {
     $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());
-    die("❌ DI container initialization failed: " . $e->getMessage() . "\n");
+    exit("❌ DI container initialization failed: " . $e->getMessage() . "\n");
 }
 
-// ✅ 5. Load Security Helper
+// Step 4: Register Logger in DI Container Before Other Services
+$container->set(\Psr\Log\LoggerInterface::class, fn() => getLogger('system'));
+
+// Step 5: Load Security Helper and Other Critical Services
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
+$logger->info("🔄 Security helper loaded.");
 
-// ✅ 6. Load Dependency Injection Container (DI)
-try {
-    $container = require_once __DIR__ . '/config/dependencies.php';
-    if (!$container instanceof \DI\Container) {
-        throw new Exception("Dependency injection container initialization failed.");
-    }
-} catch (Exception $e) {
-    $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());
-    die("❌ DI container initialization failed: " . $e->getMessage() . "\n");
-}
-
-// ✅ 7. Register Logger in DI Container
-$container->set('logger', fn() => getLogger('system'));
-
-// ✅ 8. Load Database Instances
+// Step 6: Load Database Instances
 try {
     $database = $container->get('db');
     $secure_database = $container->get('secure_db');
+    $logger->info("🔄 Database instances loaded successfully.");
 } catch (Exception $e) {
     $logger->critical("❌ Failed to load database instances: " . $e->getMessage());
-    die("❌ Database initialization failed: " . $e->getMessage() . "\n");
+    exit("❌ Database initialization failed: " . $e->getMessage() . "\n");
 }
 
-// ✅ 9. Load Required Configurations
+// Step 7: Load Required Configurations
 define('BASE_PATH', __DIR__);
 $configFiles = ['encryption', 'keymanager', 'filestorage'];
 $config = [];
-
 foreach ($configFiles as $file) {
     $path = BASE_PATH . "/config/{$file}.php";
     if (!file_exists($path)) {
@@ -63,59 +54,50 @@ foreach ($configFiles as $file) {
         continue;
     }
     $config[$file] = require $path;
+    $logger->info("🔄 Configuration file loaded: {$file}.php");
 }
 
-$logger->info("✅ Configuration files loaded successfully.");
-
-// ✅ 10. Validate Encryption Key
+// Step 8: Validate Encryption Key
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
-    $logger->error("❌ Encryption key missing or invalid.");
-    die("❌ Error: Encryption key missing or invalid in config/encryption.php\n");
+    $logger->critical("❌ Encryption key missing or invalid.");
+    exit("❌ Critical failure: Encryption key missing or invalid.\n");
 }
+$logger->info("🔄 Encryption key validated.");
 
-// ✅ 11. Retrieve Critical Services from DI Container
-try {
-    $auditService = $container->get(\App\Services\AuditService::class);
-    $encryptionService = $container->get(\App\Services\EncryptionService::class);
-    $logger->info("✅ Critical services retrieved successfully.");
-} catch (Exception $e) {
-    $logger->critical("❌ Service retrieval failed: " . $e->getMessage());
-    die("❌ Service retrieval failed: " . $e->getMessage() . "\n");
-}
-
-// ✅ 12. Validate Required Dependencies
+// Step 9: Validate Required Dependencies
 $missingDependencies = [];
 $requiredServices = [
     \App\Services\NotificationService::class,
     \App\Services\Auth\TokenService::class,
     \App\Services\Validator::class
 ];
-
 foreach ($requiredServices as $service) {
     if (!$container->has($service)) {
-        $logger->error("❌ Missing dependency: {$service}");
         $missingDependencies[] = $service;
     }
 }
-
 if (!empty($missingDependencies)) {
-    $logger->warning("⚠️ Missing dependencies: " . implode(', ', $missingDependencies));
+    $logger->error("❌ Missing dependencies: " . implode(', ', $missingDependencies));
     echo "⚠️ Missing dependencies: " . implode(', ', $missingDependencies) . "\n";
     echo "⚠️ Ensure dependencies are correctly registered in config/dependencies.php.\n";
+} else {
+    $logger->info("🔄 All required dependencies are present.");
 }
 
-// ✅ 13. Secure Session Initialization Happens Last
+// Step 10: Secure Session Initialization Happens Last
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
+    $logger->info("🔄 Session started successfully.");
 }
 
-// ✅ 14. Final Configuration Return for Application Use
+// Final Step: Return Critical Configurations & DI Container
+$logger->info("✅ Bootstrap completed successfully.");
 return [
-    'db'              => $database,
-    'secure_db'       => $secure_database,
-    'logger'          => $logger,
-    'auditService'    => $auditService,
-    'encryptionService'=> $encryptionService,
-    'container'       => $container,
+    'db'                => $database,
+    'secure_db'         => $secure_database,
+    'logger'            => $logger,
+    'container'         => $container,
+    'auditService'      => $container->get(\App\Services\AuditService::class),
+    'encryptionService' => $container->get(\App\Services\EncryptionService::class),
 ];
 
