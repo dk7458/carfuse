@@ -73,8 +73,17 @@ $container->set(EncryptionService::class, fn() => $encryptionService);
 $container->get('logger')->info("Step 4: EncryptionService registered.");
 
 // Step 5: Initialize FileStorage using centralized logger.
-$fileStorage = new FileStorage($container->get('api_logger'), $fileStorageConfig, $encryptionService);
-$container->set(FileStorage::class, fn() => $fileStorage);
+if (!isset($config['filestorage']) || !is_array($config['filestorage'])) {
+    $container->get('logger')->critical("❌ FileStorage configuration is missing or invalid.");
+    die("❌ FileStorage configuration is missing or invalid.\n");
+}
+$container->set(FileStorage::class, function () use ($container, $config) {
+    return new FileStorage(
+        $config['filestorage'],  // Pass correct config as an array.
+        $container->get('api_logger'), // Pass the proper logger.
+        $container->get(EncryptionService::class) // Inject EncryptionService.
+    );
+});
 $container->get('logger')->info("Step 5: FileStorage registered.");
 
 // Step 6: Load key manager configuration.
