@@ -26,7 +26,6 @@ use App\Services\AuditService;
 use App\Queues\NotificationQueue;
 use App\Queues\DocumentQueue;
 use App\Models\Payment;
-use App\Services\SecurityService;
 use GuzzleHttp\Client;
 
 // Step 1: Initialize DI Container
@@ -46,6 +45,15 @@ try {
     getLogger('system')->error("❌ [DI] Failed to initialize DI container: " . $e->getMessage());
     die("❌ Dependency Injection container failed: " . $e->getMessage() . "\n");
 }
+
+// Add helper registrations immediately after logger registration.
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
+$container->set(SecurityHelper::class, fn() => new SecurityHelper());
+$container->set('db', fn() => DatabaseHelper::getInstance());
+$container->set('secure_db', fn() => DatabaseHelper::getSecureInstance());
+$container->get('security_logger')->info("✅ SecurityHelper injected into DI container.");
+$container->get('db_logger')->info("✅ DatabaseHelper injected into DI container.");
 
 // Step 2: Load configuration files.
 $container->get('logger')->info("Step 2: Loading configuration files.");
@@ -182,7 +190,6 @@ $container->set(DocumentService::class, fn() => new DocumentService(
 ));
 
 // New registrations for additional services ensuring proper logging.
-$container->set(SecurityService::class, fn() => new SecurityService($container->get('security_logger')));
 
 $container->get('logger')->info("Step 8: Service registration completed.");
 
@@ -192,7 +199,6 @@ $requiredServices = [
     AuthService::class,
     Validator::class,
     DatabaseHelper::class,
-    SecurityService::class
 ];
 $container->get('dependencies_logger')->info("🔄 Step 9: Checking for circular dependencies...");
 foreach ($requiredServices as $service) {
@@ -206,6 +212,18 @@ foreach ($requiredServices as $service) {
 }
 
 $container->get('dependencies_logger')->info("✅ DI container validation completed successfully.");
+
+// Before returning the container, verify security-related services load successfully.
+try {
+    $container->get(AuthService::class);
+    $container->get(Validator::class);
+    $container->get(EncryptionService::class);
+    $container->get('security_logger')->info("✅ All security-dependent services loaded successfully.");
+} catch (Exception $e) {
+    $container->get('security_logger')->critical("❌ Security-related service failed: " . $e->getMessage());
+    die("❌ Security-related service failure: " . $e->getMessage() . "\n");
+}
+
 // Ensure container integrity before return.
 return [
     'db'                => $container->get('db'),
