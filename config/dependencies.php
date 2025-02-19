@@ -4,6 +4,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use DI\Container;
 use App\Helpers\DatabaseHelper;
+use App\Helpers\ExceptionHandler;
 use App\Helpers\SecurityHelper;
 use App\Services\Validator;
 use App\Services\RateLimiter;
@@ -136,13 +137,13 @@ $container->set(TokenService::class, fn() => new TokenService(
     $container->get('auth_logger')
 ));
 // Register ExceptionHandler in the DI container by injecting the system logger.
-$container->set(\App\Helpers\ExceptionHandler::class, fn() => new \App\Helpers\ExceptionHandler($container->get('logger')));
+$container->set(ExceptionHandler::class, fn() => new \App\Helpers\ExceptionHandler($container->get('logger')));
 // Ensure AuthService is passed the container-registered database and ExceptionHandler.
 $container->set(AuthService::class, fn() => new AuthService(
     $container->get('auth_logger'),
     $container->get('db'),
     $config['encryption'],
-    $container->get(\App\Helpers\ExceptionHandler::class) // Inject centralized ExceptionHandler
+    $container->get(ExceptionHandler::class) // Inject centralized ExceptionHandler
 ));
 $container->set(UserService::class, fn() => new UserService(
     $container->get('auth_logger'),
