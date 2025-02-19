@@ -14,8 +14,9 @@ class AuthService
 {
     private $tokenService;
     private $db;
+    private $encryptionConfig;
+    private \App\Helpers\ExceptionHandler $exceptionHandler;
 
-    // Removed logger property and dependency injection.
     public function __construct()
     {
         $configPath = __DIR__ . '/../../../config/encryption.php';
@@ -36,6 +37,7 @@ class AuthService
             getLogger('auth')
         );
         $this->db = DatabaseHelper::getInstance();
+        $this->exceptionHandler = new \App\Helpers\ExceptionHandler();
     }
 
     public function login($email, $password)
@@ -64,12 +66,16 @@ class AuthService
 
     public function registerUser(array $data)
     {
-        $user = User::create($data);
-        if (!$user) {
-            throw new Exception("User registration failed");
+        try {
+            $user = User::create($data);
+            if (!$user) {
+                throw new Exception("User registration failed");
+            }
+            getLogger('auth')->info("[Auth] ✅ User successfully registered (Email: {$data['email']})");
+            return $user;
+        } catch (Exception $e) {
+            $this->exceptionHandler->handleException($e);
         }
-        getLogger('auth')->info("[Auth] ✅ User successfully registered (Email: {$data['email']})");
-        return $user;
     }
 
     public function resetPasswordRequest($email)
@@ -92,8 +98,7 @@ class AuthService
             ]);
             getLogger('auth')->info("[Auth] Password reset requested for {$email}");
         } catch (Exception $e) {
-            getLogger('auth')->error("[Auth] Failed to insert password reset: " . $e->getMessage());
-            throw $e;
+            $this->exceptionHandler->handleException($e);
         }
 
         // Send email (mock implementation)
@@ -108,7 +113,7 @@ class AuthService
             $decoded = JWT::decode($token, new Key($this->tokenService->jwtSecret, 'HS256'));
             return (array)$decoded;
         } catch (Exception $e) {
-            getLogger('auth')->error("[Auth] Invalid token: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             return false;
         }
     }
