@@ -1,3 +1,4 @@
+<?php
 namespace App\Helpers;
 
 use Illuminate\Database\QueryException;
@@ -55,3 +56,4 @@ class ExceptionHandler
         exit();
     }
 }
+?>
