@@ -4,6 +4,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use DI\Container;
 use App\Helpers\DatabaseHelper;
+use App\Helpers\SecurityHelper;
 use App\Services\Validator;
 use App\Services\RateLimiter;
 use App\Services\Auth\TokenService;
@@ -17,15 +18,14 @@ use App\Services\ReportService;
 use App\Services\RevenueService;
 use App\Services\EncryptionService;
 use App\Services\Security\KeyManager;
-use App\Queues\NotificationQueue;
-use App\Queues\DocumentQueue;
 use App\Services\DocumentService;
 use App\Services\FileStorage;
 use App\Services\TemplateService;
 use App\Services\SignatureService;
 use App\Services\AuditService;
+use App\Queues\NotificationQueue;
+use App\Queues\DocumentQueue;
 use App\Models\Payment;
-use App\Services\DatabaseService;
 use App\Services\SecurityService;
 use GuzzleHttp\Client;
 
@@ -182,7 +182,6 @@ $container->set(DocumentService::class, fn() => new DocumentService(
 ));
 
 // New registrations for additional services ensuring proper logging.
-$container->set(DatabaseService::class, fn() => new DatabaseService($container->get('db_logger')));
 $container->set(SecurityService::class, fn() => new SecurityService($container->get('security_logger')));
 
 $container->get('logger')->info("Step 8: Service registration completed.");
@@ -192,7 +191,7 @@ $requiredServices = [
     TokenService::class,
     AuthService::class,
     Validator::class,
-    DatabaseService::class,
+    DatabaseHelper::class,
     SecurityService::class
 ];
 $container->get('dependencies_logger')->info("🔄 Step 9: Checking for circular dependencies...");
