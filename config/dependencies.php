@@ -26,7 +26,6 @@ use App\Services\SignatureService;
 use App\Services\AuditService;
 use App\Models\Payment;
 use GuzzleHttp\Client;
-use function getLogger;  // Use centralized logger
 
 // ✅ Initialize PHP-DI container.
 try {
