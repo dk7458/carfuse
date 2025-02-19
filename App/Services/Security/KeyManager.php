@@ -3,16 +3,17 @@
 namespace App\Services\Security;
 
 use Exception;
-use Psr\Log\LoggerInterface;
 
 class KeyManager
 {
+    // Removed LoggerInterface property declaration 
+    private $logger;
     private array $keys;
-    private LoggerInterface $logger;
 
-    public function __construct(LoggerInterface $logger, array $keys)
+    // Removed $logger parameter and initialize logger directly
+    public function __construct(array $keys)
     {
-        $this->logger = $logger;
+        $this->logger = getLogger('security.log');
         $this->keys = $keys;
     }
 
@@ -21,7 +22,7 @@ class KeyManager
         $keyName = 'encryption_key_' . strtolower($identifier);
 
         if (!isset($this->keys[$keyName]) || empty($this->keys[$keyName])) {
-            $this->logger->error("[KeyManager] Encryption key for {$identifier} not found.", ['category' => 'security']);
+            $this->logger->error("❌ [KeyManager] Encryption key for {$identifier} not found.", ['identifier' => $identifier, 'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)]);
             throw new Exception("Encryption key for {$identifier} not found.");
         }
 
@@ -35,7 +36,7 @@ class KeyManager
 
     public function storeKey(string $identifier, string $key): void
     {
-        $this->logger->info("[KeyManager] Storing key for {$identifier}", ['category' => 'security']);
+        $this->logger->info("✅ [KeyManager] Storing key for {$identifier}", ['identifier' => $identifier]);
         // Implementation for storing key securely (e.g., database, key vault)
     }
 
@@ -43,12 +44,12 @@ class KeyManager
     {
         $newKey = $this->generateKey();
         $this->storeKey($identifier, $newKey);
-        $this->logger->info("[KeyManager] Rotated key for {$identifier}", ['category' => 'security']);
+        $this->logger->info("✅ [KeyManager] Rotated key for {$identifier}", ['identifier' => $identifier]);
     }
 
     public function revokeKey(string $identifier): void
     {
-        $this->logger->info("[KeyManager] Revoking key for {$identifier}", ['category' => 'security']);
+        $this->logger->info("✅ [KeyManager] Revoking key for {$identifier}", ['identifier' => $identifier]);
         // Implementation for revoking key securely
     }
 }

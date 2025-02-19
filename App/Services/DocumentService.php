@@ -18,7 +18,8 @@ use Psr\Log\LoggerInterface;
  */
 class DocumentService
 {
-    private LoggerInterface $logger;
+    // Removed LoggerInterface type hint
+    private $logger;
     private $db;
     private AuditService $auditService;
     private FileStorage $fileStorage;
@@ -26,13 +27,12 @@ class DocumentService
     private TemplateService $templateService;
 
     public function __construct(
-        LoggerInterface $logger,
         AuditService $auditService,
         FileStorage $fileStorage,
         EncryptionService $encryptionService,
         TemplateService $templateService
     ) {
-        $this->logger = $logger;
+        $this->logger = getLogger('document.log');
         $this->db = DatabaseHelper::getInstance();
         $this->auditService = $auditService;
         $this->fileStorage = $fileStorage;
@@ -62,12 +62,13 @@ class DocumentService
     private function processTemplate(string $name, string $content, string $logAction): void
     {
         try {
-            $this->logger->info("Uploading template: {$name}", ['category' => 'document']);
+            $this->logger->info("✅ Uploading template: {$name}", ['template' => $name]);
             $encryptedContent = $this->encryptionService->encrypt($content);
             $this->templateService->saveTemplate("{$name}.html", $encryptedContent);
-            $this->auditService->log($logAction, ['name' => $name]);
+            $this->auditService->log($logAction, ['template' => $name]);
         } catch (Exception $e) {
-            $this->handleException("Failed to upload template: {$name}", $e);
+            $this->logger->error("❌ Exception occurred: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            throw new Exception("Failed to upload template: {$name} " . $e->getMessage());
         }
     }
 
@@ -77,7 +78,7 @@ class DocumentService
     public function generateContract(int $bookingId, int $userId): string
     {
         try {
-            $this->logger->info("[DocumentService] Generating contract", ['bookingId' => $bookingId, 'userId' => $userId, 'category' => 'document']);
+            $this->logger->info("✅ [DocumentService] Generating contract.", ['bookingId' => $bookingId, 'userId' => $userId]);
 
             $templateContent = $this->templateService->loadTemplate('rental_contract.html');
             $data = array_merge($this->fetchUserData($userId), $this->fetchBookingData($bookingId));
@@ -98,7 +99,7 @@ class DocumentService
 
             return $filePath;
         } catch (Exception $e) {
-            $this->logger->error("[DocumentService] Failed to generate contract: " . $e->getMessage(), ['category' => 'document']);
+            $this->logger->error("❌ Exception occurred: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             throw $e;
         }
     }
@@ -109,7 +110,7 @@ class DocumentService
     public function retrieveDocument(string $filePath): string
     {
         try {
-            $this->logger->info("Retrieving document", ['filePath' => $filePath, 'category' => 'document']);
+            $this->logger->info("✅ Retrieving document.", ['filePath' => $filePath]);
 
             $encryptedContent = $this->fileStorage->retrieveFile($filePath);
             $decryptedContent = $this->encryptionService->decrypt($encryptedContent);
@@ -118,7 +119,8 @@ class DocumentService
 
             return $decryptedContent;
         } catch (Exception $e) {
-            $this->handleException("Failed to retrieve document", $e);
+            $this->logger->error("❌ Exception occurred: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            throw new Exception("Failed to retrieve document " . $e->getMessage());
         }
     }
 
@@ -128,7 +130,7 @@ class DocumentService
     public function deleteDocument(int $documentId): void
     {
         try {
-            $this->logger->info("Deleting document", ['documentId' => $documentId, 'category' => 'document']);
+            $this->logger->info("✅ Deleting document.", ['documentId' => $documentId]);
 
             // Replace raw PDO prepare with DatabaseHelper query
             $document = $this->db->table('documents')->where('id', $documentId)->first();
@@ -142,7 +144,8 @@ class DocumentService
 
             $this->auditService->log('document_deleted', ['document_id' => $documentId]);
         } catch (Exception $e) {
-            $this->handleException("Failed to delete document", $e);
+            $this->logger->error("❌ Exception occurred: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            throw new Exception("Failed to delete document " . $e->getMessage());
         }
     }
 
