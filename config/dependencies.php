@@ -38,6 +38,9 @@ try {
     $container->set('db_logger', fn() => getLogger('db'));
     $container->set('api_logger', fn() => getLogger('api'));
     $container->set('security_logger', fn() => getLogger('security'));
+    // Register new dependencies logger.
+    $container->set('dependencies_logger', fn() => getLogger('dependencies'));
+    $container->get('dependencies_logger')->info("🔄 Step 1: Starting Dependency Injection.");
     $container->get('logger')->info("Step 1: DI Container created and loggers registered.");
 } catch (Exception $e) {
     getLogger('system')->error("❌ [DI] Failed to initialize DI container: " . $e->getMessage());
@@ -102,6 +105,18 @@ try {
 $container->set('db', fn() => $database);
 $container->set('secure_db', fn() => $secure_database);
 $container->get('logger')->info("Step 7: Database services registered.");
+
+// Debug database connection before proceeding.
+try {
+    $pdo = $container->get('db')->getConnection()->getPdo();
+    if (!$pdo) {
+        throw new Exception("Database connection failed.");
+    }
+    $container->get('db_logger')->info("✅ Database connection verified successfully.");
+} catch (Exception $e) {
+    $container->get('db_logger')->critical("❌ Database connection verification failed: " . $e->getMessage());
+    die("❌ Database connection issue: " . $e->getMessage() . "\n");
+}
 
 // Step 8: Register services with proper dependency order.
 $container->set(Validator::class, fn() => new Validator($container->get('api_logger')));
@@ -172,7 +187,7 @@ $container->set(SecurityService::class, fn() => new SecurityService($container->
 
 $container->get('logger')->info("Step 8: Service registration completed.");
 
-// Step 9: Final check for required service registrations.
+// Step 9: Final check for required service registrations and circular dependency detection.
 $requiredServices = [
     TokenService::class,
     AuthService::class,
@@ -180,12 +195,18 @@ $requiredServices = [
     DatabaseService::class,
     SecurityService::class
 ];
+$container->get('dependencies_logger')->info("🔄 Step 9: Checking for circular dependencies...");
 foreach ($requiredServices as $service) {
-    if (!$container->has($service)) {
-        $container->get('logger')->error("❌ Missing service registration: {$service}");
+    try {
+        $container->get($service);
+        $container->get('dependencies_logger')->info("✅ Service loaded successfully: {$service}");
+    } catch (Exception $e) {
+        $container->get('dependencies_logger')->critical("❌ Service failed to load: {$service}", ['trace' => $e->getTraceAsString()]);
+        die("❌ Service failure: {$service}: " . $e->getMessage() . "\n");
     }
 }
 
+$container->get('dependencies_logger')->info("✅ DI container validation completed successfully.");
 // Ensure container integrity before return.
 return [
     'db'                => $container->get('db'),

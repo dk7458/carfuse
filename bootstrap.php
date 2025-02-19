@@ -16,10 +16,12 @@ $logger->info("🔄 Environment variables loaded.");
 
 // Step 3: Initialize Dependency Injection Container (Load Once)
 try {
-    $container = require_once __DIR__ . '/config/dependencies.php';
+    $diDependencies = require_once __DIR__ . '/config/dependencies.php';
+    $container = $diDependencies['container'];
     if (!$container instanceof \DI\Container) {
         throw new Exception("DI container initialization failed.");
     }
+    $container->get('dependencies_logger')->info("✅ Bootstrap: DI container initialized and validated.");
     $logger->info("🔄 Dependencies initialized successfully.");
 } catch (Exception $e) {
     $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());
