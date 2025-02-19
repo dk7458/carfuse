@@ -6,7 +6,6 @@ use App\Services\Auth\TokenService;
 use App\Services\Auth\AuthService;
 use Exception;
 use App\Helpers\DatabaseHelper;
-use Psr\Log\NullLogger;
 use App\Services\Validator;
 use App\Helpers\SecurityHelper;
 use App\Helpers\ApiHelper;
@@ -48,13 +47,13 @@ class AuthController extends Controller
         view('auth/register');
     }
 
-    public function login($request)
+    public function login($request = null)
     {
-        if (!is_array($request)) {
+        $data = json_decode(file_get_contents("php://input"), true);
+        if (!$data || !is_array($data)) {
             ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         
-        $data = $request;
         $email = $data['email'] ?? '';
         $password = $data['password'] ?? '';
         
@@ -76,13 +75,13 @@ class AuthController extends Controller
         ApiHelper::sendJsonResponse('success', 'User logged in', [], 200);
     }
 
-    public function register($request)
+    public function register($request = null)
     {
-        if (!is_array($request)) {
+        $data = json_decode(file_get_contents("php://input"), true);
+        if (!$data || !is_array($data)) {
             ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         
-        $data = $request;
         $validator = new Validator(new NullLogger());
         $rules = [
             'name'             => 'required',
@@ -110,9 +109,12 @@ class AuthController extends Controller
         ApiHelper::sendJsonResponse('success', 'User registered', $result, 201);
     }
 
-    public function resetPasswordRequest($request)
+    public function resetPasswordRequest($request = null)
     {
-        $data = $_POST;
+        $data = json_decode(file_get_contents("php://input"), true);
+        if (!$data || !is_array($data)) {
+            ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
+        }
         $email = $data['email'] ?? '';
         $result = $this->authService->resetPasswordRequest($email);
         ApiHelper::sendJsonResponse('success', 'Password reset request processed', $result, 200);
@@ -142,7 +144,7 @@ class AuthController extends Controller
         }
     }
 
-    public function logout($request)
+    public function logout($request = null)
     {
         $this->authService->logout();
         setcookie("jwt", "", [
@@ -162,7 +164,7 @@ class AuthController extends Controller
         ApiHelper::sendJsonResponse('success', 'User logged out', [], 200);
     }
 
-    public function userDetails($request)
+    public function userDetails($request = null)
     {
         $token = $_COOKIE['jwt'] ?? '';
         if (!$this->authService->validateToken($token)) {

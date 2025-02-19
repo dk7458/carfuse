@@ -6,21 +6,18 @@ use App\Models\User;
 use App\Helpers\DatabaseHelper;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-// Removed: use Illuminate\Support\Facades\Hash;
 use Exception;
-use Psr\Log\LoggerInterface;
-use App\Helpers\SecurityHelper; // ✅ Updated: use correct namespace
+use App\Helpers\SecurityHelper;
+use function getLogger;
 
 class AuthService
 {
     private $tokenService;
     private $db;
-    private LoggerInterface $logger; // added
 
-    // Modified constructor to accept LoggerInterface via dependency injection.
-    public function __construct(LoggerInterface $logger)
+    // Removed logger property and dependency injection.
+    public function __construct()
     {
-        $this->logger = $logger;
         $configPath = __DIR__ . '/../../../config/encryption.php';
         if (!file_exists($configPath)) {
             throw new Exception("Encryption configuration missing.");
@@ -35,33 +32,32 @@ class AuthService
         $this->tokenService = new TokenService(
             $encryptionConfig['jwt_secret'],
             $encryptionConfig['jwt_refresh_secret'],
-            $this->logger // now injected logger
+            // Use category-based logging
+            getLogger('auth')
         );
-        // Initialize DatabaseHelper for raw password reset operations
         $this->db = DatabaseHelper::getInstance();
     }
 
     public function login($email, $password)
     {
         $user = User::where('email', $email)->first();
-        // Use PHP's password_verify() instead of Hash::check()
         if (!$user || !password_verify($password, $user->password_hash)) {
-            $this->logger->warning("Failed login attempt for email: " . $email, ['category' => 'auth']);
+            getLogger('auth')->warning("[Auth] Failed login attempt for email: {$email}");
             throw new Exception("Invalid credentials");
         }
 
-        // Ensure session is started and set session variables
         if(session_status() === PHP_SESSION_NONE) {
             session_start();
         }
-        $_SESSION['user_id'] = $user->id;
+        session_regenerate_id(true);
+        $_SESSION['user_id']   = $user->id;
         $_SESSION['user_role'] = $user->role ?? 'user';
 
         $token = $this->tokenService->generateToken($user);
         $refreshToken = $this->tokenService->generateRefreshToken($user);
 
         return [
-            'token' => $token,
+            'token'         => $token,
             'refresh_token' => $refreshToken
         ];
     }
@@ -72,7 +68,7 @@ class AuthService
         if (!$user) {
             throw new Exception("User registration failed");
         }
-
+        getLogger('auth')->info("[Auth] ✅ User successfully registered (Email: {$data['email']})");
         return $user;
     }
 
@@ -80,23 +76,23 @@ class AuthService
     {
         $user = User::where('email', $email)->first();
         if (!$user) {
-            $this->logger?->error("[AuthService] Password reset failed: email not found ($email)", ['category' => 'auth']);
+            getLogger('auth')->error("[Auth] Password reset failed: email not found ({$email})");
             throw new Exception("Email not found.");
         }
 
         $token = bin2hex(random_bytes(32));
+        $hashedToken = password_hash($token, PASSWORD_BCRYPT);
         $expiresAt = now()->addHour();
 
         try {
-            // Replace Eloquent insert with DatabaseHelper insert
             $this->db->table('password_resets')->insert([
                 'email'      => $email,
-                'token'      => password_hash($token, PASSWORD_BCRYPT),
+                'token'      => $hashedToken,
                 'expires_at' => $expiresAt,
             ]);
-            $this->logger->info("[AuthService] Password reset requested for {$email}", ['category' => 'auth']);
+            getLogger('auth')->info("[Auth] Password reset requested for {$email}");
         } catch (Exception $e) {
-            $this->logger?->error("[AuthService] Failed to insert password reset: " . $e->getMessage(), ['category' => 'auth']);
+            getLogger('auth')->error("[Auth] Failed to insert password reset: " . $e->getMessage());
             throw $e;
         }
 
@@ -112,7 +108,7 @@ class AuthService
             $decoded = JWT::decode($token, new Key($this->tokenService->jwtSecret, 'HS256'));
             return (array)$decoded;
         } catch (Exception $e) {
-            $this->logger->error("[AuthService] Invalid token: " . $e->getMessage(), ['category' => 'auth']);
+            getLogger('auth')->error("[Auth] Invalid token: " . $e->getMessage());
             return false;
         }
     }

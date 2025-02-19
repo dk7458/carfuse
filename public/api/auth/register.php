@@ -13,6 +13,7 @@ if (php_sapi_name() !== 'cli-server' && !defined('FASTROUTE_EXECUTION')) {
 
 // ✅ Retrieve JSON Input
 $data = json_decode(file_get_contents("php://input"), true);
+file_put_contents(__DIR__ . '/../../../logs/debug.log', "[REGISTER] Raw JSON Input: " . file_get_contents("php://input") . "\n", FILE_APPEND);
 
 // ✅ Initialize AuthController
 $authController = new AuthController();
