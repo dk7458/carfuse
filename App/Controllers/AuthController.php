@@ -18,7 +18,8 @@ class AuthController extends Controller
     public function __construct()
     {
         SecurityHelper::startSecureSession();
-        $this->authService = new AuthService(new NullLogger());
+        // Updated: Remove NullLogger and use parameterless constructor.
+        $this->authService = new AuthService();
 
         $configPath = __DIR__ . '/../../config/encryption.php';
         if (!file_exists($configPath)) {
@@ -28,10 +29,10 @@ class AuthController extends Controller
         if (!isset($encryptionConfig['jwt_secret'], $encryptionConfig['jwt_refresh_secret'])) {
             throw new Exception("JWT configuration missing in encryption.php.");
         }
+        // Updated: Remove NullLogger from TokenService
         $this->tokenService = new TokenService(
             $encryptionConfig['jwt_secret'],
-            $encryptionConfig['jwt_refresh_secret'],
-            new NullLogger()
+            $encryptionConfig['jwt_refresh_secret']
         );
         // Initialize DatabaseHelper (handles DB setup via safeQuery)
         DatabaseHelper::getInstance();
@@ -82,7 +83,8 @@ class AuthController extends Controller
             ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         
-        $validator = new Validator(new NullLogger());
+        // Updated: Remove NullLogger from Validator constructor.
+        $validator = new Validator();
         $rules = [
             'name'             => 'required',
             'email'            => 'required|email',
