@@ -1,32 +1,61 @@
 <?php
-// 1. Initialize Logger First
+// ✅ 2. Initialize Logger First
 require_once __DIR__ . '/logger.php';
-use function getLogger;
 $logger = getLogger('system');
 
-// 2. Load Environment Variables AFTER Logger initialization
+// ✅ 3. Ensure Logger is Valid Before Continuing
+if (!$logger instanceof Monolog\Logger) {
+    error_log("❌ [BOOTSTRAP] Logger initialization failed. Using fallback logger.");
+    $logger = new Monolog\Logger('fallback');
+}
+
+// ✅ 4. Load Environment Variables
 use Dotenv\Dotenv;
 $dotenv = Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
-// Include autoloader and SecurityHelper only once
+try {
+    $container = require_once __DIR__ . '/config/dependencies.php';
+    if (!$container instanceof \DI\Container) {
+        throw new Exception("Dependency injection container initialization failed.");
+    }
+    $logger->info("✅ Dependencies initialized successfully.");
+} catch (Exception $e) {
+    $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());
+    die("❌ DI container initialization failed: " . $e->getMessage() . "\n");
+}
+
+// ✅ 5. Load Security Helper
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 
-// 3. Initialize DI Container
-$container = new \DI\Container();
-// Bind logger immediately.
+// ✅ 6. Load Dependency Injection Container (DI)
+try {
+    $container = require_once __DIR__ . '/config/dependencies.php';
+    if (!$container instanceof \DI\Container) {
+        throw new Exception("Dependency injection container initialization failed.");
+    }
+} catch (Exception $e) {
+    $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());
+    die("❌ DI container initialization failed: " . $e->getMessage() . "\n");
+}
+
+// ✅ 7. Register Logger in DI Container
 $container->set('logger', fn() => getLogger('system'));
 
-// Remove redundant DatabaseHelper initialization
-// Ensure DatabaseHelper is available globally.
-$database = $container->get('db');
-$secure_database = $container->get('secure_db');
+// ✅ 8. Load Database Instances
+try {
+    $database = $container->get('db');
+    $secure_database = $container->get('secure_db');
+} catch (Exception $e) {
+    $logger->critical("❌ Failed to load database instances: " . $e->getMessage());
+    die("❌ Database initialization failed: " . $e->getMessage() . "\n");
+}
 
-// Remove Laravel's SessionManager initialization and related Config usage
-
+// ✅ 9. Load Required Configurations
 define('BASE_PATH', __DIR__);
 $configFiles = ['encryption', 'keymanager', 'filestorage'];
 $config = [];
+
 foreach ($configFiles as $file) {
     $path = BASE_PATH . "/config/{$file}.php";
     if (!file_exists($path)) {
@@ -35,49 +64,52 @@ foreach ($configFiles as $file) {
     }
     $config[$file] = require $path;
 }
+
 $logger->info("✅ Configuration files loaded successfully.");
 
-// Validate encryption key length
+// ✅ 10. Validate Encryption Key
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
     $logger->error("❌ Encryption key missing or invalid.");
     die("❌ Error: Encryption key missing or invalid in config/encryption.php\n");
 }
 
-// Retrieve required critical services from DI container
+// ✅ 11. Retrieve Critical Services from DI Container
 try {
     $auditService = $container->get(\App\Services\AuditService::class);
     $encryptionService = $container->get(\App\Services\EncryptionService::class);
     $logger->info("✅ Critical services retrieved successfully.");
 } catch (Exception $e) {
-    $logger->error("❌ Service retrieval failed: " . $e->getMessage());
+    $logger->critical("❌ Service retrieval failed: " . $e->getMessage());
     die("❌ Service retrieval failed: " . $e->getMessage() . "\n");
 }
 
-// Validate required dependencies
+// ✅ 12. Validate Required Dependencies
 $missingDependencies = [];
 $requiredServices = [
     \App\Services\NotificationService::class,
     \App\Services\Auth\TokenService::class,
     \App\Services\Validator::class
 ];
+
 foreach ($requiredServices as $service) {
     if (!$container->has($service)) {
         $logger->error("❌ Missing dependency: {$service}");
         $missingDependencies[] = $service;
     }
 }
+
 if (!empty($missingDependencies)) {
     $logger->warning("⚠️ Missing dependencies: " . implode(', ', $missingDependencies));
     echo "⚠️ Missing dependencies: " . implode(', ', $missingDependencies) . "\n";
     echo "⚠️ Ensure dependencies are correctly registered in config/dependencies.php.\n";
 }
 
-// 5. Secure Session Initialization Happens Last
+// ✅ 13. Secure Session Initialization Happens Last
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Final configuration return for application use
+// ✅ 14. Final Configuration Return for Application Use
 return [
     'db'              => $database,
     'secure_db'       => $secure_database,
@@ -86,3 +118,4 @@ return [
     'encryptionService'=> $encryptionService,
     'container'       => $container,
 ];
+

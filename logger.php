@@ -6,6 +6,7 @@
  * This file initializes Monolog as the application-wide logger,
  * ensuring all services use a single logging instance.
  */
+require_once __DIR__ . '/vendor/autoload.php';
 
  use Monolog\Logger;
  use Monolog\Handler\StreamHandler;
