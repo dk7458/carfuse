@@ -138,7 +138,7 @@ $container->set(TokenService::class, fn() => new TokenService(
     $container->get('auth_logger')
 ));
 // Register ExceptionHandler in the DI container by injecting the system logger.
-$container->set(ExceptionHandler::class, fn() => new ExceptionHandler($container->get('logger')));
+$container->set(ExceptionHandler::class, fn() => new ExceptionHandler($container->get('system_logger')));
 // Ensure AuthService is passed the container-registered database and ExceptionHandler.
 $container->set(AuthService::class, fn() => new AuthService(
     $container->get('auth_logger'),

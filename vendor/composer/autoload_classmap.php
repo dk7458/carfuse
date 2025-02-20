@@ -21,6 +21,7 @@ return array(
     'App\\Controllers\\UserController' => $baseDir . '/App/Controllers/UserController.php',
     'App\\Helpers\\ApiHelper' => $baseDir . '/App/Helpers/ApiHelper.php',
     'App\\Helpers\\DatabaseHelper' => $baseDir . '/App/Helpers/DatabaseHelper.php',
+    'App\\Helpers\\ExceptionHandler' => $baseDir . '/App/Helpers/ExceptionHandler.php',
     'App\\Helpers\\SecurityHelper' => $baseDir . '/App/Helpers/SecurityHelper.php',
     'App\\Middleware\\AuditTrailMiddleware' => $baseDir . '/App/Middleware/AuditTrailMiddleware.php',
     'App\\Middleware\\AuthMiddleware' => $baseDir . '/App/Middleware/AuthMiddleware.php',
