@@ -38,7 +38,7 @@ class AuthService
             getLogger('auth')
         );
         $this->db = DatabaseHelper::getInstance();
-        $this->exceptionHandler = new ExceptionHandler();
+        $this->exceptionHandler = new ExceptionHandler(getLogger('auth'));
     }
 
     public function login($email, $password)
