@@ -5,6 +5,7 @@ namespace App\Services\Auth;
 use App\Models\User;
 use App\Helpers\DatabaseHelper;
 use Firebase\JWT\JWT;
+use App\Helpers\ExceptionHandler;
 use Firebase\JWT\Key;
 use Exception;
 use App\Helpers\SecurityHelper;
@@ -15,7 +16,7 @@ class AuthService
     private $tokenService;
     private $db;
     private $encryptionConfig;
-    private \App\Helpers\ExceptionHandler $exceptionHandler;
+    private ExceptionHandler $exceptionHandler;
 
     public function __construct()
     {
@@ -37,7 +38,7 @@ class AuthService
             getLogger('auth')
         );
         $this->db = DatabaseHelper::getInstance();
-        $this->exceptionHandler = new \App\Helpers\ExceptionHandler();
+        $this->exceptionHandler = new ExceptionHandler();
     }
 
     public function login($email, $password)
