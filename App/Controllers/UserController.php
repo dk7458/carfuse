@@ -5,15 +5,15 @@ namespace App\Controllers;
 use App\Models\User;
 use App\Services\UserService;
 use App\Services\NotificationService;
-// Removed: use App\Services\Validator;
-// Removed: use Illuminate\Support\Facades\Auth;
-// Removed: use Illuminate\Support\Facades\Log;
 use App\Services\RateLimiter;
 use App\Services\AuditService;
 use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Routing\Controller;
+use App\Services\Auth\AuthService;
+use App\Helpers\ExceptionHandler;
+use function getLogger;
 
 /**
  * User Management Controller
@@ -23,22 +23,113 @@ use Illuminate\Routing\Controller;
 class UserController extends Controller
 {
     private UserService $userService;
-    // private LoggerInterface $logger; // Using native error_log()
-    // private Validator $validator;
     private RateLimiter $rateLimiter;
     private AuditService $auditService;
     private NotificationService $notificationService;
+    private AuthService $authService;
+    private ExceptionHandler $exceptionHandler;
 
     public function __construct(
-        /* Removed LoggerInterface, Validator, ... */
         RateLimiter $rateLimiter,
         AuditService $auditService,
-        NotificationService $notificationService
+        NotificationService $notificationService,
+        AuthService $authService
     ) {
         $this->rateLimiter = $rateLimiter;
         $this->auditService = $auditService;
         $this->notificationService = $notificationService;
         $this->userService = new UserService();
+        $this->authService = $authService;
+        $this->exceptionHandler = new ExceptionHandler(getLogger('auth'));
+    }
+
+    /**
+     * Register a new user.
+     */
+    public function registerUser()
+    {
+        // Assume POST request with registration data
+        $data = $_POST;
+        try {
+            // Move user registration logic here (bypassing AuthService)
+            $user = User::create($data);
+            if (!$user) {
+                throw new \Exception("User registration failed");
+            }
+            getLogger('auth')->info("[UserController] User registered successfully (Email: {$data['email']})");
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'success', 'message' => 'User registered successfully']);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * Log in an existing user.
+     */
+    public function login()
+    {
+        $email = $_POST['email'] ?? null;
+        $password = $_POST['password'] ?? null;
+        try {
+            if (!$email || !$password) {
+                throw new \Exception("Email and password required");
+            }
+            // Fetch user manually instead of within AuthService
+            $user = User::where('email', $email)->first();
+            if (!$user || !password_verify($password, $user->password_hash)) {
+                throw new \Exception("Invalid credentials");
+            }
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            session_regenerate_id(true);
+            $_SESSION['user_id']   = $user->id;
+            $_SESSION['user_role'] = $user->role ?? 'user';
+            // Delegate token generation to AuthService
+            $token = $this->authService->generateToken($user);
+            $refreshToken = $this->authService->generateRefreshToken($user);
+            getLogger('auth')->info("[UserController] User logged in: {$email}");
+            header('Content-Type: application/json');
+            echo json_encode([
+                'status'        => 'success',
+                'token'         => $token,
+                'refresh_token' => $refreshToken
+            ]);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * Log out the current user.
+     */
+    public function logout()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            setcookie(session_name(), '', time() - 42000, '/');
+        }
+        session_destroy();
+        getLogger('auth')->info("[UserController] User logged out.");
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'success', 'message' => 'Logged out successfully']);
+    }
+
+    /**
+     * Retrieve current user profile.
+     */
+    public function getUserProfile()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $user = User::find($_SESSION['user_id'] ?? null);
+        header('Content-Type: application/json');
+        echo json_encode($user);
     }
 
     /**

@@ -146,6 +146,10 @@ $container->set(AuthService::class, fn() => new AuthService(
     $config['encryption'],
     $container->get(ExceptionHandler::class) // Inject centralized ExceptionHandler
 ));
+// Register UserController to receive AuthService via DI.
+$container->set(\App\Controllers\UserController::class, fn() => new \App\Controllers\UserController(
+    $container->get(\App\Services\Auth\AuthService::class)
+));
 $container->set(UserService::class, fn() => new UserService(
     $container->get('auth_logger'),
     $container->get('db'),
