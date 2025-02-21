@@ -4,6 +4,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/ExceptionHandler.php';
 
 use DI\Container;
+use Psr\Log\LoggerInterface;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ExceptionHandler;
 use App\Helpers\SecurityHelper;
@@ -34,7 +35,7 @@ use GuzzleHttp\Client;
 try {
     $container = new Container();
     // Register categorized loggers.
-    $container->set('logger', fn() => getLogger('system'));
+    $container->set(LoggerInterface::class, fn() => getLogger('system'));
     $container->set('auth_logger', fn() => getLogger('auth'));
     $container->set('db_logger', fn() => getLogger('db'));
     $container->set('api_logger', fn() => getLogger('api'));
@@ -42,11 +43,16 @@ try {
     // Register new dependencies logger.
     $container->set('dependencies_logger', fn() => getLogger('dependencies'));
     $container->get('dependencies_logger')->info("🔄 Step 1: Starting Dependency Injection.");
-    $container->get('logger')->info("Step 1: DI Container created and loggers registered.");
+    $container->get(LoggerInterface::class)->info("Step 1: DI Container created and loggers registered.");
 } catch (Exception $e) {
     getLogger('system')->error("❌ [DI] Failed to initialize DI container: " . $e->getMessage());
     die("❌ Dependency Injection container failed: " . $e->getMessage() . "\n");
 }
+
+// Register ExceptionHandler after the logger is available.
+$container->set(ExceptionHandler::class, fn($c) => new ExceptionHandler(
+    $c->get(LoggerInterface::class)
+));
 
 // Add helper registrations immediately after logger registration.
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
@@ -58,14 +64,14 @@ $container->get('security_logger')->info("✅ SecurityHelper injected into DI co
 $container->get('db_logger')->info("✅ DatabaseHelper injected into DI container.");
 
 // Step 2: Load configuration files.
-$container->get('logger')->info("Step 2: Loading configuration files.");
+$container->get(LoggerInterface::class)->info("Step 2: Loading configuration files.");
 $configDirectory = __DIR__;
 $config = [];
 foreach (glob("{$configDirectory}/*.php") as $filePath) {
     $fileName = basename($filePath, '.php');
     if ($fileName !== 'dependencies') {
         $config[$fileName] = require $filePath;
-        $container->get('logger')->info("Configuration file loaded: {$fileName}.php");
+        $container->get(LoggerInterface::class)->info("Configuration file loaded: {$fileName}.php");
     }
 }
 
@@ -78,20 +84,20 @@ if (!is_dir($templateDirectory)) {
 if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['base_directory'])) {
     mkdir($fileStorageConfig['base_directory'], 0775, true);
 }
-$container->get('logger')->info("Step 3: Required directories verified.");
+$container->get(LoggerInterface::class)->info("Step 3: Required directories verified.");
 
 // Step 4: Initialize EncryptionService.
 $encryptionService = new EncryptionService(
-    $container->get('logger'), // Pass the correct logger
+    $container->get(LoggerInterface::class), // Pass the correct logger
     $container->get(ExceptionHandler::class), // Pass the ExceptionHandler
     $config['encryption']['encryption_key'] ?? '' // Pass the encryption key from config
 );
 $container->set(EncryptionService::class, fn() => $encryptionService);
-$container->get('logger')->info("Step 4: EncryptionService registered.");
+$container->get(LoggerInterface::class)->info("Step 4: EncryptionService registered.");
 
 // Step 5: Initialize FileStorage using centralized logger.
 if (!isset($config['filestorage']) || !is_array($config['filestorage'])) {
-    $container->get('logger')->critical("❌ FileStorage configuration is missing or invalid.");
+    $container->get(LoggerInterface::class)->critical("❌ FileStorage configuration is missing or invalid.");
     die("❌ FileStorage configuration is missing or invalid.\n");
 }
 $container->set(FileStorage::class, function () use ($container, $config) {
@@ -101,11 +107,11 @@ $container->set(FileStorage::class, function () use ($container, $config) {
         $container->get(EncryptionService::class) // Inject EncryptionService.
     );
 });
-$container->get('logger')->info("Step 5: FileStorage registered.");
+$container->get(LoggerInterface::class)->info("Step 5: FileStorage registered.");
 
 // Step 6: Load key manager configuration.
 $config['keymanager'] = require __DIR__ . '/keymanager.php';
-$container->get('logger')->info("Step 6: Key Manager configuration loaded.");
+$container->get(LoggerInterface::class)->info("Step 6: Key Manager configuration loaded.");
 
 // Step 7: Initialize DatabaseHelper instances BEFORE services that depend on them.
 try {
@@ -118,7 +124,7 @@ try {
 }
 $container->set('db', fn() => $database);
 $container->set('secure_db', fn() => $secure_database);
-$container->get('logger')->info("Step 7: Database services registered.");
+$container->get(LoggerInterface::class)->info("Step 7: Database services registered.");
 
 // Debug database connection before proceeding.
 try {
@@ -141,8 +147,6 @@ $container->set(TokenService::class, fn() => new TokenService(
     $_ENV['JWT_REFRESH_SECRET'] ?? '',
     $container->get('auth_logger')
 ));
-// Register ExceptionHandler in the DI container by injecting the system logger.
-$container->set(ExceptionHandler::class, fn() => new ExceptionHandler($container->get('logger')));
 // Ensure AuthService is passed the container-registered database and ExceptionHandler.
 $container->set(AuthService::class, fn() => new AuthService(
     $container->get('auth_logger'),
@@ -204,7 +208,7 @@ $container->set(DocumentService::class, fn() => new DocumentService(
 
 // New registrations for additional services ensuring proper logging.
 
-$container->get('logger')->info("Step 8: Service registration completed.");
+$container->get(LoggerInterface::class)->info("Step 8: Service registration completed.");
 
 // Step 9: Final check for required service registrations and circular dependency detection.
 $requiredServices = [
@@ -241,7 +245,7 @@ try {
 return [
     'db'                => $container->get('db'),
     'secure_db'         => $container->get('secure_db'),
-    'logger'            => $container->get('logger'),
+    'logger'            => $container->get(LoggerInterface::class),
     'auditService'      => $container->get(AuditService::class),
     'encryptionService' => $container->get(EncryptionService::class),
     'container'         => $container,
