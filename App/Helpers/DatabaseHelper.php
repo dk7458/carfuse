@@ -5,7 +5,6 @@ namespace App\Helpers;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
-use Dotenv\Dotenv;
 use Exception;
 use App\Helpers\ApiHelper;
 use function getLogger;
@@ -13,38 +12,46 @@ use function getLogger;
 class DatabaseHelper
 {
     private static ?DatabaseHelper $instance = null;
+    private static ?DatabaseHelper $secureInstance = null;
     private Capsule $capsule;
 
-    private function __construct()
+    private function __construct(array $config)
     {
         $this->capsule = new Capsule();
-        $this->capsule->addConnection([
-            'driver'    => $_ENV['DB_DRIVER'] ?? 'mysql',
-            'host'      => $_ENV['DB_HOST'] ?? 'localhost',
-            'database'  => $_ENV['DB_DATABASE'] ?? '',
-            'username'  => $_ENV['DB_USERNAME'] ?? '',
-            'password'  => $_ENV['DB_PASSWORD'] ?? '',
-            'charset'   => 'utf8mb4',
-            'collation' => 'utf8mb4_unicode_ci',
-        ]);
+        $this->capsule->addConnection($config);
         $this->capsule->setAsGlobal();
         $this->capsule->bootEloquent();
     }
-    
+
     public static function getInstance(): DatabaseHelper
     {
         if (self::$instance === null) {
-            self::$instance = new DatabaseHelper();
+            $config = require __DIR__ . '/../../config/database.php';
+            self::$instance = new DatabaseHelper($config['app_database']);
         }
-    
+
         // Ensure connection is set before returning
         if (!self::$instance->getCapsule()->getConnection()) {
             throw new \RuntimeException("❌ Database connection [default] not configured. Check database settings.");
         }
-    
+
         return self::$instance;
     }
-    
+
+    public static function getSecureInstance(): DatabaseHelper
+    {
+        if (self::$secureInstance === null) {
+            $config = require __DIR__ . '/../../config/database.php';
+            self::$secureInstance = new DatabaseHelper($config['secure_database']);
+        }
+
+        // Ensure connection is set before returning
+        if (!self::$secureInstance->getCapsule()->getConnection()) {
+            throw new \RuntimeException("❌ Secure database connection not configured. Check database settings.");
+        }
+
+        return self::$secureInstance;
+    }
 
     public function getCapsule(): Capsule
     {
@@ -55,68 +62,6 @@ class DatabaseHelper
     {
         return $this->capsule->getConnection();
     }
-
-    private static $secureCapsule = null;
-    private static $initialized = false;
-    private static $envLoaded = false;
-    
-    // Removed setLogger() method
-
-    private static function loadEnv()
-    {
-        if (!self::$envLoaded) {
-            $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
-            $dotenv->safeLoad();
-            self::$envLoaded = true;
-        }
-    }
-
-    private static function initializeDatabase(&$capsule, array $config, string $connectionName)
-    {
-        if ($capsule === null) {
-            self::loadEnv();
-
-            try {
-                $capsule = new Capsule();
-                $capsule->addConnection($config, $connectionName);
-                $capsule->setEventDispatcher(new Dispatcher(new Container));
-
-                $pdo = $capsule->getConnection($connectionName)->getPdo();
-                if (!$pdo) {
-                    throw new Exception("Failed to obtain PDO connection.");
-                }
-
-                if (!self::$initialized) {
-                    $capsule->setAsGlobal();
-                    $capsule->bootEloquent();
-                    self::$initialized = true;
-                }
-
-                // Log successful connection with proper category
-                getLogger('db')->info("✅ {$connectionName} Database connected successfully");
-            } catch (Exception $e) {
-                getLogger('db')->error("❌ {$connectionName} Database connection failed: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-                die("{$connectionName} database connection failed");
-            }
-        }
-    }
-
-    private static function handleDatabaseError(string $connectionName, Exception $e)
-    {
-        getLogger('db')->error("❌ {$connectionName} Database connection error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-        die("{$connectionName} database connection failed");
-    }
-
-    public static function getSecureInstance(): DatabaseHelper
-{
-    if (self::$secureCapsule === null) {
-        self::$secureCapsule = new DatabaseHelper();
-    }
-    return self::$secureCapsule;
-}
-
-
-    // Removed logEvent() wrapper in favor of direct getLogger() calls
 
     /**
      * ✅ Safe Query Execution with Exception Handling
