@@ -30,20 +30,21 @@ class DatabaseHelper
         $this->capsule->setAsGlobal();
         $this->capsule->bootEloquent();
     }
-
+    
     public static function getInstance(): DatabaseHelper
     {
         if (self::$instance === null) {
             self::$instance = new DatabaseHelper();
         }
-
-        // Ensure at least one database connection exists
+    
+        // Ensure connection is set before returning
         if (!self::$instance->getCapsule()->getConnection()) {
             throw new \RuntimeException("❌ Database connection [default] not configured. Check database settings.");
         }
-
+    
         return self::$instance;
     }
+    
 
     public function getCapsule(): Capsule
     {
@@ -106,22 +107,14 @@ class DatabaseHelper
         die("{$connectionName} database connection failed");
     }
 
-    public static function getSecureInstance(): Capsule
-    {
-        if (self::$secureCapsule === null) {
-            self::initializeDatabase(self::$secureCapsule, [
-                'driver'    => $_ENV['SECURE_DB_DRIVER'] ?? 'mysql',
-                'host'      => $_ENV['SECURE_DB_HOST'] ?? 'localhost',
-                'database'  => $_ENV['SECURE_DB_DATABASE'] ?? '',
-                'username'  => $_ENV['SECURE_DB_USERNAME'] ?? '',
-                'password'  => $_ENV['SECURE_DB_PASSWORD'] ?? '',
-                'charset'   => 'utf8mb4',
-                'collation' => 'utf8mb4_unicode_ci',
-            ], 'secure');
-        }
-
-        return self::$secureCapsule;
+    public static function getSecureInstance(): DatabaseHelper
+{
+    if (self::$secureCapsule === null) {
+        self::$secureCapsule = new DatabaseHelper();
     }
+    return self::$secureCapsule;
+}
+
 
     // Removed logEvent() wrapper in favor of direct getLogger() calls
 

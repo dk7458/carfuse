@@ -45,7 +45,19 @@ try {
     exit("❌ Database initialization failed: " . $e->getMessage() . "\n");
 }
 
-// Step 7: Load Required Configurations
+// Step 7: Verify Database Connection
+try {
+    $pdo = $database->getConnection()->getPdo();
+    if (!$pdo) {
+        throw new Exception("❌ Database connection failed.");
+    }
+    $container->get('db_logger')->info("✅ Database connection verified successfully.");
+} catch (Exception $e) {
+    $container->get('db_logger')->critical("❌ Database connection verification failed: " . $e->getMessage());
+    die("❌ Database connection issue: " . $e->getMessage() . "\n");
+}
+
+// Step 8: Load Required Configurations
 define('BASE_PATH', __DIR__);
 $configFiles = ['encryption', 'keymanager', 'filestorage'];
 $config = [];
@@ -59,14 +71,14 @@ foreach ($configFiles as $file) {
     $logger->info("🔄 Configuration file loaded: {$file}.php");
 }
 
-// Step 8: Validate Encryption Key
+// Step 9: Validate Encryption Key
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
     $logger->critical("❌ Encryption key missing or invalid.");
     exit("❌ Critical failure: Encryption key missing or invalid.\n");
 }
 $logger->info("🔄 Encryption key validated.");
 
-// Step 9: Validate Required Dependencies
+// Step 10: Validate Required Dependencies
 $missingDependencies = [];
 $requiredServices = [
     \App\Services\NotificationService::class,
@@ -86,7 +98,7 @@ if (!empty($missingDependencies)) {
     $logger->info("🔄 All required dependencies are present.");
 }
 
-// Step 10: Secure Session Initialization Happens Last
+// Step 11: Secure Session Initialization Happens Last
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
     $logger->info("🔄 Session started successfully.");
