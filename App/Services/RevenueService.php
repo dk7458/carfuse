@@ -6,17 +6,21 @@ use App\Helpers\DatabaseHelper; // new import
 use App\Models\Payment;
 use App\Models\TransactionLog;
 use Psr\Log\LoggerInterface;
+use App\Handlers\ExceptionHandler;
 
 class RevenueService
 {
+    public const DEBUG_MODE = true;
     private $db;
     private LoggerInterface $logger;
+    private ExceptionHandler $exceptionHandler;
 
     // Assume dependency injection now supplies the logger.
-    public function __construct(LoggerInterface $logger, DatabaseHelper $db)
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
         $this->logger = $logger;
         $this->db = $db;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     public function getMonthlyRevenueTrends(): array
@@ -30,13 +34,16 @@ class RevenueService
                 ->get();
             $labels = array_column($data, 'month');
             $amounts = array_column($data, 'revenue');
-            $this->logger->info("[RevenueService] Retrieved monthly revenue trends");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[db] Retrieved monthly revenue trends", ['category' => 'revenue']);
+            }
             return [
                 'labels' => $labels,
                 'data'   => $amounts,
             ];
         } catch (\Exception $e) {
-            $this->logger->error("[RevenueService] Database error: " . $e->getMessage());
+            $this->logger->error("[db] Database error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -47,10 +54,13 @@ class RevenueService
             $total = $this->db->table('transaction_logs')
                 ->where('type', 'payment')
                 ->sum('amount');
-            $this->logger->info("[RevenueService] Retrieved total revenue", ['category' => 'revenue']);
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[db] Retrieved total revenue", ['category' => 'revenue']);
+            }
             return (float) $total;
         } catch (\Exception $e) {
-            $this->logger->error("[RevenueService] Database error: " . $e->getMessage(), ['category' => 'db']);
+            $this->logger->error("[db] Database error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -61,10 +71,13 @@ class RevenueService
             $total = $this->db->table('transaction_logs')
                 ->where('type', 'refund')
                 ->sum('amount');
-            $this->logger->info("[RevenueService] Retrieved total refunds");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[db] Retrieved total refunds", ['category' => 'revenue']);
+            }
             return (float) $total;
         } catch (\Exception $e) {
-            $this->logger->error("[RevenueService] Database error: " . $e->getMessage());
+            $this->logger->error("[db] Database error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }

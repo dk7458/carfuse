@@ -4,17 +4,21 @@ namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
+use App\Handlers\ExceptionHandler;
 
 class TransactionService
 {
+    public const DEBUG_MODE = true;
     private $db;
-    private LoggerInterface $logger;
+    private LoggerInterface $bookingLogger;
+    private ExceptionHandler $exceptionHandler;
 
     // Constructor for dependency injection
-    public function __construct(LoggerInterface $logger, DatabaseHelper $db)
+    public function __construct(LoggerInterface $bookingLogger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
-        $this->logger = $logger;
+        $this->bookingLogger = $bookingLogger;
         $this->db = $db;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     public function getByUserId(int $userId): array
@@ -25,10 +29,13 @@ class TransactionService
                                      ->orderBy('created_at', 'desc')
                                      ->get()
                                      ->toArray();
-            $this->logger->info("[TransactionService] Retrieved transactions for user {$userId}");
+            if (self::DEBUG_MODE) {
+                $this->bookingLogger->info("[db] Retrieved transactions", ['userId' => $userId]);
+            }
             return $transactions;
         } catch (\Exception $e) {
-            $this->logger->error("[TransactionService] Database error while retrieving transactions: " . $e->getMessage());
+            $this->bookingLogger->error("[db] ❌ Error retrieving transactions: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             return [];
         }
     }
@@ -44,9 +51,9 @@ class TransactionService
                 'status'     => $data['status'],
                 'created_at' => date('Y-m-d H:i:s'),
             ]);
-            $this->logger->info("[TransactionService] Transaction created for user {$data['user_id']}");
+            $this->bookingLogger->info("Transaction created", ['userId' => $data['user_id']]);
         } catch (\Exception $e) {
-            $this->logger->error("[TransactionService] Database error while creating transaction: " . $e->getMessage());
+            $this->bookingLogger->error("Database error while creating transaction", ['error' => $e->getMessage()]);
             throw $e;
         }
     }
@@ -57,9 +64,9 @@ class TransactionService
             $this->db->table('transaction_logs')
                      ->where('id', $transactionId)
                      ->update(['status' => $status, 'updated_at' => date('Y-m-d H:i:s')]);
-            $this->logger->info("[TransactionService] Updated status for transaction {$transactionId}");
+            $this->bookingLogger->info("Updated transaction status", ['transactionId' => $transactionId, 'status' => $status]);
         } catch (\Exception $e) {
-            $this->logger->error("[TransactionService] Database error while updating transaction status: " . $e->getMessage());
+            $this->bookingLogger->error("Database error while updating transaction status", ['error' => $e->getMessage()]);
             throw $e;
         }
     }

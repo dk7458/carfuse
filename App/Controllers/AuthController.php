@@ -9,32 +9,39 @@ use App\Helpers\DatabaseHelper;
 use App\Services\Validator;
 use App\Helpers\SecurityHelper;
 use App\Helpers\ApiHelper;
+use Psr\Log\LoggerInterface;
+use App\Services\ExceptionHandler; // New dependency
 
 class AuthController extends Controller
 {
-    protected $authService;
-    protected $tokenService;
+    private AuthService $authService;
+    private Validator $validator;
+    private TokenService $tokenService;
+    private ExceptionHandler $exceptionHandler;
+    private LoggerInterface $authLogger;
+    private LoggerInterface $auditLogger;
 
-    public function __construct()
-    {
-        SecurityHelper::startSecureSession();
-        // Updated: Remove NullLogger and use parameterless constructor.
+    // Updated Constructor with Dependency Injection
+    public function __construct(
+        Validator $validator,
+        TokenService $tokenService,
+        ExceptionHandler $exceptionHandler,
+        LoggerInterface $authLogger,
+        LoggerInterface $auditLogger
+    ) {
+        $this->validator = $validator;
+        $this->tokenService = $tokenService;
+        $this->exceptionHandler = $exceptionHandler;
+        $this->authLogger = $authLogger;
+        $this->auditLogger = $auditLogger;
+        // ...existing dependency injections...
+        
+        // Optionally, move secure session handling to middleware
+        // SecurityHelper::startSecureSession();
+
+        // Initialize AuthService (could be injected as well)
         $this->authService = new AuthService();
-
-        $configPath = __DIR__ . '/../../config/encryption.php';
-        if (!file_exists($configPath)) {
-            throw new Exception("Encryption configuration missing.");
-        }
-        $encryptionConfig = require $configPath;
-        if (!isset($encryptionConfig['jwt_secret'], $encryptionConfig['jwt_refresh_secret'])) {
-            throw new Exception("JWT configuration missing in encryption.php.");
-        }
-        // Updated: Remove NullLogger from TokenService
-        $this->tokenService = new TokenService(
-            $encryptionConfig['jwt_secret'],
-            $encryptionConfig['jwt_refresh_secret']
-        );
-        // Initialize DatabaseHelper (handles DB setup via safeQuery)
+        // ...existing initialization code...
         DatabaseHelper::getInstance();
     }
 
@@ -50,9 +57,10 @@ class AuthController extends Controller
 
     public function login($request = null)
     {
+        // ...existing code...
         $data = json_decode(file_get_contents("php://input"), true);
         if (!$data || !is_array($data)) {
-            ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
+            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         
         $email = $data['email'] ?? '';
@@ -73,29 +81,30 @@ class AuthController extends Controller
             "httponly" => true,
             "samesite" => "Strict"
         ]);
-        ApiHelper::sendJsonResponse('success', 'User logged in', [], 200);
+        // Improved logging with context
+        $this->authLogger->info("User logged in", ['email' => $email]);
+        return ApiHelper::sendJsonResponse('success', 'User logged in', [], 200);
     }
 
     public function register($request = null)
     {
+        // ...existing code...
         $data = json_decode(file_get_contents("php://input"), true);
         if (!$data || !is_array($data)) {
-            ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
+            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         
-        // Updated: Remove NullLogger from Validator constructor.
-        $validator = new Validator();
         $rules = [
             'name'             => 'required',
             'email'            => 'required|email',
             'password'         => 'required',
             'confirm_password' => 'required'
         ];
-        if (!$validator->validate($data, $rules)) {
-            ApiHelper::sendJsonResponse('error', 'Validation failed', $validator->errors(), 400);
+        if (!$this->validator->validate($data, $rules)) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
         }
         if ($data['password'] !== $data['confirm_password']) {
-            ApiHelper::sendJsonResponse('error', 'Password and confirm password do not match', [], 400);
+            return ApiHelper::sendJsonResponse('error', 'Password and confirm password do not match', [], 400);
         }
         
         $registrationData = [
@@ -107,8 +116,19 @@ class AuthController extends Controller
             'address'  => $data['address']  ?? null
         ];
 
-        $result = $this->authService->registerUser($registrationData);
-        ApiHelper::sendJsonResponse('success', 'User registered', $result, 201);
+        try {
+            $result = $this->authService->registerUser($registrationData);
+        } catch (Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            // Additional audit logging if needed
+            $this->auditLogger->error("User registration failed", [
+                'error' => $e->getMessage(),
+                'email' => $data['email']
+            ]);
+            return; // ExceptionHandler is assumed to handle the response
+        }
+        $this->auditLogger->info("User registered", ['email' => $data['email']]);
+        return ApiHelper::sendJsonResponse('success', 'User registered', $result, 201);
     }
 
     public function resetPasswordRequest($request = null)
@@ -186,9 +206,11 @@ class AuthController extends Controller
         $_SESSION['last_activity'] = time();
     }
 
+    // Updated logging method with context details
     private function logAuthAttempt($status, $message)
     {
-        $logMessage = sprintf("[%s] %s: %s from IP: %s\n", date('Y-m-d H:i:s'), ucfirst($status), $message, $_SERVER['REMOTE_ADDR']);
-        file_put_contents(__DIR__ . '/../../logs/auth.log', $logMessage, FILE_APPEND);
+        $context = ['ip' => $_SERVER['REMOTE_ADDR'], 'time' => date('Y-m-d H:i:s')];
+        $logMessage = sprintf("%s: %s", ucfirst($status), $message);
+        $this->authLogger->info($logMessage, $context);
     }
 }

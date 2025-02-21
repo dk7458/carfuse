@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Helpers\DatabaseHelper; // new import
 use Psr\Log\LoggerInterface; // ensure LoggerInterface is imported
+use App\Handlers\ExceptionHandler;
 require_once __DIR__ . '/../../config/payu.php';
 /**
  * PayUService
@@ -15,20 +16,23 @@ require_once __DIR__ . '/../../config/payu.php';
  */
 class PayUService
 {
+    public const DEBUG_MODE = true;
     private string $merchantKey;
     private string $merchantSalt;
     private string $endpoint;
     private $db; // DatabaseHelper instance
     private LoggerInterface $logger; // injected logger
+    private ExceptionHandler $exceptionHandler;
 
     // Constructor updated to accept LoggerInterface
-    public function __construct(array $config, LoggerInterface $logger)
+    public function __construct(array $config, LoggerInterface $logger, ExceptionHandler $exceptionHandler)
     {
         $this->merchantKey = $config['merchant_key'];
         $this->merchantSalt = $config['merchant_salt'];
         $this->endpoint = $config['endpoint'];
         $this->db = DatabaseHelper::getInstance();
         $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     /**
@@ -59,6 +63,10 @@ class PayUService
             'service_provider' => 'payu_paisa'
         ];
 
+        if (self::DEBUG_MODE) {
+            $this->logger->info("[api] Initiating PayU payment", ['transactionId' => $transactionId, 'category' => 'api']);
+        }
+
         $response = Http::post("{$this->endpoint}/_payment", $params);
         throw_if($response->failed(), Exception::class, 'Payment API error');
         return [
@@ -80,6 +88,10 @@ class PayUService
             'command' => 'verify_payment',
             'var1' => $transactionId,
         ];
+
+        if (self::DEBUG_MODE) {
+            $this->logger->info("[api] Verifying PayU payment", ['transactionId' => $transactionId, 'category' => 'api']);
+        }
 
         $response = Http::post("{$this->endpoint}/payment/verify", $params);
         throw_if($response->failed(), Exception::class, 'Payment verification error');
@@ -114,13 +126,16 @@ class PayUService
                 'type'       => 'refund',
                 'status'     => 'completed'
             ]);
-            $this->logger->info("[PayUService] Refund logged for transaction {$transactionId}", ['category' => 'payment']);
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[db] Refund logged for transaction {$transactionId}", ['category' => 'db']);
+            }
             return [
                 'status' => 'success',
                 'data'   => $response->json()
             ];
         } catch (Exception $e) {
-            $this->logger->error("[PayUService] Refund processing error: " . $e->getMessage(), ['category' => 'payment']);
+            $this->logger->error("[payment] Refund processing error: " . $e->getMessage(), ['category' => 'system']);
+            $this->exceptionHandler->handleException($e);
             return [
                 'status' => 'error',
                 'message' => 'Refund processing failed'

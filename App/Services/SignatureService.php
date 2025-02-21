@@ -8,6 +8,7 @@ use Psr\Log\LoggerInterface;
 use App\Services\FileStorage;
 use App\Services\EncryptionService;
 use App\Helpers\DatabaseHelper;
+use App\Handlers\ExceptionHandler;
 
 /**
  * Signature Service
@@ -16,19 +17,22 @@ use App\Helpers\DatabaseHelper;
  */
 class SignatureService
 {
+    public const DEBUG_MODE = true;
     private LoggerInterface $logger;
     private $db;
     private string $apiEndpoint;
     private string $apiKey;
     private FileStorage $fileStorage;
     private EncryptionService $encryptionService;
+    private ExceptionHandler $exceptionHandler;
 
     public function __construct(
         LoggerInterface $logger,
         DatabaseHelper $db,
         array $config,
         FileStorage $fileStorage,
-        EncryptionService $encryptionService
+        EncryptionService $encryptionService,
+        ExceptionHandler $exceptionHandler
     ) {
         if (empty($config['api_endpoint']) || empty($config['api_key'])) {
             throw new Exception('AES API configuration is incomplete.');
@@ -40,6 +44,7 @@ class SignatureService
         $this->apiKey = $config['api_key'];
         $this->fileStorage = $fileStorage;
         $this->encryptionService = $encryptionService;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     /**
@@ -60,12 +65,17 @@ class SignatureService
                 'encrypted' => true,
                 'created_at'=> date('Y-m-d H:i:s'),
             ]);
-            $this->logger->info("[SignatureService] Signature record created for user {$userId}", ['category' => 'signature']);
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[db] Signature record created", ['userId' => $userId, 'storagePath' => $storagePath]);
+            }
         } catch (Exception $e) {
-            $this->logger->error("[SignatureService] Database error: " . $e->getMessage(), ['category' => 'db']);
+            $this->logger->error("[db] ❌ Database error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
-        $this->logger->info("[SignatureService] Signature uploaded for user {$userId} at {$storagePath}", ['category' => 'signature']);
+        if (self::DEBUG_MODE) {
+            $this->logger->info("[system] Signature uploaded", ['userId' => $userId, 'storagePath' => $storagePath]);
+        }
         return $storagePath;
     }
 
@@ -90,7 +100,9 @@ class SignatureService
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (Exception $e) {
-            $this->logAndThrow("Failed to send document for AES signing", $e);
+            $this->logger->error("[api] Failed to send document for AES signing: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            throw new Exception("Failed to send document for AES signing: " . $e->getMessage());
         }
     }
 
@@ -113,10 +125,13 @@ class SignatureService
             ]);
 
             $result = json_decode($response->getBody()->getContents(), true);
-            $this->logger->info("Signature verification", ['result' => $result]);
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[api] Signature verification", ['result' => $result]);
+            }
             return $result['verified'] ?? false;
         } catch (Exception $e) {
-            $this->logger->error("Failed to verify signature", ['error' => $e->getMessage()]);
+            $this->logger->error("[api] Failed to verify signature: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw new Exception("Failed to verify signature: " . $e->getMessage());
         }
     }
@@ -148,7 +163,9 @@ class SignatureService
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (Exception $e) {
-            $this->logAndThrow("Failed to check AES signature status", $e);
+            $this->logger->error("[api] Failed to check AES signature status: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            throw new Exception("Failed to check AES signature status: " . $e->getMessage());
         }
     }
 
@@ -166,7 +183,9 @@ class SignatureService
 
             return $response->getStatusCode() === 200;
         } catch (Exception $e) {
-            $this->logAndThrow("Failed to download AES signed document", $e);
+            $this->logger->error("[api] Failed to download AES signed document: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            throw new Exception("Failed to download AES signed document: " . $e->getMessage());
         }
     }
 

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Exception;
 use Psr\Log\LoggerInterface;
+use App\Handlers\ExceptionHandler;
 
 /**
  * Template Service
@@ -13,17 +14,20 @@ use Psr\Log\LoggerInterface;
  */
 class TemplateService
 {
+    public const DEBUG_MODE = true;
     private string $templateDirectory;
     private LoggerInterface $logger;
+    private ExceptionHandler $exceptionHandler;
 
     /**
      * Constructor
      *
      * @param LoggerInterface $logger The logger instance.
      * @param string $templateDirectory The directory where templates are stored.
+     * @param ExceptionHandler $exceptionHandler The exception handler instance.
      * @throws Exception If the directory is invalid or not readable.
      */
-    public function __construct(LoggerInterface $logger, string $templateDirectory)
+    public function __construct(LoggerInterface $logger, string $templateDirectory, ExceptionHandler $exceptionHandler)
     {
         if (!is_dir($templateDirectory) || !is_readable($templateDirectory)) {
             throw new \InvalidArgumentException("Invalid template directory: $templateDirectory");
@@ -31,6 +35,7 @@ class TemplateService
 
         $this->templateDirectory = rtrim($templateDirectory, DIRECTORY_SEPARATOR);
         $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     /**
@@ -61,10 +66,13 @@ class TemplateService
             }
 
             $content = file_get_contents($filePath);
-            $this->logger->info("[TemplateService] Loaded template: {$templateName}");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[system] Loaded template", ['template' => $templateName]);
+            }
             return $content;
         } catch (\Exception $e) {
-            $this->logger->error("[TemplateService] Error loading template: " . $e->getMessage());
+            $this->logger->error("[system] ❌ Error loading template: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -86,7 +94,7 @@ class TemplateService
             $template = str_replace($placeholder, htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'), $template);
         }
 
-        $this->logger->info("[TemplateService] Rendered template: {$templateName}");
+        $this->logger->info("Rendered template", ['template' => $templateName]);
         return $template;
     }
 
@@ -107,10 +115,10 @@ class TemplateService
                 throw new Exception("Failed to save template: $templateName");
             }
 
-            $this->logger->info("[TemplateService] Saved template: {$templateName}");
+            $this->logger->info("Saved template", ['template' => $templateName]);
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("[TemplateService] Error saving template: " . $e->getMessage());
+            $this->logger->error("Error saving template", ['template' => $templateName, 'error' => $e->getMessage()]);
             throw $e;
         }
     }
@@ -135,10 +143,10 @@ class TemplateService
                 throw new Exception("Failed to delete template: $templateName");
             }
 
-            $this->logger->info("[TemplateService] Deleted template: {$templateName}");
+            $this->logger->info("Deleted template", ['template' => $templateName]);
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("[TemplateService] Error deleting template: " . $e->getMessage());
+            $this->logger->error("Error deleting template", ['template' => $templateName, 'error' => $e->getMessage()]);
             throw $e;
         }
     }

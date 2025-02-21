@@ -4,16 +4,20 @@ namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
+use App\Handlers\ExceptionHandler;
 
 class PaymentService
 {
+    public const DEBUG_MODE = true;
     private LoggerInterface $logger;
     private $db;
+    private ExceptionHandler $exceptionHandler;
 
-    public function __construct(LoggerInterface $logger, DatabaseHelper $db)
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
         $this->logger = $logger;
         $this->db = $db;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     public function processPayment($user, array $paymentData)
@@ -59,10 +63,13 @@ class PaymentService
                     'created_at' => now()
                 ]);
             });
-            $this->logger->info("[PaymentService] Payment processed for booking {$paymentData['bookingId']}", ['category' => 'payment']);
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[payment] Payment processed for booking {$paymentData['bookingId']}", ['category' => 'system']);
+            }
             return ['status' => 'success', 'message' => 'Payment processed successfully'];
         } catch (\Exception $e) {
-            $this->logger->error("[PaymentService] Database error: " . $e->getMessage(), ['category' => 'db']);
+            $this->logger->error("[db] Database error: " . $e->getMessage(), ['category' => 'db']);
+            $this->exceptionHandler->handleException($e);
             return ['status' => 'error', 'message' => 'Payment processing failed'];
         }
     }
@@ -95,10 +102,13 @@ class PaymentService
                     'created_at' => now()
                 ]);
             });
-            $this->logger->info("[PaymentService] Refund processed for booking {$bookingId}");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[payment] Refund processed for booking {$bookingId}", ['category' => 'system']);
+            }
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("[PaymentService] Database error: " . $e->getMessage());
+            $this->logger->error("[db] Database error: " . $e->getMessage(), ['category' => 'db']);
+            $this->exceptionHandler->handleException($e);
             return false;
         }
     }

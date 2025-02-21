@@ -5,27 +5,27 @@ namespace App\Controllers;
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\User;
-// Removed: use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use PDF;
+use Psr\Log\LoggerInterface;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
 class ReportController extends Controller
 {
     private ReportService $reportService;
-    // Removed: private Validator $validator;
     private NotificationService $notificationService;
-    // Removed: private LoggerInterface $logger;
+    private LoggerInterface $logger;
 
     public function __construct(
         ReportService $reportService,
         /* Removed Validator */ $validator,
         NotificationService $notificationService,
-        /* Removed LoggerInterface */ $logger
+        LoggerInterface $reportLogger
     ) {
         $this->reportService = $reportService;
         $this->notificationService = $notificationService;
+        $this->logger = $reportLogger;
     }
 
     /**
@@ -38,8 +38,8 @@ class ReportController extends Controller
             http_response_code(200);
             echo json_encode(['status' => 'success', 'message' => 'Report dashboard loaded', 'data' => $data]);
         } catch (\Exception $e) {
-            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
-            error_log("Error: Failed to load admin report dashboard, error: " . $e->getMessage());
+            $this->logger->error(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            $this->logger->error("Error: Failed to load admin report dashboard, error: " . $e->getMessage());
             http_response_code(500);
             echo json_encode(['status' => 'error', 'message' => 'Failed to load report dashboard', 'data' => []]);
         }
@@ -112,8 +112,8 @@ class ReportController extends Controller
             http_response_code(200);
             echo json_encode(['status' => 'success', 'message' => 'User report dashboard loaded', 'data' => $data]);
         } catch (\Exception $e) {
-            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
-            error_log("Error: Failed to load user report dashboard, error: " . $e->getMessage());
+            $this->logger->error(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            $this->logger->error("Error: Failed to load user report dashboard, error: " . $e->getMessage());
             http_response_code(500);
             echo json_encode(['status' => 'error', 'message' => 'Failed to load report dashboard', 'data' => []]);
         }
@@ -193,8 +193,8 @@ class ReportController extends Controller
             readfile($filePath);
             exit;
         } catch (\Exception $e) {
-            error_log(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
-            error_log("Error: Failed to download report, error: " . $e->getMessage());
+            $this->logger->error(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            $this->logger->error("Error: Failed to download report, error: " . $e->getMessage());
             http_response_code(500);
             echo json_encode(['status' => 'error', 'message' => 'Failed to download report', 'data' => []]);
         }

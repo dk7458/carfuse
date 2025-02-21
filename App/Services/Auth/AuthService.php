@@ -9,73 +9,83 @@ use App\Helpers\ExceptionHandler;
 use Firebase\JWT\Key;
 use Exception;
 use App\Helpers\SecurityHelper;
-use function getLogger;
+use Psr\Log\LoggerInterface;
+use App\Helpers\ApiHelper;
 
 class AuthService
 {
-    private $tokenService;
-    private $db;
-    private $encryptionConfig;
+    public const DEBUG_MODE = true;
+
+    private DatabaseHelper $db;
+    private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
+    private LoggerInterface $authLogger;
+    private LoggerInterface $auditLogger;
 
-    public function __construct()
-    {
-        $configPath = __DIR__ . '/../../../config/encryption.php';
-        if (!file_exists($configPath)) {
-            throw new Exception("Encryption configuration missing.");
-        }
-
-        $encryptionConfig = require $configPath;
-
-        if (!isset($encryptionConfig['jwt_secret'], $encryptionConfig['jwt_refresh_secret'])) {
-            throw new Exception("JWT configuration missing in encryption.php.");
-        }
-
-        $this->tokenService = new TokenService(
-            $encryptionConfig['jwt_secret'],
-            $encryptionConfig['jwt_refresh_secret'],
-            // Use category-based logging
-            getLogger('auth')
-        );
-        $this->db = DatabaseHelper::getInstance();
-        $this->exceptionHandler = new ExceptionHandler(getLogger('auth'));
+    // NEW: Constructor with dependency injection
+    public function __construct(
+        DatabaseHelper $db,
+        TokenService $tokenService,
+        ExceptionHandler $exceptionHandler,
+        LoggerInterface $authLogger,
+        LoggerInterface $auditLogger
+    ) {
+        $this->db = $db;
+        $this->tokenService = $tokenService;
+        $this->exceptionHandler = $exceptionHandler;
+        $this->authLogger = $authLogger;
+        $this->auditLogger = $auditLogger;
     }
 
     public function login($email, $password)
     {
-        $user = User::where('email', $email)->first();
-        if (!$user || !password_verify($password, $user->password_hash)) {
-            getLogger('auth')->warning("[Auth] Failed login attempt for email: {$email}");
-            throw new Exception("Invalid credentials");
+        try {
+            // Use injected DatabaseHelper to query the user
+            $user = $this->db->table('users')->where('email', $email)->first();
+            if (!$user || !password_verify($password, $user->password_hash)) {
+                $this->authLogger->warning("Authentication failed", ['email' => $email]);
+                throw new Exception("Invalid credentials");
+            }
+            if (self::DEBUG_MODE) {
+                $this->authLogger->info("[auth] User authenticated", ['userId' => $user->id, 'email' => $user->email]);
+            }
+
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            session_regenerate_id(true);
+            $_SESSION['user_id']   = $user->id;
+            $_SESSION['user_role'] = $user->role ?? 'user';
+
+            $token = $this->tokenService->generateToken($user);
+            $refreshToken = $this->tokenService->generateRefreshToken($user);
+
+            return [
+                'token'         => $token,
+                'refresh_token' => $refreshToken
+            ];
+        } catch (Exception $e) {
+            $this->authLogger->error("[auth] ❌ Credential error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            // Optionally use ApiHelper to send an error response
+            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 401);
         }
-
-        if(session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-        session_regenerate_id(true);
-        $_SESSION['user_id']   = $user->id;
-        $_SESSION['user_role'] = $user->role ?? 'user';
-
-        $token = $this->tokenService->generateToken($user);
-        $refreshToken = $this->tokenService->generateRefreshToken($user);
-
-        return [
-            'token'         => $token,
-            'refresh_token' => $refreshToken
-        ];
     }
 
     public function registerUser(array $data)
     {
         try {
+            // Using injected DatabaseHelper or User model as preferred
             $user = User::create($data);
             if (!$user) {
                 throw new Exception("User registration failed");
             }
-            getLogger('auth')->info("[Auth] ✅ User successfully registered (Email: {$data['email']})");
-            return $user;
+            $this->authLogger->info("User successfully registered", ['email' => $data['email'], 'userId' => $user->id]);
+            // Standardize API response via ApiHelper
+            ApiHelper::sendJsonResponse('success', 'User registered', ['user_id' => $user->id], 201);
         } catch (Exception $e) {
             $this->exceptionHandler->handleException($e);
+            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 500);
         }
     }
 
@@ -83,7 +93,7 @@ class AuthService
     {
         $user = User::where('email', $email)->first();
         if (!$user) {
-            getLogger('auth')->error("[Auth] Password reset failed: email not found ({$email})");
+            $this->authLogger->error("Password reset failed: email not found", ['email' => $email]);
             throw new Exception("Email not found.");
         }
 
@@ -137,6 +147,7 @@ class AuthService
             setcookie(session_name(), '', time() - 42000, '/');
         }
         session_destroy();
+        $this->auditLogger->info("User logged out", ['session_id' => session_id()]);
     }
 }
 ?>

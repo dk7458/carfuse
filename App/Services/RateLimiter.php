@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Psr\Log\LoggerInterface;
+use App\Handlers\ExceptionHandler;
 
 /**
  * Rate Limiter Service
@@ -11,11 +12,14 @@ use Psr\Log\LoggerInterface;
  */
 class RateLimiter
 {
+    public const DEBUG_MODE = true;
     private LoggerInterface $logger;
+    private ExceptionHandler $exceptionHandler;
 
-    public function __construct(LoggerInterface $logger)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler)
     {
         $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     public function isRateLimited(string $ip): bool
@@ -28,7 +32,9 @@ class RateLimiter
         }
         $attempts = $_SESSION['rate_limit'][$ip] ?? 0;
         if ($attempts >= 5) {
-            $this->logger->warning("[RateLimit] Rate limit exceeded for IP: {$ip}", ['category' => 'auth']);
+            if (self::DEBUG_MODE) {
+                $this->logger->warning("[security] Rate limit exceeded for IP: {$ip}", ['category' => 'security']);
+            }
             return true;
         }
         return false;
@@ -43,6 +49,8 @@ class RateLimiter
             $_SESSION['rate_limit'] = [];
         }
         $_SESSION['rate_limit'][$ip] = ($_SESSION['rate_limit'][$ip] ?? 0) + 1;
-        $this->logger->info("[RateLimit] Recorded failed attempt for IP: {$ip}", ['category' => 'auth']);
+        if (self::DEBUG_MODE) {
+            $this->logger->info("[security] Recorded failed attempt for IP: {$ip}", ['category' => 'security']);
+        }
     }
 }

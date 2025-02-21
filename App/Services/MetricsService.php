@@ -4,16 +4,20 @@ namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
+use App\Handlers\ExceptionHandler;
 use Exception;
 
 class MetricsService
 {
+    public const DEBUG_MODE = true;
     private $db;
     private LoggerInterface $logger;
+    private ExceptionHandler $exceptionHandler;
 
-    public function __construct(LoggerInterface $logger, DatabaseHelper $db)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
     {
         $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
         $this->db = $db;
     }
 
@@ -41,10 +45,13 @@ class MetricsService
                 'total_refunds'       => $totalRefunds,
             ];
             $metrics['net_revenue'] = $totalRevenue - $totalRefunds;
-            $this->logger->info("[MetricsService] Dashboard metrics retrieved successfully", ['category' => 'metrics']);
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Metrics] Dashboard metrics retrieved successfully");
+            }
             return $metrics;
         } catch (Exception $e) {
-            $this->logger->error("[MetricsService] Database error while retrieving metrics: " . $e->getMessage(), ['category' => 'db']);
+            $this->logger->error("[DB] ❌ MetricsService error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             return [];
         }
     }

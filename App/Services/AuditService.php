@@ -6,16 +6,20 @@ use App\Models\AuditLog;
 use Exception;
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
+use App\Handlers\ExceptionHandler;
 
 class AuditService
 {
+    public const DEBUG_MODE = true;
     private $db;
-    private $logger;
+    private LoggerInterface $logger;
+    private ExceptionHandler $exceptionHandler;
 
-    public function __construct()
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
     {
-        $this->db = DatabaseHelper::getInstance();
-        $this->logger = getLogger('audit.log');
+        $this->db = $db;
+        $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     /**
@@ -37,9 +41,12 @@ class AuditService
                 'ip_address' => $ipAddress,
                 'created_at' => now()
             ]);
-            $this->logger->info("✅ [AuditService] Logged action: {$action}");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Audit] Logged action: {$action}");
+            }
         } catch (Exception $e) {
-            $this->logger->error("❌ [AuditService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Audit] ❌ log error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw new Exception('Failed to log action: ' . $e->getMessage());
         }
     }
@@ -68,7 +75,8 @@ class AuditService
             }
             return $query->orderBy('created_at', 'desc')->paginate(10);
         } catch (Exception $e) {
-            $this->logger->error("❌ [AuditService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Audit] ❌ getLogs error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -85,7 +93,8 @@ class AuditService
             }
             return $log;
         } catch (Exception $e) {
-            $this->logger->error("❌ [AuditService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Audit] ❌ getLogById error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -113,10 +122,13 @@ class AuditService
                 $query->where('created_at', '<=', $filters['end_date']);
             }
             $deleted = $query->delete();
-            $this->logger->info("✅ [AuditService] Deleted logs with filters: " . json_encode($filters));
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Audit] Deleted logs with filters: " . json_encode($filters));
+            }
             return $deleted;
         } catch (Exception $e) {
-            $this->logger->error("❌ [AuditService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Audit] ❌ deleteLogs error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw new Exception('Failed to delete logs: ' . $e->getMessage());
         }
     }

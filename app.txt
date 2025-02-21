@@ -6,15 +6,15 @@ namespace App\Controllers;
 use App\Models\User;
 use App\Services\UserService;
 use App\Services\NotificationService;
-// Removed: use App\Services\Validator;
-// Removed: use Illuminate\Support\Facades\Auth;
-// Removed: use Illuminate\Support\Facades\Log;
 use App\Services\RateLimiter;
 use App\Services\AuditService;
 use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Routing\Controller;
+use App\Services\Auth\AuthService;
+use App\Helpers\ExceptionHandler;
+use function getLogger;
 
 /**
  * User Management Controller
@@ -24,22 +24,113 @@ use Illuminate\Routing\Controller;
 class UserController extends Controller
 {
     private UserService $userService;
-    // private LoggerInterface $logger; // Using native error_log()
-    // private Validator $validator;
     private RateLimiter $rateLimiter;
     private AuditService $auditService;
     private NotificationService $notificationService;
+    private AuthService $authService;
+    private ExceptionHandler $exceptionHandler;
 
     public function __construct(
-        /* Removed LoggerInterface, Validator, ... */
         RateLimiter $rateLimiter,
         AuditService $auditService,
-        NotificationService $notificationService
+        NotificationService $notificationService,
+        AuthService $authService
     ) {
         $this->rateLimiter = $rateLimiter;
         $this->auditService = $auditService;
         $this->notificationService = $notificationService;
         $this->userService = new UserService();
+        $this->authService = $authService;
+        $this->exceptionHandler = new ExceptionHandler(getLogger('auth'));
+    }
+
+    /**
+     * Register a new user.
+     */
+    public function registerUser()
+    {
+        // Assume POST request with registration data
+        $data = $_POST;
+        try {
+            // Move user registration logic here (bypassing AuthService)
+            $user = User::create($data);
+            if (!$user) {
+                throw new \Exception("User registration failed");
+            }
+            getLogger('auth')->info("[UserController] User registered successfully (Email: {$data['email']})");
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'success', 'message' => 'User registered successfully']);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * Log in an existing user.
+     */
+    public function login()
+    {
+        $email = $_POST['email'] ?? null;
+        $password = $_POST['password'] ?? null;
+        try {
+            if (!$email || !$password) {
+                throw new \Exception("Email and password required");
+            }
+            // Fetch user manually instead of within AuthService
+            $user = User::where('email', $email)->first();
+            if (!$user || !password_verify($password, $user->password_hash)) {
+                throw new \Exception("Invalid credentials");
+            }
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            session_regenerate_id(true);
+            $_SESSION['user_id']   = $user->id;
+            $_SESSION['user_role'] = $user->role ?? 'user';
+            // Delegate token generation to AuthService
+            $token = $this->authService->generateToken($user);
+            $refreshToken = $this->authService->generateRefreshToken($user);
+            getLogger('auth')->info("[UserController] User logged in: {$email}");
+            header('Content-Type: application/json');
+            echo json_encode([
+                'status'        => 'success',
+                'token'         => $token,
+                'refresh_token' => $refreshToken
+            ]);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * Log out the current user.
+     */
+    public function logout()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            setcookie(session_name(), '', time() - 42000, '/');
+        }
+        session_destroy();
+        getLogger('auth')->info("[UserController] User logged out.");
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'success', 'message' => 'Logged out successfully']);
+    }
+
+    /**
+     * Retrieve current user profile.
+     */
+    public function getUserProfile()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $user = User::find($_SESSION['user_id'] ?? null);
+        header('Content-Type: application/json');
+        echo json_encode($user);
     }
 
     /**
@@ -4459,6 +4550,7 @@ namespace App\Services\Auth;
 use App\Models\User;
 use App\Helpers\DatabaseHelper;
 use Firebase\JWT\JWT;
+use App\Helpers\ExceptionHandler;
 use Firebase\JWT\Key;
 use Exception;
 use App\Helpers\SecurityHelper;
@@ -4468,8 +4560,9 @@ class AuthService
 {
     private $tokenService;
     private $db;
+    private $encryptionConfig;
+    private ExceptionHandler $exceptionHandler;
 
-    // Removed logger property and dependency injection.
     public function __construct()
     {
         $configPath = __DIR__ . '/../../../config/encryption.php';
@@ -4490,6 +4583,7 @@ class AuthService
             getLogger('auth')
         );
         $this->db = DatabaseHelper::getInstance();
+        $this->exceptionHandler = new ExceptionHandler(getLogger('auth'));
     }
 
     public function login($email, $password)
@@ -4518,12 +4612,16 @@ class AuthService
 
     public function registerUser(array $data)
     {
-        $user = User::create($data);
-        if (!$user) {
-            throw new Exception("User registration failed");
+        try {
+            $user = User::create($data);
+            if (!$user) {
+                throw new Exception("User registration failed");
+            }
+            getLogger('auth')->info("[Auth] ✅ User successfully registered (Email: {$data['email']})");
+            return $user;
+        } catch (Exception $e) {
+            $this->exceptionHandler->handleException($e);
         }
-        getLogger('auth')->info("[Auth] ✅ User successfully registered (Email: {$data['email']})");
-        return $user;
     }
 
     public function resetPasswordRequest($email)
@@ -4546,8 +4644,7 @@ class AuthService
             ]);
             getLogger('auth')->info("[Auth] Password reset requested for {$email}");
         } catch (Exception $e) {
-            getLogger('auth')->error("[Auth] Failed to insert password reset: " . $e->getMessage());
-            throw $e;
+            $this->exceptionHandler->handleException($e);
         }
 
         // Send email (mock implementation)
@@ -4562,7 +4659,7 @@ class AuthService
             $decoded = JWT::decode($token, new Key($this->tokenService->jwtSecret, 'HS256'));
             return (array)$decoded;
         } catch (Exception $e) {
-            getLogger('auth')->error("[Auth] Invalid token: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             return false;
         }
     }
@@ -6750,7 +6847,66 @@ if (!SecurityHelper::startSecureSession()) {
     SecurityHelper::securityLog(null, 'Critical: Failed to initialize secure session', 'critical');
 }
 ?>
-=== App/Helpers/ApiHelper.php ===
+=== App/Helpers/ExceptionHandler.php ===
+<?php
+namespace App\Helpers;
+
+use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
+use PDOException;
+use Exception;
+use Psr\Log\LoggerInterface;
+
+class ExceptionHandler
+{
+    private LoggerInterface $logger;
+
+    public function __construct(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+    }
+
+    /**
+     * Handle exceptions centrally.
+     */
+    public function handleException(Exception $e): void
+    {
+        // Handle database-related errors
+        if ($e instanceof UniqueConstraintViolationException || $e instanceof PDOException) {
+            $this->logger->error("❌ Database Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            http_response_code(400);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'A database error occurred.',
+                'error'   => $e->getMessage()
+            ]);
+            exit();
+        }
+
+        // Handle general query exceptions
+        if ($e instanceof QueryException) {
+            $this->logger->error("❌ Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            http_response_code(400);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'A query error occurred.',
+                'error'   => $e->getMessage()
+            ]);
+            exit();
+        }
+
+        // Handle all other errors
+        $this->logger->error("❌ Application Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+        http_response_code(500);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'An unexpected error occurred.',
+            'error'   => $e->getMessage()
+        ]);
+        exit();
+    }
+}
+?>=== App/Helpers/ApiHelper.php ===
 <?php
 
 namespace App\Helpers;

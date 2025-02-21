@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
+use Psr\Log\LoggerInterface;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -16,17 +17,20 @@ class DashboardController extends Controller
     private StatisticsService $statisticsService;
     private NotificationService $notificationService;
     private UserService $userService;
+    private LoggerInterface $logger;
 
     public function __construct(
         BookingService $bookingService,
         StatisticsService $statisticsService,
         NotificationService $notificationService,
-        UserService $userService
+        UserService $userService,
+        LoggerInterface $userLogger
     ) {
         $this->bookingService = $bookingService;
         $this->statisticsService = $statisticsService;
         $this->notificationService = $notificationService;
         $this->userService = $userService;
+        $this->logger = $userLogger;
     }
 
     /**
@@ -47,7 +51,7 @@ class DashboardController extends Controller
             });
             view('dashboard/user_dashboard', ['user' => $user, 'statistics' => $statistics]);
         } catch (\Exception $e) {
-            error_log('Failed to load user dashboard: '.$e->getMessage());
+            $this->logger->error('Failed to load user dashboard: ' . $e->getMessage());
             abort(500, 'Error loading dashboard');
         }
     }
@@ -66,7 +70,7 @@ class DashboardController extends Controller
                 'data'    => ['bookings' => $bookings]
             ]);
         } catch (\Exception $e) {
-            error_log('Failed to fetch bookings: '.$e->getMessage());
+            $this->logger->error('Failed to fetch bookings: ' . $e->getMessage());
             abort(500, 'Failed to fetch bookings');
         }
     }
@@ -91,7 +95,7 @@ class DashboardController extends Controller
                 'data'    => $stats
             ]);
         } catch (\Exception $e) {
-            error_log('Failed to fetch statistics: '.$e->getMessage());
+            $this->logger->error('Failed to fetch statistics: ' . $e->getMessage());
             abort(500, 'Failed to fetch statistics');
         }
     }
@@ -112,7 +116,7 @@ class DashboardController extends Controller
                 'data'    => ['notifications' => $notifications]
             ]);
         } catch (\Exception $e) {
-            error_log('Failed to fetch notifications: '.$e->getMessage());
+            $this->logger->error('Failed to fetch notifications: ' . $e->getMessage());
             abort(500, 'Failed to fetch notifications');
         }
     }
@@ -131,7 +135,7 @@ class DashboardController extends Controller
                 'data'    => ['profile' => $profile]
             ]);
         } catch (\Exception $e) {
-            error_log('Failed to fetch user profile: '.$e->getMessage());
+            $this->logger->error('Failed to fetch user profile: ' . $e->getMessage());
             abort(500, 'Failed to fetch user profile');
         }
     }

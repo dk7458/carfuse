@@ -9,11 +9,18 @@ use Psr\Log\LoggerInterface;
 
 class ExceptionHandler
 {
-    private LoggerInterface $logger;
+    private LoggerInterface $dbLogger;
+    private LoggerInterface $authLogger;
+    private LoggerInterface $systemLogger;
 
-    public function __construct(LoggerInterface $logger)
-    {
-        $this->logger = $logger;
+    public function __construct(
+        LoggerInterface $dbLogger,
+        LoggerInterface $authLogger,
+        LoggerInterface $systemLogger
+    ) {
+        $this->dbLogger = $dbLogger;
+        $this->authLogger = $authLogger;
+        $this->systemLogger = $systemLogger;
     }
 
     /**
@@ -21,38 +28,26 @@ class ExceptionHandler
      */
     public function handleException(Exception $e): void
     {
-        // Handle database-related errors
+        // Database-related exceptions
         if ($e instanceof UniqueConstraintViolationException || $e instanceof PDOException) {
-            $this->logger->error("❌ Database Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            http_response_code(400);
-            echo json_encode([
-                'status'  => 'error',
-                'message' => 'A database error occurred.',
-                'error'   => $e->getMessage()
-            ]);
-            exit();
+            $this->dbLogger->error("❌ Database Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            ApiHelper::sendJsonResponse('error', 'Database error', ['error' => $e->getMessage()], 400);
         }
-
-        // Handle general query exceptions
-        if ($e instanceof QueryException) {
-            $this->logger->error("❌ Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            http_response_code(400);
-            echo json_encode([
-                'status'  => 'error',
-                'message' => 'A query error occurred.',
-                'error'   => $e->getMessage()
-            ]);
-            exit();
+        // Query exceptions
+        elseif ($e instanceof QueryException) {
+            $this->dbLogger->error("❌ Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            ApiHelper::sendJsonResponse('error', 'Query error', ['error' => $e->getMessage()], 400);
         }
-
-        // Handle all other errors
-        $this->logger->error("❌ Application Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-        http_response_code(500);
-        echo json_encode([
-            'status'  => 'error',
-            'message' => 'An unexpected error occurred.',
-            'error'   => $e->getMessage()
-        ]);
+        // Authentication exceptions (if applicable)
+        // elseif ($e instanceof AuthenticationException) {
+        //     $this->authLogger->error("❌ Authentication Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+        //     ApiHelper::sendJsonResponse('error', 'Authentication error', ['error' => $e->getMessage()], 401);
+        // }
+        // Other exceptions
+        else {
+            $this->systemLogger->error("❌ System Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            ApiHelper::sendJsonResponse('error', 'Unexpected error occurred', ['error' => $e->getMessage()], 500);
+        }
         exit();
     }
 }

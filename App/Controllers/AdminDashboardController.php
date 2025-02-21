@@ -7,11 +7,19 @@ use App\Models\Booking;
 use App\Models\Payment;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Psr\Log\LoggerInterface;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
 class AdminDashboardController
 {
+    private LoggerInterface $logger;
+
+    public function __construct(LoggerInterface $adminLogger)
+    {
+        $this->logger = $adminLogger;
+    }
+
     public function index(): void
     {
         try {
@@ -34,7 +42,7 @@ class AdminDashboardController
             extract(compact('metrics', 'recentBookings'));
             include BASE_PATH . '/public/views/admin/dashboard.php';
         } catch (\Exception $e) {
-            error_log("DASHBOARD ERROR: " . $e->getMessage());
+            $this->logger->error("DASHBOARD ERROR: " . $e->getMessage());
             http_response_code(500);
             echo 'Error loading the dashboard. Please try again later.';
         }
@@ -72,7 +80,7 @@ class AdminDashboardController
             ]);
             exit;
         } catch (\Exception $e) {
-            error_log("DASHBOARD ERROR: " . $e->getMessage());
+            $this->logger->error("DASHBOARD ERROR: " . $e->getMessage());
             http_response_code(500);
             echo json_encode([
                 'status'  => 'error',

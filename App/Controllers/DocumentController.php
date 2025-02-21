@@ -24,12 +24,12 @@ class DocumentController extends Controller
         DocumentService $documentService,
         Validator $validator,
         AuditService $auditService,
-        LoggerInterface $logger
+        LoggerInterface $documentLogger
     ) {
         $this->documentService = $documentService;
         $this->validator = $validator;
         $this->auditService = $auditService;
-        $this->logger = $logger;
+        $this->logger = $documentLogger;
     }
     
     /**
@@ -62,7 +62,7 @@ class DocumentController extends Controller
             ]);
             return $this->jsonResponse(['status' => 'success', 'message' => 'Template uploaded successfully', 'template_id' => $template->id]);
         } catch (\Exception $e) {
-            error_log('Failed to upload template: '.$e->getMessage());
+            $this->logger->error('Failed to upload template: ' . $e->getMessage());
             return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to upload template']);
         }
     }
@@ -83,7 +83,7 @@ class DocumentController extends Controller
             ]);
             return $this->jsonResponse(['status' => 'success', 'message' => 'Contract generated successfully', 'contract_path' => $contractPath]);
         } catch (\Exception $e) {
-            error_log('Failed to generate contract: '.$e->getMessage());
+            $this->logger->error('Failed to generate contract: ' . $e->getMessage());
             return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to generate contract']);
         }
     }
@@ -113,7 +113,7 @@ class DocumentController extends Controller
 
             return $this->jsonResponse(['status' => 'success', 'message' => 'T&C document uploaded successfully']);
         } catch (\Exception $e) {
-            error_log('Failed to upload T&C document: '.$e->getMessage());
+            $this->logger->error('Failed to upload T&C document: ' . $e->getMessage());
             return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to upload T&C document']);
         }
     }
@@ -135,7 +135,7 @@ class DocumentController extends Controller
 
             return ['status' => 'success', 'message' => 'Invoice generated successfully', 'invoice_path' => $invoicePath];
         } catch (\Exception $e) {
-            error_log('Failed to generate invoice: '.$e->getMessage());
+            $this->logger->error('Failed to generate invoice: ' . $e->getMessage());
             return ['status' => 'error', 'message' => 'Failed to generate invoice'];
         }
     }
@@ -157,7 +157,7 @@ class DocumentController extends Controller
 
             return ['status' => 'success', 'message' => 'Document deleted successfully'];
         } catch (\Exception $e) {
-            error_log('Failed to delete document: '.$e->getMessage());
+            $this->logger->error('Failed to delete document: ' . $e->getMessage());
             return ['status' => 'error', 'message' => 'Failed to delete document'];
         }
     }

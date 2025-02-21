@@ -2,28 +2,28 @@
 
 namespace App\Services;
 
-use App\Helpers\DatabaseHelper; // new import
+use App\Helpers\DatabaseHelper;
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\User;
 use Dompdf\Dompdf;
 use Psr\Log\LoggerInterface;
+use App\Handlers\ExceptionHandler;
 
 class ReportService
 {
-    private $db;
+    public const DEBUG_MODE = true;
+    private DatabaseHelper $db;
     private LoggerInterface $logger;
+    private ExceptionHandler $exceptionHandler;
 
-    // Constructor updated to initialize DatabaseHelper and Logger.
-    public function __construct(LoggerInterface $logger, DatabaseHelper $db)
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
         $this->logger = $logger;
         $this->db = $db;
+        $this->exceptionHandler = $exceptionHandler;
     }    
 
-    /**
-     * Generate a report for admin
-     */
     public function generateReport(string $reportType, array $dateRange, string $format, array $filters = []): string
     {
         $start = $dateRange['start'];
@@ -37,9 +37,6 @@ class ReportService
         return $this->exportReport($data, "{$reportType}_" . date('YmdHis'), $format);
     }
 
-    /**
-     * Generate a user-specific report
-     */
     public function generateUserReport(int $userId, string $reportType, array $dateRange, string $format): string
     {
         $start = $dateRange['start'];
@@ -59,9 +56,6 @@ class ReportService
         return $this->exportReport($data, "{$reportType}_user_{$userId}", $format);
     }
 
-    /**
-     * Fetch booking report data
-     */
     private function getBookingReportData(array $dateRange, array $filters): array
     {
         try {
@@ -69,17 +63,17 @@ class ReportService
             if (!empty($filters['status'])) {
                 $query->where('status', $filters['status']);
             }
-            $this->logger->info("[ReportService] Fetched booking report data", ['category' => 'report']);
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[db] Fetched booking report data", ['category' => 'report']);
+            }
             return $query->get();
         } catch (\Exception $e) {
-            $this->logger->error("[ReportService] Database error (booking): " . $e->getMessage(), ['category' => 'db']);
+            $this->logger->error("[db] Database error (booking): " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
 
-    /**
-     * Fetch payment report data
-     */
     private function getPaymentReportData(array $dateRange, array $filters): array
     {
         try {
@@ -87,40 +81,39 @@ class ReportService
             if (!empty($filters['type'])) {
                 $query->where('type', $filters['type']);
             }
-            $this->logger->info("[ReportService] Fetched payment report data");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[db] Fetched payment report data", ['category' => 'report']);
+            }
             return $query->get();
         } catch (\Exception $e) {
-            $this->logger->error("[ReportService] Database error (payments): " . $e->getMessage());
+            $this->logger->error("[db] Database error (payments): " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
 
-    /**
-     * Fetch user report data
-     */
     private function getUserReportData(array $dateRange, array $filters): array
     {
         try {
             $data = $this->db->table('users')
                          ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
                          ->get();
-            $this->logger->info("[ReportService] Fetched user report data");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[db] Fetched user report data");
+            }
             return $data;
         } catch (\Exception $e) {
-            $this->logger->error("[ReportService] Database error (users): " . $e->getMessage());
+            $this->logger->error("[db] Database error (users): " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
 
-    /**
-     * Export the report data
-     */
     private function exportReport(array $data, string $reportName, string $format): string
     {
         $filePath = __DIR__ . "/../../storage/reports/{$reportName}_" . date('YmdHis') . ".{$format}";
 
         if ($format === 'csv') {
-            // Placeholder: In a Laravel app, you might use Maatwebsite\Excel here.
             $file = fopen($filePath, 'w');
             if (!empty($data)) {
                 fputcsv($file, array_keys($data[0])); // headers
@@ -130,7 +123,6 @@ class ReportService
             }
             fclose($file);
         } elseif ($format === 'pdf') {
-            // Placeholder: In a Laravel app, you might use Dompdf integration.
             $dompdf = new Dompdf();
             $html = '<table border="1"><tr>';
             if (!empty($data)) {
@@ -153,7 +145,9 @@ class ReportService
         } else {
             throw new \InvalidArgumentException("Unsupported format: $format");
         }
-        $this->logger->info("[ReportService] Exported report: {$filePath}");
+        if (self::DEBUG_MODE) {
+            $this->logger->info("[system] Exported report: {$filePath}");
+        }
         return $filePath;
     }
 }

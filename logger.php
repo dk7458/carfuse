@@ -51,16 +51,12 @@ require_once __DIR__ . '/vendor/autoload.php';
  
          // ✅ JSON Formatting for Structured Logs
          $formatter = new LineFormatter(
-             json_encode([
-                 'timestamp' => '%datetime%',
-                 'level'     => '%level_name%',
-                 'message'   => '%message%',
-                 'context'   => '%context%'
-             ]) . PHP_EOL,
-             null,
-             true,
-             true
-         );
+            "[%datetime%] [%channel%] %level_name%: %message%\n",
+            "Y-m-d H:i:s",
+            true,
+            true
+        );
+        
          $streamHandler->setFormatter($formatter);
          $logger->pushHandler($streamHandler);
  
@@ -83,4 +79,4 @@ require_once __DIR__ . '/vendor/autoload.php';
  
  // ✅ Return Default Logger
  return getLogger('application');
- 
+

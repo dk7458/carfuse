@@ -13,12 +13,21 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Validator;
+use Psr\Log\LoggerInterface;
 
 /**
  * AdminController - Handles admin user management and dashboard operations.
  */
 class AdminController extends Controller
 {
+    private LoggerInterface $logger;
+
+    public function __construct(LoggerInterface $adminLogger)
+    {
+        parent::__construct($adminLogger);
+        $this->logger = $adminLogger;
+    }
+
     /**
      * ✅ Get a paginated list of all users with their roles.
      */
@@ -46,7 +55,7 @@ class AdminController extends Controller
         }
         $user = User::findOrFail($userId);
         $user->update(['role' => $role]);
-        error_log("AUDIT: User role updated: {$user->email} to {$role}");
+        $this->logger->info("AUDIT: User role updated: {$user->email} to {$role}");
         header('Content-Type: application/json');
         http_response_code(200);
         echo json_encode(['message' => 'User role updated successfully']);
@@ -60,7 +69,7 @@ class AdminController extends Controller
     {
         $user = User::findOrFail($userId);
         $user->delete();
-        error_log("AUDIT: User deleted: {$user->email}");
+        $this->logger->info("AUDIT: User deleted: {$user->email}");
         header('Content-Type: application/json');
         http_response_code(200);
         echo json_encode(['message' => 'User deleted successfully']);
@@ -110,7 +119,7 @@ class AdminController extends Controller
             'password' => Hash::make($data['password']),
             'role' => 'admin'
         ]);
-        error_log("AUDIT: New admin created: {$admin->email}");
+        $this->logger->info("AUDIT: New admin created: {$admin->email}");
         header('Content-Type: application/json');
         http_response_code(201);
         echo json_encode(['message' => 'Admin created successfully', 'admin' => $admin]);

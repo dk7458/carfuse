@@ -4,15 +4,20 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
-// Removed: use Illuminate\Support\Facades\Log
+use Psr\Log\LoggerInterface;
+use App\Handlers\ExceptionHandler;
 
 class EncryptionService
 {
-    // Remove manual $encryptionKey, $cipher, and $ivLength properties.
-    
-    public function __construct()
+    public const DEBUG_MODE = true;
+
+    private LoggerInterface $logger;
+    private ExceptionHandler $exceptionHandler;
+
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler)
     {
-        // ...existing constructor code removed; Laravel handles key management via config('app.key')...
+        $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     public function encrypt(string $data): string
@@ -20,7 +25,8 @@ class EncryptionService
         try {
             return Crypt::encryptString($data);
         } catch (\Exception $e) {
-            error_log("[EncryptionService] Encryption failed: " . $e->getMessage());
+            $this->logger->error("[Encryption] ❌ Encryption failed: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -30,16 +36,16 @@ class EncryptionService
         try {
             return Crypt::decryptString($encryptedData);
         } catch (\Exception $e) {
-            error_log("[EncryptionService] Decryption failed: " . $e->getMessage());
+            $this->logger->error("[Encryption] ❌ Decryption failed: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             return null;
         }
     }
 
     public function encryptFile(string $inputFile, string $outputFile): bool
     {
-        // Use Storage facade and Crypt for file encryption.
         try {
-            $data = file_get_contents($inputFile); // retain manual file reading
+            $data = file_get_contents($inputFile);
             if ($data === false) {
                 throw new \RuntimeException("Failed to read file: $inputFile");
             }
@@ -47,7 +53,8 @@ class EncryptionService
             Storage::put($outputFile, $encrypted);
             return true;
         } catch (\Exception $e) {
-            error_log("File encryption failed: " . $e->getMessage());
+            $this->logger->error("File encryption failed: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             return false;
         }
     }
@@ -60,14 +67,14 @@ class EncryptionService
             Storage::put($outputFile, $decrypted);
             return true;
         } catch (\Exception $e) {
-            error_log("File decryption failed: " . $e->getMessage());
+            $this->logger->error("File decryption failed: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             return false;
         }
     }
 
     public function sign(string $data): string
     {
-        // Use Laravel's app key for HMAC signing.
         return hash_hmac('sha256', $data, config('app.key'));
     }
 
@@ -75,6 +82,4 @@ class EncryptionService
     {
         return hash_equals($this->sign($data), $signature);
     }
-
-    // ...existing code...
 }

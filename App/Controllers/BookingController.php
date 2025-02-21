@@ -55,7 +55,7 @@ class BookingController extends Controller
             ]);
             exit;
         } catch (\Exception $e) {
-            error_log("BOOKING ERROR: " . $e->getMessage());
+            $this->logger->error("BOOKING ERROR: " . $e->getMessage());
             http_response_code(404);
             echo 'Booking not found';
             exit;
@@ -84,7 +84,7 @@ class BookingController extends Controller
             ]);
             exit;
         } catch (\Exception $e) {
-            error_log("BOOKING ERROR: Failed to reschedule booking: " . $e->getMessage());
+            $this->logger->error("BOOKING ERROR: Failed to reschedule booking: " . $e->getMessage());
             http_response_code(500);
             echo 'Failed to reschedule booking';
             exit;
@@ -118,7 +118,7 @@ class BookingController extends Controller
             ]);
             exit;
         } catch (\Exception $e) {
-            error_log("BOOKING ERROR: Failed to cancel booking: " . $e->getMessage());
+            $this->logger->error("BOOKING ERROR: Failed to cancel booking: " . $e->getMessage());
             http_response_code(500);
             echo 'Failed to cancel booking';
             exit;
@@ -141,7 +141,7 @@ class BookingController extends Controller
             ]);
             exit;
         } catch (\Exception $e) {
-            error_log("BOOKING ERROR: Failed to fetch booking logs: " . $e->getMessage());
+            $this->logger->error("BOOKING ERROR: Failed to fetch booking logs: " . $e->getMessage());
             http_response_code(500);
             echo 'Failed to fetch booking logs';
             exit;
@@ -168,7 +168,7 @@ class BookingController extends Controller
             ]);
             exit;
         } catch (\Exception $e) {
-            error_log("BOOKING ERROR: Failed to fetch user bookings: " . $e->getMessage());
+            $this->logger->error("BOOKING ERROR: Failed to fetch user bookings: " . $e->getMessage());
             http_response_code(500);
             echo 'Failed to fetch user bookings';
             exit;
@@ -204,7 +204,7 @@ class BookingController extends Controller
             ]);
             exit;
         } catch (\Exception $e) {
-            error_log("BOOKING ERROR: Failed to create booking: " . $e->getMessage());
+            $this->logger->error("BOOKING ERROR: Failed to create booking: " . $e->getMessage());
             http_response_code(500);
             echo 'Failed to create booking';
             exit;

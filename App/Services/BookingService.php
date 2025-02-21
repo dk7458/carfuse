@@ -5,17 +5,21 @@ namespace App\Services;
 use App\Models\Booking;
 use Exception;
 use App\Helpers\DatabaseHelper;
+use Psr\Log\LoggerInterface;
+use App\Handlers\ExceptionHandler;
 
 class BookingService
 {
-    // Removed LoggerInterface type hint and parameter dependency
-    private $logger;
+    public const DEBUG_MODE = true;
+    private LoggerInterface $logger;
+    private ExceptionHandler $exceptionHandler;
     private $db;
 
-    public function __construct()
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, \App\Helpers\DatabaseHelper $db)
     {
-        $this->logger = getLogger('booking.log');
-        $this->db = DatabaseHelper::getInstance();
+        $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
+        $this->db = $db;
     }
 
     /**
@@ -28,10 +32,13 @@ class BookingService
             if (!$booking) {
                 throw new Exception("Booking not found.");
             }
-            $this->logger->info("✅ [BookingService] Retrieved booking (id: {$id}).");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Retrieved booking id: {$id}");
+            }
             return (array)$booking;
         } catch (Exception $e) {
-            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Booking] ❌ getBookingById error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -50,9 +57,12 @@ class BookingService
             if (!$updated) {
                 throw new Exception("Failed to update booking.");
             }
-            $this->logger->info("✅ [BookingService] Rescheduled booking (id: {$id}).");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Rescheduled booking id: {$id}");
+            }
         } catch (Exception $e) {
-            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Booking] ❌ rescheduleBooking error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -71,10 +81,13 @@ class BookingService
             if (!$updated) {
                 throw new Exception("Failed to update booking status.");
             }
-            $this->logger->info("✅ [BookingService] Canceled booking (id: {$id}).");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Canceled booking id: {$id}");
+            }
             return isset($booking->refund_amount) ? $booking->refund_amount : 0.0;
         } catch (Exception $e) {
-            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Booking] ❌ cancelBooking error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -89,10 +102,13 @@ class BookingService
             if (!$record || !isset($record->user_id)) {
                 throw new Exception("User not found for booking.");
             }
-            $this->logger->info("✅ [BookingService] Retrieved user id for booking (id: {$id}).");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Retrieved user id for booking id: {$id}");
+            }
             return $record->user_id;
         } catch (Exception $e) {
-            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Booking] ❌ getUserIdByBooking error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -107,10 +123,13 @@ class BookingService
                                ->selectRaw('MONTH(created_at) AS month, COUNT(*) AS total')
                                ->groupBy('month')
                                ->get();
-            $this->logger->info("✅ [BookingService] Retrieved monthly booking trends.");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Retrieved monthly booking trends.");
+            }
             return $trends;
         } catch (Exception $e) {
-            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Booking] ❌ getMonthlyBookingTrends error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -122,10 +141,13 @@ class BookingService
     {
         try {
             $total = $this->db->table('bookings')->count();
-            $this->logger->info("✅ [BookingService] Retrieved total bookings.");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Retrieved total bookings.");
+            }
             return $total;
         } catch (Exception $e) {
-            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Booking] ❌ getTotalBookings error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -137,10 +159,13 @@ class BookingService
     {
         try {
             $completed = $this->db->table('bookings')->where('status', 'completed')->count();
-            $this->logger->info("✅ [BookingService] Retrieved completed bookings.");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Retrieved completed bookings.");
+            }
             return $completed;
         } catch (Exception $e) {
-            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Booking] ❌ getCompletedBookings error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -152,10 +177,13 @@ class BookingService
     {
         try {
             $canceled = $this->db->table('bookings')->where('status', 'canceled')->count();
-            $this->logger->info("✅ [BookingService] Retrieved canceled bookings.");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Retrieved canceled bookings.");
+            }
             return $canceled;
         } catch (Exception $e) {
-            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Booking] ❌ getCanceledBookings error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -170,10 +198,13 @@ class BookingService
                              ->where('booking_id', $bookingId)
                              ->orderBy('created_at', 'desc')
                              ->get();
-            $this->logger->info("✅ [BookingService] Retrieved logs for booking (id: {$bookingId}).");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Retrieved logs for booking id: {$bookingId}");
+            }
             return $logs;
         } catch (Exception $e) {
-            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Booking] ❌ getBookingLogs error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -189,10 +220,13 @@ class BookingService
                                   ->where('vehicle_id', $vehicleId)
                                   ->whereBetween('pickup_date', [$pickupDate, $dropoffDate])
                                   ->count() === 0;
-            $this->logger->info("✅ [BookingService] Checked availability for vehicle (id: {$vehicleId}).");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Checked availability for vehicle id: {$vehicleId}");
+            }
             return $available;
         } catch (Exception $e) {
-            $this->logger->error("❌ [BookingService] Exception: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            $this->logger->error("[Booking] ❌ isBookingAvailable error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -203,12 +237,7 @@ class BookingService
     public function createBooking(int $userId, int $vehicleId, string $pickupDate, string $dropoffDate): array
     {
         if (!$this->isBookingAvailable($vehicleId, $pickupDate, $dropoffDate)) {
-            $this->logger->warning("❌ [BookingService] Booking failed: vehicle not available.", [
-                'user_id'    => $userId,
-                'vehicle_id' => $vehicleId,
-                'pickup'     => $pickupDate,
-                'dropoff'    => $dropoffDate
-            ]);
+            $this->logger->error("[Booking] ❌ Vehicle not available for booking (vehicle id: {$vehicleId})");
             return ['status' => 'error', 'message' => 'Vehicle not available for the selected dates'];
         }
 
@@ -222,22 +251,14 @@ class BookingService
                 'created_at'  => now(),
                 'updated_at'  => now()
             ]);
-            $this->logger->info("✅ [BookingService] Booking created successfully.", [
-                'user_id'     => $userId,
-                'vehicle_id'  => $vehicleId,
-                'pickup_date' => $pickupDate,
-                'dropoff_date'=> $dropoffDate
-            ]);
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Booking created for user {$userId}");
+            }
 
             return ['status' => 'success', 'message' => 'Booking created successfully'];
         } catch (Exception $e) {
-            $this->logger->error("❌ [BookingService] Failed to create booking: " . $e->getMessage(), [
-                'user_id'     => $userId,
-                'vehicle_id'  => $vehicleId,
-                'pickup_date' => $pickupDate,
-                'dropoff_date'=> $dropoffDate,
-                'trace'       => $e->getTraceAsString()
-            ]);
+            $this->logger->error("[Booking] ❌ createBooking error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             return ['status' => 'error', 'message' => 'Failed to create booking'];
         }
     }

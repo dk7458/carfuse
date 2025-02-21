@@ -3,7 +3,8 @@
 namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
-use function getLogger;
+use Psr\Log\LoggerInterface;
+use App\Handlers\ExceptionHandler;
 
 /**
  * Validator Service
@@ -12,9 +13,19 @@ use function getLogger;
  */
 class Validator
 {
+    public const DEBUG_MODE = true;
     private array $errors = [];
-    
-    // Removed constructor with LoggerInterface dependency.
+    private LoggerInterface $logger;
+    private DatabaseHelper $db;
+    private ExceptionHandler $exceptionHandler;
+
+    // Updated constructor for Dependency Injection
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
+    {
+        $this->logger = $logger;
+        $this->db = $db;
+        $this->exceptionHandler = $exceptionHandler;
+    }
 
     /**
      * Validate data against rules.
@@ -28,9 +39,13 @@ class Validator
                 $this->applyRule($field, $data[$field] ?? null, $rule, $data);
             }
         }
+
         if (!empty($this->errors)) {
-            getLogger('validation')->warning("[Validation] Failed validation", ['errors' => $this->errors]);
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[system] Validation failed", ['errors' => $this->errors]);
+            }
         }
+
         return empty($this->errors);
     }
 
@@ -47,37 +62,40 @@ class Validator
      */
     private function applyRule(string $field, $value, string $rule, array $data): void
     {
-        if ($rule === 'required' && empty($value)) {
-            $this->errors[$field][] = 'This field is required.';
-        } elseif (str_starts_with($rule, 'max:')) {
-            $maxLength = (int)explode(':', $rule)[1];
-            if (!empty($value) && strlen($value) > $maxLength) {
-                $this->errors[$field][] = "Maximum length is $maxLength characters.";
+        try {
+            if ($rule === 'required' && empty($value)) {
+                $this->errors[$field][] = 'This field is required.';
+            } elseif (strpos($rule, 'max:') === 0) {
+                $maxLength = (int)explode(':', $rule)[1];
+                if (!empty($value) && strlen($value) > $maxLength) {
+                    $this->errors[$field][] = "Maximum length is $maxLength characters.";
+                }
+            } elseif (strpos($rule, 'min:') === 0) {
+                $minLength = (int)explode(':', $rule)[1];
+                if (empty($value) || strlen($value) < $minLength) {
+                    $this->errors[$field][] = "Minimum length is $minLength characters.";
+                }
+            } elseif ($rule === 'email' && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                $this->errors[$field][] = 'Invalid email address.';
+            } elseif (strpos($rule, 'regex:') === 0) {
+                $pattern = substr($rule, 6);
+                if (!empty($value) && !preg_match($pattern, $value)) {
+                    $this->errors[$field][] = 'Invalid format.';
+                }
+            } elseif (strpos($rule, 'same:') === 0) {
+                $otherField = substr($rule, 5);
+                if (isset($data[$otherField]) && ($value ?? '') !== $data[$otherField]) {
+                    $this->errors[$field][] = "This field must match {$otherField}.";
+                }
+            } elseif (strpos($rule, 'unique:') === 0) {
+                [$table, $column] = explode(',', substr($rule, 7));
+                if ($this->db->table($table)->where($column, $value)->exists()) {
+                    $this->errors[$field][] = "The {$field} must be unique.";
+                }
             }
-        } elseif (str_starts_with($rule, 'min:')) {
-            $minLength = (int)explode(':', $rule)[1];
-            if (empty($value) || strlen($value) < $minLength) {
-                $this->errors[$field][] = "Minimum length is $minLength characters.";
-            }
-        } elseif ($rule === 'email' && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
-            $this->errors[$field][] = 'Invalid email address.';
-        } elseif (str_starts_with($rule, 'regex:')) {
-            $pattern = substr($rule, 6);
-            if (!preg_match($pattern, $value)) {
-                $this->errors[$field][] = 'Invalid format.';
-            }
-        } elseif (str_starts_with($rule, 'same:')) {
-            $otherField = substr($rule, 5);
-            if (($value ?? '') !== ($data[$otherField] ?? '')) {
-                $this->errors[$field][] = "This field must match {$otherField}.";
-            }
-        } elseif (str_starts_with($rule, 'unique:')) {
-            [$table, $column] = explode(',', substr($rule, 7));
-            $db = DatabaseHelper::getInstance();
-            // Assuming DatabaseHelper supports a where()->exists() query.
-            if ($db->table($table)->where($column, $value)->exists()) {
-                $this->errors[$field][] = "The {$field} must be unique.";
-            }
+        } catch (\Exception $e) {
+            $this->logger->error("[system] ❌ Validation error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
         }
     }
 }

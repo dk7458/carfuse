@@ -6,6 +6,7 @@ use App\Helpers\DatabaseHelper; // new import
 use Psr\Log\LoggerInterface;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+use App\Handlers\ExceptionHandler; // assume this exists
 
 /**
  * NotificationService
@@ -14,13 +15,16 @@ use PHPMailer\PHPMailer\Exception;
  */
 class NotificationService
 {
+    public const DEBUG_MODE = true;
     private LoggerInterface $logger;
+    private ExceptionHandler $exceptionHandler;
     private array $config;
     private $db;
 
-    public function __construct(LoggerInterface $logger, DatabaseHelper $db, array $config)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db, array $config)
     {
         $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
         $this->db = $db;
         $this->config = $config;
     }
@@ -34,7 +38,8 @@ class NotificationService
             $this->storeNotification($userId, $type, $message);
             return $this->dispatchNotification($userId, $type, $message, $options);
         } catch (\Exception $e) {
-            $this->logger->error("[NotificationService] Notification failed: " . $e->getMessage());
+            $this->logger->error("[Notification] ❌ Notification failed: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             return false;
         }
     }
@@ -53,9 +58,12 @@ class NotificationService
                 'sent_at' => date('Y-m-d H:i:s'),
                 'is_read' => false,
             ]);
-            $this->logger->info("[NotificationService] Notification stored for user {$userId}", ['category' => 'notification']);
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Notification] Stored notification for user {$userId}");
+            }
         } catch (\Exception $e) {
-            $this->logger->error("[NotificationService] Database error (storeNotification): " . $e->getMessage(), ['category' => 'db']);
+            $this->logger->error("[DB] ❌ storeNotification error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -67,10 +75,13 @@ class NotificationService
                                  ->where('user_id', $userId)
                                  ->orderBy('created_at', 'desc')
                                  ->get();
-            $this->logger->info("[NotificationService] Retrieved notifications for user {$userId}");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Notification] Retrieved notifications for user {$userId}");
+            }
             return $notifications;
         } catch (\Exception $e) {
-            $this->logger->error("[NotificationService] Database error (getUserNotifications): " . $e->getMessage());
+            $this->logger->error("[DB] ❌ getUserNotifications error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -81,9 +92,12 @@ class NotificationService
             $this->db->table('notifications')
                      ->where('id', $notificationId)
                      ->update(['is_read' => true]);
-            $this->logger->info("[NotificationService] Marked notification {$notificationId} as read");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Notification] Marked notification {$notificationId} as read");
+            }
         } catch (\Exception $e) {
-            $this->logger->error("[NotificationService] Database error (markAsRead): " . $e->getMessage());
+            $this->logger->error("[DB] ❌ markAsRead error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -94,9 +108,12 @@ class NotificationService
             $this->db->table('notifications')
                      ->where('id', $notificationId)
                      ->delete();
-            $this->logger->info("[NotificationService] Deleted notification {$notificationId}");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Notification] Deleted notification {$notificationId}");
+            }
         } catch (\Exception $e) {
-            $this->logger->error("[NotificationService] Database error (deleteNotification): " . $e->getMessage());
+            $this->logger->error("[DB] ❌ deleteNotification error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -107,9 +124,12 @@ class NotificationService
             $this->db->table('notifications')
                      ->where('user_id', $userId)
                      ->update(['is_read' => true]);
-            $this->logger->info("[NotificationService] Marked all notifications as read for user {$userId}");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Notification] Marked all notifications as read for user {$userId}");
+            }
         } catch (\Exception $e) {
-            $this->logger->error("[NotificationService] Database error (markAllAsRead): " . $e->getMessage());
+            $this->logger->error("[DB] ❌ markAllAsRead error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
@@ -150,11 +170,14 @@ class NotificationService
             $mail->isHTML(true);
             $mail->Body = "<p>$message</p>";
             $mail->send();
-            $this->logger->info("[NotificationService] Email sent to {$to}");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Notification] Email sent to {$to}");
+            }
 
             return true;
         } catch (Exception $e) {
-            $this->logger->error("[NotificationService] Email error: " . $e->getMessage());
+            $this->logger->error("[Notification] ❌ Email error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             return false;
         }
     }
@@ -167,10 +190,13 @@ class NotificationService
         if (empty($phone)) return false;
 
         try {
-            $this->logger->info("[NotificationService] SMS sent to {$phone}");
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Notification] SMS sent to {$phone}");
+            }
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("[NotificationService] SMS error: " . $e->getMessage());
+            $this->logger->error("[Notification] ❌ SMS error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             return false;
         }
     }
@@ -194,6 +220,7 @@ class NotificationService
             return $response !== false;
         } catch (\Exception $e) {
             $this->logger->error('Webhook failed', ['error' => $e->getMessage()]);
+            $this->exceptionHandler->handleException($e);
             return false;
         }
     }
@@ -213,6 +240,7 @@ class NotificationService
             return $this->sendFCMRequest($payload);
         } catch (\Exception $e) {
             $this->logger->error('Push notification failed', ['error' => $e->getMessage()]);
+            $this->exceptionHandler->handleException($e);
             return false;
         }
     }

@@ -3,7 +3,6 @@
 namespace App\Controllers;
 
 use App\Services\SignatureService;
-// Removed: use App\Services\Validator;
 use Psr\Log\LoggerInterface;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
@@ -17,16 +16,14 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 class SignatureController extends Controller
 {
     private SignatureService $signatureService;
-    // private Validator $validator;
-    // private LoggerInterface $logger;
+    private LoggerInterface $logger;
 
     public function __construct(
         SignatureService $signatureService,
-        /* Removed Validator */ $validator,
-        /* Removed LoggerInterface */ $logger
+        LoggerInterface $signatureLogger
     ) {
         $this->signatureService = $signatureService;
-        // Assignments removed for validator and logger as we use custom validation and error_log()
+        $this->logger = $signatureLogger;
     }
 
     /**
@@ -45,16 +42,16 @@ class SignatureController extends Controller
         try {
             custom_validate($data, $rules);
         } catch (\Exception $ex) {
-            error_log("Warning: Signature validation failed. Data: " . json_encode($data));
+            $this->logger->error("Warning: Signature validation failed. Data: " . json_encode($data));
             return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $ex->getMessage()];
         }
 
         try {
             $signaturePath = $this->signatureService->uploadSignature($data['user_id'], $data['file']);
-            error_log("Info: Signature uploaded successfully for user_id: " . $data['user_id']);
+            $this->logger->info("Info: Signature uploaded successfully for user_id: " . $data['user_id']);
             return ['status' => 'success', 'message' => 'Signature uploaded successfully', 'signature_path' => $signaturePath];
         } catch (\Exception $e) {
-            error_log("Error: Failed to upload signature, error: " . $e->getMessage());
+            $this->logger->error("Error: Failed to upload signature, error: " . $e->getMessage());
             return ['status' => 'error', 'message' => 'Failed to upload signature'];
         }
     }
@@ -72,13 +69,13 @@ class SignatureController extends Controller
             $isValid = $this->signatureService->verifySignature($userId, $documentHash);
 
             if ($isValid) {
-                error_log("Info: Signature verified successfully for user_id: {$userId}");
+                $this->logger->info("Info: Signature verified successfully for user_id: {$userId}");
                 return ['status' => 'success', 'message' => 'Signature verified successfully'];
             }
 
             return ['status' => 'error', 'message' => 'Signature verification failed'];
         } catch (\Exception $e) {
-            error_log("Error: Failed to verify signature, error: " . $e->getMessage());
+            $this->logger->error("Error: Failed to verify signature, error: " . $e->getMessage());
             return ['status' => 'error', 'message' => 'Failed to verify signature'];
         }
     }
@@ -95,13 +92,13 @@ class SignatureController extends Controller
             $signaturePath = $this->signatureService->getSignature($userId);
 
             if ($signaturePath) {
-                error_log("Info: Signature retrieved successfully for user_id: {$userId}");
+                $this->logger->info("Info: Signature retrieved successfully for user_id: {$userId}");
                 return ['status' => 'success', 'signature_path' => $signaturePath];
             }
 
             return ['status' => 'error', 'message' => 'Signature not found'];
         } catch (\Exception $e) {
-            error_log("Error: Failed to retrieve signature, error: " . $e->getMessage());
+            $this->logger->error("Error: Failed to retrieve signature, error: " . $e->getMessage());
             return ['status' => 'error', 'message' => 'Failed to retrieve signature'];
         }
     }
