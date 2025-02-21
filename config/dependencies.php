@@ -49,8 +49,10 @@ try {
     die("❌ Dependency Injection container failed: " . $e->getMessage() . "\n");
 }
 
-// Register ExceptionHandler after the logger is available.
+// Register ExceptionHandler after the loggers are available.
 $container->set(ExceptionHandler::class, fn($c) => new ExceptionHandler(
+    $c->get('db_logger'),
+    $c->get('auth_logger'),
     $c->get(LoggerInterface::class)
 ));
 
