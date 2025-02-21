@@ -1,4 +1,5 @@
 <?php
+
 use Dotenv\Dotenv;
 
 // ✅ Ensure `.env` is loaded before accessing database credentials
@@ -8,27 +9,32 @@ if (file_exists($dotenvPath . '.env')) {
     $dotenv->safeLoad();
 }
 
-// ✅ Log database configurations for debugging (ONLY FOR DEVELOPMENT)
-// ✅ Return structured database configurations
+// ✅ DEBUG LOGGING (Optional - Remove in Production)
+if (!isset($_ENV['DB_HOST']) || empty($_ENV['DB_HOST'])) {
+    file_put_contents(__DIR__ . '/../logs/debug.log', "[DB CONFIG] ❌ ERROR: .env not loaded or missing DB_HOST\n", FILE_APPEND);
+    die("❌ ERROR: Database environment variables not set.");
+}
+
+// ✅ Return database configurations
 return [
     'app_database' => [
-        'driver'    => 'mysql',
-        'host'      => getenv('DB_HOST') ?: 'localhost',
-        'database'  => getenv('DB_DATABASE') ?: '',
-        'username'  => getenv('DB_USERNAME') ?: '',
-        'password'  => getenv('DB_PASSWORD') ?: '',
-        'charset'   => 'utf8mb4',
-        'collation' => 'utf8mb4_unicode_ci',
+        'driver'    => $_ENV['DB_DRIVER'] ?? 'mysql',
+        'host'      => $_ENV['DB_HOST'] ?? 'localhost',
+        'database'  => $_ENV['DB_DATABASE'] ?? '',
+        'username'  => $_ENV['DB_USERNAME'] ?? '',
+        'password'  => $_ENV['DB_PASSWORD'] ?? '',
+        'charset'   => $_ENV['DB_CHARSET'] ?? 'utf8mb4',
+        'collation' => $_ENV['DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
         'prefix'    => '',
     ],
     'secure_database' => [
-        'driver'    => 'mysql',
-        'host'      => getenv('SECURE_DB_HOST') ?: 'localhost',
-        'database'  => getenv('SECURE_DB_DATABASE') ?: '',
-        'username'  => getenv('SECURE_DB_USERNAME') ?: '',
-        'password'  => getenv('SECURE_DB_PASSWORD') ?: '',
-        'charset'   => 'utf8mb4',
-        'collation' => 'utf8mb4_unicode_ci',
+        'driver'    => $_ENV['SECURE_DB_DRIVER'] ?? 'mysql',
+        'host'      => $_ENV['SECURE_DB_HOST'] ?? 'localhost',
+        'database'  => $_ENV['SECURE_DB_DATABASE'] ?? '',
+        'username'  => $_ENV['SECURE_DB_USERNAME'] ?? '',
+        'password'  => $_ENV['SECURE_DB_PASSWORD'] ?? '',
+        'charset'   => $_ENV['SECURE_DB_CHARSET'] ?? 'utf8mb4',
+        'collation' => $_ENV['SECURE_DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
         'prefix'    => '',
     ]
 ];

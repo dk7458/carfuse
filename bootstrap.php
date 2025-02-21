@@ -12,6 +12,9 @@ $logger->info("🔄 Logger initialized successfully.");
 use Dotenv\Dotenv;
 $dotenv = Dotenv::createImmutable(__DIR__);
 $dotenv->load();
+if (!getenv('DB_HOST')) {
+    die("❌ ERROR: .env file not loaded correctly. Check file permissions.");
+}
 $logger->info("🔄 Environment variables loaded.");
 
 // Step 3: Initialize Dependency Injection Container (Load Once)
