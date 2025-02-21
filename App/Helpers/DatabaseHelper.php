@@ -44,6 +44,11 @@ class DatabaseHelper
         return $this->capsule;
     }
 
+    public function getConnection()
+    {
+        return $this->capsule->getConnection();
+    }
+
     private static $secureCapsule = null;
     private static $initialized = false;
     private static $envLoaded = false;

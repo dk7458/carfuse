@@ -16,7 +16,7 @@ class AuthService
 {
     public const DEBUG_MODE = true;
 
-    private Capsule $db;
+    private $db;
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $authLogger;
@@ -32,7 +32,7 @@ class AuthService
         LoggerInterface $auditLogger,
         array $encryptionConfig // Add encryption configuration parameter
     ) {
-        $this->db = $dbHelper->getCapsule(); // Use getCapsule() to get Capsule instance
+        $this->db = $dbHelper->getConnection(); // Use getConnection() to get the connection
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
