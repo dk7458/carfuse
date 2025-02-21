@@ -5,7 +5,7 @@ use Dotenv\Dotenv;
 $dotenvPath = __DIR__ . '/../';
 if (file_exists($dotenvPath . '.env')) {
     $dotenv = Dotenv::createImmutable($dotenvPath);
-    $dotenv->safeLoad();
+    $dotenv->load();
 }
 
 // ✅ Log database configurations for debugging (ONLY FOR DEVELOPMENT)
