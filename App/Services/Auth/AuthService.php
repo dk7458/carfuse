@@ -73,21 +73,26 @@ class AuthService
     }
 
     public function registerUser(array $data)
-    {
-        try {
-            // Using injected DatabaseHelper or User model as preferred
-            $user = User::create($data);
-            if (!$user) {
-                throw new Exception("User registration failed");
-            }
-            $this->authLogger->info("User successfully registered", ['email' => $data['email'], 'userId' => $user->id]);
-            // Standardize API response via ApiHelper
-            ApiHelper::sendJsonResponse('success', 'User registered', ['user_id' => $user->id], 201);
-        } catch (Exception $e) {
-            $this->exceptionHandler->handleException($e);
-            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 500);
-        }
+{
+    $rules = [
+        'email'    => 'required|email|unique:users',
+        'password' => 'required|min:6',
+        'name'     => 'required|string',
+    ];
+
+    try {
+        // ✅ Throws exception if validation fails
+        $this->validator->validate($data, $rules);
+
+        $userId = $this->db->table('users')->insertGetId($data);
+        return ApiHelper::sendJsonResponse('success', 'User registered', ['user_id' => $userId], 201);
+    } catch (\InvalidArgumentException $e) {
+        return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
+    } catch (\Exception $e) {
+        $this->exceptionHandler->handleException($e);
     }
+}
+
 
     public function resetPasswordRequest($email)
     {

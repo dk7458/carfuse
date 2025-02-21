@@ -42,11 +42,14 @@ class Validator
 
         if (!empty($this->errors)) {
             if (self::DEBUG_MODE) {
-                $this->logger->info("[system] Validation failed", ['errors' => $this->errors]);
+                $this->logger->warning("[Validation] Validation failed", ['errors' => $this->errors]);
             }
+
+            // **Throw an exception to prevent further execution**
+            throw new \InvalidArgumentException(json_encode($this->errors));
         }
 
-        return empty($this->errors);
+        return true;
     }
 
     /**
@@ -94,7 +97,7 @@ class Validator
                 }
             }
         } catch (\Exception $e) {
-            $this->logger->error("[system] ❌ Validation error: " . $e->getMessage());
+            $this->logger->error("[Validation] ❌ Validation error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
         }
     }
