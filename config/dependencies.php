@@ -152,10 +152,12 @@ $container->set(TokenService::class, fn() => new TokenService(
 ));
 // Ensure AuthService is passed the container-registered database and ExceptionHandler.
 $container->set(AuthService::class, fn() => new AuthService(
-    $container->get('auth_logger'),
     $container->get('db'),
-    $config['encryption'],
-    $container->get(ExceptionHandler::class) 
+    $container->get(TokenService::class),
+    $container->get(ExceptionHandler::class),
+    $container->get('auth_logger'),
+    $container->get('audit_logger'),
+    $config['encryption'] // Pass the encryption configuration
 ));
 // Register UserController to receive AuthService via DI.
 $container->set(\App\Controllers\UserController::class, fn() => new \App\Controllers\UserController(

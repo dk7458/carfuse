@@ -21,6 +21,7 @@ class AuthService
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $authLogger;
     private LoggerInterface $auditLogger;
+    private array $encryptionConfig;
 
     // NEW: Constructor with dependency injection
     public function __construct(
@@ -28,13 +29,15 @@ class AuthService
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
-        LoggerInterface $auditLogger
+        LoggerInterface $auditLogger,
+        array $encryptionConfig // Add encryption configuration parameter
     ) {
         $this->db = $db;
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
+        $this->encryptionConfig = $encryptionConfig; // Initialize encryption configuration
     }
 
     public function login($email, $password)
