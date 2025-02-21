@@ -52,7 +52,7 @@ try {
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 $container->set(SecurityHelper::class, fn() => new SecurityHelper());
-$container->set('db', fn() => DatabaseHelper::getInstance());
+$container->set(DatabaseHelper::class, fn() => DatabaseHelper::getInstance());
 $container->set('secure_db', fn() => DatabaseHelper::getSecureInstance());
 $container->get('security_logger')->info("✅ SecurityHelper injected into DI container.");
 $container->get('db_logger')->info("✅ DatabaseHelper injected into DI container.");
@@ -105,8 +105,8 @@ $container->get('logger')->info("Step 6: Key Manager configuration loaded.");
 
 // Step 7: Initialize DatabaseHelper instances BEFORE services that depend on them.
 try {
-    $database = DatabaseHelper::getInstance();
-    $secure_database = DatabaseHelper::getSecureInstance();
+    $database = $container->get(DatabaseHelper::class);
+    $secure_database = $container->get('secure_db');
     $container->get('db_logger')->info("✅ Both databases initialized successfully.");
 } catch (Exception $e) {
     $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
@@ -186,15 +186,15 @@ $container->set(RevenueService::class, fn() => new RevenueService(
 ));
 $container->set(SignatureService::class, fn() => new SignatureService(
     $config['signature'],
-    $fileStorage,
-    $encryptionService,
+    $container->get(FileStorage::class),
+    $container->get(EncryptionService::class),
     $container->get('security_logger')
 ));
 $container->set(DocumentService::class, fn() => new DocumentService(
     $container->get('api_logger'),
     $container->get(AuditService::class),
-    $fileStorage,
-    $encryptionService,
+    $container->get(FileStorage::class),
+    $container->get(EncryptionService::class),
     $container->get(TemplateService::class)
 ));
 

@@ -13,11 +13,13 @@ class EncryptionService
 
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
+    private string $encryptionKey;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, string $encryptionKey)
     {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
+        $this->encryptionKey = $encryptionKey;
     }
 
     public function encrypt(string $data): string
@@ -75,7 +77,7 @@ class EncryptionService
 
     public function sign(string $data): string
     {
-        return hash_hmac('sha256', $data, config('app.key'));
+        return hash_hmac('sha256', $data, $this->encryptionKey);
     }
 
     public function verify(string $data, string $signature): bool
