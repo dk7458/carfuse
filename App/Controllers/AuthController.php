@@ -10,7 +10,7 @@ use App\Services\Validator;
 use App\Helpers\SecurityHelper;
 use App\Helpers\ApiHelper;
 use Psr\Log\LoggerInterface;
-use App\Services\ExceptionHandler; // New dependency
+use App\Helpers\ExceptionHandler; // New dependency
 
 class AuthController extends Controller
 {
