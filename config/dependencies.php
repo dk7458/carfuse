@@ -62,11 +62,6 @@ $container->set(ExceptionHandler::class, fn($c) => new ExceptionHandler(
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 $container->set(SecurityHelper::class, fn() => new SecurityHelper());
-$container->set(DatabaseHelper::class, fn() => DatabaseHelper::getInstance());
-$container->set('db', fn() => $container->get(DatabaseHelper::class)->getCapsule());
-$container->set('secure_db', fn() => DatabaseHelper::getSecureInstance()->getCapsule());
-$container->get('security_logger')->info("✅ SecurityHelper injected into DI container.");
-$container->get('db_logger')->info("✅ DatabaseHelper injected into DI container.");
 
 // Step 2: Load configuration files.
 $container->get(LoggerInterface::class)->info("Step 2: Loading configuration files.");
@@ -80,16 +75,33 @@ foreach (glob("{$configDirectory}/*.php") as $filePath) {
     }
 }
 
-// Step 3: Ensure required directories exist.
-$templateDirectory = __DIR__ . '/../storage/templates';
-$fileStorageConfig = $config['filestorage'] ?? [];
-if (!is_dir($templateDirectory)) {
-    mkdir($templateDirectory, 0775, true);
+// Step 3: Initialize DatabaseHelper instances BEFORE services that depend on them.
+try {
+    $databaseConfig = require __DIR__ . '/database.php';
+    $database = new DatabaseHelper($databaseConfig['app_database']);
+    $secure_database = new DatabaseHelper($databaseConfig['secure_database']);
+    $container->get('db_logger')->info("✅ Both databases initialized successfully.");
+} catch (Exception $e) {
+    $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
+    die("❌ Database initialization failed. Check logs for details.\n");
 }
-if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['base_directory'])) {
-    mkdir($fileStorageConfig['base_directory'], 0775, true);
+$container->set(DatabaseHelper::class, fn() => $database);
+$container->set('db', fn() => $database->getCapsule());
+$container->set('secure_db', fn() => $secure_database->getCapsule());
+$container->get('security_logger')->info("✅ SecurityHelper injected into DI container.");
+$container->get('db_logger')->info("✅ DatabaseHelper injected into DI container.");
+
+// Debug database connection before proceeding.
+try {
+    $pdo = $container->get('db')->getConnection()->getPdo();
+    if (!$pdo) {
+        throw new Exception("❌ Database connection failed.");
+    }
+    $container->get('db_logger')->info("✅ Database connection verified successfully.");
+} catch (Exception $e) {
+    $container->get('db_logger')->critical("❌ Database connection verification failed: " . $e->getMessage());
+    die("❌ Database connection issue: " . $e->getMessage() . "\n");
 }
-$container->get(LoggerInterface::class)->info("Step 3: Required directories verified.");
 
 // Step 4: Initialize EncryptionService.
 $encryptionService = new EncryptionService(
@@ -118,30 +130,16 @@ $container->get(LoggerInterface::class)->info("Step 5: FileStorage registered.")
 $config['keymanager'] = require __DIR__ . '/keymanager.php';
 $container->get(LoggerInterface::class)->info("Step 6: Key Manager configuration loaded.");
 
-// Step 7: Initialize DatabaseHelper instances BEFORE services that depend on them.
-try {
-    $database = DatabaseHelper::getInstance();
-    $secure_database = DatabaseHelper::getSecureInstance();
-    $container->get('db_logger')->info("✅ Both databases initialized successfully.");
-} catch (Exception $e) {
-    $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
-    die("❌ Database initialization failed. Check logs for details.\n");
+// Step 7: Ensure required directories exist.
+$templateDirectory = __DIR__ . '/../storage/templates';
+$fileStorageConfig = $config['filestorage'] ?? [];
+if (!is_dir($templateDirectory)) {
+    mkdir($templateDirectory, 0775, true);
 }
-$container->set('db', fn() => $database);
-$container->set('secure_db', fn() => $secure_database);
-$container->get(LoggerInterface::class)->info("Step 7: Database services registered.");
-
-// Debug database connection before proceeding.
-try {
-    $pdo = $container->get('db')->getConnection()->getPdo();
-    if (!$pdo) {
-        throw new Exception("❌ Database connection failed.");
-    }
-    $container->get('db_logger')->info("✅ Database connection verified successfully.");
-} catch (Exception $e) {
-    $container->get('db_logger')->critical("❌ Database connection verification failed: " . $e->getMessage());
-    die("❌ Database connection issue: " . $e->getMessage() . "\n");
+if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['base_directory'])) {
+    mkdir($fileStorageConfig['base_directory'], 0775, true);
 }
+$container->get(LoggerInterface::class)->info("Step 7: Required directories verified.");
 
 // Step 8: Register services with proper dependency order.
 $container->set(Validator::class, fn() => new Validator(

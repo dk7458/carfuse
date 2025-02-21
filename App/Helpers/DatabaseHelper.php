@@ -5,6 +5,7 @@ namespace App\Helpers;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
+use Dotenv\Dotenv;
 use Exception;
 use App\Helpers\ApiHelper;
 use function getLogger;
@@ -14,6 +15,7 @@ class DatabaseHelper
     private static ?DatabaseHelper $instance = null;
     private static ?DatabaseHelper $secureInstance = null;
     private Capsule $capsule;
+    private static bool $envLoaded = false;
 
     private function __construct(array $config)
     {
@@ -31,9 +33,19 @@ class DatabaseHelper
         }
     }
 
+    private static function loadEnv()
+    {
+        if (!self::$envLoaded) {
+            $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
+            $dotenv->load();
+            self::$envLoaded = true;
+        }
+    }
+
     public static function getInstance(): DatabaseHelper
     {
         if (self::$instance === null) {
+            self::loadEnv();
             try {
                 $config = require __DIR__ . '/../../config/database.php';
                 self::$instance = new DatabaseHelper($config['app_database']);
@@ -49,6 +61,7 @@ class DatabaseHelper
     public static function getSecureInstance(): DatabaseHelper
     {
         if (self::$secureInstance === null) {
+            self::loadEnv();
             try {
                 $config = require __DIR__ . '/../../config/database.php';
                 self::$secureInstance = new DatabaseHelper($config['secure_database']);
