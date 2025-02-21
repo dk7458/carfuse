@@ -144,7 +144,11 @@ try {
 }
 
 // Step 8: Register services with proper dependency order.
-$container->set(Validator::class, fn() => new Validator($container->get('api_logger')));
+$container->set(Validator::class, fn() => new Validator(
+    $container->get('api_logger'), // Pass the logger
+    $container->get(DatabaseHelper::class), // Pass the DatabaseHelper
+    $container->get(ExceptionHandler::class) // Pass the ExceptionHandler
+));
 $container->set(RateLimiter::class, fn() => new RateLimiter($container->get('db_logger'), $container->get('db')));
 $container->set(AuditService::class, fn() => new AuditService($container->get('security_logger')));
 $container->set(TokenService::class, fn() => new TokenService(
