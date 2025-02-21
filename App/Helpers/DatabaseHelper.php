@@ -8,19 +8,46 @@ use Illuminate\Container\Container;
 use Dotenv\Dotenv;
 use Exception;
 use App\Helpers\ApiHelper;
-// Removed: use Psr\Log\LoggerInterface;
-// Added dynamic logger usage:
 use function getLogger;
 
 class DatabaseHelper
 {
-    private static $capsule = null;
+    private static ?DatabaseHelper $instance = null;
+    private Capsule $capsule;
+
+    private function __construct()
+    {
+        $this->capsule = new Capsule();
+        $this->capsule->addConnection([
+            'driver'    => 'mysql',
+            'host'      => $_ENV['DB_HOST'] ?? 'localhost',
+            'database'  => $_ENV['DB_DATABASE'] ?? '',
+            'username'  => $_ENV['DB_USERNAME'] ?? '',
+            'password'  => $_ENV['DB_PASSWORD'] ?? '',
+            'charset'   => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+        ]);
+        $this->capsule->setAsGlobal();
+        $this->capsule->bootEloquent();
+    }
+
+    public static function getInstance(): DatabaseHelper
+    {
+        if (self::$instance === null) {
+            self::$instance = new DatabaseHelper();
+        }
+        return self::$instance;
+    }
+
+    public function getCapsule(): Capsule
+    {
+        return $this->capsule;
+    }
+
     private static $secureCapsule = null;
     private static $initialized = false;
     private static $envLoaded = false;
     
-    // ...existing code...
-
     // Removed setLogger() method
 
     private static function loadEnv()
@@ -68,25 +95,6 @@ class DatabaseHelper
         die("{$connectionName} database connection failed");
     }
 
-    public static function getInstance(): Capsule
-    {
-        if (self::$capsule === null) {
-            self::initializeDatabase(self::$capsule, [
-                'driver'    => 'mysql',
-                'host'      => $_ENV['DB_HOST'] ?? 'localhost',
-                'port'      => $_ENV['DB_PORT'] ?? '3306',
-                'database'  => $_ENV['DB_DATABASE'] ?? '',
-                'username'  => $_ENV['DB_USERNAME'] ?? '',
-                'password'  => $_ENV['DB_PASSWORD'] ?? '',
-                'charset'   => $_ENV['DB_CHARSET'] ?? 'utf8mb4',
-                'collation' => $_ENV['DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
-                'prefix'    => '',
-            ], 'default');
-        }
-
-        return self::$capsule;
-    }
-
     public static function getSecureInstance(): Capsule
     {
         if (self::$secureCapsule === null) {
@@ -114,7 +122,7 @@ class DatabaseHelper
     public static function safeQuery(callable $query)
     {
         try {
-            return $query(self::getInstance());
+            return $query(self::getInstance()->getCapsule());
         } catch (\PDOException $e) {
             getLogger('db')->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 

@@ -155,7 +155,7 @@ $container->set(TokenService::class, fn() => new TokenService(
 ));
 // Ensure AuthService is passed the container-registered database and ExceptionHandler.
 $container->set(AuthService::class, fn() => new AuthService(
-    $container->get(DatabaseHelper::class), // Ensure DatabaseHelper is passed
+    $container->get(DatabaseHelper::class), // Inject DatabaseHelper
     $container->get(TokenService::class),
     $container->get(ExceptionHandler::class),
     $container->get('auth_logger'),

@@ -16,7 +16,7 @@ class AuthService
 {
     public const DEBUG_MODE = true;
 
-    private DatabaseHelper $db;
+    private Capsule $db;
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $authLogger;
@@ -25,14 +25,14 @@ class AuthService
 
     // NEW: Constructor with dependency injection
     public function __construct(
-        DatabaseHelper $db, // Ensure DatabaseHelper is used
+        DatabaseHelper $dbHelper, // Inject DatabaseHelper
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
         LoggerInterface $auditLogger,
         array $encryptionConfig // Add encryption configuration parameter
     ) {
-        $this->db = $db;
+        $this->db = $dbHelper->getCapsule(); // Use getCapsule() to get Capsule instance
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
