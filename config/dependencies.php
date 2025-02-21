@@ -63,7 +63,7 @@ require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 $container->set(SecurityHelper::class, fn() => new SecurityHelper());
 $container->set(DatabaseHelper::class, fn() => DatabaseHelper::getInstance());
-$container->set('db', fn() => $container->get(DatabaseHelper::class));
+$container->set('db', fn() => $container->get(DatabaseHelper::class)->getCapsule());
 $container->set('secure_db', fn() => DatabaseHelper::getSecureInstance());
 $container->get('security_logger')->info("✅ SecurityHelper injected into DI container.");
 $container->get('db_logger')->info("✅ DatabaseHelper injected into DI container.");
@@ -135,7 +135,7 @@ $container->get(LoggerInterface::class)->info("Step 7: Database services registe
 try {
     $pdo = $container->get('db')->getConnection()->getPdo();
     if (!$pdo) {
-        throw new Exception("Database connection failed.");
+        throw new Exception("❌ Database connection failed.");
     }
     $container->get('db_logger')->info("✅ Database connection verified successfully.");
 } catch (Exception $e) {

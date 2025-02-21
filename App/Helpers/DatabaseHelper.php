@@ -19,7 +19,7 @@ class DatabaseHelper
     {
         $this->capsule = new Capsule();
         $this->capsule->addConnection([
-            'driver'    => 'mysql',
+            'driver'    => $_ENV['DB_DRIVER'] ?? 'mysql',
             'host'      => $_ENV['DB_HOST'] ?? 'localhost',
             'database'  => $_ENV['DB_DATABASE'] ?? '',
             'username'  => $_ENV['DB_USERNAME'] ?? '',
@@ -36,6 +36,12 @@ class DatabaseHelper
         if (self::$instance === null) {
             self::$instance = new DatabaseHelper();
         }
+
+        // Ensure at least one database connection exists
+        if (!self::$instance->getCapsule()->getConnection()) {
+            throw new \RuntimeException("❌ Database connection [default] not configured. Check database settings.");
+        }
+
         return self::$instance;
     }
 
@@ -104,15 +110,13 @@ class DatabaseHelper
     {
         if (self::$secureCapsule === null) {
             self::initializeDatabase(self::$secureCapsule, [
-                'driver'    => 'mysql',
+                'driver'    => $_ENV['SECURE_DB_DRIVER'] ?? 'mysql',
                 'host'      => $_ENV['SECURE_DB_HOST'] ?? 'localhost',
-                'port'      => $_ENV['SECURE_DB_PORT'] ?? '3306',
                 'database'  => $_ENV['SECURE_DB_DATABASE'] ?? '',
                 'username'  => $_ENV['SECURE_DB_USERNAME'] ?? '',
                 'password'  => $_ENV['SECURE_DB_PASSWORD'] ?? '',
-                'charset'   => $_ENV['SECURE_DB_CHARSET'] ?? 'utf8mb4',
-                'collation' => $_ENV['SECURE_DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
-                'prefix'    => '',
+                'charset'   => 'utf8mb4',
+                'collation' => 'utf8mb4_unicode_ci',
             ], 'secure');
         }
 
