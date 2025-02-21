@@ -2,7 +2,11 @@
 
 require_once __DIR__ . '/../../../vendor/autoload.php';
 
+use DI\Container;
 use App\Controllers\AuthController;
+
+$container = require_once __DIR__ . '/../../../config/dependencies.php';
+
 
 // ✅ Set Headers
 header('Content-Type: application/json');
@@ -18,5 +22,5 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $data = json_decode(file_get_contents("php://input"), true);
 
 // ✅ Initialize AuthController
-$authController = new AuthController();
+$authController = $container->get(AuthController::class);
 $authController->login($data);

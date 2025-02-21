@@ -14,8 +14,6 @@ use App\Helpers\ApiHelper;
 
 class AuthService
 {
-    public const DEBUG_MODE = true;
-
     private $db;
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
@@ -23,21 +21,20 @@ class AuthService
     private LoggerInterface $auditLogger;
     private array $encryptionConfig;
 
-    // NEW: Constructor with dependency injection
     public function __construct(
-        DatabaseHelper $dbHelper, // Inject DatabaseHelper
+        DatabaseHelper $dbHelper,  // Ensure DatabaseHelper is injected
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
         LoggerInterface $auditLogger,
-        array $encryptionConfig // Add encryption configuration parameter
+        array $encryptionConfig
     ) {
-        $this->db = $dbHelper->getConnection(); // Use getConnection() to get the connection
+        $this->db = $dbHelper->getCapsule();  // Get the Capsule instance
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
-        $this->encryptionConfig = $encryptionConfig; // Initialize encryption configuration
+        $this->encryptionConfig = $encryptionConfig;
     }
 
     public function login($email, $password)

@@ -21,16 +21,15 @@ class AuthController extends Controller
     private LoggerInterface $authLogger;
     private LoggerInterface $auditLogger;
 
-    // Updated Constructor with Dependency Injection
     public function __construct(
-        AuthService $authService, // Injected AuthService
+        AuthService $authService,
         Validator $validator,
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
         LoggerInterface $auditLogger
     ) {
-        $this->authService = $authService; // Now injected properly
+        $this->authService = $authService;
         $this->validator = $validator;
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
