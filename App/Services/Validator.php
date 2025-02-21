@@ -46,7 +46,7 @@ class Validator
             }
 
             // **Throw an exception to prevent further execution**
-            throw new \InvalidArgumentException(json_encode($this->errors));
+            throw new \InvalidArgumentException(json_encode(['errors' => $this->errors]));
         }
 
         return true;

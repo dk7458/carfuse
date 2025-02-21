@@ -95,10 +95,10 @@ class AuthController extends Controller
             'confirm_password' => 'required'
         ];
         if (!$this->validator->validate($data, $rules)) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', ['errors' => $this->validator->errors()], 400);
         }
         if ($data['password'] !== $data['confirm_password']) {
-            return ApiHelper::sendJsonResponse('error', 'Password and confirm password do not match', [], 400);
+            return ApiHelper::sendJsonResponse('error', 'Password and confirm password do not match', ['errors' => []], 400);
         }
         
         $registrationData = [
