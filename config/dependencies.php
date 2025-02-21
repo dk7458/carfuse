@@ -147,14 +147,15 @@ $container->set(AuditService::class, fn() => new AuditService($container->get('s
 $container->set(TokenService::class, fn() => new TokenService(
     $_ENV['JWT_SECRET'] ?? '',
     $_ENV['JWT_REFRESH_SECRET'] ?? '',
-    $container->get('auth_logger')
+    $container->get('auth_logger'),
+    $container->get(ExceptionHandler::class) 
 ));
 // Ensure AuthService is passed the container-registered database and ExceptionHandler.
 $container->set(AuthService::class, fn() => new AuthService(
     $container->get('auth_logger'),
     $container->get('db'),
     $config['encryption'],
-    $container->get(ExceptionHandler::class) // Inject centralized ExceptionHandler
+    $container->get(ExceptionHandler::class) 
 ));
 // Register UserController to receive AuthService via DI.
 $container->set(\App\Controllers\UserController::class, fn() => new \App\Controllers\UserController(
