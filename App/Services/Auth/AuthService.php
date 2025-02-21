@@ -2,8 +2,6 @@
 
 namespace App\Services\Auth;
 
-use Illuminate\Database\Capsule\Manager as Capsule;
-
 use App\Models\User;
 use App\Helpers\DatabaseHelper;
 use Firebase\JWT\JWT;
@@ -27,7 +25,7 @@ class AuthService
 
     // NEW: Constructor with dependency injection
     public function __construct(
-        Capsule $db,
+        DatabaseHelper $db, // Ensure DatabaseHelper is used
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
