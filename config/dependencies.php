@@ -81,7 +81,11 @@ if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['
 $container->get('logger')->info("Step 3: Required directories verified.");
 
 // Step 4: Initialize EncryptionService.
-$encryptionService = new EncryptionService($config['encryption']['encryption_key'] ?? '');
+$encryptionService = new EncryptionService(
+    $container->get('logger'), // Pass the correct logger
+    $container->get(ExceptionHandler::class), // Pass the ExceptionHandler
+    $config['encryption']['encryption_key'] ?? '' // Pass the encryption key from config
+);
 $container->set(EncryptionService::class, fn() => $encryptionService);
 $container->get('logger')->info("Step 4: EncryptionService registered.");
 
@@ -105,8 +109,8 @@ $container->get('logger')->info("Step 6: Key Manager configuration loaded.");
 
 // Step 7: Initialize DatabaseHelper instances BEFORE services that depend on them.
 try {
-    $database = $container->get(DatabaseHelper::class);
-    $secure_database = $container->get('secure_db');
+    $database = DatabaseHelper::getInstance();
+    $secure_database = DatabaseHelper::getSecureInstance();
     $container->get('db_logger')->info("✅ Both databases initialized successfully.");
 } catch (Exception $e) {
     $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
