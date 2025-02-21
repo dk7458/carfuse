@@ -12,7 +12,7 @@ if (file_exists($dotenvPath . '.env')) {
 // ✅ Return structured database configurations
 return [
     'app_database' => [
-        'driver'    => getenv('DB_DRIVER') ?: 'mysql',
+        'driver'    => 'mysql',
         'host'      => getenv('DB_HOST') ?: 'localhost',
         'database'  => getenv('DB_DATABASE') ?: '',
         'username'  => getenv('DB_USERNAME') ?: '',
@@ -22,7 +22,7 @@ return [
         'prefix'    => '',
     ],
     'secure_database' => [
-        'driver'    => getenv('SECURE_DB_DRIVER') ?: 'mysql',
+        'driver'    => 'mysql',
         'host'      => getenv('SECURE_DB_HOST') ?: 'localhost',
         'database'  => getenv('SECURE_DB_DATABASE') ?: '',
         'username'  => getenv('SECURE_DB_USERNAME') ?: '',
