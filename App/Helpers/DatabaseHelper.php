@@ -12,12 +12,12 @@ use function getLogger;
 
 class DatabaseHelper
 {
-    private static ?DatabaseHelper $instance = null;
-    private static ?DatabaseHelper $secureInstance = null;
-    private Capsule $capsule;
-    private static bool $envLoaded = false;
+    public static ?DatabaseHelper $instance = null;
+    public static ?DatabaseHelper $secureInstance = null;
+    public Capsule $capsule;
+    public static bool $envLoaded = false;
 
-    private function __construct(array $config)
+    public function __construct(array $config)
     {
         try {
             $this->capsule = new Capsule();
