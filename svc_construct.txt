@@ -1,0 +1,120 @@
+File: /home/dorian/carfuse/App/Services/TemplateService.php
+    public function __construct(LoggerInterface $logger, string $templateDirectory, ExceptionHandler $exceptionHandler)
+    {
+        if (!is_dir($templateDirectory) || !is_readable($templateDirectory)) {
+            throw new \InvalidArgumentException("Invalid template directory: $templateDirectory");
+
+File: /home/dorian/carfuse/App/Services/MetricsService.php
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
+    {
+        $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
+
+File: /home/dorian/carfuse/App/Services/UserService.php
+    public function __construct(
+        DatabaseHelper $db,
+        LoggerInterface $authLogger,
+        LoggerInterface $auditLogger,
+
+File: /home/dorian/carfuse/App/Services/Validator.php
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
+    {
+        $this->logger = $logger;
+        $this->db = $db;
+
+File: /home/dorian/carfuse/App/Services/BookingService.php
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, \App\Helpers\DatabaseHelper $db)
+    {
+        $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
+
+File: /home/dorian/carfuse/App/Services/Auth/TokenService.php
+    public function __construct(
+        string $secretKey,
+        string $refreshSecretKey,
+        LoggerInterface $tokenLogger,
+
+File: /home/dorian/carfuse/App/Services/Auth/AuthService.php
+    public function __construct(
+        DatabaseHelper $dbHelper, // Inject DatabaseHelper
+        TokenService $tokenService,
+        ExceptionHandler $exceptionHandler,
+
+File: /home/dorian/carfuse/App/Services/DocumentService.php
+    public function __construct(
+        AuditService $auditService,
+        FileStorage $fileStorage,
+        EncryptionService $encryptionService,
+
+File: /home/dorian/carfuse/App/Services/NotificationService.php
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db, array $config)
+    {
+        $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
+
+File: /home/dorian/carfuse/App/Services/AuditService.php
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
+    {
+        $this->db = $db;
+        $this->logger = $logger;
+
+File: /home/dorian/carfuse/App/Services/TransactionService.php
+    public function __construct(LoggerInterface $bookingLogger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
+    {
+        $this->bookingLogger = $bookingLogger;
+        $this->db = $db;
+
+File: /home/dorian/carfuse/App/Services/EncryptionService.php
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, string $encryptionKey)
+    {
+        $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
+
+File: /home/dorian/carfuse/App/Services/FileStorage.php
+    public function __construct(array $config, EncryptionService $encryptionService, LoggerInterface $logger, ExceptionHandler $exceptionHandler)
+    {
+        $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
+
+File: /home/dorian/carfuse/App/Services/RateLimiter.php
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler)
+    {
+        $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
+
+File: /home/dorian/carfuse/App/Services/RevenueService.php
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
+    {
+        $this->logger = $logger;
+        $this->db = $db;
+
+File: /home/dorian/carfuse/App/Services/Security/KeyManager.php
+    public function __construct(array $keys, LoggerInterface $logger, ExceptionHandler $exceptionHandler)
+    {
+        $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
+
+File: /home/dorian/carfuse/App/Services/SignatureService.php
+    public function __construct(
+        LoggerInterface $logger,
+        DatabaseHelper $db,
+        array $config,
+
+File: /home/dorian/carfuse/App/Services/ReportService.php
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
+    {
+        $this->logger = $logger;
+        $this->db = $db;
+
+File: /home/dorian/carfuse/App/Services/PaymentService.php
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
+    {
+        $this->logger = $logger;
+        $this->db = $db;
+
+File: /home/dorian/carfuse/App/Services/PayUService.php
+    public function __construct(array $config, LoggerInterface $logger, ExceptionHandler $exceptionHandler)
+    {
+        $this->merchantKey = $config['merchant_key'];
+        $this->merchantSalt = $config['merchant_salt'];
+

@@ -149,15 +149,21 @@ $container->set(Validator::class, fn() => new Validator(
     $container->get(DatabaseHelper::class), // Pass the DatabaseHelper
     $container->get(ExceptionHandler::class) // Pass the ExceptionHandler
 ));
-$container->set(RateLimiter::class, fn() => new RateLimiter($container->get('db_logger'), $container->get('db')));
-$container->set(AuditService::class, fn() => new AuditService($container->get('security_logger')));
+$container->set(RateLimiter::class, fn() => new RateLimiter(
+    $container->get('db_logger'), 
+    $container->get(ExceptionHandler::class)
+));
+$container->set(AuditService::class, fn() => new AuditService(
+    $container->get('security_logger'),
+    $container->get(ExceptionHandler::class),
+    $container->get(DatabaseHelper::class)
+));
 $container->set(TokenService::class, fn() => new TokenService(
     $_ENV['JWT_SECRET'] ?? '',
     $_ENV['JWT_REFRESH_SECRET'] ?? '',
     $container->get('auth_logger'),
-    $container->get(ExceptionHandler::class) 
+    $container->get(ExceptionHandler::class)
 ));
-// Ensure AuthService is passed the container-registered database and ExceptionHandler.
 $container->set(AuthService::class, fn() => new AuthService(
     $container->get(DatabaseHelper::class), // Inject DatabaseHelper
     $container->get(TokenService::class),
@@ -171,44 +177,45 @@ $container->set(\App\Controllers\UserController::class, fn() => new \App\Control
     $container->get(\App\Services\Auth\AuthService::class)
 ));
 $container->set(UserService::class, fn() => new UserService(
+    $container->get(DatabaseHelper::class),
     $container->get('auth_logger'),
-    $container->get('db'),
-    $config['encryption']['jwt_secret'] ?? ''
+    $container->get('audit_logger')
 ));
-// Register external API–dependent services after core ones.
 $container->set(NotificationService::class, fn() => new NotificationService(
     $container->get('api_logger'),
-    $config['notifications'] ?? [],
-    $container->get('db')
+    $container->get(ExceptionHandler::class),
+    $container->get(DatabaseHelper::class),
+    $config['notifications'] ?? []
 ));
 $container->set(PaymentService::class, fn() => new PaymentService(
     $container->get('db_logger'),
-    $container->get('db'),
-    new Payment(),
-    getenv('PAYU_API_KEY') ?: '',
-    getenv('PAYU_API_SECRET') ?: ''
+    $container->get(DatabaseHelper::class),
+    $container->get(ExceptionHandler::class)
 ));
 $container->set(BookingService::class, fn() => new BookingService(
     $container->get('api_logger'),
-    $container->get('db')
+    $container->get(ExceptionHandler::class),
+    $container->get(DatabaseHelper::class)
 ));
 $container->set(MetricsService::class, fn() => new MetricsService(
     $container->get('api_logger'),
-    $container->get('db')
+    $container->get(ExceptionHandler::class),
+    $container->get(DatabaseHelper::class)
 ));
 $container->set(ReportService::class, fn() => new ReportService(
     $container->get('api_logger'),
-    $container->get('db')
+    $container->get(DatabaseHelper::class),
+    $container->get(ExceptionHandler::class)
 ));
 $container->set(RevenueService::class, fn() => new RevenueService(
     $container->get('db_logger'),
-    $container->get('db')
+    $container->get(DatabaseHelper::class),
+    $container->get(ExceptionHandler::class)
 ));
 $container->set(SignatureService::class, fn() => new SignatureService(
-    $config['signature'],
-    $container->get(FileStorage::class),
-    $container->get(EncryptionService::class),
-    $container->get('security_logger')
+    $container->get('security_logger'),
+    $container->get(DatabaseHelper::class),
+    $config['signature']
 ));
 $container->set(DocumentService::class, fn() => new DocumentService(
     $container->get('api_logger'),
@@ -216,6 +223,27 @@ $container->set(DocumentService::class, fn() => new DocumentService(
     $container->get(FileStorage::class),
     $container->get(EncryptionService::class),
     $container->get(TemplateService::class)
+));
+$container->set(TemplateService::class, fn() => new TemplateService(
+    $container->get('api_logger'),
+    __DIR__ . '/../storage/templates',
+    $container->get(ExceptionHandler::class)
+));
+$container->set(FileStorage::class, fn() => new FileStorage(
+    $config['filestorage'],
+    $container->get(EncryptionService::class),
+    $container->get('api_logger'),
+    $container->get(ExceptionHandler::class)
+));
+$container->set(EncryptionService::class, fn() => new EncryptionService(
+    $container->get('api_logger'),
+    $container->get(ExceptionHandler::class),
+    $config['encryption']['encryption_key'] ?? ''
+));
+$container->set(KeyManager::class, fn() => new KeyManager(
+    $config['keymanager'],
+    $container->get('security_logger'),
+    $container->get(ExceptionHandler::class)
 ));
 
 // New registrations for additional services ensuring proper logging.
