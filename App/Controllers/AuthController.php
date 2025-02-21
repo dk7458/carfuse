@@ -54,7 +54,7 @@ class AuthController extends Controller
         // ...existing code...
         $data = json_decode(file_get_contents("php://input"), true);
         if (!$data || !is_array($data)) {
-            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
+            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
         }
         
         $email = $data['email'] ?? '';
@@ -77,7 +77,7 @@ class AuthController extends Controller
         ]);
         // Improved logging with context
         $this->authLogger->info("User logged in", ['email' => $email]);
-        return ApiHelper::sendJsonResponse('success', 'User logged in', [], 200);
+        return ApiHelper::sendJsonResponse('success', 'User logged in', ['errors' => (object)[]], 200);
     }
 
     public function register($request = null)
@@ -85,7 +85,7 @@ class AuthController extends Controller
         // ...existing code...
         $data = json_decode(file_get_contents("php://input"), true);
         if (!$data || !is_array($data)) {
-            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
+            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
         }
         
         $rules = [
@@ -98,7 +98,7 @@ class AuthController extends Controller
             return ApiHelper::sendJsonResponse('error', 'Validation failed', ['errors' => $this->validator->errors()], 400);
         }
         if ($data['password'] !== $data['confirm_password']) {
-            return ApiHelper::sendJsonResponse('error', 'Password and confirm password do not match', ['errors' => []], 400);
+            return ApiHelper::sendJsonResponse('error', 'Password and confirm password do not match', ['errors' => (object)[]], 400);
         }
         
         $registrationData = [
@@ -129,7 +129,7 @@ class AuthController extends Controller
     {
         $data = json_decode(file_get_contents("php://input"), true);
         if (!$data || !is_array($data)) {
-            ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
+            ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
         }
         $email = $data['email'] ?? '';
         $result = $this->authService->resetPasswordRequest($email);
@@ -139,11 +139,11 @@ class AuthController extends Controller
     public function refresh()
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            ApiHelper::sendJsonResponse('error', 'Method Not Allowed', [], 405);
+            ApiHelper::sendJsonResponse('error', 'Method Not Allowed', ['errors' => (object)[]], 405);
         }
         $refreshToken = $_COOKIE['refresh_token'] ?? null;
         if (!$refreshToken) {
-            ApiHelper::sendJsonResponse('error', 'Refresh token is required', [], 400);
+            ApiHelper::sendJsonResponse('error', 'Refresh token is required', ['errors' => (object)[]], 400);
         }
         $newToken = $this->tokenService->refreshToken($refreshToken);
         if ($newToken) {
@@ -154,9 +154,9 @@ class AuthController extends Controller
                 "httponly" => true,
                 "samesite" => "Strict"
             ]);
-            ApiHelper::sendJsonResponse('success', 'Token refreshed', [], 200);
+            ApiHelper::sendJsonResponse('success', 'Token refreshed', ['errors' => (object)[]], 200);
         } else {
-            ApiHelper::sendJsonResponse('error', 'Invalid refresh token', [], 401);
+            ApiHelper::sendJsonResponse('error', 'Invalid refresh token', ['errors' => (object)[]], 401);
         }
     }
 
@@ -177,14 +177,14 @@ class AuthController extends Controller
             "httponly" => true,
             "samesite" => "Strict"
         ]);
-        ApiHelper::sendJsonResponse('success', 'User logged out', [], 200);
+        ApiHelper::sendJsonResponse('success', 'User logged out', ['errors' => (object)[]], 200);
     }
 
     public function userDetails($request = null)
     {
         $token = $_COOKIE['jwt'] ?? '';
         if (!$this->authService->validateToken($token)) {
-            ApiHelper::sendJsonResponse('error', 'Invalid token', [], 400);
+            ApiHelper::sendJsonResponse('error', 'Invalid token', ['errors' => (object)[]], 400);
         }
         $userData = $this->authService->getUserFromToken($token);
         ApiHelper::sendJsonResponse('success', 'User details fetched', $userData, 200);

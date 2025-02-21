@@ -248,6 +248,14 @@ $container->set(KeyManager::class, fn() => new KeyManager(
 ));
 
 // New registrations for additional services ensuring proper logging.
+$container->set(\App\Controllers\AuthController::class, fn() => new \App\Controllers\AuthController(
+    $container->get(\App\Services\Auth\AuthService::class),
+    $container->get(Validator::class),
+    $container->get(TokenService::class),
+    $container->get(ExceptionHandler::class),
+    $container->get('auth_logger'),
+    $container->get('audit_logger')
+));
 
 $container->get(LoggerInterface::class)->info("Step 8: Service registration completed.");
 
