@@ -9,8 +9,6 @@ if (file_exists($dotenvPath . '.env')) {
 }
 
 // ✅ Log database configurations for debugging (ONLY FOR DEVELOPMENT)
-getLogger('db')->info("🔄 Database Config Loaded: HOST=" . getenv('DB_HOST'));
-
 // ✅ Return structured database configurations
 return [
     'app_database' => [
