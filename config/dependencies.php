@@ -62,7 +62,7 @@ $container->set(ExceptionHandler::class, fn($c) => new ExceptionHandler(
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 $container->set(SecurityHelper::class, fn() => new SecurityHelper());
-$container->set(DatabaseHelper::class, fn() => DatabaseHelper::getInstance());
+$container->set('db', fn() => DatabaseHelper::getInstance());
 $container->set('secure_db', fn() => DatabaseHelper::getSecureInstance());
 $container->get('security_logger')->info("✅ SecurityHelper injected into DI container.");
 $container->get('db_logger')->info("✅ DatabaseHelper injected into DI container.");
