@@ -5,7 +5,7 @@ namespace App\Services\Auth;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Psr\Log\LoggerInterface;
-use App\Exceptions\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 use App\Helpers\ApiHelper;
 
 class TokenService
