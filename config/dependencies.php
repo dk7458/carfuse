@@ -170,7 +170,8 @@ $container->set(AuthService::class, fn() => new AuthService(
     $container->get(ExceptionHandler::class),
     $container->get('auth_logger'),
     $container->get('audit_logger'),
-    $config['encryption']
+    $config['encryption'],
+    $container->get(Validator::class) // Inject Validator
 ));
 // Register UserController to receive AuthService via DI.
 $container->set(\App\Controllers\UserController::class, fn() => new \App\Controllers\UserController(

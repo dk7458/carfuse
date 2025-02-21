@@ -21,6 +21,7 @@ class AuthService
     private LoggerInterface $authLogger;
     private LoggerInterface $auditLogger;
     private array $encryptionConfig;
+    private Validator $validator;
 
     public function __construct(
         DatabaseHelper $dbHelper,  // Ensure DatabaseHelper is injected
@@ -28,7 +29,8 @@ class AuthService
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
         LoggerInterface $auditLogger,
-        array $encryptionConfig
+        array $encryptionConfig,
+        Validator $validator // Inject Validator
     ) {
         $this->db = $dbHelper->getCapsule();  // Get the Capsule instance
         $this->tokenService = $tokenService;
@@ -36,6 +38,7 @@ class AuthService
         $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
         $this->encryptionConfig = $encryptionConfig;
+        $this->validator = $validator; // Initialize Validator
     }
 
     public function login($email, $password)
@@ -74,26 +77,29 @@ class AuthService
     }
 
     public function registerUser(array $data)
-{
-    $rules = [
-        'email'    => 'required|email|unique:users',
-        'password' => 'required|min:6',
-        'name'     => 'required|string',
-    ];
+    {
+        $rules = [
+            'email'    => 'required|email|unique:users,email',
+            'password' => 'required|min:6',
+            'name'     => 'required|string',
+        ];
 
-    try {
-        // ✅ Throws exception if validation fails
-        $this->validator->validate($data, $rules);
+        try {
+            // Validate the input data
+            $this->validator->validate($data, $rules);
 
-        $userId = $this->db->table('users')->insertGetId($data);
-        return ApiHelper::sendJsonResponse('success', 'User registered', ['user_id' => $userId], 201);
-    } catch (\InvalidArgumentException $e) {
-        return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
-    } catch (\Exception $e) {
-        $this->exceptionHandler->handleException($e);
+            // Hash the password before storing it
+            $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
+
+            // Insert the user into the database
+            $userId = $this->db->table('users')->insertGetId($data);
+            return ApiHelper::sendJsonResponse('success', 'User registered', ['user_id' => $userId], 201);
+        } catch (\InvalidArgumentException $e) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
     }
-}
-
 
     public function resetPasswordRequest($email)
     {
