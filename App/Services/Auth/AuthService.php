@@ -11,6 +11,7 @@ use Exception;
 use App\Helpers\SecurityHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ApiHelper;
+use App\Services\Validator;
 
 class AuthService
 {
