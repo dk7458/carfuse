@@ -4,7 +4,7 @@ namespace App\Services\Security;
 
 use Exception;
 use Psr\Log\LoggerInterface;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 
 class KeyManager
 {

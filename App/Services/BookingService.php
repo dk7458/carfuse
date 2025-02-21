@@ -6,7 +6,7 @@ use App\Models\Booking;
 use Exception;
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 
 class BookingService
 {

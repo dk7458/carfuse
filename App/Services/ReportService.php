@@ -8,7 +8,7 @@ use App\Models\Payment;
 use App\Models\User;
 use Dompdf\Dompdf;
 use Psr\Log\LoggerInterface;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 
 class ReportService
 {

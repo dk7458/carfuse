@@ -4,7 +4,7 @@ namespace App\Middleware;
 
 use App\Helpers\ApiHelper;
 use App\Services\TokenService;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 use Psr\Log\LoggerInterface;
 
 /**

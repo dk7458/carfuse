@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Helpers\DatabaseHelper; // new import
 use Psr\Log\LoggerInterface; // ensure LoggerInterface is imported
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 require_once __DIR__ . '/../../config/payu.php';
 /**
  * PayUService

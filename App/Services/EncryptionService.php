@@ -5,7 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 use Psr\Log\LoggerInterface;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 
 class EncryptionService
 {

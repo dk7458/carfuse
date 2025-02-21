@@ -6,7 +6,7 @@ use App\Helpers\DatabaseHelper; // new import
 use App\Models\Payment;
 use App\Models\TransactionLog;
 use Psr\Log\LoggerInterface;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 
 class RevenueService
 {

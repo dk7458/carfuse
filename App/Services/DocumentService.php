@@ -9,7 +9,7 @@ use DocumentManager\Services\FileStorage;
 use DocumentManager\Services\TemplateService;
 use App\Services\EncryptionService;
 use Psr\Log\LoggerInterface;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 
 /**
  * Document Service

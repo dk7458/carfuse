@@ -6,7 +6,7 @@ use App\Helpers\DatabaseHelper; // new import
 use Psr\Log\LoggerInterface;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-use App\Handlers\ExceptionHandler; // assume this exists
+use App\Helpers\ExceptionHandler; // assume this exists
 
 /**
  * NotificationService

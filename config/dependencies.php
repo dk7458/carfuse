@@ -50,7 +50,7 @@ try {
 }
 
 // Register ExceptionHandler after the loggers are available.
-$container->set(App\Handlers\ExceptionHandler::class, fn($c) => new App\Handlers.ExceptionHandler(
+$container->set(ExceptionHandler::class, fn($c) => new ExceptionHandler(
     $c->get('db_logger'),
     $c->get('auth_logger'),
     $c->get(LoggerInterface::class)
@@ -91,7 +91,7 @@ $container->get(LoggerInterface::class)->info("Step 3: Required directories veri
 // Step 4: Initialize EncryptionService.
 $encryptionService = new EncryptionService(
     $container->get(LoggerInterface::class), // Pass the correct logger
-    $container->get(App\Handlers\ExceptionHandler::class), // Pass the ExceptionHandler
+    $container->get(ExceptionHandler::class), // Pass the ExceptionHandler
     $config['encryption']['encryption_key'] ?? '' // Pass the encryption key from config
 );
 $container->set(EncryptionService::class, fn() => $encryptionService);
@@ -154,7 +154,7 @@ $container->set(AuthService::class, fn() => new AuthService(
     $container->get('auth_logger'),
     $container->get('db'),
     $config['encryption'],
-    $container->get(App\Handlers\ExceptionHandler::class) // Inject centralized ExceptionHandler
+    $container->get(ExceptionHandler::class) // Inject centralized ExceptionHandler
 ));
 // Register UserController to receive AuthService via DI.
 $container->set(\App\Controllers\UserController::class, fn() => new \App\Controllers\UserController(

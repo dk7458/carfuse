@@ -8,7 +8,7 @@ use Psr\Log\LoggerInterface;
 use App\Services\FileStorage;
 use App\Services\EncryptionService;
 use App\Helpers\DatabaseHelper;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 
 /**
  * Signature Service

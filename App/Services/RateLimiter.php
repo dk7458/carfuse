@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use Psr\Log\LoggerInterface;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 
 /**
  * Rate Limiter Service

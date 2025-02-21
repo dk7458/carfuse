@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Exception;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ApiHelper;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 
 class UserService
 {

@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 
 class TransactionService
 {

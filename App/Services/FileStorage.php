@@ -5,7 +5,7 @@ namespace App\Services;
 use Exception;
 use App\Services\EncryptionService;
 use Psr\Log\LoggerInterface;
-use App\Handlers\ExceptionHandler;
+use App\Helpers\ExceptionHandler;
 
 class FileStorage
 {
