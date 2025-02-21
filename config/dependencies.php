@@ -62,7 +62,8 @@ $container->set(ExceptionHandler::class, fn($c) => new ExceptionHandler(
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 $container->set(SecurityHelper::class, fn() => new SecurityHelper());
-$container->set('db', fn() => DatabaseHelper::getInstance());
+$container->set(DatabaseHelper::class, fn() => DatabaseHelper::getInstance());
+$container->set('db', fn() => $container->get(DatabaseHelper::class));
 $container->set('secure_db', fn() => DatabaseHelper::getSecureInstance());
 $container->get('security_logger')->info("✅ SecurityHelper injected into DI container.");
 $container->get('db_logger')->info("✅ DatabaseHelper injected into DI container.");
@@ -154,7 +155,7 @@ $container->set(TokenService::class, fn() => new TokenService(
 ));
 // Ensure AuthService is passed the container-registered database and ExceptionHandler.
 $container->set(AuthService::class, fn() => new AuthService(
-    $container->get('db'),
+    $container->get(DatabaseHelper::class), // Ensure DatabaseHelper is passed
     $container->get(TokenService::class),
     $container->get(ExceptionHandler::class),
     $container->get('auth_logger'),
