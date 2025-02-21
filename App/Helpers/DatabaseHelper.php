@@ -17,22 +17,30 @@ class DatabaseHelper
 
     private function __construct(array $config)
     {
-        $this->capsule = new Capsule();
-        $this->capsule->addConnection($config);
-        $this->capsule->setAsGlobal();
-        $this->capsule->bootEloquent();
+        try {
+            $this->capsule = new Capsule();
+            $this->capsule->addConnection($config);
+            $this->capsule->setAsGlobal();
+            $this->capsule->bootEloquent();
+
+            // ✅ Log successful initialization
+            getLogger('db')->info("✅ Database connection initialized successfully.");
+        } catch (Exception $e) {
+            getLogger('db')->critical("❌ Database connection failed: " . $e->getMessage());
+            die("Database connection failed. Check logs for details.");
+        }
     }
 
     public static function getInstance(): DatabaseHelper
     {
         if (self::$instance === null) {
-            $config = require __DIR__ . '/../../config/database.php';
-            self::$instance = new DatabaseHelper($config['app_database']);
-        }
-
-        // Ensure connection is set before returning
-        if (!self::$instance->getCapsule()->getConnection()) {
-            throw new \RuntimeException("❌ Database connection [default] not configured. Check database settings.");
+            try {
+                $config = require __DIR__ . '/../../config/database.php';
+                self::$instance = new DatabaseHelper($config['app_database']);
+            } catch (Exception $e) {
+                getLogger('db')->critical("❌ Database initialization failed: " . $e->getMessage());
+                die("Database initialization failed.");
+            }
         }
 
         return self::$instance;
@@ -41,13 +49,13 @@ class DatabaseHelper
     public static function getSecureInstance(): DatabaseHelper
     {
         if (self::$secureInstance === null) {
-            $config = require __DIR__ . '/../../config/database.php';
-            self::$secureInstance = new DatabaseHelper($config['secure_database']);
-        }
-
-        // Ensure connection is set before returning
-        if (!self::$secureInstance->getCapsule()->getConnection()) {
-            throw new \RuntimeException("❌ Secure database connection not configured. Check database settings.");
+            try {
+                $config = require __DIR__ . '/../../config/database.php';
+                self::$secureInstance = new DatabaseHelper($config['secure_database']);
+            } catch (Exception $e) {
+                getLogger('db')->critical("❌ Secure database initialization failed: " . $e->getMessage());
+                die("Secure database initialization failed.");
+            }
         }
 
         return self::$secureInstance;
@@ -60,7 +68,12 @@ class DatabaseHelper
 
     public function getConnection()
     {
-        return $this->capsule->getConnection();
+        try {
+            return $this->capsule->getConnection();
+        } catch (Exception $e) {
+            getLogger('db')->error("❌ Failed to get database connection: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -72,15 +85,13 @@ class DatabaseHelper
             return $query(self::getInstance()->getCapsule());
         } catch (\PDOException $e) {
             getLogger('db')->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-
             if ($e->getCode() == "23000") {
-                ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
+                return ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
             }
-
-            ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
+            return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         } catch (\Exception $e) {
             getLogger('db')->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
+            return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         }
     }
 
@@ -89,9 +100,7 @@ class DatabaseHelper
      */
     public static function insert($table, $data)
     {
-        return self::safeQuery(function ($db) use ($table, $data) {
-            return $db->table($table)->insertGetId($data);
-        });
+        return self::safeQuery(fn ($db) => $db->table($table)->insertGetId($data));
     }
 
     /**
@@ -99,9 +108,7 @@ class DatabaseHelper
      */
     public static function update($table, $data, $where)
     {
-        return self::safeQuery(function ($db) use ($table, $data, $where) {
-            return $db->table($table)->where($where)->update($data);
-        });
+        return self::safeQuery(fn ($db) => $db->table($table)->where($where)->update($data));
     }
 
     /**
@@ -109,9 +116,7 @@ class DatabaseHelper
      */
     public static function delete($table, $where)
     {
-        return self::safeQuery(function ($db) use ($table, $where) {
-            return $db->table($table)->where($where)->delete();
-        });
+        return self::safeQuery(fn ($db) => $db->table($table)->where($where)->delete());
     }
 
     /**
@@ -119,8 +124,6 @@ class DatabaseHelper
      */
     public static function select($query, $params = [])
     {
-        return self::safeQuery(function ($db) use ($query, $params) {
-            return $db->select($query, $params);
-        });
+        return self::safeQuery(fn ($db) => $db->select($query, $params));
     }
 }
