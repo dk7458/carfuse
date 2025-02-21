@@ -164,13 +164,13 @@ $container->set(TokenService::class, fn() => new TokenService(
     $container->get('auth_logger'),
     $container->get(ExceptionHandler::class)
 ));
-$container->set(AuthService::class, fn() => new AuthService(
-    $container->get(DatabaseHelper::class), // Inject DatabaseHelper
-    $container->get(TokenService::class),
-    $container->get(ExceptionHandler::class),
-    $container->get('auth_logger'),
-    $container->get('audit_logger'),
-    $config['encryption'] // Pass the encryption configuration
+$container->set(AuthService::class, fn($c) => new AuthService(
+    $c->get(DatabaseHelper::class),  // Ensure correct DB injection
+    $c->get(TokenService::class),
+    $c->get(ExceptionHandler::class),
+    $c->get('auth_logger'),
+    $c->get('audit_logger'),
+    $config['encryption'] // Pass encryption config
 ));
 // Register UserController to receive AuthService via DI.
 $container->set(\App\Controllers\UserController::class, fn() => new \App\Controllers\UserController(

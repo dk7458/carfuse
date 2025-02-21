@@ -23,25 +23,20 @@ class AuthController extends Controller
 
     // Updated Constructor with Dependency Injection
     public function __construct(
+        AuthService $authService, // Injected AuthService
         Validator $validator,
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
         LoggerInterface $auditLogger
     ) {
+        $this->authService = $authService; // Now injected properly
         $this->validator = $validator;
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
-        // ...existing dependency injections...
-        
-        // Optionally, move secure session handling to middleware
-        // SecurityHelper::startSecureSession();
 
-        // Initialize AuthService (could be injected as well)
-        $this->authService = new AuthService();
-        // ...existing initialization code...
         DatabaseHelper::getInstance();
     }
 
