@@ -40,6 +40,8 @@ try {
     $container->set('db_logger', fn() => getLogger('db'));
     $container->set('api_logger', fn() => getLogger('api'));
     $container->set('security_logger', fn() => getLogger('security'));
+    $container->set('audit_logger', fn() => getLogger('audit')); 
+
     // Register new dependencies logger.
     $container->set('dependencies_logger', fn() => getLogger('dependencies'));
     $container->get('dependencies_logger')->info("🔄 Step 1: Starting Dependency Injection.");
