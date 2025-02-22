@@ -78,8 +78,8 @@ foreach (glob("{$configDirectory}/*.php") as $filePath) {
 // Step 3: Initialize DatabaseHelper instances BEFORE services that depend on them.
 try {
     DatabaseHelper::setLogger($container->get('db_logger'));
-    $database = DatabaseHelper::getInstance();
-    $secureDatabase = DatabaseHelper::getSecureInstance();
+    $database = DatabaseHelper::getInstance($envConfig); // Pass the envConfig array
+    $secureDatabase = DatabaseHelper::getSecureInstance($envConfig); // Pass the envConfig array and specify 'secure'
     $container->get('db_logger')->info("✅ Both databases initialized successfully.");
 } catch (Exception $e) {
     $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
@@ -107,7 +107,7 @@ try {
 $encryptionService = new EncryptionService(
     $container->get(LoggerInterface::class), // Pass the correct logger
     $container->get(ExceptionHandler::class), // Pass the ExceptionHandler
-    $config['encryption']['encryption_key'] ?? '' // Pass the encryption key from config
+    $envConfig['encryption']['encryption_key'] ?? '' // Pass the encryption key from envConfig
 );
 $container->set(EncryptionService::class, fn() => $encryptionService);
 $container->get(LoggerInterface::class)->info("Step 4: EncryptionService registered.");
@@ -145,7 +145,7 @@ $container->get(LoggerInterface::class)->info("Step 7: Required directories veri
 $container->set(Validator::class, fn() => new Validator(
     $container->get('api_logger'), // Pass the logger
     $container->get(DatabaseHelper::class), // Pass the DatabaseHelper
-    $container->get(ExceptionHandler::class) // Pass the ExceptionHandler
+    $container->get(ExceptionHandler::class)
 ));
 $container->set(RateLimiter::class, fn() => new RateLimiter(
     $container->get('db_logger'), 
@@ -157,8 +157,8 @@ $container->set(AuditService::class, fn() => new AuditService(
     $container->get(DatabaseHelper::class)
 ));
 $container->set(TokenService::class, fn() => new TokenService(
-    $_ENV['JWT_SECRET'] ?? '',
-    $_ENV['JWT_REFRESH_SECRET'] ?? '',
+    $envConfig['JWT_SECRET'] ?? '',
+    $envConfig['JWT_REFRESH_SECRET'] ?? '',
     $container->get('auth_logger'),
     $container->get(ExceptionHandler::class)
 ));
@@ -168,7 +168,7 @@ $container->set(AuthService::class, fn() => new AuthService(
     $container->get(ExceptionHandler::class),
     $container->get('auth_logger'),
     $container->get('audit_logger'),
-    $config['encryption'],
+    $envConfig['encryption'],
     $container->get(Validator::class) // Inject Validator
 ));
 // Register UserController to receive AuthService via DI.

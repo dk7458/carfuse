@@ -3,8 +3,6 @@
 namespace App\Helpers;
 
 use Illuminate\Database\Capsule\Manager as Capsule;
-use Illuminate\Events\Dispatcher;
-use Illuminate\Container\Container;
 use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ApiHelper;
@@ -39,40 +37,40 @@ class DatabaseHelper
         }
     }
 
-    private static function getDatabaseConfig(string $type = 'default'): array
+    private static function getDatabaseConfig(array $envConfig, string $type = 'default'): array
     {
         if ($type === 'secure') {
             return [
-                'driver'    => $_ENV['SECURE_DB_DRIVER'] ?? 'mysql',
-                'host'      => $_ENV['SECURE_DB_HOST'] ?? 'localhost',
-                'port'      => $_ENV['SECURE_DB_PORT'] ?? '3306',
-                'database'  => $_ENV['SECURE_DB_DATABASE'] ?? '',
-                'username'  => $_ENV['SECURE_DB_USERNAME'] ?? '',
-                'password'  => $_ENV['SECURE_DB_PASSWORD'] ?? '',
-                'charset'   => $_ENV['SECURE_DB_CHARSET'] ?? 'utf8mb4',
-                'collation' => $_ENV['SECURE_DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
+                'driver'    => $envConfig['SECURE_DB_DRIVER'] ?? 'mysql',
+                'host'      => $envConfig['SECURE_DB_HOST'] ?? 'localhost',
+                'port'      => $envConfig['SECURE_DB_PORT'] ?? '3306',
+                'database'  => $envConfig['SECURE_DB_DATABASE'] ?? '',
+                'username'  => $envConfig['SECURE_DB_USERNAME'] ?? '',
+                'password'  => $envConfig['SECURE_DB_PASSWORD'] ?? '',
+                'charset'   => $envConfig['SECURE_DB_CHARSET'] ?? 'utf8mb4',
+                'collation' => $envConfig['SECURE_DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
                 'prefix'    => '',
             ];
         }
 
         return [
-            'driver'    => $_ENV['DB_DRIVER'] ?? 'mysql',
-            'host'      => $_ENV['DB_HOST'] ?? 'localhost',
-            'port'      => $_ENV['DB_PORT'] ?? '3306',
-            'database'  => $_ENV['DB_DATABASE'] ?? '',
-            'username'  => $_ENV['DB_USERNAME'] ?? '',
-            'password'  => $_ENV['DB_PASSWORD'] ?? '',
-            'charset'   => $_ENV['DB_CHARSET'] ?? 'utf8mb4',
-            'collation' => $_ENV['DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
+            'driver'    => $envConfig['DB_DRIVER'] ?? 'mysql',
+            'host'      => $envConfig['DB_HOST'] ?? 'localhost',
+            'port'      => $envConfig['DB_PORT'] ?? '3306',
+            'database'  => $envConfig['DB_DATABASE'] ?? '',
+            'username'  => $envConfig['DB_USERNAME'] ?? '',
+            'password'  => $envConfig['DB_PASSWORD'] ?? '',
+            'charset'   => $envConfig['DB_CHARSET'] ?? 'utf8mb4',
+            'collation' => $envConfig['DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
             'prefix'    => '',
         ];
     }
 
-    public static function getInstance(): DatabaseHelper
+    public static function getInstance(array $envConfig): DatabaseHelper
     {
         if (self::$instance === null) {
             try {
-                self::$instance = new DatabaseHelper(self::getDatabaseConfig('default'));
+                self::$instance = new DatabaseHelper(self::getDatabaseConfig($envConfig, 'default'));
             } catch (Exception $e) {
                 self::$logger->critical("❌ Database initialization failed: " . $e->getMessage());
                 die("Database initialization failed.");
@@ -82,11 +80,11 @@ class DatabaseHelper
         return self::$instance;
     }
 
-    public static function getSecureInstance(): DatabaseHelper
+    public static function getSecureInstance(array $envConfig): DatabaseHelper
     {
         if (self::$secureInstance === null) {
             try {
-                self::$secureInstance = new DatabaseHelper(self::getDatabaseConfig('secure'));
+                self::$secureInstance = new DatabaseHelper(self::getDatabaseConfig($envConfig, 'secure'));
             } catch (Exception $e) {
                 self::$logger->critical("❌ Secure database initialization failed: " . $e->getMessage());
                 die("Secure database initialization failed.");

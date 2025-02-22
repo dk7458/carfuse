@@ -18,6 +18,29 @@ if (!getenv('DB_HOST')) {
 }
 $logger->info("🔄 Environment variables loaded from {$dotenvPath}/.env");
 
+// Store environment variables in an associative array
+$envConfig = [
+    'DB_DRIVER' => 'mysql',
+    'DB_CHARSET' => 'utf8mb4',
+    'DB_HOST' => getenv('DB_HOST'),
+    'DB_PORT' => '3306',
+    'DB_COLLATION' => 'utf8mb4_unicode_ci',
+    'DB_DATABASE' => getenv('DB_DATABASE'),
+    'DB_USERNAME' => getenv('DB_USERNAME'),
+    'DB_PASSWORD' => getenv('DB_PASSWORD'),
+    'SECURE_DB_DRIVER' => 'mysql',
+    'SECURE_DB_CHARSET' => 'utf8mb4',
+    'SECURE_DB_COLLATION' => 'utf8mb4_unicode_ci',
+    'SECURE_DB_HOST' => getenv('SECURE_DB_HOST'),
+    'SECURE_DB_PORT' => getenv('SECURE_DB_PORT'),
+    'SECURE_DB_DATABASE' => getenv('SECURE_DB_DATABASE'),
+    'SECURE_DB_USERNAME' => getenv('SECURE_DB_USERNAME'),
+    'SECURE_DB_PASSWORD' => getenv('SECURE_DB_PASSWORD'),
+    'JWT_SECRET' => getenv('JWT_SECRET'),
+    'JWT_REFRESH_SECRET' => getenv('JWT_REFRESH_SECRET'),
+    // Add other environment variables as needed
+];
+
 // Step 3: Initialize Dependency Injection Container (Load Once)
 try {
     $diDependencies = require_once __DIR__ . '/config/dependencies.php';
@@ -117,5 +140,6 @@ return [
     'container'         => $container,
     'auditService'      => $container->get(\App\Services\AuditService::class),
     'encryptionService' => $container->get(\App\Services\EncryptionService::class),
+    'envConfig'         => $envConfig, // Pass the environment configuration
 ];
 
