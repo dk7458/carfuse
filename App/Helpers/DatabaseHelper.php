@@ -7,17 +7,18 @@ use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
 use Dotenv\Dotenv;
 use Exception;
+use Psr\Log\LoggerInterface;
 use App\Helpers\ApiHelper;
-use function getLogger;
 
 class DatabaseHelper
 {
-    public static ?DatabaseHelper $instance = null;
-    public static ?DatabaseHelper $secureInstance = null;
-    public Capsule $capsule;
-    public static bool $envLoaded = false;
+    private static ?DatabaseHelper $instance = null;
+    private static ?DatabaseHelper $secureInstance = null;
+    private Capsule $capsule;
+    private static bool $envLoaded = false;
+    private static LoggerInterface $logger;
 
-    public function __construct(array $config)
+    private function __construct(array $config)
     {
         try {
             $this->capsule = new Capsule();
@@ -26,11 +27,16 @@ class DatabaseHelper
             $this->capsule->bootEloquent();
 
             // ✅ Log successful initialization
-            getLogger('db')->info("✅ Database connection initialized successfully.");
+            self::$logger->info("✅ Database connection initialized successfully.");
         } catch (Exception $e) {
-            getLogger('db')->critical("❌ Database connection failed: " . $e->getMessage());
+            self::$logger->critical("❌ Database connection failed: " . $e->getMessage());
             die("Database connection failed. Check logs for details.");
         }
+    }
+
+    public static function setLogger(LoggerInterface $logger)
+    {
+        self::$logger = $logger;
     }
 
     private static function loadEnv()
@@ -42,15 +48,44 @@ class DatabaseHelper
         }
     }
 
+    private static function getDatabaseConfig(string $type = 'default'): array
+    {
+        self::loadEnv();
+
+        if ($type === 'secure') {
+            return [
+                'driver'    => $_ENV['SECURE_DB_DRIVER'] ?? 'mysql',
+                'host'      => $_ENV['SECURE_DB_HOST'] ?? 'localhost',
+                'port'      => $_ENV['SECURE_DB_PORT'] ?? '3306',
+                'database'  => $_ENV['SECURE_DB_DATABASE'] ?? '',
+                'username'  => $_ENV['SECURE_DB_USERNAME'] ?? '',
+                'password'  => $_ENV['SECURE_DB_PASSWORD'] ?? '',
+                'charset'   => $_ENV['SECURE_DB_CHARSET'] ?? 'utf8mb4',
+                'collation' => $_ENV['SECURE_DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
+                'prefix'    => '',
+            ];
+        }
+
+        return [
+            'driver'    => $_ENV['DB_DRIVER'] ?? 'mysql',
+            'host'      => $_ENV['DB_HOST'] ?? 'localhost',
+            'port'      => $_ENV['DB_PORT'] ?? '3306',
+            'database'  => $_ENV['DB_DATABASE'] ?? '',
+            'username'  => $_ENV['DB_USERNAME'] ?? '',
+            'password'  => $_ENV['DB_PASSWORD'] ?? '',
+            'charset'   => $_ENV['DB_CHARSET'] ?? 'utf8mb4',
+            'collation' => $_ENV['DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
+            'prefix'    => '',
+        ];
+    }
+
     public static function getInstance(): DatabaseHelper
     {
         if (self::$instance === null) {
-            self::loadEnv();
             try {
-                $config = require __DIR__ . '/../../config/database.php';
-                self::$instance = new DatabaseHelper($config['app_database']);
+                self::$instance = new DatabaseHelper(self::getDatabaseConfig('default'));
             } catch (Exception $e) {
-                getLogger('db')->critical("❌ Database initialization failed: " . $e->getMessage());
+                self::$logger->critical("❌ Database initialization failed: " . $e->getMessage());
                 die("Database initialization failed.");
             }
         }
@@ -61,12 +96,10 @@ class DatabaseHelper
     public static function getSecureInstance(): DatabaseHelper
     {
         if (self::$secureInstance === null) {
-            self::loadEnv();
             try {
-                $config = require __DIR__ . '/../../config/database.php';
-                self::$secureInstance = new DatabaseHelper($config['secure_database']);
+                self::$secureInstance = new DatabaseHelper(self::getDatabaseConfig('secure'));
             } catch (Exception $e) {
-                getLogger('db')->critical("❌ Secure database initialization failed: " . $e->getMessage());
+                self::$logger->critical("❌ Secure database initialization failed: " . $e->getMessage());
                 die("Secure database initialization failed.");
             }
         }
@@ -84,7 +117,7 @@ class DatabaseHelper
         try {
             return $this->capsule->getConnection();
         } catch (Exception $e) {
-            getLogger('db')->error("❌ Failed to get database connection: " . $e->getMessage());
+            self::$logger->error("❌ Failed to get database connection: " . $e->getMessage());
             return null;
         }
     }
@@ -97,13 +130,13 @@ class DatabaseHelper
         try {
             return $query(self::getInstance()->getCapsule());
         } catch (\PDOException $e) {
-            getLogger('db')->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             if ($e->getCode() == "23000") {
                 return ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
             }
             return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         } catch (\Exception $e) {
-            getLogger('db')->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         }
     }
