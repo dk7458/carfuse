@@ -11,12 +11,23 @@ $logger->info("🔄 Logger initialized successfully.");
 // Step 2: Load Environment Variables
 use Dotenv\Dotenv;
 $dotenvPath = '/home/u122931475/domains/carfuse.pl/public_html';
+$dotenvFilePath = $dotenvPath . '/.env';
+
+// Debugging: Check if .env file exists and is readable
+if (!file_exists($dotenvFilePath)) {
+    die("❌ ERROR: .env file does not exist at path: {$dotenvFilePath}\n");
+}
+if (!is_readable($dotenvFilePath)) {
+    die("❌ ERROR: .env file is not readable. Check file permissions: {$dotenvFilePath}\n");
+}
+
 $dotenv = Dotenv::createImmutable($dotenvPath);
 $dotenv->load();
+
 if (!getenv('DB_HOST')) {
     die("❌ ERROR: .env file not loaded correctly. Check file permissions.");
 }
-$logger->info("🔄 Environment variables loaded from {$dotenvPath}/.env");
+$logger->info("🔄 Environment variables loaded from {$dotenvFilePath}");
 
 // Store environment variables in an associative array
 $envConfig = [
