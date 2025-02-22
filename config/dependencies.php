@@ -74,22 +74,22 @@ foreach (glob("{$configDirectory}/*.php") as $filePath) {
         $container->get(LoggerInterface::class)->info("Configuration file loaded: {$fileName}.php");
     }
 }
-
-// Step 3: Initialize DatabaseHelper instances BEFORE services that depend on them.
+// Step 7: Initialize DatabaseHelper instances BEFORE services that depend on them.
 try {
-    $databaseConfig = require __DIR__ . '/database.php';
-    $database = new DatabaseHelper($databaseConfig['app_database']);
-    $secure_database = new DatabaseHelper($databaseConfig['secure_database']);
+    $database = DatabaseHelper::getInstance();  // ✅ Use static method, NOT "new DatabaseHelper()"
+    $secureDatabase = DatabaseHelper::getSecureInstance();
     $container->get('db_logger')->info("✅ Both databases initialized successfully.");
 } catch (Exception $e) {
     $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
     die("❌ Database initialization failed. Check logs for details.\n");
 }
-$container->set(DatabaseHelper::class, fn() => $database);
-$container->set('db', fn() => $database->getCapsule());
-$container->set('secure_db', fn() => $secure_database->getCapsule());
-$container->get('security_logger')->info("✅ SecurityHelper injected into DI container.");
-$container->get('db_logger')->info("✅ DatabaseHelper injected into DI container.");
+
+// ✅ Register database instances in DI container
+$container->set(DatabaseHelper::class, fn() => $database); // Register as DatabaseHelper class
+$container->set('db', fn() => $database); // Register generic key
+$container->set('secure_db', fn() => $secureDatabase);
+
+
 
 // Debug database connection before proceeding.
 try {
