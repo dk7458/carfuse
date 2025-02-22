@@ -44,9 +44,11 @@ class DatabaseHelper
     private static function loadEnv()
     {
         if (!self::$envLoaded) {
-            $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
+            $dotenvPath = '/home/u122931475/domains/carfuse.pl/public_html';
+            $dotenv = Dotenv::createImmutable($dotenvPath);
             $dotenv->load();
             self::$envLoaded = true;
+            self::$logger->info("✅ Environment variables loaded from {$dotenvPath}/.env");
         }
     }
 
