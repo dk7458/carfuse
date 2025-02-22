@@ -36,7 +36,9 @@ class DatabaseHelper
 
     public static function setLogger(LoggerInterface $logger)
     {
-        self::$logger = $logger;
+        if (!isset(self::$logger)) {
+            self::$logger = $logger;
+        }
     }
 
     private static function loadEnv()
