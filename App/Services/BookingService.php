@@ -13,9 +13,9 @@ class BookingService
     public const DEBUG_MODE = true;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
-    private $db;
+    private DatabaseHelper $db;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, \App\Helpers\DatabaseHelper $db)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
     {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;

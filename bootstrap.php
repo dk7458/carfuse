@@ -8,7 +8,17 @@ if (!$logger instanceof Monolog\Logger) {
 }
 $logger->info("🔄 Logger initialized successfully.");
 
-// Step 2: Initialize Dependency Injection Container (Load Once)
+// Step 2: Load Environment Variables
+use Dotenv\Dotenv;
+$dotenvPath = '/home/u122931475/domains/carfuse.pl/public_html';
+$dotenv = Dotenv::createImmutable($dotenvPath);
+$dotenv->load();
+if (!getenv('DB_HOST')) {
+    die("❌ ERROR: .env file not loaded correctly. Check file permissions.");
+}
+$logger->info("🔄 Environment variables loaded from {$dotenvPath}/.env");
+
+// Step 3: Initialize Dependency Injection Container (Load Once)
 try {
     $diDependencies = require_once __DIR__ . '/config/dependencies.php';
     $container = $diDependencies['container'];
@@ -21,15 +31,6 @@ try {
     $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());
     exit("❌ DI container initialization failed: " . $e->getMessage() . "\n");
 }
-
-// Step 3: Load Environment Variables
-use Dotenv\Dotenv;
-$dotenv = Dotenv::createImmutable(__DIR__);
-$dotenv->load();
-if (!getenv('DB_HOST')) {
-    die("❌ ERROR: .env file not loaded correctly. Check file permissions.");
-}
-$logger->info("🔄 Environment variables loaded.");
 
 // Step 4: Register Logger in DI Container Before Other Services
 $container->set(\Psr\Log\LoggerInterface::class, fn() => getLogger('system'));

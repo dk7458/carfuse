@@ -19,7 +19,7 @@ class NotificationService
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
     private array $config;
-    private $db;
+    private DatabaseHelper $db;
 
     public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db, array $config)
     {

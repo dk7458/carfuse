@@ -5,7 +5,6 @@ namespace App\Helpers;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Container\Container;
-use Dotenv\Dotenv;
 use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ApiHelper;
@@ -15,7 +14,6 @@ class DatabaseHelper
     private static ?DatabaseHelper $instance = null;
     private static ?DatabaseHelper $secureInstance = null;
     private Capsule $capsule;
-    private static bool $envLoaded = false;
     private static LoggerInterface $logger;
 
     private function __construct(array $config)
@@ -41,21 +39,8 @@ class DatabaseHelper
         }
     }
 
-    private static function loadEnv()
-    {
-        if (!self::$envLoaded) {
-            $dotenvPath = '/home/u122931475/domains/carfuse.pl/public_html';
-            $dotenv = Dotenv::createImmutable($dotenvPath);
-            $dotenv->load();
-            self::$envLoaded = true;
-            self::$logger->info("✅ Environment variables loaded from {$dotenvPath}/.env");
-        }
-    }
-
     private static function getDatabaseConfig(string $type = 'default'): array
     {
-        self::loadEnv();
-
         if ($type === 'secure') {
             return [
                 'driver'    => $_ENV['SECURE_DB_DRIVER'] ?? 'mysql',

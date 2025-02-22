@@ -33,8 +33,8 @@ class TemplateService
             throw new \InvalidArgumentException("Invalid template directory: $templateDirectory");
         }
 
-        $this->templateDirectory = rtrim($templateDirectory, DIRECTORY_SEPARATOR);
         $this->logger = $logger;
+        $this->templateDirectory = $templateDirectory;
         $this->exceptionHandler = $exceptionHandler;
     }
 
