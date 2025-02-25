@@ -4,132 +4,135 @@ namespace App\Services\Auth;
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
-use App\Helpers\DatabaseHelper;
+use App\Helpers\ApiHelper;
 
 class TokenService
 {
-    private string $jwtSecret;
-    private int $jwtTtl;
-    private int $refreshTokenTtl;
-    private LoggerInterface $authLogger;
+    public const DEBUG_MODE = true;
+
+    private string $secretKey;
+    private string $refreshSecretKey;
+    private LoggerInterface $tokenLogger;
     private ExceptionHandler $exceptionHandler;
-    private $db;
 
     public function __construct(
-        string $jwtSecret,
-        int $jwtTtl = 3600,
-        int $refreshTokenTtl = 604800,
-        LoggerInterface $authLogger,
-        ExceptionHandler $exceptionHandler,
-        DatabaseHelper $dbHelper
+        string $secretKey,
+        string $refreshSecretKey,
+        LoggerInterface $tokenLogger,
+        ExceptionHandler $exceptionHandler
     ) {
-        $this->jwtSecret = $jwtSecret;
-        $this->jwtTtl = $jwtTtl;
-        $this->refreshTokenTtl = $refreshTokenTtl;
-        $this->authLogger = $authLogger;
+        if (empty($secretKey) || empty($refreshSecretKey)) {
+            throw new \RuntimeException('❌ JWT secrets are missing.');
+        }
+        $this->secretKey = $secretKey;
+        $this->refreshSecretKey = $refreshSecretKey;
+        $this->tokenLogger = $tokenLogger;
         $this->exceptionHandler = $exceptionHandler;
-        $this->db = $dbHelper->getAppDatabaseConnection();
-    }
-
-    public function generateToken(array $userData): string
-    {
-        try {
-            $payload = [
-                'iss' => 'carfuse_api',  // issuer
-                'iat' => time(),         // issued at
-                'exp' => time() + $this->jwtTtl, // expiration
-                'sub' => $userData['sub'] ?? null,  // subject (user ID)
-                'email' => $userData['email'] ?? null,
-                'role' => $userData['role'] ?? 'user'
-            ];
-            
-            return JWT::encode($payload, $this->jwtSecret, 'HS256');
-        } catch (Exception $e) {
-            $this->exceptionHandler->handleException($e);
-            throw new Exception("Token generation failed");
+        if (self::DEBUG_MODE) {
+            $this->tokenLogger->info("[auth] TokenService initialized.");
         }
     }
 
-    public function generateRefreshToken(array $userData): string
+    public function generateToken($user)
+    {
+        $payload = [
+            'iss' => "your-issuer",
+            'sub' => $user->id,
+            'iat' => time(),
+            'exp' => time() + 3600
+        ];
+        try {
+            $token = JWT::encode($payload, $this->secretKey, 'HS256');
+            if (self::DEBUG_MODE) {
+                $this->tokenLogger->info("[auth] ✅ Token generated.", ['userId' => $user->id]);
+            }
+            return ApiHelper::sendJsonResponse('success', 'Token generated', ['token' => $token]);
+        } catch (\Exception $e) {
+            $this->tokenLogger->error("[auth] ❌ Token generation failed: " . $e->getMessage());
+            return $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    public function verifyToken(string $token): ?array
     {
         try {
-            $token = bin2hex(random_bytes(32));
-            
-            // Store refresh token in app database for validation
-            $this->db->table('refresh_tokens')->insert([
-                'user_id' => $userData['sub'],
-                'token' => password_hash($token, PASSWORD_BCRYPT),
-                'expires_at' => date('Y-m-d H:i:s', time() + $this->refreshTokenTtl)
-            ]);
-            
-            return $token;
-        } catch (Exception $e) {
+            $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
+            $this->tokenLogger->info("✅ Token verified.", ['userId' => $decoded->sub]);
+            return (array)$decoded;
+        } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            throw new Exception("Refresh token generation failed");
+            return null;
         }
+    }
+
+    public function validateToken(string $token): ?array
+    {
+        try {
+            $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
+            if ($decoded->exp < time()) {
+                $this->tokenLogger->error("❌ [TokenService] Expired token.", ['userId' => $decoded->sub ?? 'unknown']);
+                return null;
+            }
+            return (array)$decoded;
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            return null;
+        }
+    }
+
+    public function generateRefreshToken($user): string
+    {
+        $payload = [
+            'iss' => "your-issuer",
+            'sub' => $user->id,
+            'iat' => time(),
+            'exp' => time() + 604800
+        ];
+        try {
+            return JWT::encode($payload, $this->refreshSecretKey, 'HS256');
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            return '';
+        }
+    }
+
+    public function refreshAccessToken(string $refreshToken): ?string
+    {
+        $decoded = $this->verifyToken($refreshToken);
+        if ($decoded) {
+            $userId = $decoded['sub'];
+            if (apcu_exists("revoked_refresh_token_$refreshToken")) {
+                return null;
+            }
+            return $this->generateToken((object)['id' => $userId]);
+        }
+        return null;
     }
 
     public function refreshToken(string $refreshToken): ?string
     {
         try {
-            // Find valid refresh token in app database
-            $storedToken = $this->db->table('refresh_tokens')
-                ->where('expires_at', '>', date('Y-m-d H:i:s'))
-                ->get();
-                
-            // Find token that matches the provided one (has to loop because we need password_verify)
-            $userId = null;
-            foreach ($storedToken as $token) {
-                if (password_verify($refreshToken, $token->token)) {
-                    $userId = $token->user_id;
-                    break;
-                }
-            }
-            
-            if (!$userId) {
+            $decoded = JWT::decode($refreshToken, new Key($this->refreshSecretKey, 'HS256'));
+            if ($decoded->exp < time()) {
+                $this->tokenLogger->error("❌ [TokenService] Expired refresh token.", ['userId' => $decoded->sub ?? 'unknown']);
                 return null;
             }
-            
-            // Get user details
-            $user = $this->db->table('users')->find($userId);
-            if (!$user) {
+            if (apcu_exists("revoked_refresh_token_$refreshToken")) {
+                $this->tokenLogger->error("❌ [TokenService] Revoked refresh token attempted.", ['userId' => $decoded->sub ?? 'unknown']);
                 return null;
             }
-            
-            // Generate new token
-            return $this->generateToken([
-                'sub' => $userId,
-                'email' => $user->email,
-                'role' => $user->role ?? 'user'
-            ]);
-        } catch (Exception $e) {
+            return $this->generateToken((object)['id' => $decoded->sub]);
+        } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
             return null;
         }
     }
 
-    public function validateToken(string $token): bool
+    public function revokeToken(string $token): void
     {
-        try {
-            $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
-            return !empty($decoded) && isset($decoded->sub);
-        } catch (Exception $e) {
-            $this->authLogger->warning("Token validation failed: {$e->getMessage()}");
-            return false;
-        }
-    }
-
-    public function decodeToken(string $token): ?array
-    {
-        try {
-            $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
-            return (array)$decoded;
-        } catch (Exception $e) {
-            $this->authLogger->warning("Token decode failed: {$e->getMessage()}");
-            return null;
-        }
+        apcu_store("revoked_refresh_token_$token", true, 604800);
+        $this->tokenLogger->info("✅ [TokenService] Revoked refresh token.");
     }
 }

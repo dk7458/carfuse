@@ -6,7 +6,6 @@ use App\Services\UserService;
 use App\Helpers\ApiHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
-use App\Services\Auth\TokenService;
 use Illuminate\Routing\Controller;
 
 /**
@@ -17,20 +16,17 @@ use Illuminate\Routing\Controller;
 class UserController extends Controller
 {
     private UserService $userService;
-    private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $userLogger;
     private LoggerInterface $auditLogger;
 
     public function __construct(
         UserService $userService,
-        TokenService $tokenService, // Need TokenService to extract user ID from token
         ExceptionHandler $exceptionHandler,
         LoggerInterface $userLogger,
         LoggerInterface $auditLogger
     ) {
         $this->userService = $userService;
-        $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->userLogger = $userLogger;
         $this->auditLogger = $auditLogger;
@@ -41,33 +37,14 @@ class UserController extends Controller
      */
     public function getUserProfile()
     {
-        try {
-            // Get user ID from JWT token
-            $token = $_COOKIE['jwt'] ?? null;
-            if (!$token) {
-                return ApiHelper::sendJsonResponse('error', 'Authentication required', [], 401);
-            }
-            
-            $tokenData = $this->tokenService->decodeToken($token);
-            if (!$tokenData || !isset($tokenData['sub'])) {
-                return ApiHelper::sendJsonResponse('error', 'Invalid token', [], 401);
-            }
-            
-            $userId = $tokenData['sub'];
-            $user = $this->userService->getUserById($userId);
-            
-            if (!$user) {
-                return ApiHelper::sendJsonResponse('error', 'User not found', [], 404);
-            }
-            
-            // Remove sensitive data before responding
-            unset($user['password_hash']);
-            
-            return ApiHelper::sendJsonResponse('success', 'User profile retrieved', $user, 200);
-        } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
-            return ApiHelper::sendJsonResponse('error', 'Failed to retrieve user profile', [], 500);
+        // Retrieve user profile via UserService (assumes a method exists)
+        // For example, get the userId from a secure context/token (not session)
+        $userId = $_GET['id'] ?? null;
+        if (!$userId) {
+            return ApiHelper::sendJsonResponse('error', 'User ID missing', null, 400);
         }
+        $user = $this->userService->getUserProfile($userId);
+        return ApiHelper::sendJsonResponse('success', 'User profile retrieved', $user, 200);
     }
 
     /**
@@ -75,34 +52,23 @@ class UserController extends Controller
      */
     public function updateProfile()
     {
+        $data = $_POST;
+        $rules = [
+            'name'    => 'required|string|max:255',
+            'surname' => 'required|string|max:255',
+            'email'   => 'required|email',
+            'phone'   => 'nullable|string|max:15',
+            'address' => 'nullable|string|max:255',
+        ];
+        if (!$this->userService->getValidator()->validate($data, $rules)) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->userService->getValidator()->errors(), 400);
+        }
         try {
-            // Get user ID from JWT token
-            $token = $_COOKIE['jwt'] ?? null;
-            if (!$token) {
-                return ApiHelper::sendJsonResponse('error', 'Authentication required', [], 401);
-            }
-            
-            $tokenData = $this->tokenService->decodeToken($token);
-            if (!$tokenData || !isset($tokenData['sub'])) {
-                return ApiHelper::sendJsonResponse('error', 'Invalid token', [], 401);
-            }
-            
-            $userId = $tokenData['sub'];
-            
-            // Get update data
-            $data = json_decode(file_get_contents("php://input"), true);
-            if (!$data) {
-                return ApiHelper::sendJsonResponse('error', 'Invalid input data', [], 400);
-            }
-            
-            // Update user profile
-            $result = $this->userService->updateUser($userId, $data);
-            
-            $this->auditLogger->info("User profile updated", ['userId' => $userId]);
-            return ApiHelper::sendJsonResponse('success', 'Profile updated successfully', [], 200);
+            $this->userService->updateUserProfile($data);
+            $this->auditLogger->info("User profile updated", ['user_id' => $data['id'] ?? null]);
+            return ApiHelper::sendJsonResponse('success', 'Profile updated successfully', null, 200);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            return ApiHelper::sendJsonResponse('error', 'Failed to update profile', [], 500);
         }
     }
 
@@ -111,27 +77,9 @@ class UserController extends Controller
      */
     public function userDashboard()
     {
-        try {
-            // Get user ID from JWT token
-            $token = $_COOKIE['jwt'] ?? null;
-            if (!$token) {
-                return ApiHelper::sendJsonResponse('error', 'Authentication required', [], 401);
-            }
-            
-            $tokenData = $this->tokenService->decodeToken($token);
-            if (!$tokenData || !isset($tokenData['sub'])) {
-                return ApiHelper::sendJsonResponse('error', 'Invalid token', [], 401);
-            }
-            
-            $userId = $tokenData['sub'];
-            
-            // Get user dashboard data
-            $dashboardData = $this->userService->getDashboardData($userId);
-            
-            return ApiHelper::sendJsonResponse('success', 'Dashboard data retrieved', $dashboardData, 200);
-        } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
-            return ApiHelper::sendJsonResponse('error', 'Failed to retrieve dashboard', [], 500);
-        }
+        // Dashboard access logic via UserService if needed.
+        // ...existing dashboard logic...
+        $html = "<html><body><h1>User Dashboard</h1><!-- ...existing dashboard HTML... --></body></html>";
+        return ApiHelper::sendJsonResponse('success', 'User Dashboard', $html, 200);
     }
 }

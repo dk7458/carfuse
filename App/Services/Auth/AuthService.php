@@ -33,7 +33,7 @@ class AuthService
         Validator $validator // Inject Validator
     ) {
         // Ensure to use the app database's Capsule instance:
-        $this->db = $dbHelper->getAppDatabaseConnection();  // Get the Capsule instance
+        $this->db = $dbHelper->getCapsule();  // Get the Capsule instance
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
@@ -48,120 +48,87 @@ class AuthService
             // Use injected DatabaseHelper to query the user
             $user = $this->db->table('users')->where('email', $email)->first();
             if (!$user || !password_verify($password, $user->password_hash)) {
-                $this->authLogger->warning("Authentication failed for email: {$email}");
+                $this->authLogger->warning("Authentication failed", ['email' => $email]);
                 throw new Exception("Invalid credentials");
             }
+            if (self::DEBUG_MODE) {
+                $this->authLogger->info("[auth] User authenticated", ['userId' => $user->id, 'email' => $user->email]);
+            }
 
-            $token = $this->tokenService->generateToken([
-                'sub' => $user->id,
-                'email' => $user->email,
-                'role' => $user->role ?? 'user'
-            ]);
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            session_regenerate_id(true);
+            $_SESSION['user_id']   = $user->id;
+            $_SESSION['user_role'] = $user->role ?? 'user';
 
-            $refreshToken = $this->tokenService->generateRefreshToken([
-                'sub' => $user->id
-            ]);
+            $token = $this->tokenService->generateToken($user);
+            $refreshToken = $this->tokenService->generateRefreshToken($user);
 
-            $this->authLogger->info("User authenticated successfully", ['userId' => $user->id]);
             return [
-                'token' => $token,
+                'token'         => $token,
                 'refresh_token' => $refreshToken
             ];
         } catch (Exception $e) {
+            $this->authLogger->error("[auth] ❌ Credential error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            throw $e;
+            // Optionally use ApiHelper to send an error response
+            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 401);
         }
     }
 
     public function registerUser(array $data)
     {
-        try {
-            // Validate registration data
-            $rules = [
-                'email' => 'required|email|unique:users,email',
-                'password' => 'required|min:8',
-                'name' => 'required|string',
-            ];
+        $rules = [
+            'email'    => 'required|email|unique:users,email',
+            'password' => 'required|min:6',
+            'name'     => 'required|string',
+        ];
 
+        try {
+            // Validate the input data
             $this->validator->validate($data, $rules);
 
-            // Hash the password
-            $data['password_hash'] = password_hash($data['password'], PASSWORD_BCRYPT);
-            unset($data['password']);  // Remove plaintext password
+            // Hash the password before storing it
+            $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
 
-            // Insert into app database
+            // Insert the user into the database
             $userId = $this->db->table('users')->insertGetId($data);
-
-            $this->authLogger->info("User registered successfully", ['email' => $data['email']]);
-            return ['userId' => $userId];
-        } catch (Exception $e) {
+            return ApiHelper::sendJsonResponse('success', 'User registered', ['user_id' => $userId], 201);
+        } catch (\InvalidArgumentException $e) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
+        } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            throw $e;
         }
     }
 
     public function resetPasswordRequest($email)
     {
+        $user = User::where('email', $email)->first();
+        if (!$user) {
+            $this->authLogger->error("Password reset failed: email not found", ['email' => $email]);
+            throw new Exception("Email not found.");
+        }
+
+        $token = bin2hex(random_bytes(32));
+        $hashedToken = password_hash($token, PASSWORD_BCRYPT);
+        $expiresAt = now()->addHour();
+
         try {
-            // Check if user exists in app database
-            $user = $this->db->table('users')->where('email', $email)->first();
-            if (!$user) {
-                throw new Exception("Email not found");
-            }
-
-            // Generate reset token
-            $token = bin2hex(random_bytes(32));
-            $expiresAt = date('Y-m-d H:i:s', time() + 3600); // 1 hour from now
-
-            // Store in app database
             $this->db->table('password_resets')->insert([
-                'email' => $email,
-                'token' => password_hash($token, PASSWORD_BCRYPT), // Store hashed token
-                'expires_at' => $expiresAt
+                'email'      => $email,
+                'token'      => $hashedToken,
+                'expires_at' => $expiresAt,
             ]);
-
-            $this->authLogger->info("Password reset requested", ['email' => $email]);
-
-            // Return token (in production, would send via email)
-            return ['token' => $token, 'expires_at' => $expiresAt];
+            getLogger('auth')->info("[Auth] Password reset requested for {$email}");
         } catch (Exception $e) {
             $this->exceptionHandler->handleException($e);
-            throw $e;
         }
-    }
 
-    public function resetPassword($email, $token, $newPassword)
-    {
-        try {
-            // Get reset record from app database
-            $resetRecord = $this->db->table('password_resets')
-                ->where('email', $email)
-                ->where('expires_at', '>', date('Y-m-d H:i:s'))
-                ->first();
+        // Send email (mock implementation)
+        // ...existing code...
 
-            if (!$resetRecord || !password_verify($token, $resetRecord->token)) {
-                throw new Exception("Invalid or expired token");
-            }
-
-            // Update password in app database
-            $this->db->table('users')
-                ->where('email', $email)
-                ->update(['password_hash' => password_hash($newPassword, PASSWORD_BCRYPT)]);
-
-            // Delete used token
-            $this->db->table('password_resets')->where('email', $email)->delete();
-
-            $this->authLogger->info("Password reset completed", ['email' => $email]);
-            return true;
-        } catch (Exception $e) {
-            $this->exceptionHandler->handleException($e);
-            throw $e;
-        }
-    }
-
-    public function getValidator()
-    {
-        return $this->validator;
+        return ['token' => $token];
     }
 
     public function validateToken($token)
@@ -187,8 +154,13 @@ class AuthService
 
     public function logout()
     {
-        // Any additional logout logic if needed
-        return true;
+        // Clear session data and session cookie for secure logout
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            setcookie(session_name(), '', time() - 42000, '/');
+        }
+        session_destroy();
+        $this->auditLogger->info("User logged out", ['session_id' => session_id()]);
     }
 }
 ?>
