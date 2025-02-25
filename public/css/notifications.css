@@ -1,0 +1,62 @@
+/* notifications.css _ Real_Time Notifications */
+
+.notifications-panel {
+    position: absolute;
+    right: 20px;
+    top: 50px;
+    background: #1E1E1E;
+    color: #FFF;
+    padding: 15px;
+    border-radius: 5px;
+    max-width: 90%;
+    width: 300px;
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    transform: translateY(-10px);
+    opacity: 0;
+}
+
+.notifications-panel.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.notification.unread {
+    background: #1E1E1E;
+    font-weight: bold;
+    border-left: 5px solid #FF4500; /* Add indicator */
+}
+
+.notification.read {
+    background: #252525;
+    opacity: 0.85;
+}
+
+.notification {
+    position: relative;
+    padding-right: 30px; /* Space for close button */
+}
+
+.notification .close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: transparent;
+    border: none;
+    color: #FFF;
+    cursor: pointer;
+    font-size: 16px;
+    transition: color 0.3s;
+}
+
+.notification .close-btn:hover {
+    color: #FF4500;
+}
+
+@media (max-width: 600px) {
+    .notifications-panel {
+        right: 10px;
+        top: 10px;
+        width: 100%;
+    }
+}
+

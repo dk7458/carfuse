@@ -1,0 +1,35 @@
+/* ...existing code... */
+
+/* Remove redundant table styles */
+/* .logs table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: var(--surface-color);
+}
+.logs table th {
+    background-color: var(--primary-color);
+    color: white;
+}
+.logs table td {
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    text-align: left;
+}
+.logs table tr:nth-child(even) {
+    background-color: #222;
+}
+.logs table tr:hover {
+    background-color: #333;
+} */
+
+/* Ensure tables remain responsive on smaller screens */
+@media (max-width: 768px) {
+    .logs table {
+        display: block;
+        overflow-x: auto;
+    }
+    .logs table th, .logs table td {
+        white-space: nowrap;
+    }
+}

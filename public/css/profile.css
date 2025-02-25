@@ -1,0 +1,112 @@
+/*
+|--------------------------------------------------------------------------
+| Profile Styles (profile.css)
+|--------------------------------------------------------------------------
+| This file contains styles for the user profile page, including form fields,
+| avatar upload, and account settings. Designed with a sleek, modern look.
+*/
+
+/* General Profile Page Styles */
+body {
+    background-color: #121212;
+    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.profile-container {
+    max-width: 600px;
+    margin: 40px auto;
+    background: #1E1E1E;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
+    text-align: center;
+}
+
+.profile-container h2 {
+    font-size: 2rem;
+    margin-bottom: 20px;
+}
+
+/* Avatar Upload */
+.avatar-upload {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.avatar-preview {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 3px solid #FFD700;
+    object-fit: cover;
+    margin-bottom: 10px;
+}
+
+.avatar-upload input[type="file"] {
+    display: none;
+}
+
+.upload-label {
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.upload-label:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+}
+
+/* Profile Form */
+.profile-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.profile-form input, .profile-form select, .profile-form button {
+    padding: 12px;
+    font-size: 1rem;
+    border-radius: 5px;
+    border: none;
+}
+
+.profile-form input, .profile-form select {
+    background: #333;
+    color: #fff;
+    border: 1px solid #444;
+    width: 100%;
+}
+
+.profile-form input:focus, .profile-form select:focus {
+    border-color: #FFD700;
+    outline: 0;
+}
+
+.profile-form button {
+    background: linear-gradient(45deg, #FFD700, #FF8C00);
+    color: #121212;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.profile-form button:hover {
+    background: linear-gradient(45deg, #FFC107, #FF4500);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .profile-container {
+        padding: 15px;
+    }
+}
+
