@@ -1,12 +1,19 @@
 <?php
+use Dotenv\Dotenv;
 
 /**
  * General Application Configuration
  */
 
+// ✅ Ensure `.env` is loaded before accessing app settings
+$dotenvPath = __DIR__ . '/../';
+if (file_exists($dotenvPath . '.env')) {
+    $dotenv = Dotenv::createImmutable($dotenvPath);
+    $dotenv->load();
+}
+
+// ✅ Return structured app configurations
 return [
-    'name' => 'CarFuse',
-    'env' => 'development',  // Options: development, staging, production
-    'debug' => false,  // Set to true for debugging
-    'timezone' => 'UTC',
+    'environment' => getenv('APP_ENV') ?: 'production',
+    'debug'       => getenv('APP_DEBUG') === 'true',
 ];
