@@ -22,10 +22,11 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->addRoute(['POST'], '/api/auth/register', 'App\Controllers\AuthController@register');
     $router->addRoute(['POST'], '/api/auth/refresh', 'App\Controllers\AuthController@refresh');
     $router->addRoute(['POST'], '/api/auth/logout', 'App\Controllers\AuthController@logout');
+    $router->addRoute(['GET'], '/api/auth/userDetails', 'App\Controllers\AuthController@userDetails');
 
     // ✅ Protected API Routes (Require Authentication)
     $router->addRoute(['GET'], '/api/user/profile', function (Request $request, RequestHandler $handler) {
-        return (new TokenValidationMiddleware())->__invoke($request, $handler);
+        return (new AuthMiddleware())->__invoke($request, $handler);
     });
 
     $router->addRoute(['GET'], '/api/user/settings', function (Request $request, RequestHandler $handler) {

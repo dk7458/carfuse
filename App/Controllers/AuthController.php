@@ -10,7 +10,7 @@ use App\Services\Validator;
 use App\Helpers\SecurityHelper;
 use App\Helpers\ApiHelper;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler; // New dependency
+use App\Helpers\ExceptionHandler;
 
 class AuthController extends Controller
 {
@@ -37,16 +37,6 @@ class AuthController extends Controller
         $this->auditLogger = $auditLogger;
 
         DatabaseHelper::getInstance();
-    }
-
-    public function loginView()
-    {
-        view('auth/login');
-    }
-
-    public function registerView()
-    {
-        view('auth/register');
     }
 
     public function login($request = null)
@@ -83,7 +73,6 @@ class AuthController extends Controller
 
     public function register($request = null)
     {
-
         try {
             $data = json_decode(file_get_contents('php://input'), true);
             if (!isset($data['email']) || !isset($data['password']) || !isset($data['name'])) {
@@ -166,7 +155,6 @@ class AuthController extends Controller
         $_SESSION['last_activity'] = time();
     }
 
-    // Updated logging method with context details
     private function logAuthAttempt($status, $message)
     {
         $context = ['ip' => $_SERVER['REMOTE_ADDR'], 'time' => date('Y-m-d H:i:s')];

@@ -51,12 +51,12 @@ class UserController extends Controller
      */
     public function registerUser()
     {
-        $data = $_POST;
+        $data = json_decode(file_get_contents('php://input'), true);
         // Validate input data
         $rules = [
             'email'    => 'required|email',
             'password' => 'required|min:6',
-            // ... other rules ...
+            'name'     => 'required|string',
         ];
         if (!$this->validator->validate($data, $rules)) {
             return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
@@ -71,56 +71,6 @@ class UserController extends Controller
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
         }
-    }
-
-    /**
-     * Log in an existing user.
-     */
-    public function login()
-    {
-        $email = $_POST['email'] ?? null;
-        $password = $_POST['password'] ?? null;
-        if (!$email || !$password) {
-            return ApiHelper::sendJsonResponse('error', 'Email and password required', null, 400);
-        }
-        try {
-            $user = User::where('email', $email)->first();
-            if (!$user || !password_verify($password, $user->password_hash)) {
-                throw new \Exception("Invalid credentials");
-            }
-            if (session_status() === PHP_SESSION_NONE) {
-                session_start();
-            }
-            session_regenerate_id(true);
-            $_SESSION['user_id']   = $user->id;
-            $_SESSION['user_role'] = $user->role ?? 'user';
-            $token = $this->tokenService->generateToken($user);
-            $refreshToken = $this->tokenService->generateRefreshToken($user);
-            $this->authLogger->info("User logged in", ['userId' => $user->id, 'email' => $user->email]);
-            return ApiHelper::sendJsonResponse('success', 'User logged in', [
-                'token'         => $token,
-                'refresh_token' => $refreshToken
-            ], 200);
-        } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
-        }
-    }
-
-    /**
-     * Log out the current user.
-     */
-    public function logout()
-    {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-        $_SESSION = [];
-        if (ini_get('session.use_cookies')) {
-            setcookie(session_name(), '', time() - 42000, '/');
-        }
-        session_destroy();
-        $this->authLogger->info("User logged out");
-        return ApiHelper::sendJsonResponse('success', 'Logged out successfully', null, 200);
     }
 
     /**
@@ -165,30 +115,18 @@ class UserController extends Controller
     }
 
     /**
-     * 🔹 Get user profile
-     */
-    public function getProfile()
-    {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-        $user = $_SESSION['user'] ?? null;
-        return ApiHelper::sendJsonResponse('success', 'User profile', $user, 200);
-    }
-
-    /**
      * 🔹 Request password reset
      */
     public function requestPasswordReset()
     {
-        $email = $_POST['email'] ?? null;
-        if (!$email) {
-            return ApiHelper::sendJsonResponse('error', 'Invalid input', null, 400);
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!isset($data['email'])) {
+            return ApiHelper::sendJsonResponse('error', 'Email is required', null, 400);
         }
         try {
             $token = Str::random(60);
             \App\Models\PasswordReset::create([
-                'email'      => $email,
+                'email'      => $data['email'],
                 'token'      => $token,
                 'expires_at' => now()->addHour(),
             ]);
@@ -203,9 +141,6 @@ class UserController extends Controller
      */
     public function userDashboard()
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
         // Rendering HTML for dashboard via ApiHelper response
         $html = "<html><body><h1>User Dashboard</h1><!-- ...existing dashboard HTML... --></body></html>";
         return ApiHelper::sendJsonResponse('success', 'User Dashboard', $html, 200);

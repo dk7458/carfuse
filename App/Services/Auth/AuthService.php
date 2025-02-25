@@ -24,34 +24,30 @@ class AuthService
     private Validator $validator;
 
     public function __construct(
-        DatabaseHelper $dbHelper,  // Ensure DatabaseHelper is injected
+        DatabaseHelper $dbHelper,
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
         LoggerInterface $auditLogger,
         array $encryptionConfig,
-        Validator $validator // Inject Validator
+        Validator $validator
     ) {
-        $this->db = $dbHelper->getCapsule();  // Get the Capsule instance
+        $this->db = $dbHelper->getCapsule();
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
         $this->encryptionConfig = $encryptionConfig;
-        $this->validator = $validator; // Initialize Validator
+        $this->validator = $validator;
     }
 
     public function login($email, $password)
     {
         try {
-            // Use injected DatabaseHelper to query the user
             $user = $this->db->table('users')->where('email', $email)->first();
             if (!$user || !password_verify($password, $user->password_hash)) {
                 $this->authLogger->warning("Authentication failed", ['email' => $email]);
                 throw new Exception("Invalid credentials");
-            }
-            if (self::DEBUG_MODE) {
-                $this->authLogger->info("[auth] User authenticated", ['userId' => $user->id, 'email' => $user->email]);
             }
 
             $token = $this->tokenService->generateToken($user);
@@ -64,7 +60,6 @@ class AuthService
         } catch (Exception $e) {
             $this->authLogger->error("[auth] ❌ Credential error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            // Optionally use ApiHelper to send an error response
             ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 401);
         }
     }
@@ -78,13 +73,8 @@ class AuthService
         ];
 
         try {
-            // Validate the input data
             $this->validator->validate($data, $rules);
-
-            // Hash the password before storing it
             $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
-
-            // Insert the user into the database
             $userId = $this->db->table('users')->insertGetId($data);
             return ApiHelper::sendJsonResponse('success', 'User registered', ['user_id' => $userId], 201);
         } catch (\InvalidArgumentException $e) {
@@ -116,9 +106,6 @@ class AuthService
         } catch (Exception $e) {
             $this->exceptionHandler->handleException($e);
         }
-
-        // Send email (mock implementation)
-        // ...existing code...
 
         return ['token' => $token];
     }
@@ -164,7 +151,6 @@ class AuthService
 
     public function logout()
     {
-        // No session management; tokens are stateless
         $this->auditLogger->info("User logged out");
     }
 }
