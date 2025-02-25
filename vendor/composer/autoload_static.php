@@ -435,6 +435,7 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'App\\Helpers\\ApiHelper' => __DIR__ . '/../..' . '/App/Helpers/ApiHelper.php',
         'App\\Helpers\\DatabaseHelper' => __DIR__ . '/../..' . '/App/Helpers/DatabaseHelper.php',
         'App\\Helpers\\ExceptionHandler' => __DIR__ . '/../..' . '/App/Helpers/ExceptionHandler.php',
+        'App\\Helpers\\LoggingHelper' => __DIR__ . '/../..' . '/App/Helpers/LoggingHelper.php',
         'App\\Helpers\\SecurityHelper' => __DIR__ . '/../..' . '/App/Helpers/SecurityHelper.php',
         'App\\Middleware\\AuditTrailMiddleware' => __DIR__ . '/../..' . '/App/Middleware/AuditTrailMiddleware.php',
         'App\\Middleware\\AuthMiddleware' => __DIR__ . '/../..' . '/App/Middleware/AuthMiddleware.php',
