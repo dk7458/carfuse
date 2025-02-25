@@ -6,16 +6,17 @@ use App\Services\Auth\AuthService;
 use App\Helpers\LoggingHelper;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Log\LoggerInterface;
 
 class AuthController extends Controller
 {
-    protected $logger; // Change visibility to protected
-    private $authService;
+    protected LoggerInterface $logger; // Ensure the type matches the parent class
+    private AuthService $authService;
 
-    public function __construct(AuthService $authService)
+    public function __construct(AuthService $authService, LoggerInterface $logger)
     {
         $this->authService = $authService;
-        $this->logger = LoggingHelper::getLoggerByCategory('auth');
+        $this->logger = $logger;
     }
 
     public function login(Request $request, Response $response)
