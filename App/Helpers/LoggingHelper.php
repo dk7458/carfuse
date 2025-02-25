@@ -3,6 +3,9 @@ namespace App\Helpers;
 
 use Psr\Log\LoggerInterface;
 
+// Ensure the global getLogger function is available
+require_once __DIR__ . '/../../logger.php';
+
 class LoggingHelper
 {
     /**
