@@ -67,19 +67,22 @@ $container->set(SecurityHelper::class, fn() => new SecurityHelper());
 $container->get(LoggerInterface::class)->info("Step 2: Loading configuration files.");
 $configDirectory = __DIR__;
 $config = [];
-foreach (glob("{$configDirectory}/*.php") as $filePath) {
-    $fileName = basename($filePath, '.php');
-    if ($fileName !== 'dependencies') {
-        $config[$fileName] = require $filePath;
-        $container->get(LoggerInterface::class)->info("Configuration file loaded: {$fileName}.php");
+$configFiles = ['database', 'encryption', 'app'];
+foreach ($configFiles as $file) {
+    $path = "{$configDirectory}/{$file}.php";
+    if (!file_exists($path)) {
+        $container->get(LoggerInterface::class)->critical("❌ Missing configuration file: {$file}.php");
+        die("❌ Missing configuration file: {$file}.php\n");
     }
+    $config[$file] = require $path;
+    $container->get(LoggerInterface::class)->info("Configuration file loaded: {$file}.php");
 }
 
 // Step 3: Initialize DatabaseHelper instances BEFORE services that depend on them.
 try {
     DatabaseHelper::setLogger($container->get('db_logger'));
-    $database = DatabaseHelper::getInstance($envConfig); // Pass the envConfig array
-    $secureDatabase = DatabaseHelper::getSecureInstance($envConfig); // Pass the envConfig array and specify 'secure'
+    $database = DatabaseHelper::getInstance($config['database']['app_database']); // Pass the app_database config
+    $secureDatabase = DatabaseHelper::getSecureInstance($config['database']['secure_database']); // Pass the secure_database config
     $container->get('db_logger')->info("✅ Both databases initialized successfully.");
 } catch (Exception $e) {
     $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
@@ -107,7 +110,7 @@ try {
 $encryptionService = new EncryptionService(
     $container->get(LoggerInterface::class), // Pass the correct logger
     $container->get(ExceptionHandler::class), // Pass the ExceptionHandler
-    $envConfig['encryption']['encryption_key'] ?? '' // Pass the encryption key from envConfig
+    $config['encryption']['encryption_key'] // Pass the encryption key from config
 );
 $container->set(EncryptionService::class, fn() => $encryptionService);
 $container->get(LoggerInterface::class)->info("Step 4: EncryptionService registered.");
@@ -157,8 +160,8 @@ $container->set(AuditService::class, fn() => new AuditService(
     $container->get(DatabaseHelper::class)
 ));
 $container->set(TokenService::class, fn() => new TokenService(
-    $envConfig['JWT_SECRET'] ?? '',
-    $envConfig['JWT_REFRESH_SECRET'] ?? '',
+    $config['encryption']['jwt_secret'], // Pass the JWT secret from config
+    $config['encryption']['jwt_refresh_secret'], // Pass the JWT refresh secret from config
     $container->get('auth_logger'),
     $container->get(ExceptionHandler::class)
 ));
@@ -168,7 +171,7 @@ $container->set(AuthService::class, fn() => new AuthService(
     $container->get(ExceptionHandler::class),
     $container->get('auth_logger'),
     $container->get('audit_logger'),
-    $envConfig['encryption'],
+    $config['encryption'],
     $container->get(Validator::class) // Inject Validator
 ));
 // Register UserController to receive AuthService via DI.

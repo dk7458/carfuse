@@ -8,25 +8,24 @@ if (file_exists($dotenvPath . '.env')) {
     $dotenv->load();
 }
 
-// ✅ Log database configurations for debugging (ONLY FOR DEVELOPMENT)
 // ✅ Return structured database configurations
 return [
     'app_database' => [
         'driver'    => 'mysql',
-        'host'      => getenv('DB_HOST') ?: 'localhost',
-        'database'  => getenv('DB_DATABASE') ?: '',
-        'username'  => getenv('DB_USERNAME') ?: '',
-        'password'  => getenv('DB_PASSWORD') ?: '',
+        'host'      => 'localhost',
+        'database'  => 'app_database',
+        'username'  => 'app_user',
+        'password'  => 'app_password',
         'charset'   => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix'    => '',
     ],
     'secure_database' => [
         'driver'    => 'mysql',
-        'host'      => getenv('SECURE_DB_HOST') ?: 'localhost',
-        'database'  => getenv('SECURE_DB_DATABASE') ?: '',
-        'username'  => getenv('SECURE_DB_USERNAME') ?: '',
-        'password'  => getenv('SECURE_DB_PASSWORD') ?: '',
+        'host'      => 'localhost',
+        'database'  => 'secure_database',
+        'username'  => 'secure_user',
+        'password'  => 'secure_password',
         'charset'   => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix'    => '',

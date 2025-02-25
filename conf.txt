@@ -110,6 +110,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/ExceptionHandler.php';
 
 use DI\Container;
+use Psr\Log\LoggerInterface;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ExceptionHandler;
 use App\Helpers\SecurityHelper;
@@ -140,60 +141,86 @@ use GuzzleHttp\Client;
 try {
     $container = new Container();
     // Register categorized loggers.
-    $container->set('logger', fn() => getLogger('system'));
+    $container->set(LoggerInterface::class, fn() => getLogger('system'));
     $container->set('auth_logger', fn() => getLogger('auth'));
     $container->set('db_logger', fn() => getLogger('db'));
     $container->set('api_logger', fn() => getLogger('api'));
     $container->set('security_logger', fn() => getLogger('security'));
+    $container->set('audit_logger', fn() => getLogger('audit')); 
+
     // Register new dependencies logger.
     $container->set('dependencies_logger', fn() => getLogger('dependencies'));
     $container->get('dependencies_logger')->info("🔄 Step 1: Starting Dependency Injection.");
-    $container->get('logger')->info("Step 1: DI Container created and loggers registered.");
+    $container->get(LoggerInterface::class)->info("Step 1: DI Container created and loggers registered.");
 } catch (Exception $e) {
     getLogger('system')->error("❌ [DI] Failed to initialize DI container: " . $e->getMessage());
     die("❌ Dependency Injection container failed: " . $e->getMessage() . "\n");
 }
 
+// Register ExceptionHandler after the loggers are available.
+$container->set(ExceptionHandler::class, fn($c) => new ExceptionHandler(
+    $c->get('db_logger'),
+    $c->get('auth_logger'),
+    $c->get(LoggerInterface::class)
+));
+
 // Add helper registrations immediately after logger registration.
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 $container->set(SecurityHelper::class, fn() => new SecurityHelper());
-$container->set('db', fn() => DatabaseHelper::getInstance());
-$container->set('secure_db', fn() => DatabaseHelper::getSecureInstance());
-$container->get('security_logger')->info("✅ SecurityHelper injected into DI container.");
-$container->get('db_logger')->info("✅ DatabaseHelper injected into DI container.");
 
 // Step 2: Load configuration files.
-$container->get('logger')->info("Step 2: Loading configuration files.");
+$container->get(LoggerInterface::class)->info("Step 2: Loading configuration files.");
 $configDirectory = __DIR__;
 $config = [];
 foreach (glob("{$configDirectory}/*.php") as $filePath) {
     $fileName = basename($filePath, '.php');
     if ($fileName !== 'dependencies') {
         $config[$fileName] = require $filePath;
-        $container->get('logger')->info("Configuration file loaded: {$fileName}.php");
+        $container->get(LoggerInterface::class)->info("Configuration file loaded: {$fileName}.php");
     }
 }
 
-// Step 3: Ensure required directories exist.
-$templateDirectory = __DIR__ . '/../storage/templates';
-$fileStorageConfig = $config['filestorage'] ?? [];
-if (!is_dir($templateDirectory)) {
-    mkdir($templateDirectory, 0775, true);
+// Step 3: Initialize DatabaseHelper instances BEFORE services that depend on them.
+try {
+    DatabaseHelper::setLogger($container->get('db_logger'));
+    $database = DatabaseHelper::getInstance($envConfig); // Pass the envConfig array
+    $secureDatabase = DatabaseHelper::getSecureInstance($envConfig); // Pass the envConfig array and specify 'secure'
+    $container->get('db_logger')->info("✅ Both databases initialized successfully.");
+} catch (Exception $e) {
+    $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
+    die("❌ Database initialization failed. Check logs for details.\n");
 }
-if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['base_directory'])) {
-    mkdir($fileStorageConfig['base_directory'], 0775, true);
+
+// ✅ Register database instances in DI container
+$container->set(DatabaseHelper::class, fn() => $database); // Register as DatabaseHelper class
+$container->set('db', fn() => $database); // Register generic key
+$container->set('secure_db', fn() => $secureDatabase);
+
+// Debug database connection before proceeding.
+try {
+    $pdo = $container->get('db')->getConnection()->getPdo();
+    if (!$pdo) {
+        throw new Exception("❌ Database connection failed.");
+    }
+    $container->get('db_logger')->info("✅ Database connection verified successfully.");
+} catch (Exception $e) {
+    $container->get('db_logger')->critical("❌ Database connection verification failed: " . $e->getMessage());
+    die("❌ Database connection issue: " . $e->getMessage() . "\n");
 }
-$container->get('logger')->info("Step 3: Required directories verified.");
 
 // Step 4: Initialize EncryptionService.
-$encryptionService = new EncryptionService($config['encryption']['encryption_key'] ?? '');
+$encryptionService = new EncryptionService(
+    $container->get(LoggerInterface::class), // Pass the correct logger
+    $container->get(ExceptionHandler::class), // Pass the ExceptionHandler
+    $envConfig['encryption']['encryption_key'] ?? '' // Pass the encryption key from envConfig
+);
 $container->set(EncryptionService::class, fn() => $encryptionService);
-$container->get('logger')->info("Step 4: EncryptionService registered.");
+$container->get(LoggerInterface::class)->info("Step 4: EncryptionService registered.");
 
 // Step 5: Initialize FileStorage using centralized logger.
 if (!isset($config['filestorage']) || !is_array($config['filestorage'])) {
-    $container->get('logger')->critical("❌ FileStorage configuration is missing or invalid.");
+    $container->get(LoggerInterface::class)->critical("❌ FileStorage configuration is missing or invalid.");
     die("❌ FileStorage configuration is missing or invalid.\n");
 }
 $container->set(FileStorage::class, function () use ($container, $config) {
@@ -203,110 +230,138 @@ $container->set(FileStorage::class, function () use ($container, $config) {
         $container->get(EncryptionService::class) // Inject EncryptionService.
     );
 });
-$container->get('logger')->info("Step 5: FileStorage registered.");
+$container->get(LoggerInterface::class)->info("Step 5: FileStorage registered.");
 
 // Step 6: Load key manager configuration.
 $config['keymanager'] = require __DIR__ . '/keymanager.php';
-$container->get('logger')->info("Step 6: Key Manager configuration loaded.");
+$container->get(LoggerInterface::class)->info("Step 6: Key Manager configuration loaded.");
 
-// Step 7: Initialize DatabaseHelper instances BEFORE services that depend on them.
-try {
-    $database = DatabaseHelper::getInstance();
-    $secure_database = DatabaseHelper::getSecureInstance();
-    $container->get('db_logger')->info("✅ Both databases initialized successfully.");
-} catch (Exception $e) {
-    $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
-    die("❌ Database initialization failed. Check logs for details.\n");
+// Step 7: Ensure required directories exist.
+$templateDirectory = __DIR__ . '/../storage/templates';
+$fileStorageConfig = $config['filestorage'] ?? [];
+if (!is_dir($templateDirectory)) {
+    mkdir($templateDirectory, 0775, true);
 }
-$container->set('db', fn() => $database);
-$container->set('secure_db', fn() => $secure_database);
-$container->get('logger')->info("Step 7: Database services registered.");
-
-// Debug database connection before proceeding.
-try {
-    $pdo = $container->get('db')->getConnection()->getPdo();
-    if (!$pdo) {
-        throw new Exception("Database connection failed.");
-    }
-    $container->get('db_logger')->info("✅ Database connection verified successfully.");
-} catch (Exception $e) {
-    $container->get('db_logger')->critical("❌ Database connection verification failed: " . $e->getMessage());
-    die("❌ Database connection issue: " . $e->getMessage() . "\n");
+if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['base_directory'])) {
+    mkdir($fileStorageConfig['base_directory'], 0775, true);
 }
+$container->get(LoggerInterface::class)->info("Step 7: Required directories verified.");
 
 // Step 8: Register services with proper dependency order.
-$container->set(Validator::class, fn() => new Validator($container->get('api_logger')));
-$container->set(RateLimiter::class, fn() => new RateLimiter($container->get('db_logger'), $container->get('db')));
-$container->set(AuditService::class, fn() => new AuditService($container->get('security_logger')));
-$container->set(TokenService::class, fn() => new TokenService(
-    $_ENV['JWT_SECRET'] ?? '',
-    $_ENV['JWT_REFRESH_SECRET'] ?? '',
-    $container->get('auth_logger')
+$container->set(Validator::class, fn() => new Validator(
+    $container->get('api_logger'), // Pass the logger
+    $container->get(DatabaseHelper::class), // Pass the DatabaseHelper
+    $container->get(ExceptionHandler::class)
 ));
-// Register ExceptionHandler in the DI container by injecting the system logger.
-$container->set(ExceptionHandler::class, fn() => new ExceptionHandler($container->get('logger')));
-// Ensure AuthService is passed the container-registered database and ExceptionHandler.
-$container->set(AuthService::class, fn() => new AuthService(
+$container->set(RateLimiter::class, fn() => new RateLimiter(
+    $container->get('db_logger'), 
+    $container->get(ExceptionHandler::class)
+));
+$container->set(AuditService::class, fn() => new AuditService(
+    $container->get('security_logger'),
+    $container->get(ExceptionHandler::class),
+    $container->get(DatabaseHelper::class)
+));
+$container->set(TokenService::class, fn() => new TokenService(
+    $envConfig['JWT_SECRET'] ?? '',
+    $envConfig['JWT_REFRESH_SECRET'] ?? '',
     $container->get('auth_logger'),
-    $container->get('db'),
-    $config['encryption'],
-    $container->get(ExceptionHandler::class) // Inject centralized ExceptionHandler
+    $container->get(ExceptionHandler::class)
+));
+$container->set(AuthService::class, fn() => new AuthService(
+    $container->get(DatabaseHelper::class),  // Ensure DatabaseHelper is injected
+    $container->get(TokenService::class),
+    $container->get(ExceptionHandler::class),
+    $container->get('auth_logger'),
+    $container->get('audit_logger'),
+    $envConfig['encryption'],
+    $container->get(Validator::class) // Inject Validator
 ));
 // Register UserController to receive AuthService via DI.
 $container->set(\App\Controllers\UserController::class, fn() => new \App\Controllers\UserController(
     $container->get(\App\Services\Auth\AuthService::class)
 ));
 $container->set(UserService::class, fn() => new UserService(
+    $container->get(DatabaseHelper::class),
     $container->get('auth_logger'),
-    $container->get('db'),
-    $config['encryption']['jwt_secret'] ?? ''
+    $container->get('audit_logger')
 ));
-// Register external API–dependent services after core ones.
 $container->set(NotificationService::class, fn() => new NotificationService(
     $container->get('api_logger'),
-    $config['notifications'] ?? [],
-    $container->get('db')
+    $container->get(ExceptionHandler::class),
+    $container->get(DatabaseHelper::class),
+    $config['notifications'] ?? []
 ));
 $container->set(PaymentService::class, fn() => new PaymentService(
     $container->get('db_logger'),
-    $container->get('db'),
-    new Payment(),
-    getenv('PAYU_API_KEY') ?: '',
-    getenv('PAYU_API_SECRET') ?: ''
+    $container->get(DatabaseHelper::class),
+    $container->get(ExceptionHandler::class)
 ));
 $container->set(BookingService::class, fn() => new BookingService(
     $container->get('api_logger'),
-    $container->get('db')
+    $container->get(ExceptionHandler::class),
+    $container->get(DatabaseHelper::class)
 ));
 $container->set(MetricsService::class, fn() => new MetricsService(
     $container->get('api_logger'),
-    $container->get('db')
+    $container->get(ExceptionHandler::class),
+    $container->get(DatabaseHelper::class)
 ));
 $container->set(ReportService::class, fn() => new ReportService(
     $container->get('api_logger'),
-    $container->get('db')
+    $container->get(DatabaseHelper::class),
+    $container->get(ExceptionHandler::class)
 ));
 $container->set(RevenueService::class, fn() => new RevenueService(
     $container->get('db_logger'),
-    $container->get('db')
+    $container->get(DatabaseHelper::class),
+    $container->get(ExceptionHandler::class)
 ));
 $container->set(SignatureService::class, fn() => new SignatureService(
-    $config['signature'],
-    $fileStorage,
-    $encryptionService,
-    $container->get('security_logger')
+    $container->get('security_logger'),
+    $container->get(DatabaseHelper::class),
+    $config['signature']
 ));
 $container->set(DocumentService::class, fn() => new DocumentService(
     $container->get('api_logger'),
     $container->get(AuditService::class),
-    $fileStorage,
-    $encryptionService,
+    $container->get(FileStorage::class),
+    $container->get(EncryptionService::class),
     $container->get(TemplateService::class)
+));
+$container->set(TemplateService::class, fn() => new TemplateService(
+    $container->get('api_logger'),
+    __DIR__ . '/../storage/templates',
+    $container->get(ExceptionHandler::class)
+));
+$container->set(FileStorage::class, fn() => new FileStorage(
+    $config['filestorage'],
+    $container->get(EncryptionService::class),
+    $container->get('api_logger'),
+    $container->get(ExceptionHandler::class)
+));
+$container->set(EncryptionService::class, fn() => new EncryptionService(
+    $container->get('api_logger'),
+    $container->get(ExceptionHandler::class),
+    $config['encryption']['encryption_key'] ?? ''
+));
+$container->set(KeyManager::class, fn() => new KeyManager(
+    $config['keymanager'],
+    $container->get('security_logger'),
+    $container->get(ExceptionHandler::class)
 ));
 
 // New registrations for additional services ensuring proper logging.
+$container->set(\App\Controllers\AuthController::class, fn() => new \App\Controllers\AuthController(
+    $container->get(\App\Services\Auth\AuthService::class),
+    $container->get(Validator::class),
+    $container->get(TokenService::class),
+    $container->get(ExceptionHandler::class),
+    $container->get('auth_logger'),
+    $container->get('audit_logger')
+));
 
-$container->get('logger')->info("Step 8: Service registration completed.");
+$container->get(LoggerInterface::class)->info("Step 8: Service registration completed.");
 
 // Step 9: Final check for required service registrations and circular dependency detection.
 $requiredServices = [
@@ -343,7 +398,7 @@ try {
 return [
     'db'                => $container->get('db'),
     'secure_db'         => $container->get('secure_db'),
-    'logger'            => $container->get('logger'),
+    'logger'            => $container->get(LoggerInterface::class),
     'auditService'      => $container->get(AuditService::class),
     'encryptionService' => $container->get(EncryptionService::class),
     'container'         => $container,
@@ -352,32 +407,32 @@ return [
 <?php
 use Dotenv\Dotenv;
 
-// Ensure `.env` is loaded before accessing database credentials
+// ✅ Ensure `.env` is loaded before accessing database credentials
 $dotenvPath = __DIR__ . '/../';
 if (file_exists($dotenvPath . '.env')) {
     $dotenv = Dotenv::createImmutable($dotenvPath);
-    $dotenv->safeLoad();
+    $dotenv->load();
 }
-var_dump(getenv('DB_HOST'));
 
-// This file must return an array of database configurations
+// ✅ Log database configurations for debugging (ONLY FOR DEVELOPMENT)
+// ✅ Return structured database configurations
 return [
     'app_database' => [
         'driver'    => 'mysql',
-        'host'      => $_ENV['DB_HOST'] ?? '',
-        'database'  => $_ENV['DB_DATABASE'] ?? '',
-        'username'  => $_ENV['DB_USERNAME'] ?? '',
-        'password'  => $_ENV['DB_PASSWORD'] ?? '',
+        'host'      => getenv('DB_HOST') ?: 'localhost',
+        'database'  => getenv('DB_DATABASE') ?: '',
+        'username'  => getenv('DB_USERNAME') ?: '',
+        'password'  => getenv('DB_PASSWORD') ?: '',
         'charset'   => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix'    => '',
     ],
     'secure_database' => [
         'driver'    => 'mysql',
-        'host'      => getenv('SECURE_DB_HOST'),
-        'database'  => getenv('SECURE_DB_DATABASE'),
-        'username'  => getenv('SECURE_DB_USERNAME'),
-        'password'  => getenv('SECURE_DB_PASSWORD'),
+        'host'      => getenv('SECURE_DB_HOST') ?: 'localhost',
+        'database'  => getenv('SECURE_DB_DATABASE') ?: '',
+        'username'  => getenv('SECURE_DB_USERNAME') ?: '',
+        'password'  => getenv('SECURE_DB_PASSWORD') ?: '',
         'charset'   => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix'    => '',
