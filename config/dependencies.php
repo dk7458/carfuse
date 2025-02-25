@@ -67,7 +67,7 @@ $container->set(SecurityHelper::class, fn() => new SecurityHelper());
 $container->get(LoggerInterface::class)->info("Step 2: Loading configuration files.");
 $configDirectory = __DIR__;
 $config = [];
-$configFiles = ['database', 'encryption', 'app'];
+$configFiles = ['database', 'encryption', 'app', 'filestorage'];
 foreach ($configFiles as $file) {
     $path = "{$configDirectory}/{$file}.php";
     if (!file_exists($path)) {
