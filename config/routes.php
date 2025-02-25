@@ -6,111 +6,104 @@ use App\Middleware\AuthMiddleware;
 use App\Middleware\TokenValidationMiddleware;
 use App\Controllers\AuthController;
 use App\Controllers\UserController;
-use Slim\App;
+use DI\Container;
 
-return function (App $app) {
-    // Ensure the AuthController is instantiated
-    $authController = $app->getContainer()->get(AuthController::class);
+return function (Container $container) {
+    return simpleDispatcher(function (RouteCollector $router) use ($container) {
+        // Ensure the AuthController is instantiated
+        $authController = $container->get(AuthController::class);
 
-    // Ensure the UserController is instantiated
-    $userController = $app->getContainer()->get(UserController::class);
+        // Ensure the UserController is instantiated
+        $userController = $container->get(UserController::class);
 
-    // Define routes
-    $app->group('/auth', function () use ($authController) {
-        $this->post('/login', [$authController, 'login']);
-        $this->post('/register', [$authController, 'register']);
-        $this->post('/refresh', [$authController, 'refresh']);
-        $this->post('/logout', [$authController, 'logout']);
-        $this->get('/user', [$authController, 'userDetails']);
-    })->add($authController->middleware());
+        // Define routes
+        $router->addRoute(['GET'], '/', fn() => require '../public/views/home.php');
+        $router->addRoute(['GET'], '/dashboard', fn() => require '../public/views/dashboard.php');
+        $router->addRoute(['GET'], '/profile', fn() => require '../public/views/user/profile.php');
+        $router->addRoute(['GET'], '/reports', fn() => require '../public/views/user/reports.php');
+        $router->addRoute(['GET'], '/auth/login', fn() => require '../public/views/auth/login.php');
+        $router->addRoute(['GET'], '/auth/register', fn() => require '../public/views/auth/register.php');
+        $router->addRoute(['GET'], '/auth/password_reset', fn() => require '../public/views/auth/password_reset.php');
+        $router->addRoute(['GET'], '/documents/signing_page', fn() => require '../public/views/documents/signing_page.php');
 
-    $app->group('/users', function () use ($userController) {
-        $this->get('/profile', [$userController, 'getUserProfile']);
-        $this->post('/updateProfile', [$userController, 'updateProfile']);
-    })->add($userController->middleware());
+        $router->addRoute(['POST'], '/api/auth/login', [$authController, 'login']);
+        $router->addRoute(['POST'], '/api/auth/register', [$authController, 'register']);
+        $router->addRoute(['POST'], '/api/auth/refresh', [$authController, 'refresh']);
+        $router->addRoute(['POST'], '/api/auth/logout', [$authController, 'logout']);
+        $router->addRoute(['GET'], '/api/auth/userDetails', [$authController, 'userDetails'])->middleware(AuthMiddleware::class);
 
-    // Define Public View Routes
-    $app->get('/', fn() => require '../public/views/home.php');
-    $app->get('/dashboard', fn() => require '../public/views/dashboard.php');
-    $app->get('/profile', fn() => require '../public/views/user/profile.php');
-    $app->get('/reports', fn() => require '../public/views/user/reports.php');
-    $app->get('/auth/login', fn() => require '../public/views/auth/login.php');
-    $app->get('/auth/register', fn() => require '../public/views/auth/register.php');
-    $app->get('/auth/password_reset', fn() => require '../public/views/auth/password_reset.php');
-    $app->get('/documents/signing_page', fn() => require '../public/views/documents/signing_page.php');
+        $router->post('/login', [$authController, 'login']);
+        $router->post('/register', [$authController, 'register']);
+        $router->post('/refresh', [$authController, 'refresh']);
+        $router->post('/logout', [$authController, 'logout']);
+        $router->get('/user', [$authController, 'userDetails'])->middleware(AuthMiddleware::class);
 
-    // Define API Routes with Authentication and Middleware
-    $app->post('/api/auth/login', [AuthController::class, 'login']);
-    $app->post('/api/auth/register', [AuthController::class, 'register']);
-    $app->post('/api/auth/refresh', [AuthController::class, 'refresh']);
-    $app->post('/api/auth/logout', [AuthController::class, 'logout']);
-    $app->get('/api/auth/userDetails', [AuthController::class, 'userDetails'])->add(AuthMiddleware::class);
+        // Protected API Routes (Require Authentication)
+        $router->addRoute(['GET'], '/api/user/profile', [$userController, 'getUserProfile'])->middleware(AuthMiddleware::class);
+        $router->addRoute(['POST'], '/api/user/updateProfile', [$userController, 'updateProfile'])->middleware(AuthMiddleware::class);
 
-    // Protected API Routes (Require Authentication)
-    $app->get('/api/user/profile', [UserController::class, 'getUserProfile'])->add(AuthMiddleware::class);
-    $app->post('/api/user/updateProfile', [UserController::class, 'updateProfile'])->add(AuthMiddleware::class);
+        $router->addRoute(['GET'], '/api/user/settings', function (Request $request, RequestHandler $handler) {
+            return (new TokenValidationMiddleware())->__invoke($request, $handler);
+        });
 
-    $app->get('/api/user/settings', function (Request $request, RequestHandler $handler) {
-        return (new TokenValidationMiddleware())->__invoke($request, $handler);
-    });
+        $router->addRoute(['GET'], '/api/user/notifications', function (Request $request, RequestHandler $handler) {
+            return (new TokenValidationMiddleware())->__invoke($request, $handler);
+        });
 
-    $app->get('/api/user/notifications', function (Request $request, RequestHandler $handler) {
-        return (new TokenValidationMiddleware())->__invoke($request, $handler);
-    });
+        $router->addRoute(['GET'], '/api/dashboard/metrics', function (Request $request, RequestHandler $handler) {
+            return (new TokenValidationMiddleware())->__invoke($request, $handler);
+        });
 
-    $app->get('/api/dashboard/metrics', function (Request $request, RequestHandler $handler) {
-        return (new TokenValidationMiddleware())->__invoke($request, $handler);
-    });
+        $router->addRoute(['GET'], '/api/dashboard/reports', function (Request $request, RequestHandler $handler) {
+            return (new TokenValidationMiddleware())->__invoke($request, $handler);
+        });
 
-    $app->get('/api/dashboard/reports', function (Request $request, RequestHandler $handler) {
-        return (new TokenValidationMiddleware())->__invoke($request, $handler);
-    });
+        // Booking API Routes
+        $router->addRoute(['POST'], '/api/bookings/create', 'App\Controllers\BookingController@createBooking');
+        $router->addRoute(['GET'], '/api/bookings/view/{id:\d+}', 'App\Controllers\BookingController@viewBooking');
+        $router->addRoute(['POST'], '/api/bookings/cancel/{id:\d+}', 'App\Controllers\BookingController@cancelBooking');
+        $router->addRoute(['POST'], '/api/bookings/reschedule/{id:\d+}', 'App\Controllers\BookingController@rescheduleBooking');
 
-    // Booking API Routes
-    $app->post('/api/bookings/create', 'App\Controllers\BookingController@createBooking');
-    $app->get('/api/bookings/view/{id:\d+}', 'App\Controllers\BookingController@viewBooking');
-    $app->post('/api/bookings/cancel/{id:\d+}', 'App\Controllers\BookingController@cancelBooking');
-    $app->post('/api/bookings/reschedule/{id:\d+}', 'App\Controllers\BookingController@rescheduleBooking');
+        // Payment API Routes
+        $router->addRoute(['POST'], '/api/payments/process', 'App\Controllers\PaymentController@processPayment');
+        $router->addRoute(['POST'], '/api/payments/refund/{id:\d+}', 'App\Controllers\PaymentController@refundPayment');
+        $router->addRoute(['GET'], '/api/payments/history', 'App\Controllers\PaymentController@paymentHistory');
 
-    // Payment API Routes
-    $app->post('/api/payments/process', 'App\Controllers\PaymentController@processPayment');
-    $app->post('/api/payments/refund/{id:\d+}', 'App\Controllers\PaymentController@refundPayment');
-    $app->get('/api/payments/history', 'App\Controllers\PaymentController@paymentHistory');
+        // Report API Routes
+        $router->addRoute(['POST'], '/api/reports/generate', 'App\Controllers\ReportController@generateReport');
+        $router->addRoute(['GET'], '/api/reports/view/{id:\d+}', 'App\Controllers\ReportController@viewReport');
 
-    // Report API Routes
-    $app->post('/api/reports/generate', 'App\Controllers\ReportController@generateReport');
-    $app->get('/api/reports/view/{id:\d+}', 'App\Controllers\ReportController@viewReport');
+        // Admin API Routes
+        $router->addRoute(['GET'], '/api/admin/users', function (Request $request, RequestHandler $handler) {
+            return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
+        });
 
-    // Admin API Routes
-    $app->get('/api/admin/users', function (Request $request, RequestHandler $handler) {
-        return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
-    });
+        $router->addRoute(['GET'], '/api/admin/dashboard', function (Request $request, RequestHandler $handler) {
+            return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
+        });
 
-    $app->get('/api/admin/dashboard', function (Request $request, RequestHandler $handler) {
-        return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
-    });
+        $router->addRoute(['GET'], '/api/admin/logs', function (Request $request, RequestHandler $handler) {
+            return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
+        });
 
-    $app->get('/api/admin/logs', function (Request $request, RequestHandler $handler) {
-        return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
-    });
+        // Document API Routes
+        $router->addRoute(['POST'], '/api/documents/upload', 'App\Controllers\DocumentController@uploadDocument');
+        $router->addRoute(['POST'], '/api/documents/sign', 'App\Controllers\DocumentController@signDocument');
+        $router->addRoute(['GET'], '/api/documents/view/{id:\d+}', 'App\Controllers\DocumentController@viewDocument');
 
-    // Document API Routes
-    $app->post('/api/documents/upload', 'App\Controllers\DocumentController@uploadDocument');
-    $app->post('/api/documents/sign', 'App\Controllers\DocumentController@signDocument');
-    $app->get('/api/documents/view/{id:\d+}', 'App\Controllers\DocumentController@viewDocument');
+        // System API Routes
+        $router->addRoute(['GET'], '/api/system/logs', function (Request $request, RequestHandler $handler) {
+            return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
+        });
 
-    // System API Routes
-    $app->get('/api/system/logs', function (Request $request, RequestHandler $handler) {
-        return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
-    });
+        $router->addRoute(['GET'], '/api/system/status', function (Request $request, RequestHandler $handler) {
+            return (new TokenValidationMiddleware())->__invoke($request, $handler);
+        });
 
-    $app->get('/api/system/status', function (Request $request, RequestHandler $handler) {
-        return (new TokenValidationMiddleware())->__invoke($request, $handler);
-    });
-
-    // Catch-All for Unmatched Requests
-    $app->map(['GET', 'POST'], '/{any:.+}', function () {
-        http_response_code(404);
-        echo json_encode(["error" => "Not Found"]);
+        // Catch-All for Unmatched Requests
+        $router->addRoute(['GET', 'POST'], '/{any:.+}', function () {
+            http_response_code(404);
+            echo json_encode(["error" => "Not Found"]);
+        });
     });
 };
