@@ -1,0 +1,13 @@
+RewriteEngine On
+RewriteBase /
+
+# ✅ Block direct access to backend directories
+RewriteRule ^(App/Controllers|App/Services|config|vendor|logs) - [F,L]
+
+# ✅ Serve static content from the public folder if it exists
+RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -f [OR]
+RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -d
+RewriteRule ^(.*)$ /public/$1 [L]
+
+# ✅ Forward remaining requests to public/index.php for routing
+RewriteRule ^(.*)$ /public/index.php [QSA,L]

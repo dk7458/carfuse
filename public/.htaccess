@@ -1,0 +1,28 @@
+RewriteEngine On
+RewriteBase /
+
+# ✅ Allow guest access to public views (without requiring authentication)
+RewriteRule ^(home|auth/login|vehicles|auth/register)$ views/$1.php [L]
+
+# ✅ Prevent direct access to backend directories
+RewriteRule ^(App/Controllers|App/Services|config|vendor|logs) - [F,L]
+
+# ✅ Ensure static assets load properly
+RewriteCond %{REQUEST_URI} ^/(css|js|images|views|uploads|assets)/(.*)$
+RewriteCond %{DOCUMENT_ROOT}/public/%1/%2 -f
+RewriteRule ^(css|js|images|views|uploads|assets)/(.*)$ /public/$1/$2 [L]
+
+# Removed API-specific rewrite to let fallback handle API routes
+# RewriteCond %{REQUEST_URI} ^/api/ [NC]
+# RewriteRule ^api/(.*)$ index.php?route=api/$1 [QSA,L]
+
+# ✅ Prevent direct access to api.php
+RewriteRule ^api.php - [F,L]
+
+# ✅ Ensure requests without a file extension are forwarded correctly
+RewriteCond %{REQUEST_URI} !\.(css|js|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico|pdf|json)$ [NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# ✅ Forward all remaining requests to FastRoute in index.php
+RewriteRule ^ index.php [QSA,L]
