@@ -1,5 +1,6 @@
 <?php
 use App\Helpers\LoggingHelper;
+use FastRoute\Dispatcher;
 
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -9,9 +10,7 @@ error_reporting(E_ALL);
 $bootstrap = require_once __DIR__ . '/../bootstrap.php';
 
 // Initialize our centralized logging helper and get the default "api" logger
-$loggingHelper = new \App\Helpers\LoggingHelper();
-// Use the default logger, or get one by category if needed:
-// $logger = $loggingHelper->getLoggerByCategory('api');
+$loggingHelper = new LoggingHelper();
 $logger = $loggingHelper->getDefaultLogger();
 
 // Retrieve the DI container from bootstrap
@@ -21,12 +20,25 @@ $container = $bootstrap['container'];
 $requestUri = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 
-// Route API Requests Using FastRoute
-$dispatcher = require __DIR__ . '/../config/routes.php';
+// Load routes (which may be a closure)
+$routes = require __DIR__ . '/../config/routes.php';
+if (is_callable($routes)) {
+    $dispatcher = $routes($container->get(\Slim\App::class)); // Invoke closure to obtain dispatcher
+} else {
+    $dispatcher = $routes;
+}
+
+// Verify dispatcher type
+if (!($dispatcher instanceof Dispatcher)) {
+    http_response_code(500);
+    echo json_encode(["error" => "Dispatcher is not correctly configured."]);
+    exit;
+}
+
 $routeInfo = $dispatcher->dispatch($requestMethod, "/$requestUri");
 
 switch ($routeInfo[0]) {
-    case FastRoute\Dispatcher::FOUND:
+    case Dispatcher::FOUND:
         $handler = $routeInfo[1];
         $vars = $routeInfo[2];
 
@@ -47,12 +59,12 @@ switch ($routeInfo[0]) {
         }
         break;
 
-    case FastRoute\Dispatcher::NOT_FOUND:
+    case Dispatcher::NOT_FOUND:
         http_response_code(404);
         echo json_encode(["error" => "Route not found"]);
         break;
 
-    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+    case Dispatcher::METHOD_NOT_ALLOWED:
         http_response_code(405);
         echo json_encode(["error" => "Method Not Allowed"]);
         break;
