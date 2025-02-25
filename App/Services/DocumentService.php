@@ -10,6 +10,7 @@ use DocumentManager\Services\TemplateService;
 use App\Services\EncryptionService;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
+use App\Helpers\LoggingHelper;
 
 /**
  * Document Service
@@ -36,7 +37,7 @@ class DocumentService
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler
     ) {
-        $this->logger = $logger;
+        $this->logger = LoggingHelper::getLoggerByCategory('document');
         $this->exceptionHandler = $exceptionHandler;
         $this->db = DatabaseHelper::getInstance();
         $this->auditService = $auditService;

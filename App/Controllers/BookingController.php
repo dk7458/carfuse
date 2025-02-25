@@ -9,6 +9,7 @@ use App\Services\AuthService;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\JsonResponse;
 use App\Helpers\TokenValidator;
+use App\Helpers\LoggingHelper;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -25,22 +26,21 @@ class BookingController extends Controller
     private Validator $validator;
     private AuditService $auditService;
     private NotificationService $notificationService;
-    private LoggerInterface $logger;
+    private $logger;
 
     public function __construct(
         BookingService $bookingService,
         PaymentService $paymentService,
         Validator $validator,
         AuditService $auditService,
-        NotificationService $notificationService,
-        LoggerInterface $logger
+        NotificationService $notificationService
     ) {
         $this->bookingService = $bookingService;
         $this->paymentService = $paymentService;
         $this->validator = $validator;
         $this->auditService = $auditService;
         $this->notificationService = $notificationService;
-        $this->logger = $logger;
+        $this->logger = LoggingHelper::getLoggerByCategory('booking');
     }
 
     /**
@@ -70,7 +70,7 @@ class BookingController extends Controller
                 'pickup_date'  => $data['pickup_date'],
                 'dropoff_date' => $data['dropoff_date'],
             ]);
-            error_log("AUDIT: Booking rescheduled, booking_id: {$id}");
+            $this->logger->info('Booking rescheduled', ['booking_id' => $id]);
             return JsonResponse::success('Booking rescheduled successfully');
         } catch (\Exception $e) {
             $this->logger->error("BOOKING ERROR: Failed to reschedule booking: " . $e->getMessage());
@@ -96,7 +96,7 @@ class BookingController extends Controller
                     'status'     => 'processed'
                 ]);
             }
-            error_log("BOOKING: Booking canceled, booking_id: {$id}");
+            $this->logger->info('Booking canceled', ['booking_id' => $id]);
             return JsonResponse::success('Booking canceled successfully');
         } catch (\Exception $e) {
             $this->logger->error("BOOKING ERROR: Failed to cancel booking: " . $e->getMessage());
@@ -155,7 +155,7 @@ class BookingController extends Controller
                 return JsonResponse::error('Vehicle is not available for the selected dates', 400);
             }
             $booking = Booking::create($data);
-            error_log("BOOKING: Booking created, booking_id: {$booking->id}");
+            $this->logger->info('Booking created', ['booking_id' => $booking->id]);
             return JsonResponse::success('Booking created successfully', ['booking_id' => $booking->id], 201);
         } catch (\Exception $e) {
             $this->logger->error("BOOKING ERROR: Failed to create booking: " . $e->getMessage());

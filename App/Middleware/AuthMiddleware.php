@@ -5,6 +5,7 @@ namespace App\Middleware;
 use App\Helpers\ApiHelper;
 use App\Services\Auth\AuthService;
 use App\Helpers\ExceptionHandler;
+use App\Helpers\LoggingHelper;
 use Psr\Log\LoggerInterface;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -18,19 +19,16 @@ class AuthMiddleware
 {
     private AuthService $authService;
     private ExceptionHandler $exceptionHandler;
-    private LoggerInterface $authLogger;
-    private LoggerInterface $securityLogger;
+    private LoggingHelper $loggingHelper;
 
     public function __construct(
         AuthService $authService,
         ExceptionHandler $exceptionHandler,
-        LoggerInterface $authLogger,
-        LoggerInterface $securityLogger
+        LoggingHelper $loggingHelper
     ) {
         $this->authService = $authService;
         $this->exceptionHandler = $exceptionHandler;
-        $this->authLogger = $authLogger;
-        $this->securityLogger = $securityLogger;
+        $this->loggingHelper = $loggingHelper;
     }
 
     /**
@@ -43,11 +41,19 @@ class AuthMiddleware
      */
     public function __invoke(Request $request, RequestHandler $handler, ...$roles): Response
     {
+        $logger = $this->loggingHelper->getLoggerByCategory('auth');
+
+        // Log the incoming request with contextual information
+        $logger->info('Incoming request', [
+            'ip' => $request->getServerParams()['REMOTE_ADDR'],
+            'timestamp' => (new \DateTime())->format('Y-m-d H:i:s'),
+        ]);
+
         try {
             $token = $this->extractToken($request);
 
             if (!$token || !$this->authService->validateToken($token)) {
-                $this->authLogger->warning("Invalid or missing token", ['ip' => $request->getServerParams()['REMOTE_ADDR']]);
+                $logger->warning("Invalid or missing token", ['ip' => $request->getServerParams()['REMOTE_ADDR']]);
                 return ApiHelper::sendJsonResponse('error', 'Unauthorized', [], 401);
             }
 
@@ -56,20 +62,25 @@ class AuthMiddleware
 
             // Role-based access control
             if (!empty($roles) && !in_array($user->role, $roles)) {
-                $this->securityLogger->warning("Unauthorized role access attempt.", [
+                $logger->warning("Unauthorized role access attempt.", [
                     'userId' => $user->id,
                     'requiredRoles' => $roles
                 ]);
                 return ApiHelper::sendJsonResponse('error', 'Forbidden', [], 403);
             }
 
-            $this->authLogger->info("✅ User authenticated.", [
+            $logger->info("✅ User authenticated.", [
                 'userId' => $user->id,
                 'role' => $user->role
             ]);
 
             return $handler->handle($request);
         } catch (\Exception $e) {
+            $logger->error('Token validation failed', [
+                'ip' => $request->getServerParams()['REMOTE_ADDR'],
+                'timestamp' => (new \DateTime())->format('Y-m-d H:i:s'),
+                'error' => $e->getMessage(),
+            ]);
             $this->exceptionHandler->handleException($e);
             return ApiHelper::sendJsonResponse('error', 'Internal Server Error', [], 500);
         }

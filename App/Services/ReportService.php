@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\User;
 use Dompdf\Dompdf;
+use App\Helpers\LoggingHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 
@@ -19,7 +20,7 @@ class ReportService
 
     public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
-        $this->logger = $logger;
+        $this->logger = LoggingHelper::getLoggerByCategory('report');
         $this->db = $db;
         $this->exceptionHandler = $exceptionHandler;
     }    

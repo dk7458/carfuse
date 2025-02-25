@@ -40,6 +40,12 @@ $container = new \DI\Container();
 $logger = new \App\Logging\Logger();
 $container->set('Logger', $logger);
 
+// Register LoggingHelper in the DI container
+use App\Helpers\LoggingHelper;
+$container->set('LoggingHelper', function() {
+    return new LoggingHelper();
+});
+
 // Step 3: Load Configuration Files
 $configFiles = ['database', 'encryption', 'app', 'filestorage'];
 $config = [];

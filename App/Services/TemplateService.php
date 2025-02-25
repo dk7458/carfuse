@@ -5,6 +5,7 @@ namespace App\Services;
 use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
+use App\Helpers\LoggingHelper;
 
 /**
  * Template Service
@@ -33,7 +34,7 @@ class TemplateService
             throw new \InvalidArgumentException("Invalid template directory: $templateDirectory");
         }
 
-        $this->logger = $logger;
+        $this->logger = LoggingHelper::getLoggerByCategory('template');
         $this->templateDirectory = $templateDirectory;
         $this->exceptionHandler = $exceptionHandler;
     }

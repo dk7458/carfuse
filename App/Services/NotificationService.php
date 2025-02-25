@@ -7,6 +7,7 @@ use Psr\Log\LoggerInterface;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 use App\Helpers\ExceptionHandler; // assume this exists
+use App\Helpers\LoggingHelper;
 
 /**
  * NotificationService
@@ -23,7 +24,7 @@ class NotificationService
 
     public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db, array $config)
     {
-        $this->logger = $logger;
+        $this->logger = LoggingHelper::getLoggerByCategory('notification');
         $this->exceptionHandler = $exceptionHandler;
         $this->db = $db;
         $this->config = $config;
@@ -36,9 +37,10 @@ class NotificationService
     {
         try {
             $this->storeNotification($userId, $type, $message);
+            $this->logger->info('Notification sent', ['user_id' => $userId, 'message' => $message]);
             return $this->dispatchNotification($userId, $type, $message, $options);
         } catch (\Exception $e) {
-            $this->logger->error("[Notification] ❌ Notification failed: " . $e->getMessage());
+            $this->logger->error('Failed to send notification', ['error' => $e->getMessage()]);
             $this->exceptionHandler->handleException($e);
             return false;
         }

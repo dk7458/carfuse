@@ -17,18 +17,18 @@ use Psr\Log\LoggerInterface;
 use App\Services\AuthService;
 use App\Helpers\JsonResponse;
 use App\Helpers\TokenValidator;
+use App\Helpers\LoggingHelper;
 
 /**
  * AdminController - Handles admin user management and dashboard operations.
  */
 class AdminController extends Controller
 {
-    private LoggerInterface $logger;
+    private $logger;
 
-    public function __construct(LoggerInterface $adminLogger)
+    public function __construct()
     {
-        parent::__construct($adminLogger);
-        $this->logger = $adminLogger;
+        $this->logger = LoggingHelper::getLoggerByCategory('admin');
     }
 
     /**

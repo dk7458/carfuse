@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\TransactionLog;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
+use App\Helpers\LoggingHelper;
 
 class RevenueService
 {
@@ -18,7 +19,7 @@ class RevenueService
     // Assume dependency injection now supplies the logger.
     public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
-        $this->logger = $logger;
+        $this->logger = LoggingHelper::getLoggerByCategory('revenue');
         $this->db = $db;
         $this->exceptionHandler = $exceptionHandler;
     }

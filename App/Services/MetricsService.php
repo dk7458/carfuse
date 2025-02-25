@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
+use App\Helpers\LoggingHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use Exception;
@@ -16,7 +17,7 @@ class MetricsService
 
     public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
     {
-        $this->logger = $logger;
+        $this->logger = LoggingHelper::getLoggerByCategory('metrics');
         $this->exceptionHandler = $exceptionHandler;
         $this->db = $db;
     }

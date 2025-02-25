@@ -14,6 +14,7 @@ use App\Services\Auth\AuthService;
 use Exception;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use App\Helpers\LoggingHelper;
 
 /**
  * User Management Controller
@@ -25,26 +26,19 @@ class UserController extends Controller
     private Validator $validator;
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
-    private LoggerInterface $userLogger;
-    private LoggerInterface $authLogger;
-    private LoggerInterface $auditLogger;
+    private LoggerInterface $logger;
     private AuthService $authService;
 
     public function __construct(
         Validator $validator,
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
-        LoggerInterface $userLogger,
-        LoggerInterface $authLogger,
-        LoggerInterface $auditLogger,
         AuthService $authService
     ) {
         $this->validator = $validator;
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
-        $this->userLogger = $userLogger;
-        $this->authLogger = $authLogger;
-        $this->auditLogger = $auditLogger;
+        $this->logger = LoggingHelper::getLoggerByCategory('user');
         $this->authService = $authService;
     }
 
@@ -68,7 +62,7 @@ class UserController extends Controller
             if (!$user) {
                 throw new \Exception("User registration failed");
             }
-            $this->userLogger->info("User registered successfully", ['email' => $data['email']]);
+            $this->logger->info("User registered successfully", ['email' => $data['email']]);
             return ApiHelper::sendJsonResponse('success', 'User registered successfully', ['user_id' => $user->id], 201);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);

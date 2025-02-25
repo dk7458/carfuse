@@ -32,6 +32,7 @@ use App\Queues\NotificationQueue;
 use App\Queues\DocumentQueue;
 use App\Models\Payment;
 use GuzzleHttp\Client;
+use App\Helpers\LoggingHelper;
 
 // Step 1: Initialize DI Container
 try {
@@ -254,6 +255,12 @@ $container->set('TokenService', function() {
     return new TokenService();
 });
 
+// Example of injecting LoggingHelper into a service
+$container->set('SomeService', function($container) {
+    $logger = $container->get('LoggingHelper')->getLoggerByCategory('some_category');
+    return new SomeService($logger);
+});
+
 $container->get(LoggerInterface::class)->info("Step 8: Service registration completed.");
 
 // Step 9: Final check for required service registrations and circular dependency detection.
@@ -288,3 +295,7 @@ return [
     'encryptionService' => $container->get(EncryptionService::class),
     'container'         => $container,
 ];
+} catch (Exception $e) {
+    $container->get('dependencies_logger')->critical("❌ Security services failed to load: " . $e->getMessage());
+    die("❌ Security services failed to load: " . $e->getMessage() . "\n");
+}

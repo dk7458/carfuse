@@ -7,6 +7,7 @@ use App\Models\RefundLog;
 use App\Models\TransactionLog;
 use App\Models\InstallmentPlan;
 use Illuminate\Support\Facades\Auth;
+use App\Helpers\LoggingHelper;
 
 /**
  * Payment Controller
@@ -35,7 +36,7 @@ class PaymentController extends Controller
         $this->notificationService = $notificationService;
         $this->auditService = $auditService;
         $this->db = $db;
-        $this->logger = $logger;
+        $this->logger = LoggingHelper::getLoggerByCategory('payment');
     }
 
     /**
@@ -59,12 +60,14 @@ class PaymentController extends Controller
             ]);
             // Update related booking status via Eloquent relationship
             $payment->booking()->update(['status' => 'paid']);
+            $this->logger->info('Payment processed', ['payment_id' => $payment->id]);
             $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Payment processed',
                 'data'    => ['payment' => $payment]
             ], 200);
         } catch (\Exception $e) {
+            $this->logger->error('Payment processing failed', ['error' => $e->getMessage()]);
             $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Payment processing failed',
@@ -88,12 +91,14 @@ class PaymentController extends Controller
                 'amount'         => $data['amount'],
                 'status'         => 'processed'
             ]);
+            $this->logger->info('Refund processed', ['refund_id' => $refund->id]);
             $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Refund processed',
                 'data'    => ['refund' => $refund]
             ], 200);
         } catch (\Exception $e) {
+            $this->logger->error('Refund processing failed', ['error' => $e->getMessage()]);
             $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Refund processing failed',
@@ -120,12 +125,14 @@ class PaymentController extends Controller
                 'installments'   => $data['installments'],
                 'payment_method' => $data['payment_method_id'],
             ]);
+            $this->logger->info('Installment plan created', ['plan_id' => $plan->id]);
             $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Installment plan created',
                 'data'    => ['installment_plan' => $plan]
             ], 200);
         } catch (\Exception $e) {
+            $this->logger->error('Installment plan setup failed', ['error' => $e->getMessage()]);
             $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Installment plan setup failed',
@@ -144,12 +151,14 @@ class PaymentController extends Controller
                 ->where('user_id', $_SESSION['user_id'] ?? null)
                 ->latest()
                 ->get();
+            $this->logger->info('User transactions fetched', ['user_id' => $_SESSION['user_id'] ?? null]);
             $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Transactions fetched',
                 'data'    => ['transactions' => $transactions]
             ], 200);
         } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch user transactions', ['error' => $e->getMessage()]);
             $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch user transactions',
@@ -165,12 +174,14 @@ class PaymentController extends Controller
     {
         try {
             $details = TransactionLog::findOrFail($transactionId);
+            $this->logger->info('Payment details fetched', ['transaction_id' => $transactionId]);
             $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Payment details fetched',
                 'data'    => ['details' => $details]
             ], 200);
         } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch payment details', ['error' => $e->getMessage()]);
             $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch payment details',

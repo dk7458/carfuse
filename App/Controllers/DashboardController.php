@@ -7,7 +7,7 @@ use App\Models\Payment;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
-use Psr\Log\LoggerInterface;
+use App\Helpers\LoggingHelper;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -17,20 +17,19 @@ class DashboardController extends Controller
     private StatisticsService $statisticsService;
     private NotificationService $notificationService;
     private UserService $userService;
-    private LoggerInterface $logger;
+    private $logger;
 
     public function __construct(
         BookingService $bookingService,
         StatisticsService $statisticsService,
         NotificationService $notificationService,
-        UserService $userService,
-        LoggerInterface $userLogger
+        UserService $userService
     ) {
         $this->bookingService = $bookingService;
         $this->statisticsService = $statisticsService;
         $this->notificationService = $notificationService;
         $this->userService = $userService;
-        $this->logger = $userLogger;
+        $this->logger = LoggingHelper::getLoggerByCategory('dashboard');
     }
 
     /**

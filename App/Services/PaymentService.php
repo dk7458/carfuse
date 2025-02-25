@@ -3,8 +3,9 @@
 namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
-use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
+use App\Helpers\LoggingHelper;
+use Psr\Log\LoggerInterface;
 
 class PaymentService
 {
@@ -15,7 +16,7 @@ class PaymentService
 
     public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
-        $this->logger = $logger;
+        $this->logger = LoggingHelper::getLoggerByCategory('payment');
         $this->db = $db;
         $this->exceptionHandler = $exceptionHandler;
     }

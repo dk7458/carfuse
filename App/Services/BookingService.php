@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Booking;
 use Exception;
 use App\Helpers\DatabaseHelper;
+use App\Helpers\LoggingHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 
@@ -17,7 +18,7 @@ class BookingService
 
     public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
     {
-        $this->logger = $logger;
+        $this->logger = LoggingHelper::getLoggerByCategory('booking');
         $this->exceptionHandler = $exceptionHandler;
         $this->db = $db;
     }

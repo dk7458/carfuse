@@ -7,17 +7,17 @@ use App\Models\Booking;
 use App\Models\Payment;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Psr\Log\LoggerInterface;
+use App\Helpers\LoggingHelper;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
 class AdminDashboardController
 {
-    private LoggerInterface $logger;
+    private $logger;
 
-    public function __construct(LoggerInterface $adminLogger)
+    public function __construct()
     {
-        $this->logger = $adminLogger;
+        $this->logger = LoggingHelper::getLoggerByCategory('admin_dashboard');
     }
 
     public function index(): void

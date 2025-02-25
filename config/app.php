@@ -16,4 +16,8 @@ if (file_exists($dotenvPath . '.env')) {
 return [
     'environment' => getenv('APP_ENV') ?: 'production',
     'debug'       => getenv('APP_DEBUG') === 'true',
+
+    'providers' => [
+        App\Helpers\LoggingHelper::class,
+    ],
 ];

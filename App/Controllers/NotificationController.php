@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Services\AuthService;
 use App\Helpers\JsonResponse;
 use App\Helpers\TokenValidator;
+use App\Helpers\LoggingHelper;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -19,7 +20,12 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
  */
 class NotificationController extends Controller
 {
-    // Removed injected NotificationService, Validator, LoggerInterface, and NotificationQueue
+    private $logger;
+
+    public function __construct()
+    {
+        $this->logger = LoggingHelper::getLoggerByCategory('notification');
+    }
 
     /**
      * Display user notifications.
@@ -37,6 +43,7 @@ class NotificationController extends Controller
                 'data'    => ['notifications' => $notifications]
             ], 200);
         } catch (\Exception $e) {
+            $this->logger->error('An error occurred while fetching notifications', ['exception' => $e]);
             $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'An error occurred while fetching notifications',
@@ -62,6 +69,7 @@ class NotificationController extends Controller
                 ->get();
             return JsonResponse::success('Notifications retrieved successfully', $notifications);
         } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch user notifications', ['exception' => $e]);
             return JsonResponse::error('Failed to fetch user notifications', []);
         }
     }
@@ -84,6 +92,7 @@ class NotificationController extends Controller
                 ->get();
             return JsonResponse::success('Notifications retrieved successfully', $notifications);
         } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch notifications', ['exception' => $e]);
             return JsonResponse::error('Failed to fetch notifications', []);
         }
     }
@@ -105,8 +114,10 @@ class NotificationController extends Controller
         try {
             $notification = Notification::findOrFail($data['notification_id']);
             $notification->update(['is_read' => true]);
+            $this->logger->info('Notification marked as read', ['notification_id' => $data['notification_id']]);
             return JsonResponse::success('Notification marked as read', []);
         } catch (\Exception $e) {
+            $this->logger->error('Failed to mark notification as read', ['exception' => $e]);
             return JsonResponse::error('Failed to mark notification as read', []);
         }
     }
@@ -128,8 +139,10 @@ class NotificationController extends Controller
         try {
             $notification = Notification::findOrFail($data['notification_id']);
             $notification->delete();
+            $this->logger->info('Notification deleted', ['notification_id' => $data['notification_id']]);
             return JsonResponse::success('Notification deleted', []);
         } catch (\Exception $e) {
+            $this->logger->error('Failed to delete notification', ['exception' => $e]);
             return JsonResponse::error('Failed to delete notification', []);
         }
     }
@@ -161,8 +174,10 @@ class NotificationController extends Controller
                 'is_read' => false,
             ]);
             // Optionally dispatch via queue or any external channel here.
+            $this->logger->info('Notification sent successfully', ['notification_id' => $notification->id]);
             return JsonResponse::success('Notification sent successfully', ['notification' => $notification]);
         } catch (\Exception $e) {
+            $this->logger->error('Failed to send notification', ['exception' => $e]);
             return JsonResponse::error('Failed to send notification', []);
         }
     }

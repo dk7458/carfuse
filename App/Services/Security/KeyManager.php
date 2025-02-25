@@ -3,6 +3,7 @@
 namespace App\Services\Security;
 
 use Exception;
+use App\Helpers\LoggingHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 
@@ -15,7 +16,7 @@ class KeyManager
 
     public function __construct(array $keys, LoggerInterface $logger, ExceptionHandler $exceptionHandler)
     {
-        $this->logger = $logger;
+        $this->logger = LoggingHelper::getLoggerByCategory('security');
         $this->exceptionHandler = $exceptionHandler;
         $this->keys = $keys;
     }
@@ -34,7 +35,14 @@ class KeyManager
 
     public function generateKey(): string
     {
-        return base64_encode(random_bytes(32)); // AES-256 key
+        try {
+            $key = base64_encode(random_bytes(32)); // AES-256 key
+            $this->logger->info('Key generated', ['key_data' => $key]);
+            return $key;
+        } catch (Exception $e) {
+            $this->logger->error('Failed to generate key', ['error' => $e->getMessage()]);
+            throw $e;
+        }
     }
 
     public function storeKey(string $identifier, string $key): void
