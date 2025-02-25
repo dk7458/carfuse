@@ -2,12 +2,14 @@
 
 namespace App\Controllers;
 
-use App\Services\UserService;
-use App\Helpers\ApiHelper;
+use App\Models\User;
+use ApiHelper;
+use Validator;
+use TokenService;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use Illuminate\Routing\Controller;
-use App\Middleware\AuthMiddleware;
+use Illuminate\Support\Str;
 
 /**
  * User Management Controller
@@ -16,118 +18,200 @@ use App\Middleware\AuthMiddleware;
  */
 class UserController extends Controller
 {
-    private UserService $userService;
+    private Validator $validator;
+    private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $userLogger;
+    private LoggerInterface $authLogger;
     private LoggerInterface $auditLogger;
-    private AuthMiddleware $authMiddleware;
 
     public function __construct(
-        UserService $userService,
+        Validator $validator,
+        TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $userLogger,
-        LoggerInterface $auditLogger,
-        AuthMiddleware $authMiddleware
+        LoggerInterface $authLogger,
+        LoggerInterface $auditLogger
     ) {
-        $this->userService = $userService;
+        $this->validator = $validator;
+        $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->userLogger = $userLogger;
+        $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
-        $this->authMiddleware = $authMiddleware;
+    }
+
+    /**
+     * Register a new user.
+     */
+    public function registerUser()
+    {
+        $data = $_POST;
+        // Validate input data
+        $rules = [
+            'email'    => 'required|email',
+            'password' => 'required|min:6',
+            // ... other rules ...
+        ];
+        if (!$this->validator->validate($data, $rules)) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
+        }
+        try {
+            $user = User::create($data);
+            if (!$user) {
+                throw new \Exception("User registration failed");
+            }
+            $this->userLogger->info("User registered successfully", ['email' => $data['email']]);
+            return ApiHelper::sendJsonResponse('success', 'User registered successfully', ['user_id' => $user->id], 201);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * Log in an existing user.
+     */
+    public function login()
+    {
+        $email = $_POST['email'] ?? null;
+        $password = $_POST['password'] ?? null;
+        if (!$email || !$password) {
+            return ApiHelper::sendJsonResponse('error', 'Email and password required', null, 400);
+        }
+        try {
+            $user = User::where('email', $email)->first();
+            if (!$user || !password_verify($password, $user->password_hash)) {
+                throw new \Exception("Invalid credentials");
+            }
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            session_regenerate_id(true);
+            $_SESSION['user_id']   = $user->id;
+            $_SESSION['user_role'] = $user->role ?? 'user';
+            $token = $this->tokenService->generateToken($user);
+            $refreshToken = $this->tokenService->generateRefreshToken($user);
+            $this->authLogger->info("User logged in", ['userId' => $user->id, 'email' => $user->email]);
+            return ApiHelper::sendJsonResponse('success', 'User logged in', [
+                'token'         => $token,
+                'refresh_token' => $refreshToken
+            ], 200);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * Log out the current user.
+     */
+    public function logout()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            setcookie(session_name(), '', time() - 42000, '/');
+        }
+        session_destroy();
+        $this->authLogger->info("User logged out");
+        return ApiHelper::sendJsonResponse('success', 'Logged out successfully', null, 200);
     }
 
     /**
      * Retrieve current user profile.
-     * Protected by authentication middleware.
      */
-    public function getUserProfile($request)
+    public function getUserProfile()
     {
-        return $this->authMiddleware->authenticateToken($request, function($req) {
-            try {
-                // Get user ID from authenticated request
-                $userId = $req->userId;
-                $user = $this->userService->getUserById($userId);
-                
-                if (!$user) {
-                    return ApiHelper::sendJsonResponse('error', 'User not found', [], 404);
-                }
-                
-                // Remove sensitive data before returning
-                unset($user['password_hash']);
-                
-                return ApiHelper::sendJsonResponse('success', 'User profile retrieved', $user, 200);
-            } catch (\Exception $e) {
-                $this->exceptionHandler->handleException($e);
-                return ApiHelper::sendJsonResponse('error', 'Failed to retrieve profile', [], 500);
-            }
-        });
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $user = User::find($_SESSION['user_id'] ?? null);
+        return ApiHelper::sendJsonResponse('success', 'User profile retrieved', $user, 200);
     }
 
     /**
-     * Update user profile
-     * Protected by authentication middleware.
+     * 🔹 Update user profile
      */
-    public function updateProfile($request)
+    public function updateProfile()
     {
-        return $this->authMiddleware->authenticateToken($request, function($req) {
-            try {
-                // Get user ID from authenticated request
-                $userId = $req->userId;
-                
-                // Get update data from request body
-                $data = json_decode(file_get_contents("php://input"), true);
-                if (!$data) {
-                    return ApiHelper::sendJsonResponse('error', 'Invalid input data', [], 400);
-                }
-                
-                // Update user profile
-                $result = $this->userService->updateUser($userId, $data);
-                
-                $this->auditLogger->info("User profile updated", ['userId' => $userId]);
-                return ApiHelper::sendJsonResponse('success', 'Profile updated successfully', [], 200);
-            } catch (\Exception $e) {
-                $this->exceptionHandler->handleException($e);
-                return ApiHelper::sendJsonResponse('error', 'Failed to update profile', [], 500);
-            }
-        });
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $user = $_SESSION['user'] ?? null;
+        if (!$user) {
+            return ApiHelper::sendJsonResponse('error', 'Unauthorized', null, 401);
+        }
+        $data = [
+            'name'    => $_POST['name'] ?? null,
+            'surname' => $_POST['surname'] ?? null,
+            'email'   => $_POST['email'] ?? null,
+            'phone'   => $_POST['phone'] ?? null,
+            'address' => $_POST['address'] ?? null,
+        ];
+        $rules = [
+            'name'    => 'required|string|max:255',
+            'surname' => 'required|string|max:255',
+            'email'   => 'required|email',
+            'phone'   => 'nullable|string|max:15',
+            'address' => 'nullable|string|max:255',
+        ];
+        if (!$this->validator->validate($data, $rules)) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
+        }
+        try {
+            $user->update($data);
+            $this->auditLogger->info("User profile updated", ['userId' => $user->id]);
+            return ApiHelper::sendJsonResponse('success', 'Profile updated successfully', null, 200);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
     }
 
     /**
-     * User dashboard access
-     * Protected by authentication middleware.
+     * 🔹 Get user profile
      */
-    public function userDashboard($request)
+    public function getProfile()
     {
-        return $this->authMiddleware->authenticateToken($request, function($req) {
-            try {
-                // Get user ID from authenticated request
-                $userId = $req->userId;
-                
-                // Get user dashboard data
-                $dashboardData = $this->userService->getDashboardData($userId);
-                
-                return ApiHelper::sendJsonResponse('success', 'Dashboard data retrieved', $dashboardData, 200);
-            } catch (\Exception $e) {
-                $this->exceptionHandler->handleException($e);
-                return ApiHelper::sendJsonResponse('error', 'Failed to retrieve dashboard', [], 500);
-            }
-        });
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $user = $_SESSION['user'] ?? null;
+        return ApiHelper::sendJsonResponse('success', 'User profile', $user, 200);
     }
 
     /**
-     * Admin-only endpoint example
-     * Protected by authentication middleware with role check.
+     * 🔹 Request password reset
      */
-    public function adminAction($request)
+    public function requestPasswordReset()
     {
-        return $this->authMiddleware->checkRole($request, function($req) {
-            try {
-                // Admin-specific logic here
-                return ApiHelper::sendJsonResponse('success', 'Admin action completed', [], 200);
-            } catch (\Exception $e) {
-                $this->exceptionHandler->handleException($e);
-                return ApiHelper::sendJsonResponse('error', 'Admin action failed', [], 500);
-            }
-        }, ['admin']);
+        $email = $_POST['email'] ?? null;
+        if (!$email) {
+            return ApiHelper::sendJsonResponse('error', 'Invalid input', null, 400);
+        }
+        try {
+            $token = Str::random(60);
+            \App\Models\PasswordReset::create([
+                'email'      => $email,
+                'token'      => $token,
+                'expires_at' => now()->addHour(),
+            ]);
+            return ApiHelper::sendJsonResponse('success', 'Password reset requested', null, 200);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * 🔹 User dashboard access
+     */
+    public function userDashboard()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        // Rendering HTML for dashboard via ApiHelper response
+        $html = "<html><body><h1>User Dashboard</h1><!-- ...existing dashboard HTML... --></body></html>";
+        return ApiHelper::sendJsonResponse('success', 'User Dashboard', $html, 200);
     }
 }

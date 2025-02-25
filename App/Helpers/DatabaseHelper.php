@@ -37,17 +37,40 @@ class DatabaseHelper
         }
     }
 
-    private static function getDatabaseConfig(string $type = 'default'): array
+    private static function getDatabaseConfig(array $envConfig, string $type = 'default'): array
     {
-        $config = require __DIR__ . '/../../config/database.php';
-        return $type === 'secure' ? $config['secure_database'] : $config['app_database'];
+        if ($type === 'secure') {
+            return [
+                'driver'    => $envConfig['SECURE_DB_DRIVER'] ?? 'mysql',
+                'host'      => $envConfig['SECURE_DB_HOST'] ?? 'localhost',
+                'port'      => $envConfig['SECURE_DB_PORT'] ?? '3306',
+                'database'  => $envConfig['SECURE_DB_DATABASE'] ?? '',
+                'username'  => $envConfig['SECURE_DB_USERNAME'] ?? '',
+                'password'  => $envConfig['SECURE_DB_PASSWORD'] ?? '',
+                'charset'   => $envConfig['SECURE_DB_CHARSET'] ?? 'utf8mb4',
+                'collation' => $envConfig['SECURE_DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
+                'prefix'    => '',
+            ];
+        }
+
+        return [
+            'driver'    => $envConfig['DB_DRIVER'] ?? 'mysql',
+            'host'      => $envConfig['DB_HOST'] ?? 'localhost',
+            'port'      => $envConfig['DB_PORT'] ?? '3306',
+            'database'  => $envConfig['DB_DATABASE'] ?? '',
+            'username'  => $envConfig['DB_USERNAME'] ?? '',
+            'password'  => $envConfig['DB_PASSWORD'] ?? '',
+            'charset'   => $envConfig['DB_CHARSET'] ?? 'utf8mb4',
+            'collation' => $envConfig['DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
+            'prefix'    => '',
+        ];
     }
 
-    public static function getInstance(): DatabaseHelper
+    public static function getInstance(array $envConfig): DatabaseHelper
     {
         if (self::$instance === null) {
             try {
-                self::$instance = new DatabaseHelper(self::getDatabaseConfig('default'));
+                self::$instance = new DatabaseHelper(self::getDatabaseConfig($envConfig, 'default'));
             } catch (Exception $e) {
                 self::$logger->critical("❌ Database initialization failed: " . $e->getMessage());
                 die("Database initialization failed.");
@@ -57,11 +80,11 @@ class DatabaseHelper
         return self::$instance;
     }
 
-    public static function getSecureInstance(): DatabaseHelper
+    public static function getSecureInstance(array $envConfig): DatabaseHelper
     {
         if (self::$secureInstance === null) {
             try {
-                self::$secureInstance = new DatabaseHelper(self::getDatabaseConfig('secure'));
+                self::$secureInstance = new DatabaseHelper(self::getDatabaseConfig($envConfig, 'secure'));
             } catch (Exception $e) {
                 self::$logger->critical("❌ Secure database initialization failed: " . $e->getMessage());
                 die("Secure database initialization failed.");

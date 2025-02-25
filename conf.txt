@@ -11,7 +11,7 @@
 
 return [
     // General file storage settings
-    'base_directory' => '/path/to/filestorage', // Base directory for storing files
+    'base_directory' => __DIR__ . '/../Storage', // Base directory for storing files
 
     // Storage structure
     'directories' => [
@@ -22,8 +22,8 @@ return [
 
     // File security settings
     'security' => [
-        'allowed_extensions' => ['jpg', 'png', 'pdf', 'docx'], // Allowed file extensions
-        'max_file_size' => 10485760, // Max file size (10 MB in bytes)
+        'allowed_extensions' => ['pdf', 'docx', 'html'], // Allowed file extensions
+        'max_file_size' => 10 * 1024 * 1024, // Max file size (10 MB in bytes)
         'encryption' => [
             'enabled' => true, // Enable encryption for stored files
         ],
@@ -47,18 +47,10 @@ return [
 ];
 === config/encryption.php ===
 <?php
-use Dotenv\Dotenv;
 
 $logFile = __DIR__ . '/../logs/errors.log';
 
 try {
-    // ✅ Ensure `.env` is loaded before accessing encryption keys
-    $dotenvPath = __DIR__ . '/../';
-    if (file_exists($dotenvPath . '.env')) {
-        $dotenv = Dotenv::createImmutable($dotenvPath);
-        $dotenv->load();
-    }
-
     // ✅ Load Environment Variables (If `.env` Exists)
     if (file_exists(__DIR__ . '/../.env')) {
         $env = parse_ini_file(__DIR__ . '/../.env');
@@ -100,358 +92,27 @@ try {
 ?>
 === config/app.php ===
 <?php
-use Dotenv\Dotenv;
 
 /**
  * General Application Configuration
  */
 
-// ✅ Ensure `.env` is loaded before accessing app settings
-$dotenvPath = __DIR__ . '/../';
-if (file_exists($dotenvPath . '.env')) {
-    $dotenv = Dotenv::createImmutable($dotenvPath);
-    $dotenv->load();
-}
-
-// ✅ Return structured app configurations
 return [
-    'environment' => getenv('APP_ENV') ?: 'production',
-    'debug'       => getenv('APP_DEBUG') === 'true',
+    'name' => 'CarFuse',
+    'env' => 'development',  // Options: development, staging, production
+    'debug' => false,  // Set to true for debugging
+    'timezone' => 'UTC',
 ];
-=== config/dependencies/database_dependencies.php ===
+=== config/dependencies.php ===
 <?php
 
-/**
- * Database Dependencies Configuration
- * 
- * This file contains all database-related dependency registrations for the DI container.
- * It centralizes the database configuration to make the main dependencies.php cleaner.
- */
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../App/Helpers/ExceptionHandler.php';
 
 use DI\Container;
-use App\Helpers\DatabaseHelper;
-use Psr\Log\LoggerInterface;
-
-/**
- * Register database dependencies in the container
- * 
- * @param Container $container The DI container
- * @param array $config Database configuration
- * @return Container The container with registered database dependencies
- * @throws Exception When database initialization fails
- */
-function registerDatabases(Container $container, array $config): Container
-{
-    // Get database logger from container
-    $dbLogger = $container->get('db_logger');
-    $systemLogger = $container->get(LoggerInterface::class);
-    
-    try {
-        // 1. Set the logger for DatabaseHelper
-        DatabaseHelper::setLogger($dbLogger);
-        
-        // 2. Initialize the app database instance
-        if (!isset($config['app_database']) || !is_array($config['app_database'])) {
-            throw new Exception("App database configuration missing or invalid");
-        }
-        $database = DatabaseHelper::getInstance($config['app_database']);
-        $dbLogger->info("✅ App database initialized successfully");
-        
-        // 3. Initialize the secure database instance for sensitive operations
-        if (!isset($config['secure_database']) || !is_array($config['secure_database'])) {
-            throw new Exception("Secure database configuration missing or invalid");
-        }
-        $secureDatabase = DatabaseHelper::getSecureInstance($config['secure_database']);
-        $dbLogger->info("✅ Secure database initialized successfully");
-        
-        // 4. Register the app database instance as the default DatabaseHelper
-        $container->set(DatabaseHelper::class, fn() => $database);
-        
-        // 5. Register database instances in container
-        $container->set('db', fn() => $database); // Generic key for app database
-        $container->set('secure_db', fn() => $secureDatabase);
-        
-        // 6. Verify app database connection
-        verifyDatabaseConnection($database, $dbLogger, 'App');
-        
-        // 7. Verify secure database connection
-        verifyDatabaseConnection($secureDatabase, $dbLogger, 'Secure');
-        
-        return $container;
-    } catch (Exception $e) {
-        $dbLogger->error("❌ Database initialization failed: " . $e->getMessage());
-        $systemLogger->critical("Database initialization failed", [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        throw new Exception("Database initialization failed: " . $e->getMessage());
-    }
-}
-
-/**
- * Verify a database connection by attempting to get a PDO instance
- * 
- * @param DatabaseHelper $db Database helper instance
- * @param LoggerInterface $logger Logger for recording results
- * @param string $type Type of database (for logging)
- * @return bool True if connection is valid
- * @throws Exception When connection fails
- */
-function verifyDatabaseConnection(DatabaseHelper $db, LoggerInterface $logger, string $type = 'Database'): bool
-{
-    try {
-        $pdo = $db->getConnection()->getPdo();
-        if (!$pdo) {
-            throw new Exception("Failed to get PDO instance");
-        }
-        
-        // Try a simple query to verify connection is working
-        $pdo->query('SELECT 1');
-        
-        $logger->info("✅ {$type} database connection verified successfully");
-        return true;
-    } catch (Exception $e) {
-        $logger->critical("❌ {$type} database connection failed: " . $e->getMessage());
-        throw new Exception("{$type} database connection failed: " . $e->getMessage());
-    }
-}
-
-/**
- * Get database configuration from a file
- * 
- * @param string $configPath Path to the database config file
- * @return array Database configuration
- * @throws Exception When config file doesn't exist or has invalid structure
- */
-function getDatabaseConfig(string $configPath): array
-{
-    if (!file_exists($configPath)) {
-        throw new Exception("Database configuration file not found: {$configPath}");
-    }
-    
-    $config = require $configPath;
-    
-    if (!is_array($config) || !isset($config['app_database']) || !isset($config['secure_database'])) {
-        throw new Exception("Invalid database configuration structure");
-    }
-    
-    return $config;
-}
-
-/**
- * Initialize Eloquent ORM for a database
- * 
- * @param DatabaseHelper $dbHelper Database helper instance
- * @return void
- */
-function initializeEloquent(DatabaseHelper $dbHelper): void
-{
-    $dbHelper->bootEloquent();
-}
-
-// If this file is included directly, return a container with registered databases
-if (!isset($container) && basename($_SERVER['SCRIPT_FILENAME']) == basename(__FILE__)) {
-    $container = new Container();
-    
-    // Simple logger for standalone mode
-    $container->set('db_logger', function() {
-        $logger = new \Monolog\Logger('database');
-        $handler = new \Monolog\Handler\StreamHandler('php://stderr');
-        $logger->pushHandler($handler);
-        return $logger;
-    });
-    
-    $container->set(LoggerInterface::class, $container->get('db_logger'));
-    
-    // Get database config
-    $config = getDatabaseConfig(__DIR__ . '/database.php');
-    
-    // Register databases
-    $container = registerDatabases($container, $config);
-    
-    return $container;
-}
-=== config/dependencies/logging_dependencies.php ===
-<?php
-
-/**
- * Logging Dependencies Configuration
- * 
- * This file contains all logging-related dependency registrations for the DI container.
- * It centralizes the logger configuration to make the main dependencies.php cleaner.
- */
-
-use Psr\Log\LoggerInterface;
-use DI\Container;
-use Monolog\Logger;
-use Monolog\Handler\StreamHandler;
-use Monolog\Handler\RotatingFileHandler;
-use Monolog\Formatter\LineFormatter;
-use Monolog\Processor\IntrospectionProcessor;
-use Monolog\Processor\WebProcessor;
-use Monolog\Processor\MemoryUsageProcessor;
-
-/**
- * Register logger dependencies in the container
- * 
- * @param Container $container The DI container
- * @return Container The container with registered loggers
- */
-function registerLoggers(Container $container): Container
-{
-    // Define log directory
-    $logDir = __DIR__ . '/../logs';
-    
-    // Create logs directory if it doesn't exist
-    if (!is_dir($logDir)) {
-        mkdir($logDir, 0775, true);
-    }
-    
-    // Set up formatter for consistent log format
-    $dateFormat = "Y-m-d H:i:s";
-    $lineFormat = "[%datetime%] [%level_name%] %channel%: %message% %context% %extra%\n";
-    $formatter = new LineFormatter($lineFormat, $dateFormat);
-    
-    // Common processors for all loggers
-    $processors = [
-        new WebProcessor(),
-        new IntrospectionProcessor(),
-        new MemoryUsageProcessor()
-    ];
-    
-    // Register main system logger (PSR-3 compatible)
-    $container->set(LoggerInterface::class, function() use ($logDir, $formatter, $processors) {
-        $logger = new Logger('system');
-        $handler = new RotatingFileHandler(
-            $logDir . '/system.log',
-            10, // Keep 10 days of logs
-            Logger::INFO
-        );
-        $handler->setFormatter($formatter);
-        $logger->pushHandler($handler);
-        
-        // Add processors
-        foreach ($processors as $processor) {
-            $logger->pushProcessor($processor);
-        }
-        
-        return $logger;
-    });
-    
-    // Register specialized loggers
-    $specializedLoggers = [
-        'auth_logger' => [
-            'name' => 'auth',
-            'level' => Logger::INFO
-        ],
-        'db_logger' => [
-            'name' => 'db',
-            'level' => Logger::DEBUG
-        ],
-        'api_logger' => [
-            'name' => 'api',
-            'level' => Logger::INFO
-        ],
-        'security_logger' => [
-            'name' => 'security',
-            'level' => Logger::INFO
-        ],
-        'audit_logger' => [
-            'name' => 'audit',
-            'level' => Logger::INFO
-        ],
-        'dependencies_logger' => [
-            'name' => 'dependencies',
-            'level' => Logger::INFO
-        ],
-        'user_logger' => [
-            'name' => 'user',
-            'level' => Logger::INFO
-        ]
-    ];
-    
-    // Register each specialized logger
-    foreach ($specializedLoggers as $key => $config) {
-        $container->set($key, function() use ($logDir, $formatter, $processors, $config) {
-            $logger = new Logger($config['name']);
-            $handler = new RotatingFileHandler(
-                $logDir . '/' . $config['name'] . '.log',
-                10, // Keep 10 days of logs
-                $config['level']
-            );
-            $handler->setFormatter($formatter);
-            $logger->pushHandler($handler);
-            
-            // Add processors
-            foreach ($processors as $processor) {
-                $logger->pushProcessor($processor);
-            }
-            
-            return $logger;
-        });
-    }
-    
-    return $container;
-}
-
-/**
- * Helper function to get a logger by name (useful for direct invocation)
- * 
- * @param string $name Logger name
- * @return Logger The configured logger
- */
-function getConfiguredLogger(string $name): Logger
-{
-    $logDir = __DIR__ . '/../logs';
-    
-    // Create logs directory if it doesn't exist
-    if (!is_dir($logDir)) {
-        mkdir($logDir, 0775, true);
-    }
-    
-    // Set up formatter
-    $dateFormat = "Y-m-d H:i:s";
-    $lineFormat = "[%datetime%] [%level_name%] %channel%: %message% %context% %extra%\n";
-    $formatter = new LineFormatter($lineFormat, $dateFormat);
-    
-    // Create logger
-    $logger = new Logger($name);
-    $handler = new RotatingFileHandler(
-        $logDir . '/' . $name . '.log',
-        10,
-        Logger::INFO
-    );
-    $handler->setFormatter($formatter);
-    $logger->pushHandler($handler);
-    
-    // Add processors
-    $logger->pushProcessor(new WebProcessor());
-    $logger->pushProcessor(new IntrospectionProcessor());
-    $logger->pushProcessor(new MemoryUsageProcessor());
-    
-    return $logger;
-}
-
-// If this file is included directly, return a container with registered loggers
-if (!isset($container) && basename($_SERVER['SCRIPT_FILENAME']) == basename(__FILE__)) {
-    $container = new Container();
-    $container = registerLoggers($container);
-    return $container;
-}
-=== config/dependencies/service_dependencies.php ===
-<?php
-
-/**
- * Service Dependencies Configuration
- * 
- * This file contains all service-related dependency registrations for the DI container.
- * It centralizes service registrations to make the main dependencies.php cleaner.
- */
-
-use DI\Container;
-use Psr\Log\LoggerInterface;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ExceptionHandler;
+use App\Helpers\SecurityHelper;
 use App\Services\Validator;
 use App\Services\RateLimiter;
 use App\Services\Auth\TokenService;
@@ -470,568 +131,253 @@ use App\Services\FileStorage;
 use App\Services\TemplateService;
 use App\Services\SignatureService;
 use App\Services\AuditService;
+use App\Queues\NotificationQueue;
+use App\Queues\DocumentQueue;
+use App\Models\Payment;
+use GuzzleHttp\Client;
 
-/**
- * Register all service dependencies in the container
- * 
- * @param Container $container The DI container
- * @param array $config Configuration values
- * @return Container The container with registered services
- */
-function registerServices(Container $container, array $config): Container
-{
-    // Register basic services first (those with fewer dependencies)
-    registerBaseServices($container, $config);
-    
-    // Register auth services (TokenService and AuthService)
-    registerAuthServices($container, $config);
-    
-    // Register business logic services
-    registerBusinessServices($container, $config);
-    
-    // Register file and document services
-    registerDocumentServices($container, $config);
-    
-    // Register security and audit services
-    registerSecurityServices($container, $config);
-    
-    $container->get(LoggerInterface::class)->info("All services registered successfully");
-    
-    return $container;
-}
-
-/**
- * Register base services (those with minimal dependencies)
- */
-function registerBaseServices(Container $container, array $config): void
-{
-    // Validator service (for input validation)
-    $container->set(Validator::class, function($c) {
-        return new Validator(
-            $c->get('api_logger'),
-            $c->get(DatabaseHelper::class),
-            $c->get(ExceptionHandler::class)
-        );
-    });
-    
-    // Rate limiter service (for API rate limiting)
-    $container->set(RateLimiter::class, function($c) {
-        return new RateLimiter(
-            $c->get('api_logger'),
-            $c->get(ExceptionHandler::class)
-        );
-    });
-    
-    // Encryption service (for data encryption)
-    $container->set(EncryptionService::class, function($c) use ($config) {
-        return new EncryptionService(
-            $c->get('api_logger'),
-            $c->get(ExceptionHandler::class),
-            $config['encryption']['encryption_key'] ?? ''
-        );
-    });
-    
-    // Template service (for document templates)
-    $container->set(TemplateService::class, function($c) {
-        return new TemplateService(
-            $c->get('api_logger'),
-            __DIR__ . '/../storage/templates',
-            $c->get(ExceptionHandler::class)
-        );
-    });
-}
-
-/**
- * Register authentication and authorization services
- */
-function registerAuthServices(Container $container, array $config): void
-{
-    // TokenService for JWT token management
-    $container->set(TokenService::class, function($c) use ($config) {
-        return new TokenService(
-            $config['encryption']['jwt_secret'],
-            $config['encryption']['jwt_refresh_secret'],
-            3600, // JWT TTL: 1 hour
-            604800, // Refresh Token TTL: 7 days
-            $c->get('auth_logger'),
-            $c->get(ExceptionHandler::class)
-        );
-    });
-    
-    // AuthService for user authentication
-    $container->set(AuthService::class, function($c) use ($config) {
-        return new AuthService(
-            $c->get(DatabaseHelper::class),
-            $c->get(TokenService::class),
-            $c->get(ExceptionHandler::class),
-            $c->get('auth_logger'),
-            $c->get('audit_logger'),
-            $config['encryption'],
-            $c->get(Validator::class)
-        );
-    });
-}
-
-/**
- * Register core business logic services
- */
-function registerBusinessServices(Container $container, array $config): void
-{
-    // UserService for user management
-    $container->set(UserService::class, function($c) {
-        return new UserService(
-            $c->get(DatabaseHelper::class),
-            $c->get('user_logger'),
-            $c->get('audit_logger'),
-            $c->get(ExceptionHandler::class),
-            $c->get(Validator::class)
-        );
-    });
-    
-    // NotificationService for sending notifications
-    $container->set(NotificationService::class, function($c) use ($config) {
-        return new NotificationService(
-            $c->get('api_logger'),
-            $c->get(ExceptionHandler::class),
-            $c->get(DatabaseHelper::class),
-            $config['notifications'] ?? []
-        );
-    });
-    
-    // PaymentService for payment processing
-    $container->set(PaymentService::class, function($c) {
-        return new PaymentService(
-            $c->get('db_logger'),
-            $c->get(DatabaseHelper::class),
-            $c->get(ExceptionHandler::class)
-        );
-    });
-    
-    // BookingService for booking management
-    $container->set(BookingService::class, function($c) {
-        return new BookingService(
-            $c->get('api_logger'),
-            $c->get(ExceptionHandler::class),
-            $c->get(DatabaseHelper::class)
-        );
-    });
-    
-    // MetricsService for analytics and metrics
-    $container->set(MetricsService::class, function($c) {
-        return new MetricsService(
-            $c->get('api_logger'),
-            $c->get(ExceptionHandler::class),
-            $c->get(DatabaseHelper::class)
-        );
-    });
-    
-    // ReportService for generating reports
-    $container->set(ReportService::class, function($c) {
-        return new ReportService(
-            $c->get('api_logger'),
-            $c->get(DatabaseHelper::class),
-            $c->get(ExceptionHandler::class)
-        );
-    });
-    
-    // RevenueService for revenue management
-    $container->set(RevenueService::class, function($c) {
-        return new RevenueService(
-            $c->get('db_logger'),
-            $c->get(DatabaseHelper::class),
-            $c->get(ExceptionHandler::class)
-        );
-    });
-}
-
-/**
- * Register document and file services
- */
-function registerDocumentServices(Container $container, array $config): void
-{
-    // FileStorage for file management
-    $container->set(FileStorage::class, function($c) use ($config) {
-        return new FileStorage(
-            $config['filestorage'],
-            $c->get(EncryptionService::class),
-            $c->get('api_logger'),
-            $c->get(ExceptionHandler::class)
-        );
-    });
-    
-    // SignatureService for document signing
-    $container->set(SignatureService::class, function($c) use ($config) {
-        return new SignatureService(
-            $c->get('security_logger'),
-            $c->get(DatabaseHelper::class),
-            $config['signature'] ?? []
-        );
-    });
-    
-    // DocumentService for document management
-    $container->set(DocumentService::class, function($c) {
-        return new DocumentService(
-            $c->get('api_logger'),
-            $c->get(AuditService::class),
-            $c->get(FileStorage::class),
-            $c->get(EncryptionService::class),
-            $c->get(TemplateService::class)
-        );
-    });
-}
-
-/**
- * Register security and audit services
- */
-function registerSecurityServices(Container $container, array $config): void
-{
-    // AuditService for audit logging
-    $container->set(AuditService::class, function($c) {
-        return new AuditService(
-            $c->get('security_logger'),
-            $c->get(ExceptionHandler::class),
-            $c->get(DatabaseHelper::class)
-        );
-    });
-    
-    // KeyManager for cryptographic key management
-    $container->set(KeyManager::class, function($c) use ($config) {
-        return new KeyManager(
-            $config['keymanager'] ?? [],
-            $c->get('security_logger'),
-            $c->get(ExceptionHandler::class)
-        );
-    });
-}
-
-/**
- * Register system helpers
- */
-function registerSystemHelpers(Container $container): void
-{
-    // Register RouterHelper
-    $container->set(App\Helpers\RouterHelper::class, function ($c) {
-        return new App\Helpers\RouterHelper($c);
-    });
-}
-
-/**
- * Load service-specific configuration
- * 
- * @param string $configDir Directory containing configuration files
- * @return array Configuration values
- */
-function loadServiceConfigs(string $configDir): array
-{
-    $serviceConfigs = [];
-    
-    // List of service configuration files to load
-    $serviceConfigFiles = [
-        'notifications' => 'notifications.php',
-        'signature' => 'signature.php',
-        'keymanager' => 'keymanager.php'
-    ];
-    
-    foreach ($serviceConfigFiles as $key => $file) {
-        $path = "{$configDir}/{$file}";
-        if (file_exists($path)) {
-            $serviceConfigs[$key] = require $path;
-        }
-    }
-    
-    return $serviceConfigs;
-}
-
-// If this file is included directly, return a container with registered services
-if (!isset($container) && basename($_SERVER['SCRIPT_FILENAME']) == basename(__FILE__)) {
+// Step 1: Initialize DI Container
+try {
     $container = new Container();
-    
-    // Need basic service dependencies
-    require_once __DIR__ . '/logging_dependencies.php';
-    $container = registerLoggers($container);
-    
-    require_once __DIR__ . '/database_dependencies.php';
-    $config = require __DIR__ . '/database.php';
-    $container = registerDatabases($container, $config);
-    
-    // Load other configurations
-    $config = [
-        'encryption' => require __DIR__ . '/encryption.php',
-        'filestorage' => require __DIR__ . '/filestorage.php'
-    ];
-    
-    // Register services
-    $container = registerServices($container, $config);
-    
-    return $container;
-}
-=== config/dependencies/controller_dependencies.php ===
-<?php
-
-/**
- * Controller Dependencies Configuration
- * 
- * This file contains all controller-related dependency registrations for the DI container.
- * It centralizes controller registrations to make the main dependencies.php cleaner.
- */
-
-use DI\Container;
-use Psr\Log\LoggerInterface;
-use App\Controllers\AuthController;
-use App\Controllers\UserController;
-use App\Controllers\AdminController;
-use App\Controllers\DashboardController;
-use App\Controllers\ApiController;
-use App\Controllers\DocumentController;
-use App\Controllers\PaymentController;
-use App\Controllers\ReportController;
-use App\Services\Auth\AuthService;
-use App\Services\Auth\TokenService;
-use App\Services\UserService;
-use App\Services\AdminService;
-use App\Services\DashboardService;
-use App\Services\DocumentService;
-use App\Services\PaymentService;
-use App\Services\ReportService;
-use App\Middleware\AuthMiddleware;
-use App\Helpers\ExceptionHandler;
-
-/**
- * Register all controller dependencies in the container
- * 
- * @param Container $container The DI container
- * @return Container The container with registered controllers
- */
-function registerControllers(Container $container): Container
-{
-    // Register authentication and user controllers
-    registerAuthControllers($container);
-    
-    // Register admin and dashboard controllers
-    registerAdminControllers($container);
-    
-    // Register feature-specific controllers
-    registerFeatureControllers($container);
-    
-    $container->get(LoggerInterface::class)->info("All controllers registered successfully");
-    
-    return $container;
+    // Register categorized loggers.
+    $container->set('logger', fn() => getLogger('system'));
+    $container->set('auth_logger', fn() => getLogger('auth'));
+    $container->set('db_logger', fn() => getLogger('db'));
+    $container->set('api_logger', fn() => getLogger('api'));
+    $container->set('security_logger', fn() => getLogger('security'));
+    // Register new dependencies logger.
+    $container->set('dependencies_logger', fn() => getLogger('dependencies'));
+    $container->get('dependencies_logger')->info("🔄 Step 1: Starting Dependency Injection.");
+    $container->get('logger')->info("Step 1: DI Container created and loggers registered.");
+} catch (Exception $e) {
+    getLogger('system')->error("❌ [DI] Failed to initialize DI container: " . $e->getMessage());
+    die("❌ Dependency Injection container failed: " . $e->getMessage() . "\n");
 }
 
-/**
- * Register authentication and user-related controllers
- */
-function registerAuthControllers(Container $container): void
-{
-    // Auth Controller - handles login, registration, password reset, etc.
-    $container->set(AuthController::class, function($c) {
-        return new AuthController(
-            $c->get(AuthService::class),
-            $c->get(TokenService::class),
-            $c->get(ExceptionHandler::class),
-            $c->get('auth_logger'),
-            $c->get('audit_logger')
-        );
-    });
-    
-    // User Controller - handles user profile, settings, etc.
-    $container->set(UserController::class, function($c) {
-        return new UserController(
-            $c->get(UserService::class),
-            $c->get(ExceptionHandler::class),
-            $c->get('user_logger'),
-            $c->get('audit_logger'),
-            $c->get(AuthMiddleware::class)
-        );
-    });
-}
+// Add helper registrations immediately after logger registration.
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
+$container->set(SecurityHelper::class, fn() => new SecurityHelper());
+$container->set('db', fn() => DatabaseHelper::getInstance());
+$container->set('secure_db', fn() => DatabaseHelper::getSecureInstance());
+$container->get('security_logger')->info("✅ SecurityHelper injected into DI container.");
+$container->get('db_logger')->info("✅ DatabaseHelper injected into DI container.");
 
-/**
- * Register admin and dashboard controllers
- */
-function registerAdminControllers(Container $container): void
-{
-    // Admin Controller - handles administrative functions
-    if (class_exists(AdminController::class)) {
-        $container->set(AdminController::class, function($c) {
-            return new AdminController(
-                $c->get(AdminService::class),
-                $c->get(UserService::class),
-                $c->get(AuthMiddleware::class),
-                $c->get(ExceptionHandler::class),
-                $c->get('admin_logger'),
-                $c->get('audit_logger')
-            );
-        });
-    }
-    
-    // Dashboard Controller - handles dashboard views and data
-    if (class_exists(DashboardController::class)) {
-        $container->set(DashboardController::class, function($c) {
-            return new DashboardController(
-                $c->get(DashboardService::class),
-                $c->get(AuthMiddleware::class),
-                $c->get(ExceptionHandler::class),
-                $c->get('api_logger')
-            );
-        });
+// Step 2: Load configuration files.
+$container->get('logger')->info("Step 2: Loading configuration files.");
+$configDirectory = __DIR__;
+$config = [];
+foreach (glob("{$configDirectory}/*.php") as $filePath) {
+    $fileName = basename($filePath, '.php');
+    if ($fileName !== 'dependencies') {
+        $config[$fileName] = require $filePath;
+        $container->get('logger')->info("Configuration file loaded: {$fileName}.php");
     }
 }
 
-/**
- * Register feature-specific controllers
- */
-function registerFeatureControllers(Container $container): void
-{
-    // API Controller - handles generic API endpoints
-    if (class_exists(ApiController::class)) {
-        $container->set(ApiController::class, function($c) {
-            return new ApiController(
-                $c->get(ExceptionHandler::class),
-                $c->get('api_logger')
-            );
-        });
+// Step 3: Ensure required directories exist.
+$templateDirectory = __DIR__ . '/../storage/templates';
+$fileStorageConfig = $config['filestorage'] ?? [];
+if (!is_dir($templateDirectory)) {
+    mkdir($templateDirectory, 0775, true);
+}
+if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['base_directory'])) {
+    mkdir($fileStorageConfig['base_directory'], 0775, true);
+}
+$container->get('logger')->info("Step 3: Required directories verified.");
+
+// Step 4: Initialize EncryptionService.
+$encryptionService = new EncryptionService($config['encryption']['encryption_key'] ?? '');
+$container->set(EncryptionService::class, fn() => $encryptionService);
+$container->get('logger')->info("Step 4: EncryptionService registered.");
+
+// Step 5: Initialize FileStorage using centralized logger.
+if (!isset($config['filestorage']) || !is_array($config['filestorage'])) {
+    $container->get('logger')->critical("❌ FileStorage configuration is missing or invalid.");
+    die("❌ FileStorage configuration is missing or invalid.\n");
+}
+$container->set(FileStorage::class, function () use ($container, $config) {
+    return new FileStorage(
+        $config['filestorage'],  // Pass correct config as an array.
+        $container->get('api_logger'), // Pass the proper logger.
+        $container->get(EncryptionService::class) // Inject EncryptionService.
+    );
+});
+$container->get('logger')->info("Step 5: FileStorage registered.");
+
+// Step 6: Load key manager configuration.
+$config['keymanager'] = require __DIR__ . '/keymanager.php';
+$container->get('logger')->info("Step 6: Key Manager configuration loaded.");
+
+// Step 7: Initialize DatabaseHelper instances BEFORE services that depend on them.
+try {
+    $database = DatabaseHelper::getInstance();
+    $secure_database = DatabaseHelper::getSecureInstance();
+    $container->get('db_logger')->info("✅ Both databases initialized successfully.");
+} catch (Exception $e) {
+    $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
+    die("❌ Database initialization failed. Check logs for details.\n");
+}
+$container->set('db', fn() => $database);
+$container->set('secure_db', fn() => $secure_database);
+$container->get('logger')->info("Step 7: Database services registered.");
+
+// Debug database connection before proceeding.
+try {
+    $pdo = $container->get('db')->getConnection()->getPdo();
+    if (!$pdo) {
+        throw new Exception("Database connection failed.");
     }
-    
-    // Document Controller - handles document management
-    if (class_exists(DocumentController::class)) {
-        $container->set(DocumentController::class, function($c) {
-            return new DocumentController(
-                $c->get(DocumentService::class),
-                $c->get(AuthMiddleware::class),
-                $c->get(ExceptionHandler::class),
-                $c->get('api_logger')
-            );
-        });
-    }
-    
-    // Payment Controller - handles payment processing
-    if (class_exists(PaymentController::class)) {
-        $container->set(PaymentController::class, function($c) {
-            return new PaymentController(
-                $c->get(PaymentService::class),
-                $c->get(AuthMiddleware::class),
-                $c->get(ExceptionHandler::class),
-                $c->get('api_logger')
-            );
-        });
-    }
-    
-    // Report Controller - handles report generation
-    if (class_exists(ReportController::class)) {
-        $container->set(ReportController::class, function($c) {
-            return new ReportController(
-                $c->get(ReportService::class),
-                $c->get(AuthMiddleware::class),
-                $c->get(ExceptionHandler::class),
-                $c->get('api_logger')
-            );
-        });
+    $container->get('db_logger')->info("✅ Database connection verified successfully.");
+} catch (Exception $e) {
+    $container->get('db_logger')->critical("❌ Database connection verification failed: " . $e->getMessage());
+    die("❌ Database connection issue: " . $e->getMessage() . "\n");
+}
+
+// Step 8: Register services with proper dependency order.
+$container->set(Validator::class, fn() => new Validator($container->get('api_logger')));
+$container->set(RateLimiter::class, fn() => new RateLimiter($container->get('db_logger'), $container->get('db')));
+$container->set(AuditService::class, fn() => new AuditService($container->get('security_logger')));
+$container->set(TokenService::class, fn() => new TokenService(
+    $_ENV['JWT_SECRET'] ?? '',
+    $_ENV['JWT_REFRESH_SECRET'] ?? '',
+    $container->get('auth_logger')
+));
+// Register ExceptionHandler in the DI container by injecting the system logger.
+$container->set(ExceptionHandler::class, fn() => new ExceptionHandler($container->get('logger')));
+// Ensure AuthService is passed the container-registered database and ExceptionHandler.
+$container->set(AuthService::class, fn() => new AuthService(
+    $container->get('auth_logger'),
+    $container->get('db'),
+    $config['encryption'],
+    $container->get(ExceptionHandler::class) // Inject centralized ExceptionHandler
+));
+// Register UserController to receive AuthService via DI.
+$container->set(\App\Controllers\UserController::class, fn() => new \App\Controllers\UserController(
+    $container->get(\App\Services\Auth\AuthService::class)
+));
+$container->set(UserService::class, fn() => new UserService(
+    $container->get('auth_logger'),
+    $container->get('db'),
+    $config['encryption']['jwt_secret'] ?? ''
+));
+// Register external API–dependent services after core ones.
+$container->set(NotificationService::class, fn() => new NotificationService(
+    $container->get('api_logger'),
+    $config['notifications'] ?? [],
+    $container->get('db')
+));
+$container->set(PaymentService::class, fn() => new PaymentService(
+    $container->get('db_logger'),
+    $container->get('db'),
+    new Payment(),
+    getenv('PAYU_API_KEY') ?: '',
+    getenv('PAYU_API_SECRET') ?: ''
+));
+$container->set(BookingService::class, fn() => new BookingService(
+    $container->get('api_logger'),
+    $container->get('db')
+));
+$container->set(MetricsService::class, fn() => new MetricsService(
+    $container->get('api_logger'),
+    $container->get('db')
+));
+$container->set(ReportService::class, fn() => new ReportService(
+    $container->get('api_logger'),
+    $container->get('db')
+));
+$container->set(RevenueService::class, fn() => new RevenueService(
+    $container->get('db_logger'),
+    $container->get('db')
+));
+$container->set(SignatureService::class, fn() => new SignatureService(
+    $config['signature'],
+    $fileStorage,
+    $encryptionService,
+    $container->get('security_logger')
+));
+$container->set(DocumentService::class, fn() => new DocumentService(
+    $container->get('api_logger'),
+    $container->get(AuditService::class),
+    $fileStorage,
+    $encryptionService,
+    $container->get(TemplateService::class)
+));
+
+// New registrations for additional services ensuring proper logging.
+
+$container->get('logger')->info("Step 8: Service registration completed.");
+
+// Step 9: Final check for required service registrations and circular dependency detection.
+$requiredServices = [
+    TokenService::class,
+    AuthService::class,
+    Validator::class,
+    DatabaseHelper::class,
+];
+$container->get('dependencies_logger')->info("🔄 Step 9: Checking for circular dependencies...");
+foreach ($requiredServices as $service) {
+    try {
+        $container->get($service);
+        $container->get('dependencies_logger')->info("✅ Service loaded successfully: {$service}");
+    } catch (Exception $e) {
+        $container->get('dependencies_logger')->critical("❌ Service failed to load: {$service}", ['trace' => $e->getTraceAsString()]);
+        die("❌ Service failure: {$service}: " . $e->getMessage() . "\n");
     }
 }
 
-/**
- * Register middleware for controllers
- */
-function registerControllerMiddleware(Container $container): void
-{
-    // Auth Middleware - handles authentication for protected routes
-    $container->set(AuthMiddleware::class, function($c) {
-        return new AuthMiddleware(
-            $c->get(TokenService::class),
-            $c->get('auth_logger')
-        );
-    });
+$container->get('dependencies_logger')->info("✅ DI container validation completed successfully.");
+
+// Before returning the container, verify security-related services load successfully.
+try {
+    $container->get(AuthService::class);
+    $container->get(Validator::class);
+    $container->get(EncryptionService::class);
+    $container->get('security_logger')->info("✅ All security-dependent services loaded successfully.");
+} catch (Exception $e) {
+    $container->get('security_logger')->critical("❌ Security-related service failed: " . $e->getMessage());
+    die("❌ Security-related service failure: " . $e->getMessage() . "\n");
 }
 
-// If this file is included directly, return a container with registered controllers
-if (!isset($container) && basename($_SERVER['SCRIPT_FILENAME']) == basename(__FILE__)) {
-    $container = new Container();
-    
-    // We need logger and services to be available
-    require_once __DIR__ . '/logging_dependencies.php';
-    require_once __DIR__ . '/service_dependencies.php';
-    
-    $container = registerLoggers($container);
-    
-    // Mock configuration for standalone usage
-    $config = [
-        'encryption' => ['jwt_secret' => 'test', 'jwt_refresh_secret' => 'test'],
-    ];
-    
-    // Register services needed by controllers
-    $container = registerServices($container, $config);
-    
-    // Register middleware
-    registerControllerMiddleware($container);
-    
-    // Register controllers
-    $container = registerControllers($container);
-    
-    return $container;
-}
-=== config/dependencies.php ===
-<?php
-
-/**
- * Main Dependencies Configuration File
- * 
- * This file initializes the dependency injection container and loads
- * all modular dependency components.
- */
-
-require_once __DIR__ . '/../vendor/autoload.php';
-
-// Define the path to the modular dependency files
-$dependenciesDir = __DIR__ . '/dependencies/';
-
-// Check if directory exists, if not, create it
-if (!is_dir($dependenciesDir)) {
-    // Make migration easier by copying current files if needed
-    mkdir($dependenciesDir, 0775, true);
-    
-    // Define files to migrate to the dependencies directory
-    $filesToMigrate = [
-        'logging_dependencies.php',
-        'database_dependencies.php',
-        'service_dependencies.php',
-        'controller_dependencies.php',
-    ];
-    
-    foreach ($filesToMigrate as $file) {
-        $source = __DIR__ . '/' . $file;
-        $destination = $dependenciesDir . $file;
-        
-        if (file_exists($source) && !file_exists($destination)) {
-            copy($source, $destination);
-        }
-    }
-}
-
-// Load the main dependencies index file which handles the loading sequence
-$result = require_once $dependenciesDir . 'index.php';
-
-// Return the container and other important registered services
-return $result;
+// Ensure container integrity before return.
+return [
+    'db'                => $container->get('db'),
+    'secure_db'         => $container->get('secure_db'),
+    'logger'            => $container->get('logger'),
+    'auditService'      => $container->get(AuditService::class),
+    'encryptionService' => $container->get(EncryptionService::class),
+    'container'         => $container,
+];
 === config/database.php ===
 <?php
+use Dotenv\Dotenv;
+
+// Ensure `.env` is loaded before accessing database credentials
+$dotenvPath = __DIR__ . '/../';
+if (file_exists($dotenvPath . '.env')) {
+    $dotenv = Dotenv::createImmutable($dotenvPath);
+    $dotenv->safeLoad();
+}
+var_dump(getenv('DB_HOST'));
+
+// This file must return an array of database configurations
 return [
     'app_database' => [
         'driver'    => 'mysql',
-        'host'      => 'localhost',
-        'database'  => 'u122931475_app', // use the app database name
-        'username'  => 'app_user',
-        'password'  => 'app_password',
+        'host'      => $_ENV['DB_HOST'] ?? '',
+        'database'  => $_ENV['DB_DATABASE'] ?? '',
+        'username'  => $_ENV['DB_USERNAME'] ?? '',
+        'password'  => $_ENV['DB_PASSWORD'] ?? '',
         'charset'   => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix'    => '',
     ],
     'secure_database' => [
         'driver'    => 'mysql',
-        'host'      => 'localhost',
-        'database'  => 'u122931475_secure', // secure database name
-        'username'  => 'secure_user',
-        'password'  => 'secure_password',
+        'host'      => getenv('SECURE_DB_HOST'),
+        'database'  => getenv('SECURE_DB_DATABASE'),
+        'username'  => getenv('SECURE_DB_USERNAME'),
+        'password'  => getenv('SECURE_DB_PASSWORD'),
         'charset'   => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix'    => '',
@@ -1116,6 +462,7 @@ use App\Helpers\SecurityHelper;
 use App\Helpers\ApiHelper;
 
 return simpleDispatcher(function (RouteCollector $router) {
+
     // ✅ Define Public View Routes
     $router->addRoute(['GET'], '/', fn() => require '../public/views/home.php');
     $router->addRoute(['GET'], '/dashboard', fn() => require '../public/views/dashboard.php');
@@ -1126,54 +473,84 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->addRoute(['GET'], '/auth/password_reset', fn() => require '../public/views/auth/password_reset.php');
     $router->addRoute(['GET'], '/documents/signing_page', fn() => require '../public/views/documents/signing_page.php');
 
-    // ✅ Auth API Routes - moved from routes/api.php
-    $router->addRoute(['POST'], '/api/auth/login', 'AuthController@login');
-    $router->addRoute(['POST'], '/api/auth/register', 'AuthController@register');
-    $router->addRoute(['POST'], '/api/auth/refresh', 'AuthController@refreshToken');
-    $router->addRoute(['POST'], '/api/auth/logout', 'AuthController@logout');
-    $router->addRoute(['POST'], '/api/auth/reset-request', 'AuthController@resetPasswordRequest');
-    $router->addRoute(['POST'], '/api/auth/reset', 'AuthController@resetPassword');
+    // ✅ Define API Routes with Authentication and Middleware
+    $router->addRoute(['POST'], '/api/auth/login', 'App\Controllers\AuthController@login');
+    $router->addRoute(['POST'], '/api/auth/register', 'App\Controllers\AuthController@register');
+    $router->addRoute(['POST'], '/api/auth/refresh', 'App\Controllers\AuthController@refresh');
+    $router->addRoute(['POST'], '/api/auth/logout', 'App\Controllers\AuthController@logout');
 
-    // ✅ User API Routes - moved from routes/api.php
-    $router->addRoute(['GET'], '/api/user/profile', 'UserController@getUserProfile');
-    $router->addRoute(['PUT'], '/api/user/profile', 'UserController@updateProfile');
-    $router->addRoute(['GET'], '/api/user/dashboard', 'UserController@userDashboard');
-    $router->addRoute(['GET'], '/api/admin/dashboard', 'UserController@adminAction');
+    // ✅ Protected API Routes (Require Authentication)
+    $router->addRoute(['GET'], '/api/user/profile', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/user/profile.php';
+    });
 
-    // ✅ Protected API Routes - simplified with controller references
-    $router->addRoute(['GET'], '/api/user/settings', 'UserController@getSettings');
-    $router->addRoute(['GET'], '/api/user/notifications', 'UserController@getNotifications');
-    $router->addRoute(['GET'], '/api/dashboard/metrics', 'DashboardController@getMetrics');
-    $router->addRoute(['GET'], '/api/dashboard/reports', 'DashboardController@getReports');
+    $router->addRoute(['GET'], '/api/user/settings', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/user/settings.php';
+    });
+
+    $router->addRoute(['GET'], '/api/user/notifications', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/user/notifications.php';
+    });
+
+    $router->addRoute(['GET'], '/api/dashboard/metrics', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/dashboard/metrics.php';
+    });
+
+    $router->addRoute(['GET'], '/api/dashboard/reports', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/dashboard/reports.php';
+    });
 
     // ✅ Booking API Routes
-    $router->addRoute(['POST'], '/api/bookings/create', 'BookingController@createBooking');
-    $router->addRoute(['GET'], '/api/bookings/view/{id:\d+}', 'BookingController@viewBooking');
-    $router->addRoute(['POST'], '/api/bookings/cancel/{id:\d+}', 'BookingController@cancelBooking');
-    $router->addRoute(['POST'], '/api/bookings/reschedule/{id:\d+}', 'BookingController@rescheduleBooking');
+    $router->addRoute(['POST'], '/api/bookings/create', 'App\Controllers\BookingController@createBooking');
+    $router->addRoute(['GET'], '/api/bookings/view/{id:\d+}', 'App\Controllers\BookingController@viewBooking');
+    $router->addRoute(['POST'], '/api/bookings/cancel/{id:\d+}', 'App\Controllers\BookingController@cancelBooking');
+    $router->addRoute(['POST'], '/api/bookings/reschedule/{id:\d+}', 'App\Controllers\BookingController@rescheduleBooking');
 
     // ✅ Payment API Routes
-    $router->addRoute(['POST'], '/api/payments/process', 'PaymentController@processPayment');
-    $router->addRoute(['POST'], '/api/payments/refund/{id:\d+}', 'PaymentController@refundPayment');
-    $router->addRoute(['GET'], '/api/payments/history', 'PaymentController@paymentHistory');
+    $router->addRoute(['POST'], '/api/payments/process', 'App\Controllers\PaymentController@processPayment');
+    $router->addRoute(['POST'], '/api/payments/refund/{id:\d+}', 'App\Controllers\PaymentController@refundPayment');
+    $router->addRoute(['GET'], '/api/payments/history', 'App\Controllers\PaymentController@paymentHistory');
 
     // ✅ Report API Routes
-    $router->addRoute(['POST'], '/api/reports/generate', 'ReportController@generateReport');
-    $router->addRoute(['GET'], '/api/reports/view/{id:\d+}', 'ReportController@viewReport');
+    $router->addRoute(['POST'], '/api/reports/generate', 'App\Controllers\ReportController@generateReport');
+    $router->addRoute(['GET'], '/api/reports/view/{id:\d+}', 'App\Controllers\ReportController@viewReport');
 
     // ✅ Admin API Routes
-    $router->addRoute(['GET'], '/api/admin/users', 'AdminController@listUsers');
-    $router->addRoute(['GET'], '/api/admin/dashboard', 'AdminController@getDashboard');
-    $router->addRoute(['GET'], '/api/admin/logs', 'AdminController@viewLogs');
+    $router->addRoute(['GET'], '/api/admin/users', function () {
+        AuthMiddleware::requireAdmin();
+        require '../public/api/admin/users.php';
+    });
+
+    $router->addRoute(['GET'], '/api/admin/dashboard', function () {
+        AuthMiddleware::requireAdmin();
+        require '../public/api/admin/dashboard.php';
+    });
+
+    $router->addRoute(['GET'], '/api/admin/logs', function () {
+        AuthMiddleware::requireAdmin();
+        require '../public/api/admin/logs.php';
+    });
 
     // ✅ Document API Routes
-    $router->addRoute(['POST'], '/api/documents/upload', 'DocumentController@uploadDocument');
-    $router->addRoute(['POST'], '/api/documents/sign', 'DocumentController@signDocument');
-    $router->addRoute(['GET'], '/api/documents/view/{id:\d+}', 'DocumentController@viewDocument');
+    $router->addRoute(['POST'], '/api/documents/upload', 'App\Controllers\DocumentController@uploadDocument');
+    $router->addRoute(['POST'], '/api/documents/sign', 'App\Controllers\DocumentController@signDocument');
+    $router->addRoute(['GET'], '/api/documents/view/{id:\d+}', 'App\Controllers\DocumentController@viewDocument');
 
     // ✅ System API Routes
-    $router->addRoute(['GET'], '/api/system/logs', 'SystemController@viewLogs');
-    $router->addRoute(['GET'], '/api/system/status', 'SystemController@getStatus');
+    $router->addRoute(['GET'], '/api/system/logs', function () {
+        AuthMiddleware::requireAdmin();
+        require '../public/api/system/logs.php';
+    });
+
+    $router->addRoute(['GET'], '/api/system/status', function () {
+        AuthMiddleware::requireAuth();
+        require '../public/api/system/status.php';
+    });
 
     // ✅ Catch-All for Unmatched Requests
     $router->addRoute(['GET', 'POST'], '/{any:.+}', function () {

@@ -15,7 +15,7 @@ use App\Services\Validator;
 
 class AuthService
 {
-    private $db; // this is the Capsule instance from the default DatabaseHelper
+    private $db;
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $authLogger;
@@ -32,7 +32,6 @@ class AuthService
         array $encryptionConfig,
         Validator $validator // Inject Validator
     ) {
-        // Ensure to use the app database's Capsule instance:
         $this->db = $dbHelper->getCapsule();  // Get the Capsule instance
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;

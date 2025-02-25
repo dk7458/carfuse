@@ -3,11 +3,14 @@
 
 namespace App\Controllers;
 
-use App\Services\UserService;
-use App\Helpers\ApiHelper;
+use App\Models\User;
+use ApiHelper;
+use Validator;
+use TokenService;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Str;
 
 /**
  * User Management Controller
@@ -16,21 +19,104 @@ use Illuminate\Routing\Controller;
  */
 class UserController extends Controller
 {
-    private UserService $userService;
+    private Validator $validator;
+    private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $userLogger;
+    private LoggerInterface $authLogger;
     private LoggerInterface $auditLogger;
 
     public function __construct(
-        UserService $userService,
+        Validator $validator,
+        TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $userLogger,
+        LoggerInterface $authLogger,
         LoggerInterface $auditLogger
     ) {
-        $this->userService = $userService;
+        $this->validator = $validator;
+        $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->userLogger = $userLogger;
+        $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
+    }
+
+    /**
+     * Register a new user.
+     */
+    public function registerUser()
+    {
+        $data = $_POST;
+        // Validate input data
+        $rules = [
+            'email'    => 'required|email',
+            'password' => 'required|min:6',
+            // ... other rules ...
+        ];
+        if (!$this->validator->validate($data, $rules)) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
+        }
+        try {
+            $user = User::create($data);
+            if (!$user) {
+                throw new \Exception("User registration failed");
+            }
+            $this->userLogger->info("User registered successfully", ['email' => $data['email']]);
+            return ApiHelper::sendJsonResponse('success', 'User registered successfully', ['user_id' => $user->id], 201);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * Log in an existing user.
+     */
+    public function login()
+    {
+        $email = $_POST['email'] ?? null;
+        $password = $_POST['password'] ?? null;
+        if (!$email || !$password) {
+            return ApiHelper::sendJsonResponse('error', 'Email and password required', null, 400);
+        }
+        try {
+            $user = User::where('email', $email)->first();
+            if (!$user || !password_verify($password, $user->password_hash)) {
+                throw new \Exception("Invalid credentials");
+            }
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            session_regenerate_id(true);
+            $_SESSION['user_id']   = $user->id;
+            $_SESSION['user_role'] = $user->role ?? 'user';
+            $token = $this->tokenService->generateToken($user);
+            $refreshToken = $this->tokenService->generateRefreshToken($user);
+            $this->authLogger->info("User logged in", ['userId' => $user->id, 'email' => $user->email]);
+            return ApiHelper::sendJsonResponse('success', 'User logged in', [
+                'token'         => $token,
+                'refresh_token' => $refreshToken
+            ], 200);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * Log out the current user.
+     */
+    public function logout()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            setcookie(session_name(), '', time() - 42000, '/');
+        }
+        session_destroy();
+        $this->authLogger->info("User logged out");
+        return ApiHelper::sendJsonResponse('success', 'Logged out successfully', null, 200);
     }
 
     /**
@@ -38,22 +124,32 @@ class UserController extends Controller
      */
     public function getUserProfile()
     {
-        // Retrieve user profile via UserService (assumes a method exists)
-        // For example, get the userId from a secure context/token (not session)
-        $userId = $_GET['id'] ?? null;
-        if (!$userId) {
-            return ApiHelper::sendJsonResponse('error', 'User ID missing', null, 400);
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
         }
-        $user = $this->userService->getUserProfile($userId);
+        $user = User::find($_SESSION['user_id'] ?? null);
         return ApiHelper::sendJsonResponse('success', 'User profile retrieved', $user, 200);
     }
 
     /**
-     * Update user profile
+     * 🔹 Update user profile
      */
     public function updateProfile()
     {
-        $data = $_POST;
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $user = $_SESSION['user'] ?? null;
+        if (!$user) {
+            return ApiHelper::sendJsonResponse('error', 'Unauthorized', null, 401);
+        }
+        $data = [
+            'name'    => $_POST['name'] ?? null,
+            'surname' => $_POST['surname'] ?? null,
+            'email'   => $_POST['email'] ?? null,
+            'phone'   => $_POST['phone'] ?? null,
+            'address' => $_POST['address'] ?? null,
+        ];
         $rules = [
             'name'    => 'required|string|max:255',
             'surname' => 'required|string|max:255',
@@ -61,12 +157,12 @@ class UserController extends Controller
             'phone'   => 'nullable|string|max:15',
             'address' => 'nullable|string|max:255',
         ];
-        if (!$this->userService->getValidator()->validate($data, $rules)) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->userService->getValidator()->errors(), 400);
+        if (!$this->validator->validate($data, $rules)) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
         }
         try {
-            $this->userService->updateUserProfile($data);
-            $this->auditLogger->info("User profile updated", ['user_id' => $data['id'] ?? null]);
+            $user->update($data);
+            $this->auditLogger->info("User profile updated", ['userId' => $user->id]);
             return ApiHelper::sendJsonResponse('success', 'Profile updated successfully', null, 200);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
@@ -74,12 +170,48 @@ class UserController extends Controller
     }
 
     /**
-     * User dashboard access
+     * 🔹 Get user profile
+     */
+    public function getProfile()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $user = $_SESSION['user'] ?? null;
+        return ApiHelper::sendJsonResponse('success', 'User profile', $user, 200);
+    }
+
+    /**
+     * 🔹 Request password reset
+     */
+    public function requestPasswordReset()
+    {
+        $email = $_POST['email'] ?? null;
+        if (!$email) {
+            return ApiHelper::sendJsonResponse('error', 'Invalid input', null, 400);
+        }
+        try {
+            $token = Str::random(60);
+            \App\Models\PasswordReset::create([
+                'email'      => $email,
+                'token'      => $token,
+                'expires_at' => now()->addHour(),
+            ]);
+            return ApiHelper::sendJsonResponse('success', 'Password reset requested', null, 200);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * 🔹 User dashboard access
      */
     public function userDashboard()
     {
-        // Dashboard access logic via UserService if needed.
-        // ...existing dashboard logic...
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        // Rendering HTML for dashboard via ApiHelper response
         $html = "<html><body><h1>User Dashboard</h1><!-- ...existing dashboard HTML... --></body></html>";
         return ApiHelper::sendJsonResponse('success', 'User Dashboard', $html, 200);
     }
@@ -617,37 +749,62 @@ namespace App\Controllers;
 use App\Services\Auth\TokenService;
 use App\Services\Auth\AuthService;
 use Exception;
+use App\Helpers\DatabaseHelper;
+use App\Services\Validator;
+use App\Helpers\SecurityHelper;
 use App\Helpers\ApiHelper;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Services\ExceptionHandler; // New dependency
 
 class AuthController extends Controller
 {
     private AuthService $authService;
+    private Validator $validator;
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $authLogger;
     private LoggerInterface $auditLogger;
 
+    // Updated Constructor with Dependency Injection
     public function __construct(
-        AuthService $authService,
+        Validator $validator,
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
         LoggerInterface $auditLogger
     ) {
-        $this->authService = $authService;
+        $this->validator = $validator;
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
+        // ...existing dependency injections...
+        
+        // Optionally, move secure session handling to middleware
+        // SecurityHelper::startSecureSession();
+
+        // Initialize AuthService (could be injected as well)
+        $this->authService = new AuthService();
+        // ...existing initialization code...
+        DatabaseHelper::getInstance();
+    }
+
+    public function loginView()
+    {
+        view('auth/login');
+    }
+
+    public function registerView()
+    {
+        view('auth/register');
     }
 
     public function login($request = null)
     {
+        // ...existing code...
         $data = json_decode(file_get_contents("php://input"), true);
         if (!$data || !is_array($data)) {
-            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
+            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         
         $email = $data['email'] ?? '';
@@ -668,15 +825,17 @@ class AuthController extends Controller
             "httponly" => true,
             "samesite" => "Strict"
         ]);
+        // Improved logging with context
         $this->authLogger->info("User logged in", ['email' => $email]);
-        return ApiHelper::sendJsonResponse('success', 'User logged in', ['errors' => (object)[]], 200);
+        return ApiHelper::sendJsonResponse('success', 'User logged in', [], 200);
     }
 
     public function register($request = null)
     {
+        // ...existing code...
         $data = json_decode(file_get_contents("php://input"), true);
         if (!$data || !is_array($data)) {
-            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
+            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         
         $rules = [
@@ -685,17 +844,27 @@ class AuthController extends Controller
             'password'         => 'required',
             'confirm_password' => 'required'
         ];
-        if (!$this->authService->getValidator()->validate($data, $rules)) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', ['errors' => $this->authService->getValidator()->errors()], 400);
+        if (!$this->validator->validate($data, $rules)) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
         }
         if ($data['password'] !== $data['confirm_password']) {
-            return ApiHelper::sendJsonResponse('error', 'Password and confirm password do not match', ['errors' => (object)[]], 400);
+            return ApiHelper::sendJsonResponse('error', 'Password and confirm password do not match', [], 400);
         }
         
+        $registrationData = [
+            'name'     => $data['name'],
+            'surname'  => $data['surname']  ?? '',
+            'email'    => $data['email'],
+            'password' => $data['password'],
+            'phone'    => $data['phone']    ?? null,
+            'address'  => $data['address']  ?? null
+        ];
+
         try {
-            $result = $this->authService->registerUser($data);
+            $result = $this->authService->registerUser($registrationData);
         } catch (Exception $e) {
             $this->exceptionHandler->handleException($e);
+            // Additional audit logging if needed
             $this->auditLogger->error("User registration failed", [
                 'error' => $e->getMessage(),
                 'email' => $data['email']
@@ -710,39 +879,40 @@ class AuthController extends Controller
     {
         $data = json_decode(file_get_contents("php://input"), true);
         if (!$data || !is_array($data)) {
-            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
+            ApiHelper::sendJsonResponse('error', 'Invalid JSON input', [], 400);
         }
         $email = $data['email'] ?? '';
         $result = $this->authService->resetPasswordRequest($email);
-        return ApiHelper::sendJsonResponse('success', 'Password reset request processed', $result, 200);
+        ApiHelper::sendJsonResponse('success', 'Password reset request processed', $result, 200);
     }
 
     public function refresh()
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            return ApiHelper::sendJsonResponse('error', 'Method Not Allowed', ['errors' => (object)[]], 405);
+            ApiHelper::sendJsonResponse('error', 'Method Not Allowed', [], 405);
         }
         $refreshToken = $_COOKIE['refresh_token'] ?? null;
         if (!$refreshToken) {
-            return ApiHelper::sendJsonResponse('error', 'Refresh token is required', ['errors' => (object)[]], 400);
+            ApiHelper::sendJsonResponse('error', 'Refresh token is required', [], 400);
         }
         $newToken = $this->tokenService->refreshToken($refreshToken);
         if ($newToken) {
             setcookie("jwt", $newToken, [
-                "expires"  => time() + 3600,
-                "path"     => "/",
-                "secure"   => true,
+                "expires" => time() + 3600,
+                "path" => "/",
+                "secure" => true,
                 "httponly" => true,
                 "samesite" => "Strict"
             ]);
-            return ApiHelper::sendJsonResponse('success', 'Token refreshed', ['errors' => (object)[]], 200);
+            ApiHelper::sendJsonResponse('success', 'Token refreshed', [], 200);
         } else {
-            return ApiHelper::sendJsonResponse('error', 'Invalid refresh token', ['errors' => (object)[]], 401);
+            ApiHelper::sendJsonResponse('error', 'Invalid refresh token', [], 401);
         }
     }
 
     public function logout($request = null)
     {
+        $this->authService->logout();
         setcookie("jwt", "", [
             "expires" => time() - 3600,
             "path" => "/",
@@ -757,9 +927,35 @@ class AuthController extends Controller
             "httponly" => true,
             "samesite" => "Strict"
         ]);
-        $this->authService->logout();
-        $this->auditLogger->info("User logged out");
-        return ApiHelper::sendJsonResponse('success', 'User logged out', ['errors' => (object)[]], 200);
+        ApiHelper::sendJsonResponse('success', 'User logged out', [], 200);
+    }
+
+    public function userDetails($request = null)
+    {
+        $token = $_COOKIE['jwt'] ?? '';
+        if (!$this->authService->validateToken($token)) {
+            ApiHelper::sendJsonResponse('error', 'Invalid token', [], 400);
+        }
+        $userData = $this->authService->getUserFromToken($token);
+        ApiHelper::sendJsonResponse('success', 'User details fetched', $userData, 200);
+    }
+
+    private function refreshToken()
+    {
+        // ...existing code...
+    }
+
+    private function updateSessionActivity()
+    {
+        $_SESSION['last_activity'] = time();
+    }
+
+    // Updated logging method with context details
+    private function logAuthAttempt($status, $message)
+    {
+        $context = ['ip' => $_SERVER['REMOTE_ADDR'], 'time' => date('Y-m-d H:i:s')];
+        $logMessage = sprintf("%s: %s", ucfirst($status), $message);
+        $this->authLogger->info($logMessage, $context);
     }
 }
 === App/Controllers/SignatureController.php ===
@@ -3566,7 +3762,7 @@ namespace App\Services;
 
 use Exception;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 /**
  * Template Service
@@ -3595,8 +3791,8 @@ class TemplateService
             throw new \InvalidArgumentException("Invalid template directory: $templateDirectory");
         }
 
+        $this->templateDirectory = rtrim($templateDirectory, DIRECTORY_SEPARATOR);
         $this->logger = $logger;
-        $this->templateDirectory = $templateDirectory;
         $this->exceptionHandler = $exceptionHandler;
     }
 
@@ -3737,7 +3933,7 @@ namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 use Exception;
 
 class MetricsService
@@ -3800,7 +3996,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Exception;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ApiHelper;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 class UserService
 {
@@ -3954,7 +4150,7 @@ namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 /**
  * Validator Service
@@ -3992,14 +4188,11 @@ class Validator
 
         if (!empty($this->errors)) {
             if (self::DEBUG_MODE) {
-                $this->logger->warning("[Validation] Validation failed", ['errors' => $this->errors]);
+                $this->logger->info("[system] Validation failed", ['errors' => $this->errors]);
             }
-
-            // **Throw an exception to prevent further execution**
-            throw new \InvalidArgumentException(json_encode(['errors' => $this->errors]));
         }
 
-        return true;
+        return empty($this->errors);
     }
 
     /**
@@ -4042,16 +4235,17 @@ class Validator
                 }
             } elseif (strpos($rule, 'unique:') === 0) {
                 [$table, $column] = explode(',', substr($rule, 7));
-                if ($this->db->getCapsule()->table($table)->where($column, $value)->exists()) {
+                if ($this->db->table($table)->where($column, $value)->exists()) {
                     $this->errors[$field][] = "The {$field} must be unique.";
                 }
             }
         } catch (\Exception $e) {
-            $this->logger->error("[Validation] ❌ Validation error: " . $e->getMessage());
+            $this->logger->error("[system] ❌ Validation error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
         }
     }
-}=== App/Services/BookingService.php ===
+}
+=== App/Services/BookingService.php ===
 <?php
 
 namespace App\Services;
@@ -4060,16 +4254,16 @@ use App\Models\Booking;
 use Exception;
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 class BookingService
 {
     public const DEBUG_MODE = true;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
-    private DatabaseHelper $db;
+    private $db;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, \App\Helpers\DatabaseHelper $db)
     {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
@@ -4325,7 +4519,7 @@ namespace App\Services\Auth;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Exceptions\ExceptionHandler;
 use App\Helpers\ApiHelper;
 
 class TokenService
@@ -4470,35 +4664,30 @@ use Exception;
 use App\Helpers\SecurityHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ApiHelper;
-use App\Services\Validator;
 
 class AuthService
 {
-    private $db; // this is the Capsule instance from the default DatabaseHelper
+    public const DEBUG_MODE = true;
+
+    private DatabaseHelper $db;
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $authLogger;
     private LoggerInterface $auditLogger;
-    private array $encryptionConfig;
-    private Validator $validator;
 
+    // NEW: Constructor with dependency injection
     public function __construct(
-        DatabaseHelper $dbHelper,  // Ensure DatabaseHelper is injected
+        DatabaseHelper $db,
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
-        LoggerInterface $auditLogger,
-        array $encryptionConfig,
-        Validator $validator // Inject Validator
+        LoggerInterface $auditLogger
     ) {
-        // Ensure to use the app database's Capsule instance:
-        $this->db = $dbHelper->getCapsule();  // Get the Capsule instance
+        $this->db = $db;
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
-        $this->encryptionConfig = $encryptionConfig;
-        $this->validator = $validator; // Initialize Validator
     }
 
     public function login($email, $password)
@@ -4538,26 +4727,18 @@ class AuthService
 
     public function registerUser(array $data)
     {
-        $rules = [
-            'email'    => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
-            'name'     => 'required|string',
-        ];
-
         try {
-            // Validate the input data
-            $this->validator->validate($data, $rules);
-
-            // Hash the password before storing it
-            $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
-
-            // Insert the user into the database
-            $userId = $this->db->table('users')->insertGetId($data);
-            return ApiHelper::sendJsonResponse('success', 'User registered', ['user_id' => $userId], 201);
-        } catch (\InvalidArgumentException $e) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
-        } catch (\Exception $e) {
+            // Using injected DatabaseHelper or User model as preferred
+            $user = User::create($data);
+            if (!$user) {
+                throw new Exception("User registration failed");
+            }
+            $this->authLogger->info("User successfully registered", ['email' => $data['email'], 'userId' => $user->id]);
+            // Standardize API response via ApiHelper
+            ApiHelper::sendJsonResponse('success', 'User registered', ['user_id' => $user->id], 201);
+        } catch (Exception $e) {
             $this->exceptionHandler->handleException($e);
+            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 500);
         }
     }
 
@@ -4635,7 +4816,7 @@ use DocumentManager\Services\FileStorage;
 use DocumentManager\Services\TemplateService;
 use App\Services\EncryptionService;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 /**
  * Document Service
@@ -4846,7 +5027,7 @@ use App\Helpers\DatabaseHelper; // new import
 use Psr\Log\LoggerInterface;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-use App\Helpers\ExceptionHandler; // assume this exists
+use App\Handlers\ExceptionHandler; // assume this exists
 
 /**
  * NotificationService
@@ -4859,7 +5040,7 @@ class NotificationService
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
     private array $config;
-    private DatabaseHelper $db;
+    private $db;
 
     public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db, array $config)
     {
@@ -5113,7 +5294,7 @@ use App\Models\AuditLog;
 use Exception;
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 class AuditService
 {
@@ -5247,7 +5428,7 @@ namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 class TransactionService
 {
@@ -5322,7 +5503,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 class EncryptionService
 {
@@ -5330,13 +5511,11 @@ class EncryptionService
 
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
-    private string $encryptionKey;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, string $encryptionKey)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler)
     {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
-        $this->encryptionKey = $encryptionKey;
     }
 
     public function encrypt(string $data): string
@@ -5394,7 +5573,7 @@ class EncryptionService
 
     public function sign(string $data): string
     {
-        return hash_hmac('sha256', $data, $this->encryptionKey);
+        return hash_hmac('sha256', $data, config('app.key'));
     }
 
     public function verify(string $data, string $signature): bool
@@ -5410,7 +5589,7 @@ namespace App\Services;
 use Exception;
 use App\Services\EncryptionService;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 class FileStorage
 {
@@ -5541,7 +5720,7 @@ class FileStorage
 namespace App\Services;
 
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 /**
  * Rate Limiter Service
@@ -5601,7 +5780,7 @@ use App\Helpers\DatabaseHelper; // new import
 use App\Models\Payment;
 use App\Models\TransactionLog;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 class RevenueService
 {
@@ -5689,7 +5868,7 @@ namespace App\Services\Security;
 
 use Exception;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 class KeyManager
 {
@@ -5755,7 +5934,7 @@ use Psr\Log\LoggerInterface;
 use App\Services\FileStorage;
 use App\Services\EncryptionService;
 use App\Helpers\DatabaseHelper;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 /**
  * Signature Service
@@ -5978,7 +6157,7 @@ use App\Models\Payment;
 use App\Models\User;
 use Dompdf\Dompdf;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 class ReportService
 {
@@ -6128,7 +6307,7 @@ namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 
 class PaymentService
 {
@@ -6264,7 +6443,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Helpers\DatabaseHelper; // new import
 use Psr\Log\LoggerInterface; // ensure LoggerInterface is imported
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 require_once __DIR__ . '/../../config/payu.php';
 /**
  * PayUService
@@ -6509,7 +6688,7 @@ namespace App\Middleware;
 
 use App\Helpers\ApiHelper;
 use App\Services\TokenService;
-use App\Helpers\ExceptionHandler;
+use App\Handlers\ExceptionHandler;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -6998,88 +7177,110 @@ class ApiHelper
 namespace App\Helpers;
 
 use Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Events\Dispatcher;
+use Illuminate\Container\Container;
+use Dotenv\Dotenv;
 use Exception;
-use Psr\Log\LoggerInterface;
 use App\Helpers\ApiHelper;
+// Removed: use Psr\Log\LoggerInterface;
+// Added dynamic logger usage:
+use function getLogger;
 
 class DatabaseHelper
 {
-    private static ?DatabaseHelper $instance = null;
-    private static ?DatabaseHelper $secureInstance = null;
-    private Capsule $capsule;
-    private static LoggerInterface $logger;
+    private static $capsule = null;
+    private static $secureCapsule = null;
+    private static $initialized = false;
+    private static $envLoaded = false;
+    
+    // ...existing code...
 
-    private function __construct(array $config)
+    // Removed setLogger() method
+
+    private static function loadEnv()
     {
-        try {
-            $this->capsule = new Capsule();
-            $this->capsule->addConnection($config);
-            $this->capsule->setAsGlobal();
-            $this->capsule->bootEloquent();
-
-            // ✅ Log successful initialization
-            self::$logger->info("✅ Database connection initialized successfully.");
-        } catch (Exception $e) {
-            self::$logger->critical("❌ Database connection failed: " . $e->getMessage());
-            die("Database connection failed. Check logs for details.");
+        if (!self::$envLoaded) {
+            $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
+            $dotenv->safeLoad();
+            self::$envLoaded = true;
         }
     }
 
-    public static function setLogger(LoggerInterface $logger)
+    private static function initializeDatabase(&$capsule, array $config, string $connectionName)
     {
-        if (!isset(self::$logger)) {
-            self::$logger = $logger;
-        }
-    }
+        if ($capsule === null) {
+            self::loadEnv();
 
-    private static function getDatabaseConfig(string $type = 'default'): array
-    {
-        $config = require __DIR__ . '/../../config/database.php';
-        return $type === 'secure' ? $config['secure_database'] : $config['app_database'];
-    }
-
-    public static function getInstance(): DatabaseHelper
-    {
-        if (self::$instance === null) {
             try {
-                self::$instance = new DatabaseHelper(self::getDatabaseConfig('default'));
+                $capsule = new Capsule();
+                $capsule->addConnection($config, $connectionName);
+                $capsule->setEventDispatcher(new Dispatcher(new Container));
+
+                $pdo = $capsule->getConnection($connectionName)->getPdo();
+                if (!$pdo) {
+                    throw new Exception("Failed to obtain PDO connection.");
+                }
+
+                if (!self::$initialized) {
+                    $capsule->setAsGlobal();
+                    $capsule->bootEloquent();
+                    self::$initialized = true;
+                }
+
+                // Log successful connection with proper category
+                getLogger('db')->info("✅ {$connectionName} Database connected successfully");
             } catch (Exception $e) {
-                self::$logger->critical("❌ Database initialization failed: " . $e->getMessage());
-                die("Database initialization failed.");
+                getLogger('db')->error("❌ {$connectionName} Database connection failed: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+                die("{$connectionName} database connection failed");
             }
         }
-
-        return self::$instance;
     }
 
-    public static function getSecureInstance(): DatabaseHelper
+    private static function handleDatabaseError(string $connectionName, Exception $e)
     {
-        if (self::$secureInstance === null) {
-            try {
-                self::$secureInstance = new DatabaseHelper(self::getDatabaseConfig('secure'));
-            } catch (Exception $e) {
-                self::$logger->critical("❌ Secure database initialization failed: " . $e->getMessage());
-                die("Secure database initialization failed.");
-            }
+        getLogger('db')->error("❌ {$connectionName} Database connection error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+        die("{$connectionName} database connection failed");
+    }
+
+    public static function getInstance(): Capsule
+    {
+        if (self::$capsule === null) {
+            self::initializeDatabase(self::$capsule, [
+                'driver'    => 'mysql',
+                'host'      => $_ENV['DB_HOST'] ?? 'localhost',
+                'port'      => $_ENV['DB_PORT'] ?? '3306',
+                'database'  => $_ENV['DB_DATABASE'] ?? '',
+                'username'  => $_ENV['DB_USERNAME'] ?? '',
+                'password'  => $_ENV['DB_PASSWORD'] ?? '',
+                'charset'   => $_ENV['DB_CHARSET'] ?? 'utf8mb4',
+                'collation' => $_ENV['DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
+                'prefix'    => '',
+            ], 'default');
         }
 
-        return self::$secureInstance;
+        return self::$capsule;
     }
 
-    public function getCapsule(): Capsule
+    public static function getSecureInstance(): Capsule
     {
-        return $this->capsule;
-    }
-
-    public function getConnection()
-    {
-        try {
-            return $this->capsule->getConnection();
-        } catch (Exception $e) {
-            self::$logger->error("❌ Failed to get database connection: " . $e->getMessage());
-            return null;
+        if (self::$secureCapsule === null) {
+            self::initializeDatabase(self::$secureCapsule, [
+                'driver'    => 'mysql',
+                'host'      => $_ENV['SECURE_DB_HOST'] ?? 'localhost',
+                'port'      => $_ENV['SECURE_DB_PORT'] ?? '3306',
+                'database'  => $_ENV['SECURE_DB_DATABASE'] ?? '',
+                'username'  => $_ENV['SECURE_DB_USERNAME'] ?? '',
+                'password'  => $_ENV['SECURE_DB_PASSWORD'] ?? '',
+                'charset'   => $_ENV['SECURE_DB_CHARSET'] ?? 'utf8mb4',
+                'collation' => $_ENV['SECURE_DB_COLLATION'] ?? 'utf8mb4_unicode_ci',
+                'prefix'    => '',
+            ], 'secure');
         }
+
+        return self::$secureCapsule;
     }
+
+    // Removed logEvent() wrapper in favor of direct getLogger() calls
 
     /**
      * ✅ Safe Query Execution with Exception Handling
@@ -7087,16 +7288,18 @@ class DatabaseHelper
     public static function safeQuery(callable $query)
     {
         try {
-            return $query(self::getInstance()->getCapsule());
+            return $query(self::getInstance());
         } catch (\PDOException $e) {
-            self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            getLogger('db')->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+
             if ($e->getCode() == "23000") {
-                return ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
+                ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
             }
-            return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
+
+            ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         } catch (\Exception $e) {
-            self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
+            getLogger('db')->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         }
     }
 
@@ -7105,7 +7308,9 @@ class DatabaseHelper
      */
     public static function insert($table, $data)
     {
-        return self::safeQuery(fn ($db) => $db->table($table)->insertGetId($data));
+        return self::safeQuery(function ($db) use ($table, $data) {
+            return $db->table($table)->insertGetId($data);
+        });
     }
 
     /**
@@ -7113,7 +7318,9 @@ class DatabaseHelper
      */
     public static function update($table, $data, $where)
     {
-        return self::safeQuery(fn ($db) => $db->table($table)->where($where)->update($data));
+        return self::safeQuery(function ($db) use ($table, $data, $where) {
+            return $db->table($table)->where($where)->update($data);
+        });
     }
 
     /**
@@ -7121,7 +7328,9 @@ class DatabaseHelper
      */
     public static function delete($table, $where)
     {
-        return self::safeQuery(fn ($db) => $db->table($table)->where($where)->delete());
+        return self::safeQuery(function ($db) use ($table, $where) {
+            return $db->table($table)->where($where)->delete();
+        });
     }
 
     /**
@@ -7129,7 +7338,9 @@ class DatabaseHelper
      */
     public static function select($query, $params = [])
     {
-        return self::safeQuery(fn ($db) => $db->select($query, $params));
+        return self::safeQuery(function ($db) use ($query, $params) {
+            return $db->select($query, $params);
+        });
     }
 }
 === App/api.php ===

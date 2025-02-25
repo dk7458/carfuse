@@ -4,5 +4,3 @@
 .env.production
 /node_modules
 .aider*
-config/database.php
-

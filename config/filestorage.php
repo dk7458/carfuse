@@ -10,7 +10,7 @@
 
 return [
     // General file storage settings
-    'base_directory' => '/path/to/filestorage', // Base directory for storing files
+    'base_directory' => __DIR__ . '/../Storage', // Base directory for storing files
 
     // Storage structure
     'directories' => [
@@ -21,8 +21,8 @@ return [
 
     // File security settings
     'security' => [
-        'allowed_extensions' => ['jpg', 'png', 'pdf', 'docx'], // Allowed file extensions
-        'max_file_size' => 10485760, // Max file size (10 MB in bytes)
+        'allowed_extensions' => ['pdf', 'docx', 'html'], // Allowed file extensions
+        'max_file_size' => 10 * 1024 * 1024, // Max file size (10 MB in bytes)
         'encryption' => [
             'enabled' => true, // Enable encryption for stored files
         ],

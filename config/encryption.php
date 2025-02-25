@@ -1,16 +1,8 @@
 <?php
-use Dotenv\Dotenv;
 
 $logFile = __DIR__ . '/../logs/errors.log';
 
 try {
-    // ✅ Ensure `.env` is loaded before accessing encryption keys
-    $dotenvPath = __DIR__ . '/../';
-    if (file_exists($dotenvPath . '.env')) {
-        $dotenv = Dotenv::createImmutable($dotenvPath);
-        $dotenv->load();
-    }
-
     // ✅ Load Environment Variables (If `.env` Exists)
     if (file_exists(__DIR__ . '/../.env')) {
         $env = parse_ini_file(__DIR__ . '/../.env');
