@@ -1,5 +1,5 @@
 <?php
-use App\Helpers\LoggingHelper;
+use function getLogger;
 use FastRoute\Dispatcher;
 
 ini_set('display_errors', 1);
@@ -8,30 +8,26 @@ error_reporting(E_ALL);
 
 // Load Bootstrap (Dependencies, Configs, Logger, DB)
 $bootstrap = require_once __DIR__ . '/../bootstrap.php';
-
-// Initialize our centralized logging helper and get the default "api" logger
-$loggingHelper = new LoggingHelper();
-$logger = $loggingHelper->getDefaultLogger();
-
-// Retrieve the DI container from bootstrap
+// Replace bootstrap logger with centralized logger
+$logger = getLogger('api');
 $container = $bootstrap['container'];
 
-// Get the requested URI and HTTP method
+// Get Requested URI & HTTP Method
 $requestUri = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 
-// Load routes (which may be a closure)
+// Load routes (which may return a closure)
 $routes = require __DIR__ . '/../config/routes.php';
 if (is_callable($routes)) {
-    $dispatcher = $routes($container->get(\Slim\App::class)); // Invoke closure to obtain dispatcher
+    $dispatcher = $routes(); // Invoke closure to get the dispatcher
 } else {
     $dispatcher = $routes;
 }
 
-// Verify dispatcher type
+// Verify that we have a proper dispatcher
 if (!($dispatcher instanceof Dispatcher)) {
     http_response_code(500);
-    echo json_encode(["error" => "Dispatcher is not correctly configured."]);
+    echo json_encode(["error" => "Dispatcher is not properly configured."]);
     exit;
 }
 
