@@ -7,6 +7,7 @@ use App\Helpers\ApiHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use Illuminate\Routing\Controller;
+use App\Middleware\AuthMiddleware;
 
 /**
  * User Management Controller
@@ -19,67 +20,114 @@ class UserController extends Controller
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $userLogger;
     private LoggerInterface $auditLogger;
+    private AuthMiddleware $authMiddleware;
 
     public function __construct(
         UserService $userService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $userLogger,
-        LoggerInterface $auditLogger
+        LoggerInterface $auditLogger,
+        AuthMiddleware $authMiddleware
     ) {
         $this->userService = $userService;
         $this->exceptionHandler = $exceptionHandler;
         $this->userLogger = $userLogger;
         $this->auditLogger = $auditLogger;
+        $this->authMiddleware = $authMiddleware;
     }
 
     /**
      * Retrieve current user profile.
+     * Protected by authentication middleware.
      */
-    public function getUserProfile()
+    public function getUserProfile($request)
     {
-        // Retrieve user profile via UserService (assumes a method exists)
-        // For example, get the userId from a secure context/token (not session)
-        $userId = $_GET['id'] ?? null;
-        if (!$userId) {
-            return ApiHelper::sendJsonResponse('error', 'User ID missing', null, 400);
-        }
-        $user = $this->userService->getUserProfile($userId);
-        return ApiHelper::sendJsonResponse('success', 'User profile retrieved', $user, 200);
+        return $this->authMiddleware->authenticateToken($request, function($req) {
+            try {
+                // Get user ID from authenticated request
+                $userId = $req->userId;
+                $user = $this->userService->getUserById($userId);
+                
+                if (!$user) {
+                    return ApiHelper::sendJsonResponse('error', 'User not found', [], 404);
+                }
+                
+                // Remove sensitive data before returning
+                unset($user['password_hash']);
+                
+                return ApiHelper::sendJsonResponse('success', 'User profile retrieved', $user, 200);
+            } catch (\Exception $e) {
+                $this->exceptionHandler->handleException($e);
+                return ApiHelper::sendJsonResponse('error', 'Failed to retrieve profile', [], 500);
+            }
+        });
     }
 
     /**
      * Update user profile
+     * Protected by authentication middleware.
      */
-    public function updateProfile()
+    public function updateProfile($request)
     {
-        $data = $_POST;
-        $rules = [
-            'name'    => 'required|string|max:255',
-            'surname' => 'required|string|max:255',
-            'email'   => 'required|email',
-            'phone'   => 'nullable|string|max:15',
-            'address' => 'nullable|string|max:255',
-        ];
-        if (!$this->userService->getValidator()->validate($data, $rules)) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->userService->getValidator()->errors(), 400);
-        }
-        try {
-            $this->userService->updateUserProfile($data);
-            $this->auditLogger->info("User profile updated", ['user_id' => $data['id'] ?? null]);
-            return ApiHelper::sendJsonResponse('success', 'Profile updated successfully', null, 200);
-        } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
-        }
+        return $this->authMiddleware->authenticateToken($request, function($req) {
+            try {
+                // Get user ID from authenticated request
+                $userId = $req->userId;
+                
+                // Get update data from request body
+                $data = json_decode(file_get_contents("php://input"), true);
+                if (!$data) {
+                    return ApiHelper::sendJsonResponse('error', 'Invalid input data', [], 400);
+                }
+                
+                // Update user profile
+                $result = $this->userService->updateUser($userId, $data);
+                
+                $this->auditLogger->info("User profile updated", ['userId' => $userId]);
+                return ApiHelper::sendJsonResponse('success', 'Profile updated successfully', [], 200);
+            } catch (\Exception $e) {
+                $this->exceptionHandler->handleException($e);
+                return ApiHelper::sendJsonResponse('error', 'Failed to update profile', [], 500);
+            }
+        });
     }
 
     /**
      * User dashboard access
+     * Protected by authentication middleware.
      */
-    public function userDashboard()
+    public function userDashboard($request)
     {
-        // Dashboard access logic via UserService if needed.
-        // ...existing dashboard logic...
-        $html = "<html><body><h1>User Dashboard</h1><!-- ...existing dashboard HTML... --></body></html>";
-        return ApiHelper::sendJsonResponse('success', 'User Dashboard', $html, 200);
+        return $this->authMiddleware->authenticateToken($request, function($req) {
+            try {
+                // Get user ID from authenticated request
+                $userId = $req->userId;
+                
+                // Get user dashboard data
+                $dashboardData = $this->userService->getDashboardData($userId);
+                
+                return ApiHelper::sendJsonResponse('success', 'Dashboard data retrieved', $dashboardData, 200);
+            } catch (\Exception $e) {
+                $this->exceptionHandler->handleException($e);
+                return ApiHelper::sendJsonResponse('error', 'Failed to retrieve dashboard', [], 500);
+            }
+        });
+    }
+
+    /**
+     * Admin-only endpoint example
+     * Protected by authentication middleware with role check.
+     */
+    public function adminAction($request)
+    {
+        return $this->authMiddleware->checkRole($request, function($req) {
+            try {
+                // Admin-specific logic here
+                return ApiHelper::sendJsonResponse('success', 'Admin action completed', [], 200);
+            } catch (\Exception $e) {
+                $this->exceptionHandler->handleException($e);
+                return ApiHelper::sendJsonResponse('error', 'Admin action failed', [], 500);
+            }
+        }, ['admin']);
     }
 }

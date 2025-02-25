@@ -3,14 +3,11 @@
 
 namespace App\Controllers;
 
-use App\Models\User;
-use ApiHelper;
-use Validator;
-use TokenService;
+use App\Services\UserService;
+use App\Helpers\ApiHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Str;
 
 /**
  * User Management Controller
@@ -19,104 +16,21 @@ use Illuminate\Support\Str;
  */
 class UserController extends Controller
 {
-    private Validator $validator;
-    private TokenService $tokenService;
+    private UserService $userService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $userLogger;
-    private LoggerInterface $authLogger;
     private LoggerInterface $auditLogger;
 
     public function __construct(
-        Validator $validator,
-        TokenService $tokenService,
+        UserService $userService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $userLogger,
-        LoggerInterface $authLogger,
         LoggerInterface $auditLogger
     ) {
-        $this->validator = $validator;
-        $this->tokenService = $tokenService;
+        $this->userService = $userService;
         $this->exceptionHandler = $exceptionHandler;
         $this->userLogger = $userLogger;
-        $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
-    }
-
-    /**
-     * Register a new user.
-     */
-    public function registerUser()
-    {
-        $data = $_POST;
-        // Validate input data
-        $rules = [
-            'email'    => 'required|email',
-            'password' => 'required|min:6',
-            // ... other rules ...
-        ];
-        if (!$this->validator->validate($data, $rules)) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
-        }
-        try {
-            $user = User::create($data);
-            if (!$user) {
-                throw new \Exception("User registration failed");
-            }
-            $this->userLogger->info("User registered successfully", ['email' => $data['email']]);
-            return ApiHelper::sendJsonResponse('success', 'User registered successfully', ['user_id' => $user->id], 201);
-        } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
-        }
-    }
-
-    /**
-     * Log in an existing user.
-     */
-    public function login()
-    {
-        $email = $_POST['email'] ?? null;
-        $password = $_POST['password'] ?? null;
-        if (!$email || !$password) {
-            return ApiHelper::sendJsonResponse('error', 'Email and password required', null, 400);
-        }
-        try {
-            $user = User::where('email', $email)->first();
-            if (!$user || !password_verify($password, $user->password_hash)) {
-                throw new \Exception("Invalid credentials");
-            }
-            if (session_status() === PHP_SESSION_NONE) {
-                session_start();
-            }
-            session_regenerate_id(true);
-            $_SESSION['user_id']   = $user->id;
-            $_SESSION['user_role'] = $user->role ?? 'user';
-            $token = $this->tokenService->generateToken($user);
-            $refreshToken = $this->tokenService->generateRefreshToken($user);
-            $this->authLogger->info("User logged in", ['userId' => $user->id, 'email' => $user->email]);
-            return ApiHelper::sendJsonResponse('success', 'User logged in', [
-                'token'         => $token,
-                'refresh_token' => $refreshToken
-            ], 200);
-        } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
-        }
-    }
-
-    /**
-     * Log out the current user.
-     */
-    public function logout()
-    {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-        $_SESSION = [];
-        if (ini_get('session.use_cookies')) {
-            setcookie(session_name(), '', time() - 42000, '/');
-        }
-        session_destroy();
-        $this->authLogger->info("User logged out");
-        return ApiHelper::sendJsonResponse('success', 'Logged out successfully', null, 200);
     }
 
     /**
@@ -124,32 +38,22 @@ class UserController extends Controller
      */
     public function getUserProfile()
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
+        // Retrieve user profile via UserService (assumes a method exists)
+        // For example, get the userId from a secure context/token (not session)
+        $userId = $_GET['id'] ?? null;
+        if (!$userId) {
+            return ApiHelper::sendJsonResponse('error', 'User ID missing', null, 400);
         }
-        $user = User::find($_SESSION['user_id'] ?? null);
+        $user = $this->userService->getUserProfile($userId);
         return ApiHelper::sendJsonResponse('success', 'User profile retrieved', $user, 200);
     }
 
     /**
-     * 🔹 Update user profile
+     * Update user profile
      */
     public function updateProfile()
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-        $user = $_SESSION['user'] ?? null;
-        if (!$user) {
-            return ApiHelper::sendJsonResponse('error', 'Unauthorized', null, 401);
-        }
-        $data = [
-            'name'    => $_POST['name'] ?? null,
-            'surname' => $_POST['surname'] ?? null,
-            'email'   => $_POST['email'] ?? null,
-            'phone'   => $_POST['phone'] ?? null,
-            'address' => $_POST['address'] ?? null,
-        ];
+        $data = $_POST;
         $rules = [
             'name'    => 'required|string|max:255',
             'surname' => 'required|string|max:255',
@@ -157,12 +61,12 @@ class UserController extends Controller
             'phone'   => 'nullable|string|max:15',
             'address' => 'nullable|string|max:255',
         ];
-        if (!$this->validator->validate($data, $rules)) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
+        if (!$this->userService->getValidator()->validate($data, $rules)) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->userService->getValidator()->errors(), 400);
         }
         try {
-            $user->update($data);
-            $this->auditLogger->info("User profile updated", ['userId' => $user->id]);
+            $this->userService->updateUserProfile($data);
+            $this->auditLogger->info("User profile updated", ['user_id' => $data['id'] ?? null]);
             return ApiHelper::sendJsonResponse('success', 'Profile updated successfully', null, 200);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
@@ -170,48 +74,12 @@ class UserController extends Controller
     }
 
     /**
-     * 🔹 Get user profile
-     */
-    public function getProfile()
-    {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-        $user = $_SESSION['user'] ?? null;
-        return ApiHelper::sendJsonResponse('success', 'User profile', $user, 200);
-    }
-
-    /**
-     * 🔹 Request password reset
-     */
-    public function requestPasswordReset()
-    {
-        $email = $_POST['email'] ?? null;
-        if (!$email) {
-            return ApiHelper::sendJsonResponse('error', 'Invalid input', null, 400);
-        }
-        try {
-            $token = Str::random(60);
-            \App\Models\PasswordReset::create([
-                'email'      => $email,
-                'token'      => $token,
-                'expires_at' => now()->addHour(),
-            ]);
-            return ApiHelper::sendJsonResponse('success', 'Password reset requested', null, 200);
-        } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
-        }
-    }
-
-    /**
-     * 🔹 User dashboard access
+     * User dashboard access
      */
     public function userDashboard()
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-        // Rendering HTML for dashboard via ApiHelper response
+        // Dashboard access logic via UserService if needed.
+        // ...existing dashboard logic...
         $html = "<html><body><h1>User Dashboard</h1><!-- ...existing dashboard HTML... --></body></html>";
         return ApiHelper::sendJsonResponse('success', 'User Dashboard', $html, 200);
     }
@@ -749,17 +617,13 @@ namespace App\Controllers;
 use App\Services\Auth\TokenService;
 use App\Services\Auth\AuthService;
 use Exception;
-use App\Helpers\DatabaseHelper;
-use App\Services\Validator;
-use App\Helpers\SecurityHelper;
 use App\Helpers\ApiHelper;
 use Psr\Log\LoggerInterface;
-use App\Helpers\ExceptionHandler; // New dependency
+use App\Helpers\ExceptionHandler;
 
 class AuthController extends Controller
 {
     private AuthService $authService;
-    private Validator $validator;
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $authLogger;
@@ -767,36 +631,20 @@ class AuthController extends Controller
 
     public function __construct(
         AuthService $authService,
-        Validator $validator,
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
         LoggerInterface $auditLogger
     ) {
         $this->authService = $authService;
-        $this->validator = $validator;
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
-        
-        // Remove the manual DatabaseHelper initialization
-        // DatabaseHelper::getInstance();
-    }
-
-    public function loginView()
-    {
-        view('auth/login');
-    }
-
-    public function registerView()
-    {
-        view('auth/register');
     }
 
     public function login($request = null)
     {
-        // ...existing code...
         $data = json_decode(file_get_contents("php://input"), true);
         if (!$data || !is_array($data)) {
             return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
@@ -820,14 +668,12 @@ class AuthController extends Controller
             "httponly" => true,
             "samesite" => "Strict"
         ]);
-        // Improved logging with context
         $this->authLogger->info("User logged in", ['email' => $email]);
         return ApiHelper::sendJsonResponse('success', 'User logged in', ['errors' => (object)[]], 200);
     }
 
     public function register($request = null)
     {
-        // ...existing code...
         $data = json_decode(file_get_contents("php://input"), true);
         if (!$data || !is_array($data)) {
             return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
@@ -839,27 +685,17 @@ class AuthController extends Controller
             'password'         => 'required',
             'confirm_password' => 'required'
         ];
-        if (!$this->validator->validate($data, $rules)) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', ['errors' => $this->validator->errors()], 400);
+        if (!$this->authService->getValidator()->validate($data, $rules)) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', ['errors' => $this->authService->getValidator()->errors()], 400);
         }
         if ($data['password'] !== $data['confirm_password']) {
             return ApiHelper::sendJsonResponse('error', 'Password and confirm password do not match', ['errors' => (object)[]], 400);
         }
         
-        $registrationData = [
-            'name'     => $data['name'],
-            'surname'  => $data['surname']  ?? '',
-            'email'    => $data['email'],
-            'password' => $data['password'],
-            'phone'    => $data['phone']    ?? null,
-            'address'  => $data['address']  ?? null
-        ];
-
         try {
-            $result = $this->authService->registerUser($registrationData);
+            $result = $this->authService->registerUser($data);
         } catch (Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // Additional audit logging if needed
             $this->auditLogger->error("User registration failed", [
                 'error' => $e->getMessage(),
                 'email' => $data['email']
@@ -874,40 +710,39 @@ class AuthController extends Controller
     {
         $data = json_decode(file_get_contents("php://input"), true);
         if (!$data || !is_array($data)) {
-            ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
+            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
         }
         $email = $data['email'] ?? '';
         $result = $this->authService->resetPasswordRequest($email);
-        ApiHelper::sendJsonResponse('success', 'Password reset request processed', $result, 200);
+        return ApiHelper::sendJsonResponse('success', 'Password reset request processed', $result, 200);
     }
 
     public function refresh()
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            ApiHelper::sendJsonResponse('error', 'Method Not Allowed', ['errors' => (object)[]], 405);
+            return ApiHelper::sendJsonResponse('error', 'Method Not Allowed', ['errors' => (object)[]], 405);
         }
         $refreshToken = $_COOKIE['refresh_token'] ?? null;
         if (!$refreshToken) {
-            ApiHelper::sendJsonResponse('error', 'Refresh token is required', ['errors' => (object)[]], 400);
+            return ApiHelper::sendJsonResponse('error', 'Refresh token is required', ['errors' => (object)[]], 400);
         }
         $newToken = $this->tokenService->refreshToken($refreshToken);
         if ($newToken) {
             setcookie("jwt", $newToken, [
-                "expires" => time() + 3600,
-                "path" => "/",
-                "secure" => true,
+                "expires"  => time() + 3600,
+                "path"     => "/",
+                "secure"   => true,
                 "httponly" => true,
                 "samesite" => "Strict"
             ]);
-            ApiHelper::sendJsonResponse('success', 'Token refreshed', ['errors' => (object)[]], 200);
+            return ApiHelper::sendJsonResponse('success', 'Token refreshed', ['errors' => (object)[]], 200);
         } else {
-            ApiHelper::sendJsonResponse('error', 'Invalid refresh token', ['errors' => (object)[]], 401);
+            return ApiHelper::sendJsonResponse('error', 'Invalid refresh token', ['errors' => (object)[]], 401);
         }
     }
 
     public function logout($request = null)
     {
-        $this->authService->logout();
         setcookie("jwt", "", [
             "expires" => time() - 3600,
             "path" => "/",
@@ -922,35 +757,9 @@ class AuthController extends Controller
             "httponly" => true,
             "samesite" => "Strict"
         ]);
-        ApiHelper::sendJsonResponse('success', 'User logged out', ['errors' => (object)[]], 200);
-    }
-
-    public function userDetails($request = null)
-    {
-        $token = $_COOKIE['jwt'] ?? '';
-        if (!$this->authService->validateToken($token)) {
-            ApiHelper::sendJsonResponse('error', 'Invalid token', ['errors' => (object)[]], 400);
-        }
-        $userData = $this->authService->getUserFromToken($token);
-        ApiHelper::sendJsonResponse('success', 'User details fetched', $userData, 200);
-    }
-
-    private function refreshToken()
-    {
-        // ...existing code...
-    }
-
-    private function updateSessionActivity()
-    {
-        $_SESSION['last_activity'] = time();
-    }
-
-    // Updated logging method with context details
-    private function logAuthAttempt($status, $message)
-    {
-        $context = ['ip' => $_SERVER['REMOTE_ADDR'], 'time' => date('Y-m-d H:i:s')];
-        $logMessage = sprintf("%s: %s", ucfirst($status), $message);
-        $this->authLogger->info($logMessage, $context);
+        $this->authService->logout();
+        $this->auditLogger->info("User logged out");
+        return ApiHelper::sendJsonResponse('success', 'User logged out', ['errors' => (object)[]], 200);
     }
 }
 === App/Controllers/SignatureController.php ===

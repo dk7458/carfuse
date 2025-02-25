@@ -2,82 +2,121 @@
 
 namespace App\Middleware;
 
+use App\Services\Auth\TokenService;
 use App\Helpers\ApiHelper;
-use App\Services\TokenService;
-use App\Helpers\ExceptionHandler;
 use Psr\Log\LoggerInterface;
+use Exception;
 
-/**
- * AuthMiddleware - Handles authentication and authorization for API requests.
- * Ensures valid JWT tokens and role-based access control.
- */
 class AuthMiddleware
 {
     private TokenService $tokenService;
-    private ExceptionHandler $exceptionHandler;
     private LoggerInterface $authLogger;
-    private LoggerInterface $securityLogger;
 
-    public function __construct(
-        TokenService $tokenService,
-        ExceptionHandler $exceptionHandler,
-        LoggerInterface $authLogger,
-        LoggerInterface $securityLogger
-    ) {
+    public function __construct(TokenService $tokenService, LoggerInterface $authLogger)
+    {
         $this->tokenService = $tokenService;
-        $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
-        $this->securityLogger = $securityLogger;
     }
 
     /**
-     * Handle authentication and authorization.
-     * 
-     * @param callable $next The next middleware function.
-     * @param array $roles Required roles (e.g., 'admin').
+     * Authenticate API requests using JWT token from Authorization header
+     *
+     * @param mixed $request The request object
+     * @param callable $next The next middleware handler
+     * @return mixed
      */
-    public function handle(callable $next, ...$roles)
+    public function authenticateToken($request, callable $next)
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
+        // Get authorization header
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+        
+        // Check for Bearer token
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            return ApiHelper::sendJsonResponse('error', 'Authorization token required', null, 401);
         }
-
+        
+        $token = $matches[1];
+        
         try {
-            // Retrieve and validate Authorization header
-            $headers = getallheaders();
-            if (!isset($headers['Authorization']) || !str_starts_with($headers['Authorization'], 'Bearer ')) {
-                $this->authLogger->warning("Unauthorized access: Missing Authorization header.");
-                ApiHelper::sendJsonResponse('error', 'Unauthorized', [], 401);
-            }
-
-            $token = substr($headers['Authorization'], 7);
-            $decoded = $this->tokenService->validateToken($token);
-            if (!$decoded) {
-                $this->authLogger->warning("Invalid token detected.");
-                ApiHelper::sendJsonResponse('error', 'Invalid token', [], 401);
-            }
-
-            // Store user details in session
-            $_SESSION['user_id'] = $decoded['sub'] ?? null;
-            $_SESSION['user_role'] = $decoded['role'] ?? 'guest';
+            // Validate the token
+            $tokenData = $this->tokenService->validateToken($token);
             
-            // Role-based access control
-            if (!empty($roles) && !in_array($_SESSION['user_role'], $roles)) {
-                $this->securityLogger->warning("Unauthorized role access attempt.", [
-                    'userId' => $_SESSION['user_id'],
-                    'requiredRoles' => $roles
-                ]);
-                ApiHelper::sendJsonResponse('error', 'Forbidden', [], 403);
+            if (!$tokenData) {
+                $this->authLogger->warning('Invalid token used for authentication');
+                return ApiHelper::sendJsonResponse('error', 'Invalid or expired token', null, 401);
             }
-
-            $this->authLogger->info("✅ User authenticated.", [
-                'userId' => $_SESSION['user_id'],
-                'role' => $_SESSION['user_role']
+            
+            // Attach user ID to request for later use in controllers
+            $request->userId = $tokenData['sub'] ?? null;
+            
+            if (!$request->userId) {
+                $this->authLogger->warning('Token missing user ID');
+                return ApiHelper::sendJsonResponse('error', 'Invalid token', null, 401);
+            }
+            
+            // Log successful authentication
+            $this->authLogger->info('User authenticated via token', [
+                'userId' => $request->userId,
+                'endpoint' => $_SERVER['REQUEST_URI']
             ]);
-
-            return $next();
-        } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
+            
+            // Continue to the next middleware or controller
+            return $next($request);
+            
+        } catch (Exception $e) {
+            $this->authLogger->error('Token authentication error', [
+                'error' => $e->getMessage()
+            ]);
+            return ApiHelper::sendJsonResponse('error', 'Authentication failed', null, 401);
         }
+    }
+
+    /**
+     * Check if the authenticated user has required role(s)
+     *
+     * @param mixed $request The request object
+     * @param callable $next The next middleware handler
+     * @param array|string $roles Required role(s)
+     * @return mixed
+     */
+    public function checkRole($request, callable $next, $roles)
+    {
+        // First ensure user is authenticated
+        $authResult = $this->authenticateToken($request, function($req) use ($roles, $next) {
+            // Get user roles from the token
+            $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+            if (preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                $token = $matches[1];
+                $tokenData = $this->tokenService->decodeToken($token);
+                
+                if (!$tokenData || !isset($tokenData['role'])) {
+                    return ApiHelper::sendJsonResponse('error', 'Invalid token or missing role', null, 401);
+                }
+                
+                $userRole = $tokenData['role'];
+                
+                // Convert roles to array if string
+                if (is_string($roles)) {
+                    $roles = [$roles];
+                }
+                
+                // Check if user has required role
+                if (in_array($userRole, $roles)) {
+                    // User has required role, continue
+                    return $next($req);
+                } else {
+                    $this->authLogger->warning('Unauthorized role access attempt', [
+                        'userId' => $req->userId,
+                        'userRole' => $userRole,
+                        'requiredRoles' => implode(',', $roles)
+                    ]);
+                    return ApiHelper::sendJsonResponse('error', 'Insufficient permissions', null, 403);
+                }
+            }
+            
+            return ApiHelper::sendJsonResponse('error', 'Authorization token required', null, 401);
+        });
+        
+        return $authResult;
     }
 }
