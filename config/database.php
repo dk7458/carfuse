@@ -13,7 +13,7 @@ return [
     'app_database' => [
         'driver'    => 'mysql',
         'host'      => 'localhost',
-        'database'  => 'sdifbhdsi',
+        'database'  => 'sdifb',
         'username'  => 'app_user',
         'password'  => 'app_password',
         'charset'   => 'utf8mb4',
