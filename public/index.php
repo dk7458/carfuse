@@ -16,10 +16,11 @@ $container = $bootstrap['container'];
 $requestUri = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 
-// Load routes (which may return a closure)
+// Load routes (which return a closure that expects 1 argument, the DI container)
 $routes = require __DIR__ . '/../config/routes.php';
 if (is_callable($routes)) {
-    $dispatcher = $routes(); // Invoke closure to get the dispatcher
+    // Pass the DI container to the closure
+    $dispatcher = $routes($container);
 } else {
     $dispatcher = $routes;
 }
