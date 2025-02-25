@@ -26,7 +26,7 @@ if (!is_readable($dotenvPath)) {
     exit("❌ ERROR: .env file is not readable. Check file permissions: {$dotenvPath}\n");
 }
 
-if (!getenv('DB_HOST')) {
+if (!$_ENV['DB_HOST']) {
     $logger->critical("❌ ERROR: .env file not loaded correctly. Check file permissions.");
     exit("❌ ERROR: .env file not loaded correctly. Check file permissions.\n");
 }
