@@ -9,8 +9,8 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 
 class AuthController extends Controller
 {
+    protected $logger; // Change visibility to protected
     private $authService;
-    private $logger;
 
     public function __construct(AuthService $authService)
     {
