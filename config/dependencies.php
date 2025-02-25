@@ -7,6 +7,8 @@ require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 
 use DI\Container;
 use Psr\Log\LoggerInterface;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ExceptionHandler;
 use App\Helpers\SecurityHelper;
@@ -162,7 +164,8 @@ $container->set(TokenService::class, fn() => new TokenService(
     $config['encryption']['jwt_secret'], // Pass the JWT secret from config
     $config['encryption']['jwt_refresh_secret'], // Pass the JWT refresh secret from config
     $container->get('auth_logger'),
-    $container->get(ExceptionHandler::class)
+    $container->get(ExceptionHandler::class),
+    $container->get(LoggerInterface::class) // Inject LoggerInterface
 ));
 $container->set(AuthService::class, fn() => new AuthService(
     $container->get(DatabaseHelper::class),  // Inject DatabaseHelper
