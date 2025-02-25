@@ -133,10 +133,3 @@ final class PharAutoloader
 }
 
 spl_autoload_register([PharAutoloader::class, 'loadClass']);
-
-// Load configuration and set up DI container
-$config = require __DIR__ . '/../config/encryption.php';
-$container = require __DIR__ . '/../config/dependencies.php';
-
-// Initialize dependencies
-$container->get(LoggerInterface::class)->info("Application bootstrap completed.");

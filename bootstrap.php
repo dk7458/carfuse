@@ -119,12 +119,6 @@ if (!empty($missingDependencies)) {
     $logger->info("🔄 All required dependencies are present.");
 }
 
-// Step 11: Secure Session Initialization Happens Last
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-    $logger->info("🔄 Session started successfully.");
-}
-
 // Final Step: Return Critical Configurations & DI Container
 $logger->info("✅ Bootstrap completed successfully.");
 return [
