@@ -10,8 +10,8 @@ use App\Helpers\DatabaseHelper;
 use App\Helpers\LoggingHelper;
 
 // Step 1: Initialize Logger First
-require_once __DIR__ . '/logger.php';
-$logger = getLogger('system');
+$loggingHelper = new LoggingHelper();
+$logger = $loggingHelper->getDefaultLogger();
 if (!$logger instanceof Monolog\Logger) {
     error_log("❌ [BOOTSTRAP] Logger initialization failed. Using fallback logger.");
     $logger = new Monolog\Logger('fallback');
@@ -60,7 +60,7 @@ try {
     if (!$container instanceof \DI\Container) {
         throw new Exception("DI container initialization failed.");
     }
-    $container->get(LoggingHelper::class)->getLogger('dependencies')->info("✅ Bootstrap: DI container initialized and validated.");
+    $container->get(LoggingHelper::class)->getLoggerByCategory('dependencies')->info("✅ Bootstrap: DI container initialized and validated.");
     $logger->info("🔄 Dependencies initialized successfully.");
 } catch (Exception $e) {
     $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());
@@ -68,7 +68,7 @@ try {
 }
 
 // Step 5: Register Logger in DI Container Before Other Services
-$container->set(\Psr\Log\LoggerInterface::class, fn() => getLogger('system'));
+$container->set(\Psr\Log\LoggerInterface::class, fn() => $loggingHelper->getDefaultLogger());
 
 // Step 6: Load Security Helper and Other Critical Services
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
@@ -78,7 +78,7 @@ $logger->info("🔄 Security helper and other critical services loaded.");
 
 // Step 7: Load Database Instances
 try {
-    DatabaseHelper::setLogger($container->get(LoggingHelper::class)->getLogger('db'));
+    DatabaseHelper::setLogger($container->get(LoggingHelper::class)->getLoggerByCategory('db'));
     $database = DatabaseHelper::getInstance($config['database']['app_database']);
     $secure_database = DatabaseHelper::getSecureInstance($config['database']['secure_database']);
     $logger->info("🔄 Database instances loaded successfully.");
@@ -93,9 +93,9 @@ try {
     if (!$pdo) {
         throw new Exception("❌ Database connection failed.");
     }
-    $container->get(LoggingHelper::class)->getLogger('db')->info("✅ Database connection verified successfully.");
+    $container->get(LoggingHelper::class)->getLoggerByCategory('db')->info("✅ Database connection verified successfully.");
 } catch (Exception $e) {
-    $container->get(LoggingHelper::class)->getLogger('db')->critical("❌ Database connection verification failed: " . $e->getMessage());
+    $container->get(LoggingHelper::class)->getLoggerByCategory('db')->critical("❌ Database connection verification failed: " . $e->getMessage());
     exit("❌ Database connection issue: " . $e->getMessage() . "\n");
 }
 
