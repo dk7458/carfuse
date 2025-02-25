@@ -4,7 +4,7 @@ require_once __DIR__ . '/App/Helpers/ExceptionHandler.php';
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/App/Helpers/DatabaseHelper.php';
 require_once __DIR__ . '/App/Helpers/LoggingHelper.php'; // Ensure LoggingHelper is included
-require_once __DIR__ . '/config/logger.php'; // Ensure the global getLogger function is included
+require_once __DIR__ . '/logger.php'; // Ensure the global getLogger function is included
 use Dotenv\Dotenv;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\LoggingHelper;
