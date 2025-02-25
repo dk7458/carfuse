@@ -33,9 +33,6 @@ if (!$_ENV['DB_HOST']) {
 }
 $logger->info("🔄 Environment variables loaded from {$dotenvPath}");
 
-// Initialize configuration
-$config = require __DIR__ . '/config/config.php';
-
 // Initialize DI container
 $container = new \DI\Container();
 
