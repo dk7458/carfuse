@@ -4,6 +4,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/ExceptionHandler.php';
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
+
 use DI\Container;
 use Psr\Log\LoggerInterface;
 use App\Helpers\DatabaseHelper;
@@ -60,7 +61,6 @@ $container->set(ExceptionHandler::class, fn($c) => new ExceptionHandler(
 ));
 
 // Add helper registrations immediately after logger registration.
-
 $container->set(SecurityHelper::class, fn() => new SecurityHelper());
 
 // Step 2: Load configuration files.

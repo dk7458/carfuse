@@ -33,7 +33,7 @@ if (!$_ENV['DB_HOST']) {
 $logger->info("🔄 Environment variables loaded from {$dotenvPath}");
 
 // Step 3: Load Configuration Files
-$configFiles = ['database', 'encryption', 'app'];
+$configFiles = ['database', 'encryption', 'app', 'filestorage'];
 $config = [];
 foreach ($configFiles as $file) {
     $path = __DIR__ . "/config/{$file}.php";
@@ -64,7 +64,9 @@ $container->set(\Psr\Log\LoggerInterface::class, fn() => getLogger('system'));
 
 // Step 6: Load Security Helper and Other Critical Services
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
-$logger->info("🔄 Security helper loaded.");
+require_once __DIR__ . '/App/Helpers/DatabaseHelper.php';
+require_once __DIR__ . '/App/Helpers/ExceptionHandler.php';
+$logger->info("🔄 Security helper and other critical services loaded.");
 
 // Step 7: Load Database Instances
 try {
