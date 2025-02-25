@@ -2,37 +2,27 @@
 
 namespace App\Services;
 
-use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
+use App\Services\AuthService;
 
 class PaymentService
 {
-    public const DEBUG_MODE = true;
     private LoggerInterface $logger;
-    private $db;
     private ExceptionHandler $exceptionHandler;
+    private AuthService $authService;
 
-    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, AuthService $authService)
     {
         $this->logger = $logger;
-        $this->db = $db;
         $this->exceptionHandler = $exceptionHandler;
+        $this->authService = $authService;
     }
 
-    public function processPayment($user, array $paymentData)
+    public function processPayment(array $paymentData): array
     {
-        if (empty($user) || empty($user['authenticated']) || !$user['authenticated']) {
-            $this->logger->error("[PaymentService] Unauthenticated payment attempt", ['category' => 'auth']);
-            return ['status' => 'error', 'message' => 'User not authenticated'];
-        }
-
-        if (!empty($paymentData['adminOnly']) && $paymentData['adminOnly'] === true && $user['role'] !== 'admin') {
-            $this->logger->error("[PaymentService] Unauthorized admin transaction", ['category' => 'auth']);
-            return ['status' => 'error', 'message' => 'Admin privileges required'];
-        }
-
         try {
+            $userId = $this->authService->getUserIdFromToken($paymentData['token']);
             $this->db->transaction(function () use ($paymentData) {
                 // Insert payment record
                 $this->db->table('payments')->insert([
@@ -68,9 +58,9 @@ class PaymentService
             }
             return ['status' => 'success', 'message' => 'Payment processed successfully'];
         } catch (\Exception $e) {
-            $this->logger->error("[db] Database error: " . $e->getMessage(), ['category' => 'db']);
+            $this->logger->error("[Payment] ❌ Processing payment failed: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            return ['status' => 'error', 'message' => 'Payment processing failed'];
+            return ['status' => 'error', 'message' => 'Failed to process payment'];
         }
     }
 

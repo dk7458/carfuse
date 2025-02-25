@@ -30,26 +30,20 @@ class Validator
     /**
      * Validate data against rules.
      */
-    public function validate(array $data, array $rules): bool
+    public function validate(array $data, array $rules): array
     {
-        $this->errors = [];
-        foreach ($rules as $field => $ruleSet) {
-            $rulesArray = explode('|', $ruleSet);
-            foreach ($rulesArray as $rule) {
-                $this->applyRule($field, $data[$field] ?? null, $rule, $data);
-            }
+        // Standardize validation logic to support JSON input
+        $validator = \Validator::make($data, $rules);
+
+        if ($validator->fails()) {
+            // Format validation errors
+            return [
+                'success' => false,
+                'errors' => $validator->errors()->all()
+            ];
         }
 
-        if (!empty($this->errors)) {
-            if (self::DEBUG_MODE) {
-                $this->logger->warning("[Validation] Validation failed", ['errors' => $this->errors]);
-            }
-
-            // **Throw an exception to prevent further execution**
-            throw new \InvalidArgumentException(json_encode(['errors' => $this->errors]));
-        }
-
-        return true;
+        return ['success' => true];
     }
 
     /**

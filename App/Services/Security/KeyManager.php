@@ -5,6 +5,7 @@ namespace App\Services\Security;
 use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
+use Illuminate\Support\Facades\Log;
 
 class KeyManager
 {
@@ -32,25 +33,45 @@ class KeyManager
         return $this->keys[$keyName];
     }
 
+    public function loadKey(string $keyName): string
+    {
+        try {
+            $key = config("keys.$keyName");
+            if (!$key) {
+                throw new \RuntimeException("Key not found: $keyName");
+            }
+            return $key;
+        } catch (\Exception $e) {
+            Log::error("Key loading failed: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    public function storeKey(string $keyName, string $key): bool
+    {
+        try {
+            config(["keys.$keyName" => $key]);
+            return true;
+        } catch (\Exception $e) {
+            Log::error("Key storage failed: " . $e->getMessage());
+            return false;
+        }
+    }
+
     public function generateKey(): string
     {
         return base64_encode(random_bytes(32)); // AES-256 key
     }
 
-    public function storeKey(string $identifier, string $key): void
+    public function rotateKey(string $keyName): bool
     {
-        if (self::DEBUG_MODE) {
-            $this->logger->info("[security] Storing key for {$identifier}");
+        try {
+            $newKey = bin2hex(random_bytes(32));
+            return $this->storeKey($keyName, $newKey);
+        } catch (\Exception $e) {
+            Log::error("Key rotation failed: " . $e->getMessage());
+            return false;
         }
-        $this->logger->info("[security] ✅ Storing key for {$identifier}", ['identifier' => $identifier]);
-        // Implementation for storing key securely (e.g., database, key vault)
-    }
-
-    public function rotateKey(string $identifier): void
-    {
-        $newKey = $this->generateKey();
-        $this->storeKey($identifier, $newKey);
-        $this->logger->info("[security] ✅ Rotated key for {$identifier}", ['identifier' => $identifier]);
     }
 
     public function revokeKey(string $identifier): void

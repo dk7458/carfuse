@@ -2,28 +2,27 @@
 
 namespace App\Services;
 
-use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
-use Exception;
+use App\Services\AuthService;
 
 class MetricsService
 {
-    public const DEBUG_MODE = true;
-    private $db;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
+    private AuthService $authService;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, AuthService $authService)
     {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
-        $this->db = $db;
+        $this->authService = $authService;
     }
 
-    public function getDashboardMetrics(): array
+    public function getMetrics(string $token): array
     {
         try {
+            $userId = $this->authService->getUserIdFromToken($token);
             $totalUsers        = $this->db->table('users')->count();
             $activeUsers       = $this->db->table('users')->where('active', true)->count();
             $totalBookings     = $this->db->table('bookings')->count();
@@ -48,11 +47,11 @@ class MetricsService
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Metrics] Dashboard metrics retrieved successfully");
             }
-            return $metrics;
-        } catch (Exception $e) {
-            $this->logger->error("[DB] ❌ MetricsService error: " . $e->getMessage());
+            return ['status' => 'success', 'data' => $metrics];
+        } catch (\Exception $e) {
+            $this->logger->error("[Metrics] ❌ Fetching metrics failed: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            return [];
+            return ['status' => 'error', 'message' => 'Failed to fetch metrics'];
         }
     }
 }

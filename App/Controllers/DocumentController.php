@@ -10,6 +10,7 @@ use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
 use App\Models\DocumentTemplate;
 use App\Models\AuditLog;
+use App\Services\TokenService;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -160,5 +161,18 @@ class DocumentController extends Controller
             $this->logger->error('Failed to delete document: ' . $e->getMessage());
             return ['status' => 'error', 'message' => 'Failed to delete document'];
         }
+    }
+
+    public function uploadDocument()
+    {
+        $user = TokenService::getUserFromToken(request()->bearerToken());
+
+        if (!$user) {
+            return $this->jsonResponse(['error' => 'Unauthorized'], 401);
+        }
+
+        // ...existing code...
+
+        return $this->jsonResponse(['success' => true, 'message' => 'Document uploaded successfully']);
     }
 }
