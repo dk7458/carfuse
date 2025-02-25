@@ -1,25 +1,28 @@
 <?php
 
 require_once __DIR__ . '/../../../vendor/autoload.php';
-use DI\Container;
 use App\Controllers\AuthController;
 
-// ✅ Set Headers
+// Get DI container
+$container = require_once __DIR__ . '/../../../config/dependencies.php';
+
+// Set Headers
 header('Content-Type: application/json');
 
-// ✅ Check for POST Request
+// Check for POST Request
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     echo json_encode(["error" => "Method Not Allowed"]);
     exit;
 }
 
-// ✅ Retrieve JSON Input
-$data = json_decode(file_get_contents("php://input"), true);
-file_put_contents(__DIR__ . '/../../../logs/debug.log', "[REGISTER] Raw JSON Input: " . file_get_contents("php://input") . "\n", FILE_APPEND);
+// Retrieve JSON Input
+$input = file_get_contents("php://input");
+// Log raw input for debugging if needed
+file_put_contents(__DIR__ . '/../../../logs/debug.log', "[REGISTER] Raw JSON Input: " . $input . "\n", FILE_APPEND);
 
-// ✅ Initialize AuthController
+// Initialize AuthController from container
 $authController = $container->get(AuthController::class);
 
-// ✅ Process Registration
-$authController->register($data);
+// Process Registration - will return JSON response
+$authController->register();
