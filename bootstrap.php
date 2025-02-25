@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/vendor/autoload.php';
+use Dotenv\Dotenv;
 use App\Helpers\DatabaseHelper;
+use App\Helpers\LoggingHelper;
 
 // Step 1: Initialize Logger First
 require_once __DIR__ . '/logger.php';
@@ -12,17 +14,16 @@ if (!$logger instanceof Monolog\Logger) {
 $logger->info("🔄 Logger initialized successfully.");
 
 // Step 2: Load Environment Variables
-use Dotenv\Dotenv;
 $dotenvPath = __DIR__;
 $dotenv = Dotenv::createImmutable($dotenvPath);
 $dotenv->load();
 
 // Debugging: Check if .env file exists and is readable
-if (!file_exists($dotenvPath)) {
+if (!file_exists($dotenvPath . '/.env')) {
     $logger->critical("❌ ERROR: .env file does not exist at path: {$dotenvPath}");
     exit("❌ ERROR: .env file does not exist at path: {$dotenvPath}\n");
 }
-if (!is_readable($dotenvPath)) {
+if (!is_readable($dotenvPath . '/.env')) {
     $logger->critical("❌ ERROR: .env file is not readable. Check file permissions: {$dotenvPath}");
     exit("❌ ERROR: .env file is not readable. Check file permissions: {$dotenvPath}\n");
 }
@@ -32,19 +33,6 @@ if (!$_ENV['DB_HOST']) {
     exit("❌ ERROR: .env file not loaded correctly. Check file permissions.\n");
 }
 $logger->info("🔄 Environment variables loaded from {$dotenvPath}");
-
-// Initialize DI container
-$container = new \DI\Container();
-
-// Initialize in-house logging
-$logger = new \App\Logging\Logger();
-$container->set('Logger', $logger);
-
-// Register LoggingHelper in the DI container
-use App\Helpers\LoggingHelper;
-$container->set('LoggingHelper', function() {
-    return new LoggingHelper();
-});
 
 // Step 3: Load Configuration Files
 $configFiles = ['database', 'encryption', 'app', 'filestorage'];
@@ -59,14 +47,15 @@ foreach ($configFiles as $file) {
     $logger->info("🔄 Configuration file loaded: {$file}.php");
 }
 
-// Step 4: Initialize Dependency Injection Container (Load Once)
+// Step 4: Initialize Dependency Injection Container
 try {
+    $container = new \DI\Container();
     $diDependencies = require_once __DIR__ . '/config/dependencies.php';
     $container = $diDependencies['container'];
     if (!$container instanceof \DI\Container) {
         throw new Exception("DI container initialization failed.");
     }
-    $container->get('dependencies_logger')->info("✅ Bootstrap: DI container initialized and validated.");
+    $container->get(LoggingHelper::class)->getLogger('dependencies')->info("✅ Bootstrap: DI container initialized and validated.");
     $logger->info("🔄 Dependencies initialized successfully.");
 } catch (Exception $e) {
     $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());
@@ -84,7 +73,7 @@ $logger->info("🔄 Security helper and other critical services loaded.");
 
 // Step 7: Load Database Instances
 try {
-    DatabaseHelper::setLogger($container->get('db_logger'));
+    DatabaseHelper::setLogger($container->get(LoggingHelper::class)->getLogger('db'));
     $database = DatabaseHelper::getInstance($config['database']['app_database']);
     $secure_database = DatabaseHelper::getSecureInstance($config['database']['secure_database']);
     $logger->info("🔄 Database instances loaded successfully.");
@@ -99,9 +88,9 @@ try {
     if (!$pdo) {
         throw new Exception("❌ Database connection failed.");
     }
-    $container->get('db_logger')->info("✅ Database connection verified successfully.");
+    $container->get(LoggingHelper::class)->getLogger('db')->info("✅ Database connection verified successfully.");
 } catch (Exception $e) {
-    $container->get('db_logger')->critical("❌ Database connection verification failed: " . $e->getMessage());
+    $container->get(LoggingHelper::class)->getLogger('db')->critical("❌ Database connection verification failed: " . $e->getMessage());
     exit("❌ Database connection issue: " . $e->getMessage() . "\n");
 }
 
@@ -143,4 +132,3 @@ return [
     'encryptionService' => $container->get(\App\Services\EncryptionService::class),
     'config'            => $config, // Pass the configuration array
 ];
-
