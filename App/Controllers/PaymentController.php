@@ -7,14 +7,13 @@ use App\Models\RefundLog;
 use App\Models\TransactionLog;
 use App\Models\InstallmentPlan;
 use Illuminate\Support\Facades\Auth;
-use App\Services\TokenService;
 
 /**
  * Payment Controller
  *
  * Handles payment processing, refunds, installment payments, and user transactions.
  */
-class PaymentController extends BaseController
+class PaymentController extends Controller
 {
     private PaymentService $paymentService;
     private Validator $validator;
@@ -44,13 +43,6 @@ class PaymentController extends BaseController
      */
     public function processPayment(): void
     {
-        $user = TokenService::getUserFromToken(request()->bearerToken());
-
-        if (!$user) {
-            $this->jsonResponse(['error' => 'Unauthorized'], 401);
-            return;
-        }
-
         $data = $this->validateRequest($_POST, [
             'user_id'          => 'required|integer',
             'booking_id'       => 'required|integer',

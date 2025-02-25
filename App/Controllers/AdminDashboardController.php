@@ -8,11 +8,10 @@ use App\Models\Payment;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Psr\Log\LoggerInterface;
-use App\Services\TokenService;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
-class AdminDashboardController extends BaseController
+class AdminDashboardController
 {
     private LoggerInterface $logger;
 
@@ -23,12 +22,6 @@ class AdminDashboardController extends BaseController
 
     public function index(): void
     {
-        $admin = TokenService::getUserFromToken(request()->bearerToken());
-
-        if (!$admin) {
-            return $this->jsonResponse(['error' => 'Unauthorized'], 401);
-        }
-
         try {
             $metrics = Cache::remember('dashboard_metrics', 60, function () {
                 $totalRevenue = Payment::where('status', 'completed')->sum('amount');
@@ -57,12 +50,7 @@ class AdminDashboardController extends BaseController
 
     public function getDashboardData(): void
     {
-        $admin = TokenService::getUserFromToken(request()->bearerToken());
-
-        if (!$admin) {
-            return $this->jsonResponse(['error' => 'Unauthorized'], 401);
-        }
-
+        requireAuth(); // ensure admin authentication is in place
         try {
             $metrics = Cache::remember('dashboard_metrics', 60, function () {
                 $totalRevenue = Payment::where('status', 'completed')->sum('amount');

@@ -9,8 +9,6 @@ use App\Models\User;
 use Dompdf\Dompdf;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
-use App\Services\AuthService;
-use Illuminate\Support\Facades\Log;
 
 class ReportService
 {
@@ -18,43 +16,25 @@ class ReportService
     private DatabaseHelper $db;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
-    private AuthService $authService;
 
-    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler, AuthService $authService)
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
         $this->logger = $logger;
         $this->db = $db;
         $this->exceptionHandler = $exceptionHandler;
-        $this->authService = $authService;
     }    
 
-    public function generateReport(array $parameters): array
+    public function generateReport(string $reportType, array $dateRange, string $format, array $filters = []): string
     {
-        try {
-            $user = $this->authService->getUserFromToken();
-            $reportType = $parameters['reportType'];
-            $dateRange = $parameters['dateRange'];
-            $format = $parameters['format'];
-            $filters = $parameters['filters'] ?? [];
-            $data = match ($reportType) {
-                'bookings' => $this->getBookingReportData($dateRange, $filters),
-                'payments' => $this->getPaymentReportData($dateRange, $filters),
-                'users'    => $this->getUserReportData($dateRange, $filters),
-                default    => throw new \InvalidArgumentException("Invalid report type: $reportType"),
-            };
-            $reportData = $this->exportReport($data, "{$reportType}_" . date('YmdHis'), $format);
-            return [
-                'status' => 'success',
-                'data' => $reportData
-            ];
-        } catch (\Exception $e) {
-            Log::error("Report generation failed: " . $e->getMessage());
-            return [
-                'status' => 'error',
-                'message' => 'Report generation failed',
-                'error' => $e->getMessage()
-            ];
-        }
+        $start = $dateRange['start'];
+        $end   = $dateRange['end'];
+        $data = match ($reportType) {
+            'bookings' => $this->getBookingReportData($dateRange, $filters),
+            'payments' => $this->getPaymentReportData($dateRange, $filters),
+            'users'    => $this->getUserReportData($dateRange, $filters),
+            default    => throw new \InvalidArgumentException("Invalid report type: $reportType"),
+        };
+        return $this->exportReport($data, "{$reportType}_" . date('YmdHis'), $format);
     }
 
     public function generateUserReport(int $userId, string $reportType, array $dateRange, string $format): string

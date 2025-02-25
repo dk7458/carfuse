@@ -7,7 +7,6 @@ use Psr\Log\LoggerInterface;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 use App\Helpers\ExceptionHandler; // assume this exists
-use App\Services\AuthService;
 
 /**
  * NotificationService
@@ -21,31 +20,27 @@ class NotificationService
     private ExceptionHandler $exceptionHandler;
     private array $config;
     private DatabaseHelper $db;
-    private AuthService $authService;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db, AuthService $authService, array $config)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db, array $config)
     {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
         $this->db = $db;
-        $this->authService = $authService;
         $this->config = $config;
     }
 
     /**
      * Send a notification
      */
-    public function sendNotification(array $notificationData): array
+    public function sendNotification(int $userId, string $type, string $message, array $options = []): bool
     {
         try {
-            $userId = $this->authService->getUserIdFromToken($notificationData['token']);
-            $this->storeNotification($userId, $notificationData['type'], $notificationData['message']);
-            $this->dispatchNotification($userId, $notificationData['type'], $notificationData['message'], $notificationData['options']);
-            return ['status' => 'success', 'message' => 'Notification sent successfully'];
+            $this->storeNotification($userId, $type, $message);
+            return $this->dispatchNotification($userId, $type, $message, $options);
         } catch (\Exception $e) {
-            $this->logger->error("[Notification] ❌ Sending notification failed: " . $e->getMessage());
+            $this->logger->error("[Notification] ❌ Notification failed: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            return ['status' => 'error', 'message' => 'Failed to send notification'];
+            return false;
         }
     }
 

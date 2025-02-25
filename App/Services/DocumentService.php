@@ -10,8 +10,6 @@ use DocumentManager\Services\TemplateService;
 use App\Services\EncryptionService;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
-use App\Services\AuthService;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Document Service
@@ -29,7 +27,6 @@ class DocumentService
     private FileStorage $fileStorage;
     private EncryptionService $encryptionService;
     private TemplateService $templateService;
-    private AuthService $authService;
 
     public function __construct(
         AuditService $auditService,
@@ -37,8 +34,7 @@ class DocumentService
         EncryptionService $encryptionService,
         TemplateService $templateService,
         LoggerInterface $logger,
-        ExceptionHandler $exceptionHandler,
-        AuthService $authService
+        ExceptionHandler $exceptionHandler
     ) {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
@@ -47,7 +43,6 @@ class DocumentService
         $this->fileStorage = $fileStorage;
         $this->encryptionService = $encryptionService;
         $this->templateService = $templateService;
-        $this->authService = $authService;
     }
 
     /**
@@ -214,32 +209,5 @@ class DocumentService
     {
         $this->logger->error($message, ['error' => $e->getMessage(), 'category' => 'document']);
         throw new Exception($message . " " . $e->getMessage());
-    }
-
-    /**
-     * Process document with token-based auth and standardized responses.
-     */
-    public function processDocument(string $documentPath): array
-    {
-        try {
-            $user = $this->authService->getUserFromToken();
-            $processedData = $this->process($documentPath, $user);
-            return [
-                'status' => 'success',
-                'data' => $processedData
-            ];
-        } catch (Exception $e) {
-            Log::error("Document processing failed: " . $e->getMessage());
-            return [
-                'status' => 'error',
-                'message' => 'Document processing failed',
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    private function process(string $documentPath, $user)
-    {
-        // ...existing code...
     }
 }

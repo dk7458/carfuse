@@ -9,7 +9,6 @@ use Exception;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ApiHelper;
 use App\Helpers\ExceptionHandler;
-use App\Services\AuthService;
 
 class UserService
 {
@@ -19,20 +18,17 @@ class UserService
     private LoggerInterface $authLogger;
     private LoggerInterface $auditLogger;
     private ExceptionHandler $exceptionHandler;
-    private AuthService $authService;
 
     public function __construct(
         DatabaseHelper $db,
         LoggerInterface $authLogger,
         LoggerInterface $auditLogger,
-        ExceptionHandler $exceptionHandler,
-        AuthService $authService
+        ExceptionHandler $exceptionHandler
     ) {
         $this->db = $db;
         $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
         $this->exceptionHandler = $exceptionHandler;
-        $this->authService = $authService;
         if (self::DEBUG_MODE) {
             $this->authLogger->info("[auth] UserService initialized", ['service' => 'UserService']);
         }
@@ -142,19 +138,6 @@ class UserService
         } catch (Exception $e) {
             $this->exceptionHandler->handleException($e);
             return ApiHelper::sendJsonResponse('error', 'Password reset request error', [], 500);
-        }
-    }
-
-    public function getUserDetails(string $token): array
-    {
-        try {
-            $userId = $this->authService->getUserIdFromToken($token);
-            $userDetails = $this->db->table('users')->where('id', $userId)->first();
-            return ['status' => 'success', 'data' => $userDetails];
-        } catch (Exception $e) {
-            $this->authLogger->error("[User] ❌ Fetching user details failed: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
-            return ['status' => 'error', 'message' => 'Failed to fetch user details'];
         }
     }
 

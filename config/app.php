@@ -16,6 +16,4 @@ if (file_exists($dotenvPath . '.env')) {
 return [
     'environment' => getenv('APP_ENV') ?: 'production',
     'debug'       => getenv('APP_DEBUG') === 'true',
-    'env' => env('APP_ENV', 'production'),
-    'debug' => (bool) env('APP_DEBUG', false),
 ];

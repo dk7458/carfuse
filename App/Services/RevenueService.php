@@ -7,9 +7,6 @@ use App\Models\Payment;
 use App\Models\TransactionLog;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
-use App\Services\AuthService;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class RevenueService
 {
@@ -17,15 +14,13 @@ class RevenueService
     private $db;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
-    private AuthService $authService;
 
     // Assume dependency injection now supplies the logger.
-    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler, AuthService $authService)
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
         $this->logger = $logger;
         $this->db = $db;
         $this->exceptionHandler = $exceptionHandler;
-        $this->authService = $authService;
     }
 
     public function getMonthlyRevenueTrends(): array
@@ -43,24 +38,17 @@ class RevenueService
                 $this->logger->info("[db] Retrieved monthly revenue trends", ['category' => 'revenue']);
             }
             return [
-                'status' => 'success',
-                'data' => [
-                    'labels' => $labels,
-                    'data'   => $amounts,
-                ]
+                'labels' => $labels,
+                'data'   => $amounts,
             ];
         } catch (\Exception $e) {
             $this->logger->error("[db] Database error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            return [
-                'status' => 'error',
-                'message' => 'Failed to retrieve monthly revenue trends',
-                'error' => $e->getMessage()
-            ];
+            throw $e;
         }
     }
 
-    public function getTotalRevenue(): array
+    public function getTotalRevenue(): float
     {
         try {
             $total = $this->db->table('transaction_logs')
@@ -69,22 +57,15 @@ class RevenueService
             if (self::DEBUG_MODE) {
                 $this->logger->info("[db] Retrieved total revenue", ['category' => 'revenue']);
             }
-            return [
-                'status' => 'success',
-                'data' => (float) $total
-            ];
+            return (float) $total;
         } catch (\Exception $e) {
             $this->logger->error("[db] Database error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            return [
-                'status' => 'error',
-                'message' => 'Failed to retrieve total revenue',
-                'error' => $e->getMessage()
-            ];
+            throw $e;
         }
     }
 
-    public function getTotalRefunds(): array
+    public function getTotalRefunds(): float
     {
         try {
             $total = $this->db->table('transaction_logs')
@@ -93,61 +74,16 @@ class RevenueService
             if (self::DEBUG_MODE) {
                 $this->logger->info("[db] Retrieved total refunds", ['category' => 'revenue']);
             }
-            return [
-                'status' => 'success',
-                'data' => (float) $total
-            ];
+            return (float) $total;
         } catch (\Exception $e) {
             $this->logger->error("[db] Database error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            return [
-                'status' => 'error',
-                'message' => 'Failed to retrieve total refunds',
-                'error' => $e->getMessage()
-            ];
+            throw $e;
         }
     }
 
-    public function getNetRevenue(): array
+    public function getNetRevenue(): float
     {
-        try {
-            $netRevenue = $this->getTotalRevenue()['data'] - $this->getTotalRefunds()['data'];
-            return [
-                'status' => 'success',
-                'data' => (float) $netRevenue
-            ];
-        } catch (\Exception $e) {
-            $this->logger->error("[db] Database error: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
-            return [
-                'status' => 'error',
-                'message' => 'Failed to calculate net revenue',
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    public function calculateRevenue(array $parameters): array
-    {
-        try {
-            $user = $this->authService->getUserFromToken();
-            $revenueData = $this->computeRevenueData($parameters, $user);
-            return [
-                'status' => 'success',
-                'data' => $revenueData
-            ];
-        } catch (\Exception $e) {
-            Log::error("Revenue calculation failed: " . $e->getMessage());
-            return [
-                'status' => 'error',
-                'message' => 'Revenue calculation failed',
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    private function computeRevenueData(array $parameters, $user)
-    {
-        // ...existing code...
+        return $this->getTotalRevenue() - $this->getTotalRefunds();
     }
 }

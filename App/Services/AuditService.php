@@ -7,8 +7,6 @@ use Exception;
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
-use App\Services\AuthService;
-use Illuminate\Support\Facades\Log;
 
 class AuditService
 {
@@ -16,51 +14,40 @@ class AuditService
     private $db;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
-    private AuthService $authService;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db, AuthService $authService)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
     {
         $this->db = $db;
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
-        $this->authService = $authService;
     }
 
-    public function logEvent(string $event, array $details): array
-    {
-        try {
-            $user = $this->authService->getUserFromToken();
-            $this->saveAuditLog($event, $details, $user);
-            return [
-                'status' => 'success',
-                'message' => 'Event logged successfully'
-            ];
-        } catch (\Exception $e) {
-            Log::error("Audit logging failed: " . $e->getMessage());
-            return [
-                'status' => 'error',
-                'message' => 'Audit logging failed',
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    private function saveAuditLog(string $event, array $details, $user)
-    {
+    /**
+     * Log an action using AuditLog Eloquent model.
+     */
+    public function log(
+        string $action,
+        array $details = [],
+        ?int $userId = null,
+        ?int $bookingId = null,
+        ?string $ipAddress = null
+    ): void {
         try {
             $this->db->table('audit_logs')->insert([
-                'event'      => $event,
+                'action'     => $action,
                 'details'    => json_encode($details, JSON_UNESCAPED_UNICODE),
-                'user_id'    => $user->id,
+                'user_id'    => $userId,
+                'booking_id' => $bookingId,
+                'ip_address' => $ipAddress,
                 'created_at' => now()
             ]);
             if (self::DEBUG_MODE) {
-                $this->logger->info("[Audit] Logged event: {$event}");
+                $this->logger->info("[Audit] Logged action: {$action}");
             }
         } catch (Exception $e) {
-            $this->logger->error("[Audit] ❌ saveAuditLog error: " . $e->getMessage());
+            $this->logger->error("[Audit] ❌ log error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            throw new Exception('Failed to save audit log: ' . $e->getMessage());
+            throw new Exception('Failed to log action: ' . $e->getMessage());
         }
     }
 

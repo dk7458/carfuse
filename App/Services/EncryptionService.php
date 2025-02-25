@@ -25,11 +25,7 @@ class EncryptionService
     public function encrypt(string $data): string
     {
         try {
-            // Confirm secure encryption key and cipher settings
-            $key = config('encryption.key');
-            $cipher = config('encryption.cipher', 'AES-256-CBC');
-
-            return openssl_encrypt($data, $cipher, $key, 0, $this->getIv());
+            return Crypt::encryptString($data);
         } catch (\Exception $e) {
             $this->logger->error("[Encryption] ❌ Encryption failed: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
@@ -40,22 +36,12 @@ class EncryptionService
     public function decrypt(string $encryptedData): ?string
     {
         try {
-            // Confirm secure encryption key and cipher settings
-            $key = config('encryption.key');
-            $cipher = config('encryption.cipher', 'AES-256-CBC');
-
-            return openssl_decrypt($encryptedData, $cipher, $key, 0, $this->getIv());
+            return Crypt::decryptString($encryptedData);
         } catch (\Exception $e) {
             $this->logger->error("[Encryption] ❌ Decryption failed: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             return null;
         }
-    }
-
-    private function getIv()
-    {
-        // Generate an initialization vector
-        return substr(hash('sha256', config('encryption.iv')), 0, 16);
     }
 
     public function encryptFile(string $inputFile, string $outputFile): bool

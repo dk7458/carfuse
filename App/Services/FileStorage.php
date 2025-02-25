@@ -29,7 +29,7 @@ class FileStorage
         }
     }
 
-    public function storeFile(string $directory, string $fileName, string $content, bool $encrypt = false): array
+    public function storeFile(string $directory, string $fileName, string $content, bool $encrypt = false): string
     {
         $safeDirectory = $this->getDirectoryPath($directory);
         $safeFileName = $this->sanitizeFileName($fileName);
@@ -49,15 +49,15 @@ class FileStorage
                 $this->logger->info("[FileStorage] File stored: {$fileName}");
             }
 
-            return ['success' => true, 'message' => 'File stored successfully'];
+            return $filePath;
         } catch (\Exception $e) {
             $this->logger->error("[FileStorage] ❌ Failed to store file: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            return ['success' => false, 'error' => 'File storage failed'];
+            throw $e;
         }
     }
 
-    public function retrieveFile(string $filePath, bool $decrypt = false): array
+    public function retrieveFile(string $filePath, bool $decrypt = false): string
     {
         try {
             if (!file_exists($filePath) || !is_readable($filePath)) {
@@ -79,15 +79,15 @@ class FileStorage
             if (self::DEBUG_MODE) {
                 $this->logger->info("[FileStorage] File retrieved: {$filePath}");
             }
-            return ['success' => true, 'content' => $content];
+            return $content;
         } catch (\Exception $e) {
             $this->logger->error("[FileStorage] ❌ Failed to retrieve file: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            return ['success' => false, 'error' => 'File retrieval failed'];
+            throw $e;
         }
     }
 
-    public function deleteFile(string $filePath): array
+    public function deleteFile(string $filePath): void
     {
         try {
             if (!file_exists($filePath)) {
@@ -101,11 +101,10 @@ class FileStorage
             if (self::DEBUG_MODE) {
                 $this->logger->info("[FileStorage] File deleted: {$filePath}");
             }
-            return ['success' => true, 'message' => 'File deleted successfully'];
         } catch (\Exception $e) {
             $this->logger->error("[FileStorage] ❌ Failed to delete file: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            return ['success' => false, 'error' => 'File deletion failed'];
+            throw $e;
         }
     }
 

@@ -8,7 +8,6 @@ use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Psr\Log\LoggerInterface;
-use App\Services\TokenService;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -40,12 +39,9 @@ class DashboardController extends Controller
     public function userDashboard()
     {
         try {
-            $user = TokenService::getUserFromToken(request()->bearerToken());
-
-            if (!$user) {
-                return $this->jsonResponse(['error' => 'Unauthorized'], 401);
-            }
-
+            // Assume session_start() is already called.
+            $user = (object)['id' => $_SESSION['user_id'] ?? null]; // Replace with native session retrieval
+            // ...existing code for eager loading if needed...
             $statistics = Cache::remember('user_dashboard_' . $user->id, 60, function () use ($user) {
                 return [
                     'total_bookings'     => Booking::where('user_id', $user->id)->count(),
@@ -53,10 +49,10 @@ class DashboardController extends Controller
                     'total_payments'     => Payment::where('user_id', $user->id)->sum('amount'),
                 ];
             });
-            return $this->jsonResponse(['data' => ['user' => $user, 'statistics' => $statistics]]);
+            view('dashboard/user_dashboard', ['user' => $user, 'statistics' => $statistics]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to load user dashboard: ' . $e->getMessage());
-            return $this->jsonResponse(['error' => 'Error loading dashboard'], 500);
+            abort(500, 'Error loading dashboard');
         }
     }
 
@@ -66,21 +62,16 @@ class DashboardController extends Controller
     public function getUserBookings(): void
     {
         try {
-            $user = TokenService::getUserFromToken(request()->bearerToken());
-
-            if (!$user) {
-                return $this->jsonResponse(['error' => 'Unauthorized'], 401);
-            }
-
-            $bookings = Booking::where('user_id', $user->id)->get();
-            return $this->jsonResponse([
+            $bookings = Booking::where('user_id', $_SESSION['user_id'] ?? null)->get();
+            http_response_code(200);
+            echo json_encode([
                 'status'  => 'success',
                 'message' => 'Bookings fetched',
                 'data'    => ['bookings' => $bookings]
             ]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to fetch bookings: ' . $e->getMessage());
-            return $this->jsonResponse(['error' => 'Failed to fetch bookings'], 500);
+            abort(500, 'Failed to fetch bookings');
         }
     }
 
@@ -97,14 +88,15 @@ class DashboardController extends Controller
                     'total_revenue'      => Payment::sum('amount')
                 ];
             });
-            return $this->jsonResponse([
+            http_response_code(200);
+            echo json_encode([
                 'status'  => 'success',
                 'message' => 'Statistics fetched',
                 'data'    => $stats
             ]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to fetch statistics: ' . $e->getMessage());
-            return $this->jsonResponse(['error' => 'Failed to fetch statistics'], 500);
+            abort(500, 'Failed to fetch statistics');
         }
     }
 
@@ -114,23 +106,18 @@ class DashboardController extends Controller
     public function fetchNotifications(): void
     {
         try {
-            $user = TokenService::getUserFromToken(request()->bearerToken());
-
-            if (!$user) {
-                return $this->jsonResponse(['error' => 'Unauthorized'], 401);
-            }
-
-            $notifications = Notification::where('user_id', $user->id)
+            $notifications = Notification::where('user_id', $_SESSION['user_id'] ?? null)
                 ->latest()
                 ->get();
-            return $this->jsonResponse([
+            http_response_code(200);
+            echo json_encode([
                 'status'  => 'success',
                 'message' => 'Notifications fetched',
                 'data'    => ['notifications' => $notifications]
             ]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to fetch notifications: ' . $e->getMessage());
-            return $this->jsonResponse(['error' => 'Failed to fetch notifications'], 500);
+            abort(500, 'Failed to fetch notifications');
         }
     }
 
@@ -140,28 +127,16 @@ class DashboardController extends Controller
     public function fetchUserProfile(): void
     {
         try {
-            $user = TokenService::getUserFromToken(request()->bearerToken());
-
-            if (!$user) {
-                return $this->jsonResponse(['error' => 'Unauthorized'], 401);
-            }
-
-            $profile = User::findOrFail($user->id);
-            return $this->jsonResponse([
+            $profile = User::findOrFail($_SESSION['user_id'] ?? null);
+            http_response_code(200);
+            echo json_encode([
                 'status'  => 'success',
                 'message' => 'User profile fetched',
                 'data'    => ['profile' => $profile]
             ]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to fetch user profile: ' . $e->getMessage());
-            return $this->jsonResponse(['error' => 'Failed to fetch user profile'], 500);
+            abort(500, 'Failed to fetch user profile');
         }
-    }
-
-    private function jsonResponse(array $data, int $statusCode = 200)
-    {
-        http_response_code($statusCode);
-        echo json_encode($data);
-        exit;
     }
 }

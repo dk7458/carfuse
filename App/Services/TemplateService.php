@@ -5,7 +5,6 @@ namespace App\Services;
 use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Template Service
@@ -54,24 +53,27 @@ class TemplateService
      * Load the content of a template.
      *
      * @param string $templateName The name of the template file.
-     * @return array The template content.
+     * @return string The template content.
      * @throws Exception If the template cannot be found or read.
      */
-    public function loadTemplate(string $templateName): array
+    public function loadTemplate(string $templateName): string
     {
         try {
-            $template = $this->getTemplate($templateName);
-            return [
-                'status' => 'success',
-                'data' => $template
-            ];
+            $filePath = $this->getTemplatePath($templateName);
+
+            if (!file_exists($filePath) || !is_readable($filePath)) {
+                throw new Exception("Template not found or unreadable: $templateName");
+            }
+
+            $content = file_get_contents($filePath);
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[system] Loaded template", ['template' => $templateName]);
+            }
+            return $content;
         } catch (\Exception $e) {
-            Log::error("Template loading failed: " . $e->getMessage());
-            return [
-                'status' => 'error',
-                'message' => 'Template loading failed',
-                'error' => $e->getMessage()
-            ];
+            $this->logger->error("[system] ❌ Error loading template: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            throw $e;
         }
     }
 
@@ -85,7 +87,7 @@ class TemplateService
      */
     public function renderTemplate(string $templateName, array $data): string
     {
-        $template = $this->loadTemplate($templateName)['data'];
+        $template = $this->loadTemplate($templateName);
 
         foreach ($data as $key => $value) {
             $placeholder = '{{' . $key . '}}';
@@ -164,27 +166,5 @@ class TemplateService
         }
 
         return $this->templateDirectory . DIRECTORY_SEPARATOR . $sanitizedFileName;
-    }
-
-    /**
-     * Get the content of a template.
-     *
-     * @param string $templateName The name of the template file.
-     * @return string The template content.
-     * @throws Exception If the template cannot be found or read.
-     */
-    private function getTemplate(string $templateName): string
-    {
-        $filePath = $this->getTemplatePath($templateName);
-
-        if (!file_exists($filePath) || !is_readable($filePath)) {
-            throw new Exception("Template not found or unreadable: $templateName");
-        }
-
-        $content = file_get_contents($filePath);
-        if (self::DEBUG_MODE) {
-            $this->logger->info("[system] Loaded template", ['template' => $templateName]);
-        }
-        return $content;
     }
 }
