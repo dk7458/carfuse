@@ -139,9 +139,7 @@ $fileStorageConfig = $config['filestorage'] ?? [];
 if (!is_dir($templateDirectory)) {
     mkdir($templateDirectory, 0775, true);
 }
-if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['base_directory'])) {
-    mkdir($fileStorageConfig['base_directory'], 0775, true);
-}
+
 $container->get(LoggerInterface::class)->info("Step 7: Required directories verified.");
 
 // Step 8: Register services with proper dependency order.
