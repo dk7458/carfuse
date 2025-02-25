@@ -4,6 +4,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/ExceptionHandler.php';
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
+require_once __DIR__ . '/../App/Helpers/LoggingHelper.php'; // Ensure LoggingHelper is included
 
 use DI\Container;
 use Psr\Log\LoggerInterface;

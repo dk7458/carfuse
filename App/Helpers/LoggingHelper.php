@@ -11,7 +11,7 @@ class LoggingHelper
 
     public function getLoggerByCategory($category)
     {
-        // Assuming getLogger is a global function that accepts a category
-        return getLogger($category);
+        // Call the global getLogger function
+        return \getLogger($category);
     }
 }
