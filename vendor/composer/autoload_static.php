@@ -439,6 +439,7 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'App\\Middleware\\AuditTrailMiddleware' => __DIR__ . '/../..' . '/App/Middleware/AuditTrailMiddleware.php',
         'App\\Middleware\\AuthMiddleware' => __DIR__ . '/../..' . '/App/Middleware/AuthMiddleware.php',
         'App\\Middleware\\EncryptionMiddleware' => __DIR__ . '/../..' . '/App/Middleware/EncryptionMiddleware.php',
+        'App\\Middleware\\TokenValidationMiddleware' => __DIR__ . '/../..' . '/App/Middleware/TokenValidationMiddleware.php',
         'App\\Models\\Admin' => __DIR__ . '/../..' . '/App/Models/Admin.php',
         'App\\Models\\AuditTrail' => __DIR__ . '/../..' . '/App/Models/AuditTrail.php',
         'App\\Models\\BaseModel' => __DIR__ . '/../..' . '/App/Models/BaseModel.php',

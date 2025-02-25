@@ -26,6 +26,7 @@ return array(
     'App\\Middleware\\AuditTrailMiddleware' => $baseDir . '/App/Middleware/AuditTrailMiddleware.php',
     'App\\Middleware\\AuthMiddleware' => $baseDir . '/App/Middleware/AuthMiddleware.php',
     'App\\Middleware\\EncryptionMiddleware' => $baseDir . '/App/Middleware/EncryptionMiddleware.php',
+    'App\\Middleware\\TokenValidationMiddleware' => $baseDir . '/App/Middleware/TokenValidationMiddleware.php',
     'App\\Models\\Admin' => $baseDir . '/App/Models/Admin.php',
     'App\\Models\\AuditTrail' => $baseDir . '/App/Models/AuditTrail.php',
     'App\\Models\\BaseModel' => $baseDir . '/App/Models/BaseModel.php',
