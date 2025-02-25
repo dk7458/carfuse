@@ -1,6 +1,13 @@
 <?php
 
 return [
+    'email' => [
+        'from' => env('NOTIFICATION_EMAIL_FROM', 'no-reply@example.com'),
+    ],
+    'sms' => [
+        'provider' => env('SMS_PROVIDER', 'twilio'),
+        'api_key' => env('SMS_API_KEY', 'your-api-key'),
+    ],
     'smtp_host' => 'smtp.example.com',
     'smtp_user' => 'user@example.com',
     'smtp_password' => 'password',

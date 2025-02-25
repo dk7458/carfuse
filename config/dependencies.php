@@ -246,6 +246,14 @@ $container->set(\App\Controllers\AuthController::class, fn() => new \App\Control
     $container->get('audit_logger')
 ));
 
+$container->set('AuthService', function() {
+    return new AuthService(new DatabaseHelper());
+});
+
+$container->set('TokenService', function() {
+    return new TokenService();
+});
+
 $container->get(LoggerInterface::class)->info("Step 8: Service registration completed.");
 
 // Step 9: Final check for required service registrations and circular dependency detection.
@@ -271,14 +279,6 @@ $container->get('dependencies_logger')->info("✅ DI container validation comple
 // Before returning the container, verify security-related services load successfully.
 try {
     $container->get(AuthService::class);
-    $container->get(Validator::class);
-    $container->get(EncryptionService::class);
-    $container->get('security_logger')->info("✅ All security-dependent services loaded successfully.");
-} catch (Exception $e) {
-    $container->get('security_logger')->critical("❌ Security-related service failed: " . $e->getMessage());
-    die("❌ Security-related service failure: " . $e->getMessage() . "\n");
-}
-
 // Ensure container integrity before return.
 return [
     'db'                => $container->get('db'),

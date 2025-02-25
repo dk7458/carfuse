@@ -8,7 +8,6 @@ use Firebase\JWT\JWT;
 use App\Helpers\ExceptionHandler;
 use Firebase\JWT\Key;
 use Exception;
-use App\Helpers\SecurityHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ApiHelper;
 use App\Services\Validator;
@@ -41,12 +40,12 @@ class AuthService
         $this->validator = $validator;
     }
 
-    public function login($email, $password)
+    public function login(array $data)
     {
         try {
-            $user = $this->db->table('users')->where('email', $email)->first();
-            if (!$user || !password_verify($password, $user->password_hash)) {
-                $this->authLogger->warning("Authentication failed", ['email' => $email]);
+            $user = $this->db->table('users')->where('email', $data['email'])->first();
+            if (!$user || !password_verify($data['password'], $user->password_hash)) {
+                $this->authLogger->warning("Authentication failed", ['email' => $data['email']]);
                 throw new Exception("Invalid credentials");
             }
 
@@ -64,7 +63,7 @@ class AuthService
         }
     }
 
-    public function registerUser(array $data)
+    public function register(array $data)
     {
         $rules = [
             'email'    => 'required|email|unique:users,email',
@@ -84,57 +83,10 @@ class AuthService
         }
     }
 
-    public function resetPasswordRequest($email)
-    {
-        $user = User::where('email', $email)->first();
-        if (!$user) {
-            $this->authLogger->error("Password reset failed: email not found", ['email' => $email]);
-            throw new Exception("Email not found.");
-        }
-
-        $token = bin2hex(random_bytes(32));
-        $hashedToken = password_hash($token, PASSWORD_BCRYPT);
-        $expiresAt = now()->addHour();
-
-        try {
-            $this->db->table('password_resets')->insert([
-                'email'      => $email,
-                'token'      => $hashedToken,
-                'expires_at' => $expiresAt,
-            ]);
-            getLogger('auth')->info("[Auth] Password reset requested for {$email}");
-        } catch (Exception $e) {
-            $this->exceptionHandler->handleException($e);
-        }
-
-        return ['token' => $token];
-    }
-
-    public function validateToken($token)
+    public function refresh(array $data)
     {
         try {
-            $decoded = JWT::decode($token, new Key($this->tokenService->jwtSecret, 'HS256'));
-            return (array)$decoded;
-        } catch (Exception $e) {
-            $this->exceptionHandler->handleException($e);
-            return false;
-        }
-    }
-
-    public function getUserFromToken($token)
-    {
-        $decoded = $this->tokenService->validateToken($token);
-        if (!$decoded) {
-            throw new Exception("Invalid token.");
-        }
-
-        return User::find($decoded['sub']);
-    }
-
-    public function refreshToken($refreshToken)
-    {
-        try {
-            $decoded = JWT::decode($refreshToken, new Key($this->tokenService->jwtSecret, 'HS256'));
+            $decoded = JWT::decode($data['refresh_token'], new Key($this->tokenService->jwtSecret, 'HS256'));
             $user = User::find($decoded->sub);
             if (!$user) {
                 throw new Exception("Invalid refresh token.");
@@ -149,9 +101,14 @@ class AuthService
         }
     }
 
-    public function logout()
+    public function logout(array $data)
     {
         $this->auditLogger->info("User logged out");
+    }
+
+    public function updateProfile($user, array $data)
+    {
+        // ...update profile logic...
     }
 }
 ?>

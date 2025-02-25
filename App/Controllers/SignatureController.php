@@ -4,6 +4,8 @@ namespace App\Controllers;
 
 use App\Services\SignatureService;
 use Psr\Log\LoggerInterface;
+use App\Helpers\JsonResponse;
+use App\Helpers\TokenValidator;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -34,6 +36,11 @@ class SignatureController extends Controller
      */
     public function uploadSignature(array $data): array
     {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
         $rules = [
             'user_id' => 'required|integer',
             'file' => 'required|file|mimes:png,jpg,jpeg|max:2048', // Max 2MB
@@ -43,16 +50,16 @@ class SignatureController extends Controller
             custom_validate($data, $rules);
         } catch (\Exception $ex) {
             $this->logger->error("Warning: Signature validation failed. Data: " . json_encode($data));
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $ex->getMessage()]);
+            return JsonResponse::error('Validation failed', $ex->getMessage());
         }
 
         try {
             $signaturePath = $this->signatureService->uploadSignature($data['user_id'], $data['file']);
             $this->logger->info("Info: Signature uploaded successfully for user_id: " . $data['user_id']);
-            return $this->jsonResponse(['status' => 'success', 'message' => 'Signature uploaded successfully', 'signature_path' => $signaturePath]);
+            return JsonResponse::success('Signature uploaded successfully', $signaturePath);
         } catch (\Exception $e) {
             $this->logger->error("Error: Failed to upload signature, error: " . $e->getMessage());
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to upload signature']);
+            return JsonResponse::error('Failed to upload signature');
         }
     }
 
@@ -70,13 +77,13 @@ class SignatureController extends Controller
 
             if ($isValid) {
                 $this->logger->info("Info: Signature verified successfully for user_id: {$userId}");
-                return $this->jsonResponse(['status' => 'success', 'message' => 'Signature verified successfully']);
+                return JsonResponse::success('Signature verified successfully');
             }
 
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Signature verification failed']);
+            return JsonResponse::error('Signature verification failed');
         } catch (\Exception $e) {
             $this->logger->error("Error: Failed to verify signature, error: " . $e->getMessage());
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to verify signature']);
+            return JsonResponse::error('Failed to verify signature');
         }
     }
 
@@ -93,13 +100,13 @@ class SignatureController extends Controller
 
             if ($signaturePath) {
                 $this->logger->info("Info: Signature retrieved successfully for user_id: {$userId}");
-                return $this->jsonResponse(['status' => 'success', 'signature_path' => $signaturePath]);
+                return JsonResponse::success('Signature retrieved successfully', $signaturePath);
             }
 
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Signature not found']);
+            return JsonResponse::error('Signature not found');
         } catch (\Exception $e) {
             $this->logger->error("Error: Failed to retrieve signature, error: " . $e->getMessage());
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to retrieve signature']);
+            return JsonResponse::error('Failed to retrieve signature');
         }
     }
 

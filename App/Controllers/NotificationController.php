@@ -5,6 +5,8 @@ namespace App\Controllers;
 use App\Models\Notification;
 use Illuminate\Support\Facades\Auth;
 use App\Services\AuthService;
+use App\Helpers\JsonResponse;
+use App\Helpers\TokenValidator;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -48,22 +50,19 @@ class NotificationController extends Controller
      */
     public function getUserNotifications()
     {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
         try {
             $notifications = Notification::with('user')
                 ->where('user_id', AuthService::getUserIdFromToken())
                 ->latest()
                 ->get();
-            $this->jsonResponse([
-                'status'  => 'success',
-                'message' => 'Notifications fetched',
-                'data'    => ['notifications' => $notifications]
-            ], 200);
+            return JsonResponse::success('Notifications retrieved successfully', $notifications);
         } catch (\Exception $e) {
-            $this->jsonResponse([
-                'status'  => 'error',
-                'message' => 'Failed to fetch user notifications',
-                'data'    => []
-            ], 500);
+            return JsonResponse::error('Failed to fetch user notifications', []);
         }
     }
 
@@ -72,23 +71,20 @@ class NotificationController extends Controller
      */
     public function fetchNotificationsAjax()
     {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
         try {
             $notifications = Notification::with('user')
                 ->where('user_id', AuthService::getUserIdFromToken())
                 ->where('is_read', false)
                 ->latest()
                 ->get();
-            $this->jsonResponse([
-                'status'  => 'success',
-                'message' => 'Notifications fetched',
-                'data'    => ['notifications' => $notifications]
-            ], 200);
+            return JsonResponse::success('Notifications retrieved successfully', $notifications);
         } catch (\Exception $e) {
-            $this->jsonResponse([
-                'status'  => 'error',
-                'message' => 'Failed to fetch notifications',
-                'data'    => []
-            ], 500);
+            return JsonResponse::error('Failed to fetch notifications', []);
         }
     }
 
@@ -97,6 +93,11 @@ class NotificationController extends Controller
      */
     public function markNotificationAsRead()
     {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
         $data = $this->validateRequest($_POST, [
             'notification_id' => 'required|integer'
         ]);
@@ -104,17 +105,9 @@ class NotificationController extends Controller
         try {
             $notification = Notification::findOrFail($data['notification_id']);
             $notification->update(['is_read' => true]);
-            $this->jsonResponse([
-                'status'  => 'success',
-                'message' => 'Notification marked as read',
-                'data'    => []
-            ], 200);
+            return JsonResponse::success('Notification marked as read', []);
         } catch (\Exception $e) {
-            $this->jsonResponse([
-                'status'  => 'error',
-                'message' => 'Failed to mark notification as read',
-                'data'    => []
-            ], 500);
+            return JsonResponse::error('Failed to mark notification as read', []);
         }
     }
 
@@ -123,6 +116,11 @@ class NotificationController extends Controller
      */
     public function deleteNotification()
     {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
         $data = $this->validateRequest($_POST, [
             'notification_id' => 'required|integer'
         ]);
@@ -130,17 +128,9 @@ class NotificationController extends Controller
         try {
             $notification = Notification::findOrFail($data['notification_id']);
             $notification->delete();
-            $this->jsonResponse([
-                'status'  => 'success',
-                'message' => 'Notification deleted',
-                'data'    => []
-            ], 200);
+            return JsonResponse::success('Notification deleted', []);
         } catch (\Exception $e) {
-            $this->jsonResponse([
-                'status'  => 'error',
-                'message' => 'Failed to delete notification',
-                'data'    => []
-            ], 500);
+            return JsonResponse::error('Failed to delete notification', []);
         }
     }
 
@@ -149,6 +139,11 @@ class NotificationController extends Controller
      */
     public function sendNotification()
     {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
         $data = $this->validateRequest($_POST, [
             'user_id' => 'required|integer',
             'type'    => 'required|in:email,sms,webhook,push',
@@ -166,17 +161,9 @@ class NotificationController extends Controller
                 'is_read' => false,
             ]);
             // Optionally dispatch via queue or any external channel here.
-            $this->jsonResponse([
-                'status'  => 'success',
-                'message' => 'Notification sent successfully',
-                'data'    => ['notification' => $notification]
-            ], 200);
+            return JsonResponse::success('Notification sent successfully', ['notification' => $notification]);
         } catch (\Exception $e) {
-            $this->jsonResponse([
-                'status'  => 'error',
-                'message' => 'Failed to send notification',
-                'data'    => []
-            ], 500);
+            return JsonResponse::error('Failed to send notification', []);
         }
     }
 }

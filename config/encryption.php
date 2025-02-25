@@ -36,10 +36,10 @@ try {
 
     // ✅ Return Secure Configuration
     return [
-        'encryption_key' => $encryptionKey,
-        'cipher' => 'AES-256-CBC',
         'jwt_secret' => $jwtSecret,
         'jwt_refresh_secret' => $jwtRefreshSecret,
+        'encryption_key' => $encryptionKey,
+        'cipher' => 'AES-256-CBC',
     ];
 } catch (Exception $e) {
     $timestamp = date('Y-m-d H:i:s');

@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use Exception;
 use Psr\Log\LoggerInterface;
+use Psr\Http\Message\ResponseInterface as Response;
 
 /**
  * Base Controller - Provides shared methods for all controllers.
@@ -20,12 +21,18 @@ class Controller
     /**
      * ✅ Standard JSON Response
      */
-    protected function jsonResponse(array $data, int $statusCode = 200): void
+    protected function jsonResponse(Response $response, $data, $status = 200)
     {
-        header('Content-Type: application/json');
-        http_response_code($statusCode);
-        echo json_encode($data);
-        exit;
+        $response->getBody()->write(json_encode($data));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+    }
+
+    /**
+     * ✅ Error Response
+     */
+    protected function errorResponse(Response $response, $message, $status = 400)
+    {
+        return $this->jsonResponse($response, ['error' => $message], $status);
     }
 
     /**

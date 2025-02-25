@@ -12,22 +12,20 @@ class TokenService
 {
     public const DEBUG_MODE = true;
 
-    private string $secretKey;
-    private string $refreshSecretKey;
+    private string $jwtSecret;
+    private string $jwtRefreshSecret;
     private LoggerInterface $tokenLogger;
     private ExceptionHandler $exceptionHandler;
 
     public function __construct(
-        string $secretKey,
-        string $refreshSecretKey,
         LoggerInterface $tokenLogger,
         ExceptionHandler $exceptionHandler
     ) {
-        if (empty($secretKey) || empty($refreshSecretKey)) {
+        $this->jwtSecret = getenv('JWT_SECRET');
+        $this->jwtRefreshSecret = getenv('JWT_REFRESH_SECRET');
+        if (empty($this->jwtSecret) || empty($this->jwtRefreshSecret)) {
             throw new \RuntimeException('❌ JWT secrets are missing.');
         }
-        $this->secretKey = $secretKey;
-        $this->refreshSecretKey = $refreshSecretKey;
         $this->tokenLogger = $tokenLogger;
         $this->exceptionHandler = $exceptionHandler;
         if (self::DEBUG_MODE) {
@@ -44,7 +42,7 @@ class TokenService
             'exp' => time() + 3600
         ];
         try {
-            $token = JWT::encode($payload, $this->secretKey, 'HS256');
+            $token = JWT::encode($payload, $this->jwtSecret, 'HS256');
             if (self::DEBUG_MODE) {
                 $this->tokenLogger->info("[auth] ✅ Token generated.", ['userId' => $user->id]);
             }
@@ -58,7 +56,7 @@ class TokenService
     public function verifyToken(string $token): ?array
     {
         try {
-            $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
+            $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
             $this->tokenLogger->info("✅ Token verified.", ['userId' => $decoded->sub]);
             return (array)$decoded;
         } catch (\Exception $e) {
@@ -70,7 +68,7 @@ class TokenService
     public function validateToken(string $token): ?array
     {
         try {
-            $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
+            $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
             if ($decoded->exp < time()) {
                 $this->tokenLogger->error("❌ [TokenService] Expired token.", ['userId' => $decoded->sub ?? 'unknown']);
                 return null;
@@ -91,7 +89,7 @@ class TokenService
             'exp' => time() + 604800
         ];
         try {
-            return JWT::encode($payload, $this->refreshSecretKey, 'HS256');
+            return JWT::encode($payload, $this->jwtRefreshSecret, 'HS256');
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
             return '';
@@ -114,7 +112,7 @@ class TokenService
     public function refreshToken(string $refreshToken): ?string
     {
         try {
-            $decoded = JWT::decode($refreshToken, new Key($this->refreshSecretKey, 'HS256'));
+            $decoded = JWT::decode($refreshToken, new Key($this->jwtRefreshSecret, 'HS256'));
             if ($decoded->exp < time()) {
                 $this->tokenLogger->error("❌ [TokenService] Expired refresh token.", ['userId' => $decoded->sub ?? 'unknown']);
                 return null;

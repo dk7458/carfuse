@@ -4,6 +4,8 @@ use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\TokenValidationMiddleware;
+use App\Controllers\AuthController;
+use App\Controllers\UserController;
 
 return simpleDispatcher(function (RouteCollector $router) {
 
@@ -18,16 +20,21 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->addRoute(['GET'], '/documents/signing_page', fn() => require '../public/views/documents/signing_page.php');
 
     // ✅ Define API Routes with Authentication and Middleware
-    $router->addRoute(['POST'], '/api/auth/login', 'App\Controllers\AuthController@login');
-    $router->addRoute(['POST'], '/api/auth/register', 'App\Controllers\AuthController@register');
-    $router->addRoute(['POST'], '/api/auth/refresh', 'App\Controllers\AuthController@refresh');
-    $router->addRoute(['POST'], '/api/auth/logout', 'App\Controllers\AuthController@logout');
-    $router->addRoute(['GET'], '/api/auth/userDetails', 'App\Controllers\AuthController@userDetails');
+    $router->addRoute(['POST'], '/api/auth/login', [AuthController::class, 'login']);
+    $router->addRoute(['POST'], '/api/auth/register', [AuthController::class, 'register']);
+    $router->addRoute(['POST'], '/api/auth/refresh', [AuthController::class, 'refresh']);
+    $router->addRoute(['POST'], '/api/auth/logout', [AuthController::class, 'logout']);
+    $router->addRoute(['GET'], '/api/auth/userDetails', [AuthController::class, 'userDetails'])->middleware(AuthMiddleware::class);
+
+    $router->post('/login', [AuthController::class, 'login']);
+    $router->post('/register', [AuthController::class, 'register']);
+    $router->post('/refresh', [AuthController::class, 'refresh']);
+    $router->post('/logout', [AuthController::class, 'logout']);
+    $router->get('/user', [AuthController::class, 'userDetails'])->middleware(AuthMiddleware::class);
 
     // ✅ Protected API Routes (Require Authentication)
-    $router->addRoute(['GET'], '/api/user/profile', function (Request $request, RequestHandler $handler) {
-        return (new AuthMiddleware())->__invoke($request, $handler);
-    });
+    $router->addRoute(['GET'], '/api/user/profile', [UserController::class, 'getUserProfile'])->middleware(AuthMiddleware::class);
+    $router->addRoute(['POST'], '/api/user/updateProfile', [UserController::class, 'updateProfile'])->middleware(AuthMiddleware::class);
 
     $router->addRoute(['GET'], '/api/user/settings', function (Request $request, RequestHandler $handler) {
         return (new TokenValidationMiddleware())->__invoke($request, $handler);

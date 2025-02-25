@@ -13,7 +13,7 @@ $logger->info("🔄 Logger initialized successfully.");
 
 // Step 2: Load Environment Variables
 use Dotenv\Dotenv;
-$dotenvPath = '/home/u122931475/domains/carfuse.pl/public_html';
+$dotenvPath = __DIR__;
 $dotenv = Dotenv::createImmutable($dotenvPath);
 $dotenv->load();
 
@@ -32,6 +32,16 @@ if (!$_ENV['DB_HOST']) {
     exit("❌ ERROR: .env file not loaded correctly. Check file permissions.\n");
 }
 $logger->info("🔄 Environment variables loaded from {$dotenvPath}");
+
+// Initialize configuration
+$config = require __DIR__ . '/config/config.php';
+
+// Initialize DI container
+$container = new \DI\Container();
+
+// Initialize in-house logging
+$logger = new \App\Logging\Logger();
+$container->set('Logger', $logger);
 
 // Step 3: Load Configuration Files
 $configFiles = ['database', 'encryption', 'app', 'filestorage'];

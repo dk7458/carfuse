@@ -6,6 +6,9 @@ use App\Models\Booking;
 use App\Models\RefundLog;
 use Illuminate\Http\Request;
 use App\Services\AuthService;
+use App\Helpers\DatabaseHelper;
+use App\Helpers\JsonResponse;
+use App\Helpers\TokenValidator;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -47,14 +50,10 @@ class BookingController extends Controller
     {
         try {
             $booking = Booking::with('logs')->findOrFail($id);
-            return $this->jsonResponse([
-                'status'  => 'success',
-                'message' => 'Booking details fetched',
-                'data'    => ['booking' => $booking]
-            ]);
+            return JsonResponse::success('Booking details fetched', ['booking' => $booking]);
         } catch (\Exception $e) {
             $this->logger->error("BOOKING ERROR: " . $e->getMessage());
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+            return JsonResponse::error('Booking not found', 404);
         }
     }
 
@@ -72,13 +71,10 @@ class BookingController extends Controller
                 'dropoff_date' => $data['dropoff_date'],
             ]);
             error_log("AUDIT: Booking rescheduled, booking_id: {$id}");
-            return $this->jsonResponse([
-                'status'  => 'success',
-                'message' => 'Booking rescheduled successfully'
-            ]);
+            return JsonResponse::success('Booking rescheduled successfully');
         } catch (\Exception $e) {
             $this->logger->error("BOOKING ERROR: Failed to reschedule booking: " . $e->getMessage());
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to reschedule booking'], 500);
+            return JsonResponse::error('Failed to reschedule booking', 500);
         }
     }
 
@@ -101,13 +97,10 @@ class BookingController extends Controller
                 ]);
             }
             error_log("BOOKING: Booking canceled, booking_id: {$id}");
-            return $this->jsonResponse([
-                'status'  => 'success',
-                'message' => 'Booking canceled successfully'
-            ]);
+            return JsonResponse::success('Booking canceled successfully');
         } catch (\Exception $e) {
             $this->logger->error("BOOKING ERROR: Failed to cancel booking: " . $e->getMessage());
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to cancel booking'], 500);
+            return JsonResponse::error('Failed to cancel booking', 500);
         }
     }
 
@@ -118,14 +111,10 @@ class BookingController extends Controller
     {
         try {
             $logs = Booking::findOrFail($bookingId)->logs()->latest()->get();
-            return $this->jsonResponse([
-                'status'  => 'success',
-                'message' => 'Booking logs fetched successfully',
-                'data'    => ['logs' => $logs]
-            ]);
+            return JsonResponse::success('Booking logs fetched successfully', ['logs' => $logs]);
         } catch (\Exception $e) {
             $this->logger->error("BOOKING ERROR: Failed to fetch booking logs: " . $e->getMessage());
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to fetch booking logs'], 500);
+            return JsonResponse::error('Failed to fetch booking logs', 500);
         }
     }
 
@@ -140,14 +129,10 @@ class BookingController extends Controller
                 throw new \Exception('User not authenticated');
             }
             $bookings = Booking::where('user_id', $userId)->latest()->get();
-            return $this->jsonResponse([
-                'status'  => 'success',
-                'message' => 'User bookings fetched successfully',
-                'data'    => ['bookings' => $bookings]
-            ]);
+            return JsonResponse::success('User bookings fetched successfully', ['bookings' => $bookings]);
         } catch (\Exception $e) {
             $this->logger->error("BOOKING ERROR: Failed to fetch user bookings: " . $e->getMessage());
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to fetch user bookings'], 500);
+            return JsonResponse::error('Failed to fetch user bookings', 500);
         }
     }
 
@@ -156,26 +141,25 @@ class BookingController extends Controller
      */
     public function createBooking(): void
     {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
+        $db = DatabaseHelper::getConnection('default');
         $data = $_POST; // assuming custom validation is performed elsewhere
         
         try {
             // Check vehicle availability using an assumed Booking::isAvailable() scope.
             if (!Booking::isAvailable($data['vehicle_id'], $data['pickup_date'], $data['dropoff_date'])) {
-                return $this->jsonResponse([
-                    'status'  => 'error',
-                    'message' => 'Vehicle is not available for the selected dates'
-                ], 400);
+                return JsonResponse::error('Vehicle is not available for the selected dates', 400);
             }
             $booking = Booking::create($data);
             error_log("BOOKING: Booking created, booking_id: {$booking->id}");
-            return $this->jsonResponse([
-                'status'  => 'success',
-                'message' => 'Booking created successfully',
-                'data'    => ['booking_id' => $booking->id]
-            ], 201);
+            return JsonResponse::success('Booking created successfully', ['booking_id' => $booking->id], 201);
         } catch (\Exception $e) {
             $this->logger->error("BOOKING ERROR: Failed to create booking: " . $e->getMessage());
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to create booking'], 500);
+            return JsonResponse::error('Failed to create booking', 500);
         }
     }
 }

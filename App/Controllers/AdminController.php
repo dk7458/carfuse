@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Validator;
 use Psr\Log\LoggerInterface;
 use App\Services\AuthService;
+use App\Helpers\JsonResponse;
+use App\Helpers\TokenValidator;
 
 /**
  * AdminController - Handles admin user management and dashboard operations.
@@ -34,8 +36,13 @@ class AdminController extends Controller
      */
     public function getAllUsers()
     {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return JsonResponse::unauthorized('Invalid token or insufficient permissions');
+        }
+
         $users = User::with('roles')->latest()->paginate(10);
-        return $this->jsonResponse(['success' => true, 'data' => $users]);
+        return JsonResponse::success('User list retrieved successfully', $users);
     }
 
     /**
@@ -43,16 +50,21 @@ class AdminController extends Controller
      */
     public function updateUserRole($userId)
     {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return JsonResponse::unauthorized('Invalid token or insufficient permissions');
+        }
+
         // Replace Laravel validation with native checks.
         $role = $_POST['role'] ?? '';
         $allowedRoles = ['user', 'admin', 'manager'];
         if (!$role || !in_array($role, $allowedRoles)) {
-            return $this->jsonResponse(['success' => false, 'message' => 'Invalid role'], 400);
+            return JsonResponse::error('Invalid role', 400);
         }
         $user = User::findOrFail($userId);
         $user->update(['role' => $role]);
         $this->logger->info("AUDIT: User role updated: {$user->email} to {$role}");
-        return $this->jsonResponse(['success' => true, 'message' => 'User role updated successfully']);
+        return JsonResponse::success('User role updated successfully');
     }
 
     /**
@@ -60,10 +72,15 @@ class AdminController extends Controller
      */
     public function deleteUser($userId)
     {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return JsonResponse::unauthorized('Invalid token or insufficient permissions');
+        }
+
         $user = User::findOrFail($userId);
         $user->delete();
         $this->logger->info("AUDIT: User deleted: {$user->email}");
-        return $this->jsonResponse(['success' => true, 'message' => 'User deleted successfully']);
+        return JsonResponse::success('User deleted successfully');
     }
 
     /**
@@ -71,6 +88,11 @@ class AdminController extends Controller
      */
     public function getDashboardData()
     {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return JsonResponse::unauthorized('Invalid token or insufficient permissions');
+        }
+
         $dashboardData = Cache::remember('admin_dashboard', 60, function () {
             return [
                 'total_users' => User::count(),
@@ -80,7 +102,7 @@ class AdminController extends Controller
                 'latest_transactions' => TransactionLog::latest()->limit(5)->get(),
             ];
         });
-        return $this->jsonResponse(['success' => true, 'data' => $dashboardData]);
+        return JsonResponse::success('Dashboard data retrieved successfully', $dashboardData);
     }
 
     /**
@@ -88,6 +110,11 @@ class AdminController extends Controller
      */
     public function createAdmin()
     {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return JsonResponse::unauthorized('Invalid token or insufficient permissions');
+        }
+
         // Use native PHP POST handling.
         $data = $_POST;
         // Basic native validation.
@@ -95,7 +122,7 @@ class AdminController extends Controller
             !filter_var($data['email'], FILTER_VALIDATE_EMAIL) ||
             strlen($data['password']) < 8
         ) {
-            return $this->jsonResponse(['success' => false, 'message' => 'Invalid input'], 400);
+            return JsonResponse::error('Invalid input', 400);
         }
 
         $admin = Admin::create([
@@ -105,14 +132,6 @@ class AdminController extends Controller
             'role' => 'admin'
         ]);
         $this->logger->info("AUDIT: New admin created: {$admin->email}");
-        return $this->jsonResponse(['success' => true, 'message' => 'Admin created successfully', 'admin' => $admin], 201);
-    }
-
-    private function jsonResponse(array $data, int $statusCode = 200)
-    {
-        header('Content-Type: application/json');
-        http_response_code($statusCode);
-        echo json_encode($data);
-        exit;
+        return JsonResponse::success('Admin created successfully', $admin, 201);
     }
 }

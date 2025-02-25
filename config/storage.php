@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'default' => env('STORAGE_DRIVER', 'local'),
+    'cloud' => env('STORAGE_CLOUD', 's3'),
     'base_directory' => __DIR__ . '/../storage/',
     'storage_path' => env('STORAGE_PATH', 'your-storage-path'),
 

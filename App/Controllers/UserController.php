@@ -12,6 +12,8 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Str;
 use App\Services\Auth\AuthService;
 use Exception;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
  * User Management Controller
@@ -76,42 +78,21 @@ class UserController extends Controller
     /**
      * Retrieve current user profile.
      */
-    public function getUserProfile($request = null)
+    public function getUserProfile(Request $request, Response $response)
     {
-        try {
-            $token = $_COOKIE['jwt'] ?? '';
-            if (!$this->authService->validateToken($token)) {
-                throw new Exception("Invalid token.");
-            }
-
-            $userData = $this->authService->getUserFromToken($token);
-            ApiHelper::sendJsonResponse('success', 'User profile fetched', $userData, 200);
-        } catch (Exception $e) {
-            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 401);
-        }
+        $user = $request->getAttribute('user');
+        return $this->jsonResponse($response, $user);
     }
 
     /**
      * 🔹 Update user profile
      */
-    public function updateProfile($request = null)
+    public function updateProfile(Request $request, Response $response)
     {
-        try {
-            $token = $_COOKIE['jwt'] ?? '';
-            if (!$this->authService->validateToken($token)) {
-                throw new Exception("Invalid token.");
-            }
-
-            $userData = $this->authService->getUserFromToken($token);
-            $data = json_decode(file_get_contents('php://input'), true);
-
-            // Assume $this->authService->updateUserProfile($userData['id'], $data) exists
-            $this->authService->updateUserProfile($userData['id'], $data);
-
-            ApiHelper::sendJsonResponse('success', 'Profile updated successfully');
-        } catch (Exception $e) {
-            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 400);
-        }
+        $user = $request->getAttribute('user');
+        $data = json_decode($request->getBody()->getContents(), true);
+        $result = $this->authService->updateProfile($user, $data);
+        return $this->jsonResponse($response, $result);
     }
 
     /**

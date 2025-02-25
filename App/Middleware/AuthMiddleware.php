@@ -3,7 +3,7 @@
 namespace App\Middleware;
 
 use App\Helpers\ApiHelper;
-use App\Services\TokenService;
+use App\Services\Auth\AuthService;
 use App\Helpers\ExceptionHandler;
 use Psr\Log\LoggerInterface;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -16,18 +16,18 @@ use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
  */
 class AuthMiddleware
 {
-    private TokenService $tokenService;
+    private AuthService $authService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $authLogger;
     private LoggerInterface $securityLogger;
 
     public function __construct(
-        TokenService $tokenService,
+        AuthService $authService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
         LoggerInterface $securityLogger
     ) {
-        $this->tokenService = $tokenService;
+        $this->authService = $authService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
         $this->securityLogger = $securityLogger;
@@ -46,12 +46,12 @@ class AuthMiddleware
         try {
             $token = $this->extractToken($request);
 
-            if (!$token || !$this->tokenService->validateToken($token)) {
+            if (!$token || !$this->authService->validateToken($token)) {
                 $this->authLogger->warning("Invalid or missing token", ['ip' => $request->getServerParams()['REMOTE_ADDR']]);
                 return ApiHelper::sendJsonResponse('error', 'Unauthorized', [], 401);
             }
 
-            $user = $this->tokenService->getUserFromToken($token);
+            $user = $this->authService->getUserFromToken($token);
             $request = $request->withAttribute('user', $user);
 
             // Role-based access control
@@ -82,7 +82,7 @@ class AuthMiddleware
             return substr($authHeader, 7);
         }
 
-        return $_COOKIE['jwt'] ?? null;
+        return $request->getCookieParams()['token'] ?? null;
     }
 }
 ?>
