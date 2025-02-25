@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/vendor/autoload.php';
+use App\Helpers\DatabaseHelper;
 
 // Step 1: Initialize Logger First
 require_once __DIR__ . '/logger.php';
