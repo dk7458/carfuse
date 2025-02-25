@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Validator;
 use Psr\Log\LoggerInterface;
+use App\Services\AuthService;
 
 /**
  * AdminController - Handles admin user management and dashboard operations.
@@ -34,10 +35,7 @@ class AdminController extends Controller
     public function getAllUsers()
     {
         $users = User::with('roles')->latest()->paginate(10);
-        header('Content-Type: application/json');
-        http_response_code(200);
-        echo json_encode(['users' => $users]);
-        exit;
+        return $this->jsonResponse(['success' => true, 'data' => $users]);
     }
 
     /**
@@ -49,17 +47,12 @@ class AdminController extends Controller
         $role = $_POST['role'] ?? '';
         $allowedRoles = ['user', 'admin', 'manager'];
         if (!$role || !in_array($role, $allowedRoles)) {
-            http_response_code(400);
-            echo json_encode(['message' => 'Invalid role']);
-            exit;
+            return $this->jsonResponse(['success' => false, 'message' => 'Invalid role'], 400);
         }
         $user = User::findOrFail($userId);
         $user->update(['role' => $role]);
         $this->logger->info("AUDIT: User role updated: {$user->email} to {$role}");
-        header('Content-Type: application/json');
-        http_response_code(200);
-        echo json_encode(['message' => 'User role updated successfully']);
-        exit;
+        return $this->jsonResponse(['success' => true, 'message' => 'User role updated successfully']);
     }
 
     /**
@@ -70,10 +63,7 @@ class AdminController extends Controller
         $user = User::findOrFail($userId);
         $user->delete();
         $this->logger->info("AUDIT: User deleted: {$user->email}");
-        header('Content-Type: application/json');
-        http_response_code(200);
-        echo json_encode(['message' => 'User deleted successfully']);
-        exit;
+        return $this->jsonResponse(['success' => true, 'message' => 'User deleted successfully']);
     }
 
     /**
@@ -90,10 +80,7 @@ class AdminController extends Controller
                 'latest_transactions' => TransactionLog::latest()->limit(5)->get(),
             ];
         });
-        header('Content-Type: application/json');
-        http_response_code(200);
-        echo json_encode($dashboardData);
-        exit;
+        return $this->jsonResponse(['success' => true, 'data' => $dashboardData]);
     }
 
     /**
@@ -108,9 +95,7 @@ class AdminController extends Controller
             !filter_var($data['email'], FILTER_VALIDATE_EMAIL) ||
             strlen($data['password']) < 8
         ) {
-            http_response_code(400);
-            echo json_encode(['message' => 'Invalid input']);
-            exit;
+            return $this->jsonResponse(['success' => false, 'message' => 'Invalid input'], 400);
         }
 
         $admin = Admin::create([
@@ -120,9 +105,14 @@ class AdminController extends Controller
             'role' => 'admin'
         ]);
         $this->logger->info("AUDIT: New admin created: {$admin->email}");
+        return $this->jsonResponse(['success' => true, 'message' => 'Admin created successfully', 'admin' => $admin], 201);
+    }
+
+    private function jsonResponse(array $data, int $statusCode = 200)
+    {
         header('Content-Type: application/json');
-        http_response_code(201);
-        echo json_encode(['message' => 'Admin created successfully', 'admin' => $admin]);
+        http_response_code($statusCode);
+        echo json_encode($data);
         exit;
     }
 }

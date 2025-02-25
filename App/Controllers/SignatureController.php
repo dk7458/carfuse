@@ -43,16 +43,16 @@ class SignatureController extends Controller
             custom_validate($data, $rules);
         } catch (\Exception $ex) {
             $this->logger->error("Warning: Signature validation failed. Data: " . json_encode($data));
-            return ['status' => 'error', 'message' => 'Validation failed', 'errors' => $ex->getMessage()];
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $ex->getMessage()]);
         }
 
         try {
             $signaturePath = $this->signatureService->uploadSignature($data['user_id'], $data['file']);
             $this->logger->info("Info: Signature uploaded successfully for user_id: " . $data['user_id']);
-            return ['status' => 'success', 'message' => 'Signature uploaded successfully', 'signature_path' => $signaturePath];
+            return $this->jsonResponse(['status' => 'success', 'message' => 'Signature uploaded successfully', 'signature_path' => $signaturePath]);
         } catch (\Exception $e) {
             $this->logger->error("Error: Failed to upload signature, error: " . $e->getMessage());
-            return ['status' => 'error', 'message' => 'Failed to upload signature'];
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to upload signature']);
         }
     }
 
@@ -70,13 +70,13 @@ class SignatureController extends Controller
 
             if ($isValid) {
                 $this->logger->info("Info: Signature verified successfully for user_id: {$userId}");
-                return ['status' => 'success', 'message' => 'Signature verified successfully'];
+                return $this->jsonResponse(['status' => 'success', 'message' => 'Signature verified successfully']);
             }
 
-            return ['status' => 'error', 'message' => 'Signature verification failed'];
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Signature verification failed']);
         } catch (\Exception $e) {
             $this->logger->error("Error: Failed to verify signature, error: " . $e->getMessage());
-            return ['status' => 'error', 'message' => 'Failed to verify signature'];
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to verify signature']);
         }
     }
 
@@ -93,13 +93,18 @@ class SignatureController extends Controller
 
             if ($signaturePath) {
                 $this->logger->info("Info: Signature retrieved successfully for user_id: {$userId}");
-                return ['status' => 'success', 'signature_path' => $signaturePath];
+                return $this->jsonResponse(['status' => 'success', 'signature_path' => $signaturePath]);
             }
 
-            return ['status' => 'error', 'message' => 'Signature not found'];
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Signature not found']);
         } catch (\Exception $e) {
             $this->logger->error("Error: Failed to retrieve signature, error: " . $e->getMessage());
-            return ['status' => 'error', 'message' => 'Failed to retrieve signature'];
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to retrieve signature']);
         }
+    }
+
+    private function jsonResponse(array $data): array
+    {
+        return $data;
     }
 }

@@ -2,6 +2,7 @@
 
 return [
     'base_directory' => __DIR__ . '/../storage/',
+    'storage_path' => env('STORAGE_PATH', 'your-storage-path'),
 
     'security' => [
         'permissions' => [

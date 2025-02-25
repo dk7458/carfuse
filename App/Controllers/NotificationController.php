@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Models\Notification;
 use Illuminate\Support\Facades\Auth;
+use App\Services\AuthService;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -25,7 +26,7 @@ class NotificationController extends Controller
     {
         try {
             $notifications = Notification::with('user')
-                ->where('user_id', $_SESSION['user_id'] ?? null)
+                ->where('user_id', AuthService::getUserIdFromToken())
                 ->latest()
                 ->get();
             $this->jsonResponse([
@@ -49,7 +50,7 @@ class NotificationController extends Controller
     {
         try {
             $notifications = Notification::with('user')
-                ->where('user_id', $_SESSION['user_id'] ?? null)
+                ->where('user_id', AuthService::getUserIdFromToken())
                 ->latest()
                 ->get();
             $this->jsonResponse([
@@ -73,7 +74,7 @@ class NotificationController extends Controller
     {
         try {
             $notifications = Notification::with('user')
-                ->where('user_id', $_SESSION['user_id'] ?? null)
+                ->where('user_id', AuthService::getUserIdFromToken())
                 ->where('is_read', false)
                 ->latest()
                 ->get();
