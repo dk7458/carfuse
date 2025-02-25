@@ -13,8 +13,11 @@ class AuthController extends Controller
     protected LoggerInterface $logger; // Ensure the type matches the parent class
     private AuthService $authService;
 
-    public function __construct(AuthService $authService, LoggerInterface $logger)
-    {
+    public function __construct(
+        LoggerInterface $logger,  // Parent logger
+        AuthService $authService
+    ) {
+        parent::__construct($logger);
         $this->authService = $authService;
         $this->logger = $logger;
     }
