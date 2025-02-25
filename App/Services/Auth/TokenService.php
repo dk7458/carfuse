@@ -18,11 +18,13 @@ class TokenService
     private ExceptionHandler $exceptionHandler;
 
     public function __construct(
+        string $jwtSecret,
+        string $jwtRefreshSecret,
         LoggerInterface $tokenLogger,
         ExceptionHandler $exceptionHandler
     ) {
-        $this->jwtSecret = getenv('JWT_SECRET');
-        $this->jwtRefreshSecret = getenv('JWT_REFRESH_SECRET');
+        $this->jwtSecret = $jwtSecret;
+        $this->jwtRefreshSecret = $jwtRefreshSecret;
         if (empty($this->jwtSecret) || empty($this->jwtRefreshSecret)) {
             throw new \RuntimeException('❌ JWT secrets are missing.');
         }
