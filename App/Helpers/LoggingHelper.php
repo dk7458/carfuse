@@ -1,17 +1,29 @@
 <?php
-
 namespace App\Helpers;
+
+use Psr\Log\LoggerInterface;
 
 class LoggingHelper
 {
-    public function getDefaultLogger()
+    /**
+     * Retrieve the default logger.
+     *
+     * @return LoggerInterface
+     */
+    public function getDefaultLogger(): LoggerInterface
     {
-        return $this->getLoggerByCategory('default');
+        return $this->getLoggerByCategory('application');
     }
 
-    public function getLoggerByCategory($category)
+    /**
+     * Retrieve a logger by its category.
+     *
+     * @param string $category
+     * @return LoggerInterface
+     */
+    public function getLoggerByCategory(string $category): LoggerInterface
     {
-        // Call the global getLogger function
+        // Call the global getLogger() function defined in the root logger configuration.
         return \getLogger($category);
     }
 }
