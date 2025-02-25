@@ -32,6 +32,8 @@ use App\Queues\NotificationQueue;
 use App\Queues\DocumentQueue;
 use App\Models\Payment;
 use GuzzleHttp\Client;
+use App\Controllers\AuthController;
+use App\Controllers\UserController;
 
 // Step 1: Initialize DI Container
 try {
@@ -257,6 +259,30 @@ $container->set(\App\Controllers\AuthController::class, fn() => new \App\Control
     $container->get('auth_logger'),
     $container->get('audit_logger')
 ));
+
+$container->set(AuthController::class, function($c) {
+    return new AuthController(
+        $c->get(AuthService::class),
+        $c->get(TokenService::class),
+        $c->get(ExceptionHandler::class),
+        $c->get(LoggerInterface::class),      // authLogger
+        $c->get('auditLogger')               // auditLogger binding key (example)
+    );
+});
+
+$container->set(UserController::class, function($c) {
+    return new UserController(
+        $c->get(UserService::class),
+        $c->get(ExceptionHandler::class),
+        $c->get('userLogger'),              // userLogger binding key (example)
+        $c->get('auditLogger')              // auditLogger
+    );
+});
+
+// Bind TokenService solely for JWT authentication
+$container->set(TokenService::class, function($c) {
+    return new TokenService(/* ...configuration... */);
+});
 
 $container->get(LoggerInterface::class)->info("Step 8: Service registration completed.");
 
