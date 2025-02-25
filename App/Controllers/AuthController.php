@@ -35,8 +35,9 @@ class AuthController extends Controller
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
-
-        DatabaseHelper::getInstance();
+        
+        // Remove the manual DatabaseHelper initialization
+        // DatabaseHelper::getInstance();
     }
 
     public function loginView()

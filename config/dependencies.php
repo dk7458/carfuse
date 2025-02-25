@@ -81,16 +81,18 @@ foreach ($configFiles as $file) {
 // Step 3: Initialize DatabaseHelper instances BEFORE services that depend on them.
 try {
     DatabaseHelper::setLogger($container->get('db_logger'));
-    $database = DatabaseHelper::getInstance($config['database']['app_database']); // Pass the app_database config
-    $secureDatabase = DatabaseHelper::getSecureInstance($config['database']['secure_database']); // Pass the secure_database config
+    $database = DatabaseHelper::getInstance($config['database']['app_database']); // using app_database config
+    $secureDatabase = DatabaseHelper::getSecureInstance($config['database']['secure_database']); // secure instance for sensitive operations
     $container->get('db_logger')->info("✅ Both databases initialized successfully.");
 } catch (Exception $e) {
     $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
     die("❌ Database initialization failed. Check logs for details.\n");
 }
 
+// Register the app database instance as the default DI for DatabaseHelper:
+$container->set(DatabaseHelper::class, fn() => $database);
+
 // ✅ Register database instances in DI container
-$container->set(DatabaseHelper::class, fn() => $database); // Register as DatabaseHelper class
 $container->set('db', fn() => $database); // Register generic key
 $container->set('secure_db', fn() => $secureDatabase);
 
