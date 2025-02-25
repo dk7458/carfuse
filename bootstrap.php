@@ -11,26 +11,24 @@ $logger->info("🔄 Logger initialized successfully.");
 // Step 2: Load Environment Variables
 use Dotenv\Dotenv;
 $dotenvPath = '/home/u122931475/domains/carfuse.pl/public_html';
-$dotenvFilePath = $dotenvPath . '/.env';
-
-// Debugging: Check if .env file exists and is readable
-if (!file_exists($dotenvFilePath)) {
-    $logger->critical("❌ ERROR: .env file does not exist at path: {$dotenvFilePath}");
-    exit("❌ ERROR: .env file does not exist at path: {$dotenvFilePath}\n");
-}
-if (!is_readable($dotenvFilePath)) {
-    $logger->critical("❌ ERROR: .env file is not readable. Check file permissions: {$dotenvFilePath}");
-    exit("❌ ERROR: .env file is not readable. Check file permissions: {$dotenvFilePath}\n");
-}
-
 $dotenv = Dotenv::createImmutable($dotenvPath);
 $dotenv->load();
+
+// Debugging: Check if .env file exists and is readable
+if (!file_exists($dotenvPath)) {
+    $logger->critical("❌ ERROR: .env file does not exist at path: {$dotenvPath}");
+    exit("❌ ERROR: .env file does not exist at path: {$dotenvPath}\n");
+}
+if (!is_readable($dotenvPath)) {
+    $logger->critical("❌ ERROR: .env file is not readable. Check file permissions: {$dotenvPath}");
+    exit("❌ ERROR: .env file is not readable. Check file permissions: {$dotenvPath}\n");
+}
 
 if (!getenv('DB_HOST')) {
     $logger->critical("❌ ERROR: .env file not loaded correctly. Check file permissions.");
     exit("❌ ERROR: .env file not loaded correctly. Check file permissions.\n");
 }
-$logger->info("🔄 Environment variables loaded from {$dotenvFilePath}");
+$logger->info("🔄 Environment variables loaded from {$dotenvPath}");
 
 // Step 3: Load Configuration Files
 $configFiles = ['database', 'encryption', 'app'];
