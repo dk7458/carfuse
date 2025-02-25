@@ -164,15 +164,15 @@ $container->set(TokenService::class, fn() => new TokenService(
     $container->get(ExceptionHandler::class)
 ));
 $container->set(AuthService::class, fn() => new AuthService(
-    $container->get(DatabaseHelper::class),  // Ensure DatabaseHelper is injected
+    $container->get(DatabaseHelper::class),  // Inject DatabaseHelper
     $container->get(TokenService::class),
     $container->get(ExceptionHandler::class),
     $container->get('auth_logger'),
     $container->get('audit_logger'),
-    $config['encryption'],
+    $config['encryption'], // Pass entire encryption config for token settings
     $container->get(Validator::class) // Inject Validator
 ));
-// Register UserController to receive AuthService via DI.
+// Register UserController with the updated AuthService dependency.
 $container->set(\App\Controllers\UserController::class, fn() => new \App\Controllers\UserController(
     $container->get(\App\Services\Auth\AuthService::class)
 ));
@@ -229,24 +229,14 @@ $container->set(TemplateService::class, fn() => new TemplateService(
     __DIR__ . '/../storage/templates',
     $container->get(ExceptionHandler::class)
 ));
-$container->set(FileStorage::class, fn() => new FileStorage(
-    $config['filestorage'],
-    $container->get(EncryptionService::class),
-    $container->get('api_logger'),
-    $container->get(ExceptionHandler::class)
-));
-$container->set(EncryptionService::class, fn() => new EncryptionService(
-    $container->get('api_logger'),
-    $container->get(ExceptionHandler::class),
-    $config['encryption']['encryption_key'] ?? ''
-));
+// Removed duplicate registration for FileStorage and EncryptionService here since they are already registered.
 $container->set(KeyManager::class, fn() => new KeyManager(
     $config['keymanager'],
     $container->get('security_logger'),
     $container->get(ExceptionHandler::class)
 ));
 
-// New registrations for additional services ensuring proper logging.
+// New registration: AuthController with updated dependencies.
 $container->set(\App\Controllers\AuthController::class, fn() => new \App\Controllers\AuthController(
     $container->get(\App\Services\Auth\AuthService::class),
     $container->get(Validator::class),

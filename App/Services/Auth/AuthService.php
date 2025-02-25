@@ -54,13 +54,6 @@ class AuthService
                 $this->authLogger->info("[auth] User authenticated", ['userId' => $user->id, 'email' => $user->email]);
             }
 
-            if (session_status() === PHP_SESSION_NONE) {
-                session_start();
-            }
-            session_regenerate_id(true);
-            $_SESSION['user_id']   = $user->id;
-            $_SESSION['user_role'] = $user->role ?? 'user';
-
             $token = $this->tokenService->generateToken($user);
             $refreshToken = $this->tokenService->generateRefreshToken($user);
 
@@ -151,15 +144,28 @@ class AuthService
         return User::find($decoded['sub']);
     }
 
+    public function refreshToken($refreshToken)
+    {
+        try {
+            $decoded = JWT::decode($refreshToken, new Key($this->tokenService->jwtSecret, 'HS256'));
+            $user = User::find($decoded->sub);
+            if (!$user) {
+                throw new Exception("Invalid refresh token.");
+            }
+
+            $token = $this->tokenService->generateToken($user);
+            return ['token' => $token];
+        } catch (Exception $e) {
+            $this->authLogger->error("[auth] ❌ Refresh token error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 401);
+        }
+    }
+
     public function logout()
     {
-        // Clear session data and session cookie for secure logout
-        $_SESSION = [];
-        if (ini_get('session.use_cookies')) {
-            setcookie(session_name(), '', time() - 42000, '/');
-        }
-        session_destroy();
-        $this->auditLogger->info("User logged out", ['session_id' => session_id()]);
+        // No session management; tokens are stateless
+        $this->auditLogger->info("User logged out");
     }
 }
 ?>

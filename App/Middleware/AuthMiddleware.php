@@ -6,6 +6,9 @@ use App\Helpers\ApiHelper;
 use App\Services\TokenService;
 use App\Helpers\ExceptionHandler;
 use Psr\Log\LoggerInterface;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
 
 /**
  * AuthMiddleware - Handles authentication and authorization for API requests.
@@ -33,51 +36,53 @@ class AuthMiddleware
     /**
      * Handle authentication and authorization.
      * 
-     * @param callable $next The next middleware function.
+     * @param Request $request The incoming request.
+     * @param RequestHandler $handler The next middleware function.
      * @param array $roles Required roles (e.g., 'admin').
+     * @return Response
      */
-    public function handle(callable $next, ...$roles)
+    public function __invoke(Request $request, RequestHandler $handler, ...$roles): Response
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-
         try {
-            // Retrieve and validate Authorization header
-            $headers = getallheaders();
-            if (!isset($headers['Authorization']) || !str_starts_with($headers['Authorization'], 'Bearer ')) {
-                $this->authLogger->warning("Unauthorized access: Missing Authorization header.");
-                ApiHelper::sendJsonResponse('error', 'Unauthorized', [], 401);
+            $token = $this->extractToken($request);
+
+            if (!$token || !$this->tokenService->validateToken($token)) {
+                $this->authLogger->warning("Invalid or missing token", ['ip' => $request->getServerParams()['REMOTE_ADDR']]);
+                return ApiHelper::sendJsonResponse('error', 'Unauthorized', [], 401);
             }
 
-            $token = substr($headers['Authorization'], 7);
-            $decoded = $this->tokenService->validateToken($token);
-            if (!$decoded) {
-                $this->authLogger->warning("Invalid token detected.");
-                ApiHelper::sendJsonResponse('error', 'Invalid token', [], 401);
-            }
+            $user = $this->tokenService->getUserFromToken($token);
+            $request = $request->withAttribute('user', $user);
 
-            // Store user details in session
-            $_SESSION['user_id'] = $decoded['sub'] ?? null;
-            $_SESSION['user_role'] = $decoded['role'] ?? 'guest';
-            
             // Role-based access control
-            if (!empty($roles) && !in_array($_SESSION['user_role'], $roles)) {
+            if (!empty($roles) && !in_array($user->role, $roles)) {
                 $this->securityLogger->warning("Unauthorized role access attempt.", [
-                    'userId' => $_SESSION['user_id'],
+                    'userId' => $user->id,
                     'requiredRoles' => $roles
                 ]);
-                ApiHelper::sendJsonResponse('error', 'Forbidden', [], 403);
+                return ApiHelper::sendJsonResponse('error', 'Forbidden', [], 403);
             }
 
             $this->authLogger->info("✅ User authenticated.", [
-                'userId' => $_SESSION['user_id'],
-                'role' => $_SESSION['user_role']
+                'userId' => $user->id,
+                'role' => $user->role
             ]);
 
-            return $next();
+            return $handler->handle($request);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
+            return ApiHelper::sendJsonResponse('error', 'Internal Server Error', [], 500);
         }
     }
+
+    private function extractToken(Request $request): ?string
+    {
+        $authHeader = $request->getHeaderLine('Authorization');
+        if (strpos($authHeader, 'Bearer ') === 0) {
+            return substr($authHeader, 7);
+        }
+
+        return $_COOKIE['jwt'] ?? null;
+    }
 }
+?>

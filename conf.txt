@@ -11,7 +11,7 @@
 
 return [
     // General file storage settings
-    'base_directory' => __DIR__ . '/../Storage', // Base directory for storing files
+    'base_directory' => '/path/to/filestorage', // Base directory for storing files
 
     // Storage structure
     'directories' => [
@@ -22,8 +22,8 @@ return [
 
     // File security settings
     'security' => [
-        'allowed_extensions' => ['pdf', 'docx', 'html'], // Allowed file extensions
-        'max_file_size' => 10 * 1024 * 1024, // Max file size (10 MB in bytes)
+        'allowed_extensions' => ['jpg', 'png', 'pdf', 'docx'], // Allowed file extensions
+        'max_file_size' => 10485760, // Max file size (10 MB in bytes)
         'encryption' => [
             'enabled' => true, // Enable encryption for stored files
         ],
@@ -47,10 +47,18 @@ return [
 ];
 === config/encryption.php ===
 <?php
+use Dotenv\Dotenv;
 
 $logFile = __DIR__ . '/../logs/errors.log';
 
 try {
+    // ✅ Ensure `.env` is loaded before accessing encryption keys
+    $dotenvPath = __DIR__ . '/../';
+    if (file_exists($dotenvPath . '.env')) {
+        $dotenv = Dotenv::createImmutable($dotenvPath);
+        $dotenv->load();
+    }
+
     // ✅ Load Environment Variables (If `.env` Exists)
     if (file_exists(__DIR__ . '/../.env')) {
         $env = parse_ini_file(__DIR__ . '/../.env');
@@ -92,22 +100,31 @@ try {
 ?>
 === config/app.php ===
 <?php
+use Dotenv\Dotenv;
 
 /**
  * General Application Configuration
  */
 
+// ✅ Ensure `.env` is loaded before accessing app settings
+$dotenvPath = __DIR__ . '/../';
+if (file_exists($dotenvPath . '.env')) {
+    $dotenv = Dotenv::createImmutable($dotenvPath);
+    $dotenv->load();
+}
+
+// ✅ Return structured app configurations
 return [
-    'name' => 'CarFuse',
-    'env' => 'development',  // Options: development, staging, production
-    'debug' => false,  // Set to true for debugging
-    'timezone' => 'UTC',
+    'environment' => getenv('APP_ENV') ?: 'production',
+    'debug'       => getenv('APP_DEBUG') === 'true',
 ];
 === config/dependencies.php ===
 <?php
 
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/ExceptionHandler.php';
+require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
+require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 
 use DI\Container;
 use Psr\Log\LoggerInterface;
@@ -165,27 +182,28 @@ $container->set(ExceptionHandler::class, fn($c) => new ExceptionHandler(
 ));
 
 // Add helper registrations immediately after logger registration.
-require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
-require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 $container->set(SecurityHelper::class, fn() => new SecurityHelper());
 
 // Step 2: Load configuration files.
 $container->get(LoggerInterface::class)->info("Step 2: Loading configuration files.");
 $configDirectory = __DIR__;
 $config = [];
-foreach (glob("{$configDirectory}/*.php") as $filePath) {
-    $fileName = basename($filePath, '.php');
-    if ($fileName !== 'dependencies') {
-        $config[$fileName] = require $filePath;
-        $container->get(LoggerInterface::class)->info("Configuration file loaded: {$fileName}.php");
+$configFiles = ['database', 'encryption', 'app', 'filestorage'];
+foreach ($configFiles as $file) {
+    $path = "{$configDirectory}/{$file}.php";
+    if (!file_exists($path)) {
+        $container->get(LoggerInterface::class)->critical("❌ Missing configuration file: {$file}.php");
+        die("❌ Missing configuration file: {$file}.php\n");
     }
+    $config[$file] = require $path;
+    $container->get(LoggerInterface::class)->info("Configuration file loaded: {$file}.php");
 }
 
 // Step 3: Initialize DatabaseHelper instances BEFORE services that depend on them.
 try {
     DatabaseHelper::setLogger($container->get('db_logger'));
-    $database = DatabaseHelper::getInstance($envConfig); // Pass the envConfig array
-    $secureDatabase = DatabaseHelper::getSecureInstance($envConfig); // Pass the envConfig array and specify 'secure'
+    $database = DatabaseHelper::getInstance($config['database']['app_database']); // Pass the app_database config
+    $secureDatabase = DatabaseHelper::getSecureInstance($config['database']['secure_database']); // Pass the secure_database config
     $container->get('db_logger')->info("✅ Both databases initialized successfully.");
 } catch (Exception $e) {
     $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
@@ -213,7 +231,7 @@ try {
 $encryptionService = new EncryptionService(
     $container->get(LoggerInterface::class), // Pass the correct logger
     $container->get(ExceptionHandler::class), // Pass the ExceptionHandler
-    $envConfig['encryption']['encryption_key'] ?? '' // Pass the encryption key from envConfig
+    $config['encryption']['encryption_key'] // Pass the encryption key from config
 );
 $container->set(EncryptionService::class, fn() => $encryptionService);
 $container->get(LoggerInterface::class)->info("Step 4: EncryptionService registered.");
@@ -242,9 +260,7 @@ $fileStorageConfig = $config['filestorage'] ?? [];
 if (!is_dir($templateDirectory)) {
     mkdir($templateDirectory, 0775, true);
 }
-if (!empty($fileStorageConfig['base_directory']) && !is_dir($fileStorageConfig['base_directory'])) {
-    mkdir($fileStorageConfig['base_directory'], 0775, true);
-}
+
 $container->get(LoggerInterface::class)->info("Step 7: Required directories verified.");
 
 // Step 8: Register services with proper dependency order.
@@ -263,8 +279,8 @@ $container->set(AuditService::class, fn() => new AuditService(
     $container->get(DatabaseHelper::class)
 ));
 $container->set(TokenService::class, fn() => new TokenService(
-    $envConfig['JWT_SECRET'] ?? '',
-    $envConfig['JWT_REFRESH_SECRET'] ?? '',
+    $config['encryption']['jwt_secret'], // Pass the JWT secret from config
+    $config['encryption']['jwt_refresh_secret'], // Pass the JWT refresh secret from config
     $container->get('auth_logger'),
     $container->get(ExceptionHandler::class)
 ));
@@ -274,7 +290,7 @@ $container->set(AuthService::class, fn() => new AuthService(
     $container->get(ExceptionHandler::class),
     $container->get('auth_logger'),
     $container->get('audit_logger'),
-    $envConfig['encryption'],
+    $config['encryption'],
     $container->get(Validator::class) // Inject Validator
 ));
 // Register UserController to receive AuthService via DI.
@@ -419,26 +435,25 @@ if (file_exists($dotenvPath . '.env')) {
 return [
     'app_database' => [
         'driver'    => 'mysql',
-        'host'      => getenv('DB_HOST') ?: 'localhost',
-        'database'  => getenv('DB_DATABASE') ?: '',
-        'username'  => getenv('DB_USERNAME') ?: '',
-        'password'  => getenv('DB_PASSWORD') ?: '',
+        'host'      => $_ENV['DB_HOST'] ?? 'localhost',
+        'database'  => $_ENV['DB_DATABASE'] ?? '',
+        'username'  => $_ENV['DB_USERNAME'] ?? '',
+        'password'  => $_ENV['DB_PASSWORD'] ?? '',
         'charset'   => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix'    => '',
     ],
     'secure_database' => [
         'driver'    => 'mysql',
-        'host'      => getenv('SECURE_DB_HOST') ?: 'localhost',
-        'database'  => getenv('SECURE_DB_DATABASE') ?: '',
-        'username'  => getenv('SECURE_DB_USERNAME') ?: '',
-        'password'  => getenv('SECURE_DB_PASSWORD') ?: '',
+        'host'      => $_ENV['SECURE_DB_HOST'] ?? 'localhost',
+        'database'  => $_ENV['SECURE_DB_DATABASE'] ?? '',
+        'username'  => $_ENV['SECURE_DB_USERNAME'] ?? '',
+        'password'  => $_ENV['SECURE_DB_PASSWORD'] ?? '',
         'charset'   => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix'    => '',
     ]
-];
-=== config/payu.php ===
+];=== config/payu.php ===
 <?php
 return [
     'api_key' => 'your-payu-api-key',

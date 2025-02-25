@@ -10,6 +10,8 @@ use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Str;
+use App\Services\Auth\AuthService;
+use Exception;
 
 /**
  * User Management Controller
@@ -24,6 +26,7 @@ class UserController extends Controller
     private LoggerInterface $userLogger;
     private LoggerInterface $authLogger;
     private LoggerInterface $auditLogger;
+    private AuthService $authService;
 
     public function __construct(
         Validator $validator,
@@ -31,7 +34,8 @@ class UserController extends Controller
         ExceptionHandler $exceptionHandler,
         LoggerInterface $userLogger,
         LoggerInterface $authLogger,
-        LoggerInterface $auditLogger
+        LoggerInterface $auditLogger,
+        AuthService $authService
     ) {
         $this->validator = $validator;
         $this->tokenService = $tokenService;
@@ -39,6 +43,7 @@ class UserController extends Controller
         $this->userLogger = $userLogger;
         $this->authLogger = $authLogger;
         $this->auditLogger = $auditLogger;
+        $this->authService = $authService;
     }
 
     /**
@@ -121,50 +126,41 @@ class UserController extends Controller
     /**
      * Retrieve current user profile.
      */
-    public function getUserProfile()
+    public function getUserProfile($request = null)
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
+        try {
+            $token = $_COOKIE['jwt'] ?? '';
+            if (!$this->authService->validateToken($token)) {
+                throw new Exception("Invalid token.");
+            }
+
+            $userData = $this->authService->getUserFromToken($token);
+            ApiHelper::sendJsonResponse('success', 'User profile fetched', $userData, 200);
+        } catch (Exception $e) {
+            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 401);
         }
-        $user = User::find($_SESSION['user_id'] ?? null);
-        return ApiHelper::sendJsonResponse('success', 'User profile retrieved', $user, 200);
     }
 
     /**
      * 🔹 Update user profile
      */
-    public function updateProfile()
+    public function updateProfile($request = null)
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-        $user = $_SESSION['user'] ?? null;
-        if (!$user) {
-            return ApiHelper::sendJsonResponse('error', 'Unauthorized', null, 401);
-        }
-        $data = [
-            'name'    => $_POST['name'] ?? null,
-            'surname' => $_POST['surname'] ?? null,
-            'email'   => $_POST['email'] ?? null,
-            'phone'   => $_POST['phone'] ?? null,
-            'address' => $_POST['address'] ?? null,
-        ];
-        $rules = [
-            'name'    => 'required|string|max:255',
-            'surname' => 'required|string|max:255',
-            'email'   => 'required|email',
-            'phone'   => 'nullable|string|max:15',
-            'address' => 'nullable|string|max:255',
-        ];
-        if (!$this->validator->validate($data, $rules)) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
-        }
         try {
-            $user->update($data);
-            $this->auditLogger->info("User profile updated", ['userId' => $user->id]);
-            return ApiHelper::sendJsonResponse('success', 'Profile updated successfully', null, 200);
-        } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
+            $token = $_COOKIE['jwt'] ?? '';
+            if (!$this->authService->validateToken($token)) {
+                throw new Exception("Invalid token.");
+            }
+
+            $userData = $this->authService->getUserFromToken($token);
+            $data = json_decode(file_get_contents('php://input'), true);
+
+            // Assume $this->authService->updateUserProfile($userData['id'], $data) exists
+            $this->authService->updateUserProfile($userData['id'], $data);
+
+            ApiHelper::sendJsonResponse('success', 'Profile updated successfully');
+        } catch (Exception $e) {
+            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 400);
         }
     }
 

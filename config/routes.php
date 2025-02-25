@@ -3,8 +3,7 @@
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
 use App\Middleware\AuthMiddleware;
-use App\Helpers\SecurityHelper;
-use App\Helpers\ApiHelper;
+use App\Middleware\TokenValidationMiddleware;
 
 return simpleDispatcher(function (RouteCollector $router) {
 
@@ -25,29 +24,24 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->addRoute(['POST'], '/api/auth/logout', 'App\Controllers\AuthController@logout');
 
     // ✅ Protected API Routes (Require Authentication)
-    $router->addRoute(['GET'], '/api/user/profile', function () {
-        AuthMiddleware::requireAuth();
-        require '../public/api/user/profile.php';
+    $router->addRoute(['GET'], '/api/user/profile', function (Request $request, RequestHandler $handler) {
+        return (new TokenValidationMiddleware())->__invoke($request, $handler);
     });
 
-    $router->addRoute(['GET'], '/api/user/settings', function () {
-        AuthMiddleware::requireAuth();
-        require '../public/api/user/settings.php';
+    $router->addRoute(['GET'], '/api/user/settings', function (Request $request, RequestHandler $handler) {
+        return (new TokenValidationMiddleware())->__invoke($request, $handler);
     });
 
-    $router->addRoute(['GET'], '/api/user/notifications', function () {
-        AuthMiddleware::requireAuth();
-        require '../public/api/user/notifications.php';
+    $router->addRoute(['GET'], '/api/user/notifications', function (Request $request, RequestHandler $handler) {
+        return (new TokenValidationMiddleware())->__invoke($request, $handler);
     });
 
-    $router->addRoute(['GET'], '/api/dashboard/metrics', function () {
-        AuthMiddleware::requireAuth();
-        require '../public/api/dashboard/metrics.php';
+    $router->addRoute(['GET'], '/api/dashboard/metrics', function (Request $request, RequestHandler $handler) {
+        return (new TokenValidationMiddleware())->__invoke($request, $handler);
     });
 
-    $router->addRoute(['GET'], '/api/dashboard/reports', function () {
-        AuthMiddleware::requireAuth();
-        require '../public/api/dashboard/reports.php';
+    $router->addRoute(['GET'], '/api/dashboard/reports', function (Request $request, RequestHandler $handler) {
+        return (new TokenValidationMiddleware())->__invoke($request, $handler);
     });
 
     // ✅ Booking API Routes
@@ -66,19 +60,16 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->addRoute(['GET'], '/api/reports/view/{id:\d+}', 'App\Controllers\ReportController@viewReport');
 
     // ✅ Admin API Routes
-    $router->addRoute(['GET'], '/api/admin/users', function () {
-        AuthMiddleware::requireAdmin();
-        require '../public/api/admin/users.php';
+    $router->addRoute(['GET'], '/api/admin/users', function (Request $request, RequestHandler $handler) {
+        return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
     });
 
-    $router->addRoute(['GET'], '/api/admin/dashboard', function () {
-        AuthMiddleware::requireAdmin();
-        require '../public/api/admin/dashboard.php';
+    $router->addRoute(['GET'], '/api/admin/dashboard', function (Request $request, RequestHandler $handler) {
+        return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
     });
 
-    $router->addRoute(['GET'], '/api/admin/logs', function () {
-        AuthMiddleware::requireAdmin();
-        require '../public/api/admin/logs.php';
+    $router->addRoute(['GET'], '/api/admin/logs', function (Request $request, RequestHandler $handler) {
+        return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
     });
 
     // ✅ Document API Routes
@@ -87,14 +78,12 @@ return simpleDispatcher(function (RouteCollector $router) {
     $router->addRoute(['GET'], '/api/documents/view/{id:\d+}', 'App\Controllers\DocumentController@viewDocument');
 
     // ✅ System API Routes
-    $router->addRoute(['GET'], '/api/system/logs', function () {
-        AuthMiddleware::requireAdmin();
-        require '../public/api/system/logs.php';
+    $router->addRoute(['GET'], '/api/system/logs', function (Request $request, RequestHandler $handler) {
+        return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
     });
 
-    $router->addRoute(['GET'], '/api/system/status', function () {
-        AuthMiddleware::requireAuth();
-        require '../public/api/system/status.php';
+    $router->addRoute(['GET'], '/api/system/status', function (Request $request, RequestHandler $handler) {
+        return (new TokenValidationMiddleware())->__invoke($request, $handler);
     });
 
     // ✅ Catch-All for Unmatched Requests

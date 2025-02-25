@@ -51,78 +51,50 @@ class AuthController extends Controller
 
     public function login($request = null)
     {
-        // ...existing code...
-        $data = json_decode(file_get_contents("php://input"), true);
-        if (!$data || !is_array($data)) {
-            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
+        try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (!isset($data['email']) || !isset($data['password'])) {
+                throw new Exception("Email and password are required.");
+            }
+
+            $result = $this->authService->login($data['email'], $data['password']);
+
+            setcookie('jwt', $result['token'], [
+                'expires' => time() + 3600,
+                'path' => '/',
+                'secure' => true,
+                'httponly' => true,
+                'samesite' => 'Strict',
+            ]);
+
+            setcookie('refresh_token', $result['refresh_token'], [
+                'expires' => time() + 86400,
+                'path' => '/',
+                'secure' => true,
+                'httponly' => true,
+                'samesite' => 'Strict',
+            ]);
+
+            ApiHelper::sendJsonResponse('success', 'Login successful', $result);
+        } catch (Exception $e) {
+            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 401);
         }
-        
-        $email = $data['email'] ?? '';
-        $password = $data['password'] ?? '';
-        
-        $result = $this->authService->login($email, $password);
-        setcookie("jwt", $result['token'], [
-            "expires"  => time() + 3600,
-            "path"     => "/",
-            "secure"   => true,
-            "httponly" => true,
-            "samesite" => "Strict"
-        ]);
-        setcookie("refresh_token", $result['refresh_token'], [
-            "expires"  => time() + 604800,
-            "path"     => "/",
-            "secure"   => true,
-            "httponly" => true,
-            "samesite" => "Strict"
-        ]);
-        // Improved logging with context
-        $this->authLogger->info("User logged in", ['email' => $email]);
-        return ApiHelper::sendJsonResponse('success', 'User logged in', ['errors' => (object)[]], 200);
     }
 
     public function register($request = null)
     {
-        // ...existing code...
-        $data = json_decode(file_get_contents("php://input"), true);
-        if (!$data || !is_array($data)) {
-            return ApiHelper::sendJsonResponse('error', 'Invalid JSON input', ['errors' => (object)[]], 400);
-        }
-        
-        $rules = [
-            'name'             => 'required',
-            'email'            => 'required|email',
-            'password'         => 'required',
-            'confirm_password' => 'required'
-        ];
-        if (!$this->validator->validate($data, $rules)) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', ['errors' => $this->validator->errors()], 400);
-        }
-        if ($data['password'] !== $data['confirm_password']) {
-            return ApiHelper::sendJsonResponse('error', 'Password and confirm password do not match', ['errors' => (object)[]], 400);
-        }
-        
-        $registrationData = [
-            'name'     => $data['name'],
-            'surname'  => $data['surname']  ?? '',
-            'email'    => $data['email'],
-            'password' => $data['password'],
-            'phone'    => $data['phone']    ?? null,
-            'address'  => $data['address']  ?? null
-        ];
 
         try {
-            $result = $this->authService->registerUser($registrationData);
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (!isset($data['email']) || !isset($data['password']) || !isset($data['name'])) {
+                throw new Exception("Email, password, and name are required.");
+            }
+
+            $result = $this->authService->registerUser($data);
+            ApiHelper::sendJsonResponse('success', 'Registration successful', $result);
         } catch (Exception $e) {
-            $this->exceptionHandler->handleException($e);
-            // Additional audit logging if needed
-            $this->auditLogger->error("User registration failed", [
-                'error' => $e->getMessage(),
-                'email' => $data['email']
-            ]);
-            return; // ExceptionHandler is assumed to handle the response
+            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 400);
         }
-        $this->auditLogger->info("User registered", ['email' => $data['email']]);
-        return ApiHelper::sendJsonResponse('success', 'User registered', $result, 201);
     }
 
     public function resetPasswordRequest($request = null)
@@ -138,46 +110,40 @@ class AuthController extends Controller
 
     public function refresh()
     {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            ApiHelper::sendJsonResponse('error', 'Method Not Allowed', ['errors' => (object)[]], 405);
-        }
-        $refreshToken = $_COOKIE['refresh_token'] ?? null;
-        if (!$refreshToken) {
-            ApiHelper::sendJsonResponse('error', 'Refresh token is required', ['errors' => (object)[]], 400);
-        }
-        $newToken = $this->tokenService->refreshToken($refreshToken);
-        if ($newToken) {
-            setcookie("jwt", $newToken, [
-                "expires" => time() + 3600,
-                "path" => "/",
-                "secure" => true,
-                "httponly" => true,
-                "samesite" => "Strict"
+        try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (!isset($data['refresh_token'])) {
+                throw new Exception("Refresh token is required.");
+            }
+
+            $result = $this->authService->refreshToken($data['refresh_token']);
+
+            setcookie('jwt', $result['token'], [
+                'expires' => time() + 3600,
+                'path' => '/',
+                'secure' => true,
+                'httponly' => true,
+                'samesite' => 'Strict',
             ]);
-            ApiHelper::sendJsonResponse('success', 'Token refreshed', ['errors' => (object)[]], 200);
-        } else {
-            ApiHelper::sendJsonResponse('error', 'Invalid refresh token', ['errors' => (object)[]], 401);
+
+            ApiHelper::sendJsonResponse('success', 'Token refreshed', $result);
+        } catch (Exception $e) {
+            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 401);
         }
     }
 
     public function logout($request = null)
     {
-        $this->authService->logout();
-        setcookie("jwt", "", [
-            "expires" => time() - 3600,
-            "path" => "/",
-            "secure" => true,
-            "httponly" => true,
-            "samesite" => "Strict"
-        ]);
-        setcookie("refresh_token", "", [
-            "expires" => time() - 3600,
-            "path" => "/",
-            "secure" => true,
-            "httponly" => true,
-            "samesite" => "Strict"
-        ]);
-        ApiHelper::sendJsonResponse('success', 'User logged out', ['errors' => (object)[]], 200);
+        try {
+            $this->authService->logout();
+
+            setcookie('jwt', '', time() - 3600, '/');
+            setcookie('refresh_token', '', time() - 3600, '/');
+
+            ApiHelper::sendJsonResponse('success', 'Logout successful');
+        } catch (Exception $e) {
+            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 400);
+        }
     }
 
     public function userDetails($request = null)
