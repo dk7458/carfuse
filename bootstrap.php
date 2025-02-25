@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/vendor/autoload.php';
 
-// Step 1: Initialize Logger First
+// Add the missing import:
+use App\Helpers\DatabaseHelper;
+
 require_once __DIR__ . '/logger.php';
 $logger = getLogger('system');
 if (!$logger instanceof Monolog\Logger) {
