@@ -2,28 +2,53 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 
 // Load dependency container
-$container = require_once __DIR__ . '/../config/dependencies.php';
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
-// Get request URI and method
-$uri = $_SERVER['REQUEST_URI'];
+// ✅ Load Bootstrap (Dependencies, Configs, Logger, DB)
+$bootstrap = require_once __DIR__ . '/../bootstrap.php';
+// Replace bootstrap logger with centralized logger
+$logger = getLogger('api');
+$container = $bootstrap['container'];
+
+// ✅ Get Requested URI & HTTP Method
+$requestUri = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 
-// Load routes configuration
-$dispatcher = require_once __DIR__ . '/../config/routes.php';
+// ✅ Route API Requests Using FastRoute
+$dispatcher = require __DIR__ . '/../config/routes.php';
+$routeInfo = $dispatcher->dispatch($requestMethod, "/$requestUri");
 
-// Strip query string and decode URI
-$uri = rawurldecode(parse_url($uri, PHP_URL_PATH));
+switch ($routeInfo[0]) {
+    case FastRoute\Dispatcher::FOUND:
+        $handler = $routeInfo[1];
+        $vars = $routeInfo[2];
 
-// Dispatch the request
-$routeInfo = $dispatcher->dispatch($requestMethod, $uri);
+        if (is_callable($handler)) {
+            call_user_func($handler, $vars);
+        } elseif (is_string($handler) && strpos($handler, '@') !== false) {
+            list($class, $method) = explode('@', $handler, 2);
+            $controller = $container->get($class);
+            if (method_exists($controller, $method)) {
+                $controller->{$method}($vars);
+            } else {
+                http_response_code(500);
+                echo json_encode(["error" => "Controller method not found"]);
+            }
+        } else {
+            http_response_code(500);
+            echo json_encode(["error" => "Handler not callable"]);
+        }
+        break;
 
-// Use RouterHelper to process the route
-$routerHelper = new App\Helpers\RouterHelper($container);
-$response = $routerHelper->processRouteResult($routeInfo);
+    case FastRoute\Dispatcher::NOT_FOUND:
+        http_response_code(404);
+        echo json_encode(["error" => "Route not found"]);
+        break;
 
-// Handle the response if it hasn't been sent yet
-if (is_array($response) || is_object($response)) {
-    header('Content-Type: application/json');
-    echo json_encode($response);
+    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+        http_response_code(405);
+        echo json_encode(["error" => "Method Not Allowed"]);
+        break;
 }
 ?>
