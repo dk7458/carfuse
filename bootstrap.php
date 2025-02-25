@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../vendor/autoload.php';
+
 // Step 1: Initialize Logger First
 require_once __DIR__ . '/logger.php';
 $logger = getLogger('system');
