@@ -46,7 +46,7 @@ class AuthService
             $user = $this->db->table('users')->where('email', $data['email'])->first();
             if (!$user || !password_verify($data['password'], $user->password_hash)) {
                 $this->authLogger->warning("Authentication failed", ['email' => $data['email']]);
-                throw new Exception("Invalid credentials");
+                throw new InvalidCredentialsException("Invalid credentials");
             }
 
             $token = $this->tokenService->generateToken($user);
@@ -59,7 +59,7 @@ class AuthService
         } catch (Exception $e) {
             $this->authLogger->error("[auth] ❌ Credential error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 401);
+            throw $e;
         }
     }
 
@@ -75,11 +75,12 @@ class AuthService
             $this->validator->validate($data, $rules);
             $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
             $userId = $this->db->table('users')->insertGetId($data);
-            return ApiHelper::sendJsonResponse('success', 'User registered', ['user_id' => $userId], 201);
+            return ['user_id' => $userId];
         } catch (\InvalidArgumentException $e) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
+            throw $e;
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
+            throw $e;
         }
     }
 
@@ -97,7 +98,7 @@ class AuthService
         } catch (Exception $e) {
             $this->authLogger->error("[auth] ❌ Refresh token error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            ApiHelper::sendJsonResponse('error', $e->getMessage(), [], 401);
+            throw $e;
         }
     }
 

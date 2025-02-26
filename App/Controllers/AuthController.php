@@ -3,18 +3,17 @@
 namespace App\Controllers;
 
 use App\Services\Auth\AuthService;
-use App\Helpers\LoggingHelper;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Log\LoggerInterface;
 
 class AuthController extends Controller
 {
-    protected LoggerInterface $logger; // Ensure the type matches the parent class
+    protected LoggerInterface $logger;
     private AuthService $authService;
 
     public function __construct(
-        LoggerInterface $logger,  // Parent logger
+        LoggerInterface $logger,
         AuthService $authService
     ) {
         parent::__construct($logger);
@@ -24,11 +23,7 @@ class AuthController extends Controller
 
     public function login(Request $request, Response $response)
     {
-        $data = json_decode(file_get_contents("php://input"), true);
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            return $this->jsonResponse($response, ["error" => "Method Not Allowed"], 405);
-        }
+        $data = json_decode($request->getBody()->getContents(), true);
 
         if (!isset($data['email']) || !isset($data['password'])) {
             return $this->jsonResponse($response, ["error" => "Email and password are required"], 400);
@@ -42,11 +37,7 @@ class AuthController extends Controller
 
     public function register(Request $request, Response $response)
     {
-        $data = json_decode(file_get_contents("php://input"), true);
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            return $this->jsonResponse($response, ["error" => "Method Not Allowed"], 405);
-        }
+        $data = json_decode($request->getBody()->getContents(), true);
 
         if (!isset($data['email']) || !isset($data['password']) || !isset($data['name'])) {
             return $this->jsonResponse($response, ["error" => "Name, email, and password are required"], 400);
@@ -83,11 +74,7 @@ class AuthController extends Controller
 
     public function resetPasswordRequest(Request $request, Response $response)
     {
-        $data = json_decode(file_get_contents("php://input"), true);
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            return $this->jsonResponse($response, ["error" => "Method Not Allowed"], 405);
-        }
+        $data = json_decode($request->getBody()->getContents(), true);
 
         if (!isset($data['email'])) {
             return $this->jsonResponse($response, ["error" => "Email is required"], 400);
