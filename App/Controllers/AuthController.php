@@ -24,17 +24,37 @@ class AuthController extends Controller
 
     public function login(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
+        $data = json_decode(file_get_contents("php://input"), true);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return $this->jsonResponse($response, ["error" => "Method Not Allowed"], 405);
+        }
+
+        if (!isset($data['email']) || !isset($data['password'])) {
+            return $this->jsonResponse($response, ["error" => "Email and password are required"], 400);
+        }
+
         $result = $this->authService->login($data);
         $this->logger->info('User login attempt', ['data' => $data]);
+
         return $this->jsonResponse($response, $result);
     }
 
     public function register(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
+        $data = json_decode(file_get_contents("php://input"), true);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return $this->jsonResponse($response, ["error" => "Method Not Allowed"], 405);
+        }
+
+        if (!isset($data['email']) || !isset($data['password']) || !isset($data['name'])) {
+            return $this->jsonResponse($response, ["error" => "Name, email, and password are required"], 400);
+        }
+
         $result = $this->authService->register($data);
         $this->logger->info('User registration attempt', ['data' => $data]);
+
         return $this->jsonResponse($response, $result);
     }
 
@@ -59,5 +79,23 @@ class AuthController extends Controller
         $user = $request->getAttribute('user');
         $this->logger->info('User details retrieved', ['user' => $user]);
         return $this->jsonResponse($response, $user);
+    }
+
+    public function resetPasswordRequest(Request $request, Response $response)
+    {
+        $data = json_decode(file_get_contents("php://input"), true);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return $this->jsonResponse($response, ["error" => "Method Not Allowed"], 405);
+        }
+
+        if (!isset($data['email'])) {
+            return $this->jsonResponse($response, ["error" => "Email is required"], 400);
+        }
+
+        // Trigger password reset flow (implementation not shown)
+        // ...
+
+        return $this->jsonResponse($response, ["message" => "Password reset request received"]);
     }
 }

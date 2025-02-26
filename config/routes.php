@@ -30,6 +30,7 @@ return function (Container $container) {
         $router->addRoute(['POST'], '/api/auth/register', [$authController, 'register']);
         $router->addRoute(['POST'], '/api/auth/refresh', [$authController, 'refresh']);
         $router->addRoute(['POST'], '/api/auth/logout', [$authController, 'logout']);
+        $router->addRoute(['POST'], '/api/auth/reset-request', [$authController, 'resetPasswordRequest']);
         $router->addRoute(['GET'], '/api/auth/userDetails', [$authController, 'userDetails'])->middleware(AuthMiddleware::class);
 
         $router->post('/login', [$authController, 'login']);

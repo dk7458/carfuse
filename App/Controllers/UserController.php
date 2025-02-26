@@ -3,9 +3,9 @@
 namespace App\Controllers;
 
 use App\Models\User;
-use ApiHelper;
-use Validator;
-use TokenService;
+use App\Helpers\ApiHelper;
+use App\Services\Validator;
+use App\Services\TokenService;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use Illuminate\Routing\Controller;
@@ -45,25 +45,24 @@ class UserController extends Controller
     /**
      * Register a new user.
      */
-    public function registerUser()
+    public function registerUser(Request $request, Response $response)
     {
-        $data = json_decode(file_get_contents('php://input'), true);
-        // Validate input data
+        $data = json_decode($request->getBody()->getContents(), true);
+
         $rules = [
-            'email'    => 'required|email',
+            'email'    => 'required|email|unique:users,email',
             'password' => 'required|min:6',
             'name'     => 'required|string',
         ];
-        if (!$this->validator->validate($data, $rules)) {
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', $this->validator->errors(), 400);
-        }
+
         try {
+            $this->validator->validate($data, $rules);
+            $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
             $user = User::create($data);
-            if (!$user) {
-                throw new \Exception("User registration failed");
-            }
             $this->logger->info("User registered successfully", ['email' => $data['email']]);
             return ApiHelper::sendJsonResponse('success', 'User registered successfully', ['user_id' => $user->id], 201);
+        } catch (\InvalidArgumentException $e) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
         }
@@ -79,7 +78,7 @@ class UserController extends Controller
     }
 
     /**
-     * 🔹 Update user profile
+     * Update user profile.
      */
     public function updateProfile(Request $request, Response $response)
     {
@@ -90,14 +89,16 @@ class UserController extends Controller
     }
 
     /**
-     * 🔹 Request password reset
+     * Request password reset.
      */
-    public function requestPasswordReset()
+    public function requestPasswordReset(Request $request, Response $response)
     {
-        $data = json_decode(file_get_contents('php://input'), true);
+        $data = json_decode($request->getBody()->getContents(), true);
+
         if (!isset($data['email'])) {
             return ApiHelper::sendJsonResponse('error', 'Email is required', null, 400);
         }
+
         try {
             $token = Str::random(60);
             \App\Models\PasswordReset::create([
@@ -112,9 +113,9 @@ class UserController extends Controller
     }
 
     /**
-     * 🔹 User dashboard access
+     * User dashboard access.
      */
-    public function userDashboard()
+    public function userDashboard(Request $request, Response $response)
     {
         // Rendering HTML for dashboard via ApiHelper response
         $html = "<html><body><h1>User Dashboard</h1><!-- ...existing dashboard HTML... --></body></html>";
