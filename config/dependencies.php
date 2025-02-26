@@ -36,6 +36,7 @@ use App\Queues\DocumentQueue;
 use App\Models\Payment;
 use GuzzleHttp\Client;
 use App\Helpers\LoggingHelper;
+use App\Controllers\UserController;
 
 // Step 1: Initialize DI Container
 try {
@@ -176,10 +177,14 @@ $container->set(AuthService::class, fn() => new AuthService(
     $config['encryption'], // Pass entire encryption config for token settings
     $container->get(Validator::class) // Inject Validator
 ));
-// Register UserController with the updated AuthService dependency.
-$container->set(\App\Controllers\UserController::class, fn() => new \App\Controllers\UserController(
-    $container->get(\App\Services\Auth\AuthService::class)
-));
+$container->set(UserController::class, function ($container) {
+    return new UserController(
+        $container->get(Validator::class),
+        $container->get(TokenService::class),
+        $container->get(ExceptionHandler::class),
+        $container->get(AuthService::class)
+    );
+});
 $container->set(UserService::class, fn() => new UserService(
     $container->get(DatabaseHelper::class),
     $container->get('auth_logger'),
