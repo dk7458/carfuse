@@ -5,7 +5,7 @@ namespace App\Controllers;
 use App\Models\User;
 use App\Helpers\ApiHelper;
 use App\Services\Validator;
-use App\Services\TokenService;
+use App\Services\Auth\TokenService;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use App\Services\Auth\AuthService;
