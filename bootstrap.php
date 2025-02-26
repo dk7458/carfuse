@@ -5,6 +5,8 @@ require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/App/Helpers/DatabaseHelper.php';
 require_once __DIR__ . '/App/Helpers/LoggingHelper.php'; // Ensure LoggingHelper is included
 require_once __DIR__ . '/logger.php'; // Ensure the global getLogger function is included
+$logger->info("🔄 Security helper and other critical services loaded.");
+
 use Dotenv\Dotenv;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\LoggingHelper;
@@ -68,13 +70,10 @@ try {
 }
 
 // Step 5: Register Logger in DI Container Before Other Services
-$container->set(\Psr\Log\LoggerInterface::class, fn() => $loggingHelper->getDefaultLogger());
+$container->set(LoggerInterface::class, fn() => $loggingHelper->getDefaultLogger());
 
 // Step 6: Load Security Helper and Other Critical Services
-require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
-require_once __DIR__ . '/App/Helpers/DatabaseHelper.php';
-require_once __DIR__ . '/App/Helpers/ExceptionHandler.php';
-$logger->info("🔄 Security helper and other critical services loaded.");
+
 
 // Step 7: Load Database Instances
 try {
@@ -109,9 +108,9 @@ $logger->info("🔄 Encryption key validated.");
 // Step 10: Validate Required Dependencies
 $missingDependencies = [];
 $requiredServices = [
-    \App\Services\NotificationService::class,
-    \App\Services\Auth\TokenService::class,
-    \App\Services\Validator::class
+    NotificationService::class,
+    TokenService::class,
+    Validator::class
 ];
 if (!empty($missingDependencies)) {
     $logger->error("❌ Missing dependencies: " . implode(', ', $missingDependencies));

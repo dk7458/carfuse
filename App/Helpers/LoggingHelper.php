@@ -13,9 +13,9 @@ class LoggingHelper
      *
      * @return LoggerInterface
      */
-    public function getDefaultLogger(): LoggerInterface
+    public static function getDefaultLogger(): LoggerInterface
     {
-        return $this->getLoggerByCategory('application');
+        return static::getLoggerByCategory('application');
     }
 
     /**
@@ -24,7 +24,7 @@ class LoggingHelper
      * @param string $category
      * @return LoggerInterface
      */
-    public function getLoggerByCategory(string $category): LoggerInterface
+    public static function getLoggerByCategory(string $category): LoggerInterface
     {
         // Call the global getLogger() function defined in the root logger configuration.
         return \getLogger($category);
