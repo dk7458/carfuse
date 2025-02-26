@@ -8,8 +8,6 @@ use App\Services\Validator;
 use App\Services\TokenService;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
-use Illuminate\Routing\Controller;
-use Illuminate\Support\Str;
 use App\Services\Auth\AuthService;
 use Exception;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -21,7 +19,7 @@ use App\Helpers\LoggingHelper;
  *
  * Handles profile management, password resets, and dashboard access.
  */
-class UserController extends Controller
+class UserController
 {
     private Validator $validator;
     private TokenService $tokenService;
