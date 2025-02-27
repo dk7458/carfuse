@@ -38,6 +38,9 @@ class AuthService
         $this->auditLogger = $auditLogger;
         $this->encryptionConfig = $encryptionConfig;
         $this->validator = $validator;
+
+        // Log the database connection being used
+        $this->authLogger->info("Using database connection from app_database.");
     }
 
     public function login(array $data)

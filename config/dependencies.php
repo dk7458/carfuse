@@ -169,13 +169,13 @@ $container->set(TokenService::class, fn() => new TokenService(
     $container->get(ExceptionHandler::class)
 ));
 $container->set(AuthService::class, fn() => new AuthService(
-    $container->get(DatabaseHelper::class),  // Inject DatabaseHelper
+    DatabaseHelper::getInstance(),           // Use default app_database instance
     $container->get(TokenService::class),
     $container->get(ExceptionHandler::class),
     $container->get('auth_logger'),
     $container->get('audit_logger'),
-    $config['encryption'], // Pass entire encryption config for token settings
-    $container->get(Validator::class) // Inject Validator
+    $config['encryption'],                     // Entire encryption config for token settings
+    $container->get(Validator::class)
 ));
 $container->set(UserController::class, function ($container) {
     return new UserController(
