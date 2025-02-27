@@ -14,7 +14,7 @@ use App\Services\Validator;
 
 class AuthService
 {
-    private $db;
+    private $pdo;
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $authLogger;
@@ -31,7 +31,7 @@ class AuthService
         array $encryptionConfig,
         Validator $validator
     ) {
-        $this->db = $dbHelper->getCapsule();
+        $this->pdo = $dbHelper->getPdo();
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
@@ -46,8 +46,11 @@ class AuthService
     public function login(array $data)
     {
         try {
-            $user = $this->db->table('users')->where('email', $data['email'])->first();
-            if (!$user || !password_verify($data['password'], $user->password_hash)) {
+            $stmt = $this->pdo->prepare("SELECT * FROM users WHERE email = ?");
+            $stmt->execute([$data['email']]);
+            $user = $stmt->fetch();
+
+            if (!$user || !password_verify($data['password'], $user['password_hash'])) {
                 $this->authLogger->warning("Authentication failed", ['email' => $data['email']]);
                 throw new InvalidCredentialsException("Invalid credentials");
             }
@@ -77,7 +80,11 @@ class AuthService
         try {
             $this->validator->validate($data, $rules);
             $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
-            $userId = $this->db->table('users')->insertGetId($data);
+
+            $stmt = $this->pdo->prepare("INSERT INTO users (name, email, password) VALUES (?, ?, ?)");
+            $stmt->execute([$data['name'], $data['email'], $data['password']]);
+            $userId = $this->pdo->lastInsertId();
+
             return ['user_id' => $userId];
         } catch (\InvalidArgumentException $e) {
             throw $e;
@@ -91,7 +98,10 @@ class AuthService
     {
         try {
             $decoded = JWT::decode($data['refresh_token'], new Key($this->tokenService->jwtSecret, 'HS256'));
-            $user = User::find($decoded->sub);
+            $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = ?");
+            $stmt->execute([$decoded->sub]);
+            $user = $stmt->fetch();
+
             if (!$user) {
                 throw new Exception("Invalid refresh token.");
             }

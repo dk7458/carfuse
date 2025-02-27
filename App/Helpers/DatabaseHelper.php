@@ -2,7 +2,7 @@
 
 namespace App\Helpers;
 
-use Illuminate\Database\Capsule\Manager as Capsule;
+use PDO;
 use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ApiHelper;
@@ -11,16 +11,17 @@ class DatabaseHelper
 {
     private static ?DatabaseHelper $instance = null;
     private static ?DatabaseHelper $secureInstance = null;
-    private Capsule $capsule;
+    private PDO $pdo;
     private static LoggerInterface $logger;
 
     private function __construct(array $config)
     {
         try {
-            $this->capsule = new Capsule();
-            $this->capsule->addConnection($config);
-            $this->capsule->setAsGlobal();
-            $this->capsule->bootEloquent();
+            $dsn = "mysql:host={$config['host']};dbname={$config['database']};charset={$config['charset']}";
+            $this->pdo = new PDO($dsn, $config['username'], $config['password'], [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]);
 
             // ✅ Log successful initialization
             self::$logger->info("✅ Database connection initialized successfully.");
@@ -71,15 +72,15 @@ class DatabaseHelper
         return self::$secureInstance;
     }
 
-    public function getCapsule(): Capsule
+    public function getPdo(): PDO
     {
-        return $this->capsule;
+        return $this->pdo;
     }
 
     public function getConnection()
     {
         try {
-            return $this->capsule->getConnection();
+            return $this->pdo;
         } catch (Exception $e) {
             self::$logger->error("❌ Failed to get database connection: " . $e->getMessage());
             return null;
@@ -92,7 +93,7 @@ class DatabaseHelper
     public static function safeQuery(callable $query)
     {
         try {
-            return $query(self::getInstance()->getCapsule());
+            return $query(self::getInstance()->getPdo());
         } catch (\PDOException $e) {
             self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             if ($e->getCode() == "23000") {
@@ -110,7 +111,13 @@ class DatabaseHelper
      */
     public static function insert($table, $data)
     {
-        return self::safeQuery(fn ($db) => $db->table($table)->insertGetId($data));
+        return self::safeQuery(function ($pdo) use ($table, $data) {
+            $columns = implode(", ", array_keys($data));
+            $placeholders = implode(", ", array_fill(0, count($data), "?"));
+            $stmt = $pdo->prepare("INSERT INTO {$table} ({$columns}) VALUES ({$placeholders})");
+            $stmt->execute(array_values($data));
+            return $pdo->lastInsertId();
+        });
     }
 
     /**
@@ -118,7 +125,13 @@ class DatabaseHelper
      */
     public static function update($table, $data, $where)
     {
-        return self::safeQuery(fn ($db) => $db->table($table)->where($where)->update($data));
+        return self::safeQuery(function ($pdo) use ($table, $data, $where) {
+            $set = implode(", ", array_map(fn($key) => "{$key} = ?", array_keys($data)));
+            $whereClause = implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
+            $stmt = $pdo->prepare("UPDATE {$table} SET {$set} WHERE {$whereClause}");
+            $stmt->execute(array_merge(array_values($data), array_values($where)));
+            return $stmt->rowCount();
+        });
     }
 
     /**
@@ -126,7 +139,12 @@ class DatabaseHelper
      */
     public static function delete($table, $where)
     {
-        return self::safeQuery(fn ($db) => $db->table($table)->where($where)->delete());
+        return self::safeQuery(function ($pdo) use ($table, $where) {
+            $whereClause = implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
+            $stmt = $pdo->prepare("DELETE FROM {$table} WHERE {$whereClause}");
+            $stmt->execute(array_values($where));
+            return $stmt->rowCount();
+        });
     }
 
     /**
@@ -134,6 +152,10 @@ class DatabaseHelper
      */
     public static function select($query, $params = [])
     {
-        return self::safeQuery(fn ($db) => $db->select($query, $params));
+        return self::safeQuery(function ($pdo) use ($query, $params) {
+            $stmt = $pdo->prepare($query);
+            $stmt->execute($params);
+            return $stmt->fetchAll();
+        });
     }
 }

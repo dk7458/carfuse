@@ -92,7 +92,9 @@ class Validator
                 }
             } elseif (strpos($rule, 'unique:') === 0) {
                 [$table, $column] = explode(',', substr($rule, 7));
-                if ($this->db->getCapsule()->table($table)->where($column, $value)->exists()) {
+                $stmt = $this->db->getPdo()->prepare("SELECT COUNT(*) FROM {$table} WHERE {$column} = ?");
+                $stmt->execute([$value]);
+                if ($stmt->fetchColumn() > 0) {
                     $this->errors[$field][] = "The {$field} must be unique.";
                 }
             }
