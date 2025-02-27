@@ -39,8 +39,16 @@ class AuthController extends Controller
     {
         $data = json_decode($request->getBody()->getContents(), true);
 
-        if (!isset($data['email']) || !isset($data['password']) || !isset($data['name'])) {
-            return $this->jsonResponse($response, ["error" => "Name, email, and password are required"], 400);
+        if (!is_array($data)) {
+            $this->logger->error('Invalid JSON received', ['body' => $request->getBody()->getContents()]);
+            return $this->jsonResponse($response, ["error" => "Invalid JSON format"], 400);
+        }
+
+        $requiredFields = ['name', 'email', 'password'];
+        $missingFields = array_diff($requiredFields, array_keys($data));
+
+        if (!empty($missingFields)) {
+            return $this->jsonResponse($response, ["error" => "Missing fields: " . implode(', ', $missingFields)], 400);
         }
 
         $result = $this->authService->register($data);
