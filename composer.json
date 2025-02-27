@@ -22,7 +22,8 @@
         "ext-json": "*",
         "ext-mbstring": "*",
         "ext-pdo": "*",
-        "ext-curl": "*"
+        "ext-curl": "*",
+        "nyholm/psr7": "^1.4"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.0",
