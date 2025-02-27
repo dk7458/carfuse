@@ -83,15 +83,16 @@ class AuthService
         try {
             $this->authLogger->info("Starting registration process", ['email' => $data['email'] ?? 'unknown']);
             
+            // Define the validation rules, ensuring surname and confirm_password are required
             $rules = [
                 'email'           => 'required|email|unique:users,email',
                 'password'        => 'required|min:8',
                 'confirm_password'=> 'required|same:password',
                 'name'            => 'required|string',
-                'surname'         => 'required|string',
-                'phone'           => 'string',
-                'address'         => 'string',
-                'pesel_or_id'     => 'string'
+                'surname'         => 'required|string', // Ensure surname is required
+                'phone'           => 'string|nullable',
+                'address'         => 'string|nullable',
+                'pesel_or_id'     => 'string|nullable'
             ];
 
             // Log sanitized input data (without passwords)
@@ -103,13 +104,13 @@ class AuthService
             // Validate input data
             $this->validator->validate($data, $rules);
             
-            // Check passwords match
+            // Check passwords match (redundant with validation but keeping as a double-check)
             if (!isset($data['password']) || !isset($data['confirm_password']) || $data['password'] !== $data['confirm_password']) {
                 $this->authLogger->warning("Passwords don't match during registration");
                 throw new Exception("Passwords do not match", 400);
             }
             
-            // Prepare user data for database insertion with valid columns from the existing schema
+            // Prepare user data for database insertion with valid columns only
             $userData = [
                 'name' => $data['name'],
                 'surname' => $data['surname'],
@@ -118,7 +119,7 @@ class AuthService
                 'phone' => $data['phone'] ?? null,
                 'address' => $data['address'] ?? null,
                 'pesel_or_id' => $data['pesel_or_id'] ?? null,
-                'role' => $data['role'] ?? 'user',
+                'role' => 'user', // Default role, only override if admin is creating the user
                 'email_notifications' => $data['email_notifications'] ?? 0,
                 'sms_notifications' => $data['sms_notifications'] ?? 0,
                 'active' => 1,

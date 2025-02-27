@@ -6,19 +6,27 @@ use App\Services\Auth\AuthService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Log\LoggerInterface;
+use App\Services\Auth\TokenService;
+use App\Helpers\DatabaseHelper;
 
 class AuthController extends Controller
 {
     protected LoggerInterface $logger;
     private AuthService $authService;
+    private TokenService $tokenService;
+    private $pdo;
 
     public function __construct(
         LoggerInterface $logger,
-        AuthService $authService
+        AuthService $authService,
+        TokenService $tokenService,
+        DatabaseHelper $dbHelper
     ) {
         parent::__construct($logger);
         $this->authService = $authService;
+        $this->tokenService = $tokenService;
         $this->logger = $logger;
+        $this->pdo = $dbHelper->getPdo();
     }
 
     public function login(Request $request, Response $response)
@@ -167,11 +175,26 @@ class AuthController extends Controller
         return $this->jsonResponse($response, ["message" => "Logout successful"]);
     }
 
-    public function userDetails(Request $request, Response $response)
+    /**
+     * Get authenticated user details
+     * 
+     * This endpoint assumes AuthMiddleware is applied to the route.
+     * For protected routes, use AuthMiddleware with required=true.
+     */
+    public function userDetails(Request $request, Response $response): Response
     {
         $user = $request->getAttribute('user');
-        $this->logger->info('User details retrieved', ['user' => $user]);
-        return $this->jsonResponse($response, $user);
+        
+        if (!$user) {
+            $this->logger->error("User not authenticated");
+            return $this->jsonResponse($response->withStatus(401), ['error' => 'Authentication required']);
+        }
+        
+        // Remove sensitive fields
+        $userDetails = array_diff_key($user, array_flip(['password_hash']));
+        
+        $this->logger->info("User details retrieved successfully", ['user_id' => $user['id']]);
+        return $this->jsonResponse($response, ['user' => $userDetails]);
     }
 
     public function resetPasswordRequest(Request $request, Response $response)

@@ -2,98 +2,104 @@
 
 namespace App\Middleware;
 
-use App\Helpers\ApiHelper;
-use App\Services\Auth\AuthService;
-use App\Helpers\ExceptionHandler;
-use App\Helpers\LoggingHelper;
-use Psr\Log\LoggerInterface;
-use Psr\Http\Message\ServerRequestInterface as Request;
+use App\Services\Auth\TokenService;
 use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
+use Psr\Log\LoggerInterface;
+use App\Helpers\DatabaseHelper;
 
-/**
- * AuthMiddleware - Handles authentication and authorization for API requests.
- * Ensures valid JWT tokens and role-based access control.
- */
-class AuthMiddleware
+class AuthMiddleware implements MiddlewareInterface
 {
-    private AuthService $authService;
-    private ExceptionHandler $exceptionHandler;
-    private LoggingHelper $loggingHelper;
+    private TokenService $tokenService;
+    private LoggerInterface $logger;
+    private $pdo;
+    private bool $required;
 
     public function __construct(
-        AuthService $authService,
-        ExceptionHandler $exceptionHandler,
-        LoggingHelper $loggingHelper
+        TokenService $tokenService, 
+        LoggerInterface $logger,
+        DatabaseHelper $dbHelper,
+        bool $required = false
     ) {
-        $this->authService = $authService;
-        $this->exceptionHandler = $exceptionHandler;
-        $this->loggingHelper = $loggingHelper;
+        $this->tokenService = $tokenService;
+        $this->logger = $logger;
+        $this->pdo = $dbHelper->getPdo();
+        $this->required = $required;
     }
 
-    /**
-     * Handle authentication and authorization.
-     * 
-     * @param Request $request The incoming request.
-     * @param RequestHandler $handler The next middleware function.
-     * @param array $roles Required roles (e.g., 'admin').
-     * @return Response
-     */
-    public function __invoke(Request $request, RequestHandler $handler, ...$roles): Response
+    public function process(Request $request, RequestHandler $handler): Response
     {
-        $logger = $this->loggingHelper->getLoggerByCategory('auth');
-
-        // Log the incoming request with contextual information
-        $logger->info('Incoming request', [
-            'ip' => $request->getServerParams()['REMOTE_ADDR'],
-            'timestamp' => (new \DateTime())->format('Y-m-d H:i:s'),
+        $this->logger->debug("AuthMiddleware processing request", [
+            'required_auth' => $this->required ? 'yes' : 'no'
         ]);
-
-        try {
-            $token = $this->extractToken($request);
-
-            if (!$token || !$this->authService->validateToken($token)) {
-                $logger->warning("Invalid or missing token", ['ip' => $request->getServerParams()['REMOTE_ADDR']]);
-                return ApiHelper::sendJsonResponse('error', 'Unauthorized', [], 401);
-            }
-
-            $user = $this->authService->getUserFromToken($token);
-            $request = $request->withAttribute('user', $user);
-
-            // Role-based access control
-            if (!empty($roles) && !in_array($user->role, $roles)) {
-                $logger->warning("Unauthorized role access attempt.", [
-                    'userId' => $user->id,
-                    'requiredRoles' => $roles
-                ]);
-                return ApiHelper::sendJsonResponse('error', 'Forbidden', [], 403);
-            }
-
-            $logger->info("✅ User authenticated.", [
-                'userId' => $user->id,
-                'role' => $user->role
-            ]);
-
-            return $handler->handle($request);
-        } catch (\Exception $e) {
-            $logger->error('Token validation failed', [
-                'ip' => $request->getServerParams()['REMOTE_ADDR'],
-                'timestamp' => (new \DateTime())->format('Y-m-d H:i:s'),
-                'error' => $e->getMessage(),
-            ]);
-            $this->exceptionHandler->handleException($e);
-            return ApiHelper::sendJsonResponse('error', 'Internal Server Error', [], 500);
-        }
-    }
-
-    private function extractToken(Request $request): ?string
-    {
+        
+        // Try to get token from Authorization header
+        $token = null;
         $authHeader = $request->getHeaderLine('Authorization');
         if (strpos($authHeader, 'Bearer ') === 0) {
-            return substr($authHeader, 7);
+            $token = substr($authHeader, 7);
+            $this->logger->debug("Found token in Authorization header");
         }
-
-        return $request->getCookieParams()['token'] ?? null;
+        
+        // If not in header, try cookies
+        if (!$token) {
+            $cookies = $request->getCookieParams();
+            $token = $cookies['jwt'] ?? null;
+            if ($token) {
+                $this->logger->debug("Found token in cookies");
+            }
+        }
+        
+        $authenticated = false;
+        
+        if ($token) {
+            try {
+                // Verify and decode the token
+                $decoded = $this->tokenService->verifyToken($token);
+                $userId = $decoded['sub'];
+                $this->logger->debug("Token verified successfully", ['userId' => $userId]);
+                
+                // Fetch user from database
+                $stmt = $this->pdo->prepare("
+                    SELECT id, name, surname, email, phone, role, address, 
+                           pesel_or_id, created_at, email_notifications, sms_notifications 
+                    FROM users WHERE id = ? AND active = 1
+                ");
+                $stmt->execute([$userId]);
+                $user = $stmt->fetch();
+                
+                if ($user) {
+                    // Attach user to request
+                    $this->logger->debug("User attached to request", ['userId' => $user['id']]);
+                    $request = $request->withAttribute('user', $user);
+                    $authenticated = true;
+                } else {
+                    $this->logger->warning("User not found or inactive", ['userId' => $userId]);
+                }
+            } catch (\Exception $e) {
+                $this->logger->warning("Token validation failed: " . $e->getMessage());
+                // We'll proceed without setting the user attribute
+            }
+        } else {
+            $this->logger->debug("No token found in request");
+        }
+        
+        // If authentication is required but failed, return 401 Unauthorized
+        if ($this->required && !$authenticated) {
+            $this->logger->warning("Authentication required but failed or missing");
+            $response = new \Slim\Psr7\Response();
+            $response->getBody()->write(json_encode([
+                'error' => 'Authentication required',
+                'status' => 401
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(401);
+        }
+        
+        return $handler->handle($request);
     }
 }
 ?>

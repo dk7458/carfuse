@@ -249,7 +249,37 @@ $container->set(KeyManager::class, fn() => new KeyManager(
 $container->set(AuthController::class, function (Container $container) {
     return new AuthController(
         $container->get(LoggerInterface::class),
-        $container->get(AuthService::class)
+        $container->get(AuthService::class),
+        $container->get(TokenService::class),
+        $container->get(DatabaseHelper::class)
+    );
+});
+
+// Register SetupHelper
+$container->set(SetupHelper::class, function ($container) {
+    return new SetupHelper(
+        $container->get(DatabaseHelper::class),
+        $container->get(LoggerInterface::class)
+    );
+});
+
+// Update AuthMiddleware registration to include the required parameter option
+$container->set(AuthMiddleware::class, function ($container) {
+    return new AuthMiddleware(
+        $container->get(TokenService::class),
+        $container->get('auth_logger'),
+        $container->get(DatabaseHelper::class),
+        false // Default to optional auth
+    );
+});
+
+// Specialized version for required authentication
+$container->set('RequiredAuthMiddleware', function ($container) {
+    return new AuthMiddleware(
+        $container->get(TokenService::class),
+        $container->get('auth_logger'),
+        $container->get(DatabaseHelper::class),
+        true // Require authentication
     );
 });
 
@@ -290,6 +320,21 @@ $container->get('dependencies_logger')->info("✅ DI container validation comple
 // Before returning the container, verify security-related services load successfully.
 try {
     $container->get(AuthService::class);
+    // Call SetupHelper to ensure database indexes when the app starts
+    try {
+        $container->get(SetupHelper::class)->ensureIndexes();
+        $container->get(LoggerInterface::class)->info("Database indexes verified");
+        
+        // Check for security issues
+        $securityIssues = $container->get(SetupHelper::class)->verifySecureEnvironment();
+        if (!empty($securityIssues)) {
+            foreach ($securityIssues as $issue) {
+                $container->get('security_logger')->warning($issue);
+            }
+        }
+    } catch (Exception $e) {
+        $container->get(LoggerInterface::class)->error("Failed to run setup: " . $e->getMessage());
+    }
     return [
         'db'                => $container->get('db'),
         'secure_db'         => $container->get('secure_db'),

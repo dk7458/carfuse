@@ -10,6 +10,7 @@ $logger->info("🔄 Security helper and other critical services loaded.");
 use Dotenv\Dotenv;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\LoggingHelper;
+use App\Helpers\SetupHelper;
 
 // Step 1: Initialize Logger First
 $loggingHelper = new LoggingHelper();
@@ -118,6 +119,29 @@ if (!empty($missingDependencies)) {
     echo "⚠️ Ensure dependencies are correctly registered in config/dependencies.php.\n";
 } else {
     $logger->info("🔄 All required dependencies are present.");
+}
+
+// Run initial setup tasks
+try {
+    // Ensure database indexes exist
+    $setupHelper = $container->get(SetupHelper::class);
+    $setupHelper->ensureIndexes();
+    
+    // Check environment security
+    $securityIssues = $setupHelper->verifySecureEnvironment();
+    if (!empty($securityIssues)) {
+        $logger->warning("Security issues detected:", ['issues' => $securityIssues]);
+    } else {
+        $logger->info("Environment security checks passed");
+    }
+    
+    $logger->info("Application bootstrap completed successfully");
+} catch (Exception $e) {
+    $logger->critical("Bootstrap failed: " . $e->getMessage(), [
+        'exception' => get_class($e),
+        'trace' => $e->getTraceAsString()
+    ]);
+    die("Application failed to start: " . $e->getMessage());
 }
 
 // Final Step: Return Critical Configurations & DI Container
