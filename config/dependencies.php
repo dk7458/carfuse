@@ -37,7 +37,7 @@ use App\Models\Payment;
 use GuzzleHttp\Client;
 use App\Helpers\LoggingHelper;
 use App\Controllers\UserController;
-
+use App\Controllers\AuthController;
 // Step 1: Initialize DI Container
 try {
     $container = new Container();
@@ -246,15 +246,10 @@ $container->set(KeyManager::class, fn() => new KeyManager(
 ));
 
 // New registration: AuthController with updated dependencies.
-$container->set(\App\Controllers\AuthController::class, function (Container $container) {
-    return new \App\Controllers\AuthController(
-        $container->get(LoggerInterface::class),  // For parent's logger parameter
-        $container->get(AuthService::class),
-        $container->get(Validator::class),
-        $container->get(TokenService::class),
-        $container->get(ExceptionHandler::class),
-        $container->get('auth_logger'),  // For auth-specific logger if desired
-        $container->get('audit_logger')
+$container->set(AuthController::class, function (Container $container) {
+    return new AuthController(
+        $container->get(LoggerInterface::class),
+        $container->get(AuthService::class)
     );
 });
 
