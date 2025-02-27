@@ -2,8 +2,6 @@
 
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
-use App\Middleware\AuthMiddleware;
-use App\Middleware\TokenValidationMiddleware;
 use App\Controllers\AuthController;
 use App\Controllers\UserController;
 use DI\Container;
@@ -31,74 +29,60 @@ return function (Container $container) {
         $router->addRoute(['POST'], '/api/auth/refresh', [$authController, 'refresh']);
         $router->addRoute(['POST'], '/api/auth/logout', [$authController, 'logout']);
         $router->addRoute(['POST'], '/api/auth/reset-request', [$authController, 'resetPasswordRequest']);
-        $router->addRoute(['GET'], '/api/auth/userDetails', [$authController, 'userDetails'])->middleware(AuthMiddleware::class);
-
-        $router->post('/login', [$authController, 'login']);
-        $router->post('/register', [$authController, 'register']);
-        $router->post('/refresh', [$authController, 'refresh']);
-        $router->post('/logout', [$authController, 'logout']);
-        $router->get('/user', [$authController, 'userDetails'])->middleware(AuthMiddleware::class);
+        $router->addRoute(['GET'], '/api/auth/userDetails', [$authController, 'userDetails']);
 
         // Protected API Routes (Require Authentication)
-        $router->addRoute(['GET'], '/api/user/profile', [$userController, 'getUserProfile'])->middleware(AuthMiddleware::class);
-        $router->addRoute(['POST'], '/api/user/updateProfile', [$userController, 'updateProfile'])->middleware(AuthMiddleware::class);
-
-        $router->addRoute(['GET'], '/api/user/settings', function (Request $request, RequestHandler $handler) {
-            return (new TokenValidationMiddleware())->__invoke($request, $handler);
+        $router->addGroup('/api/user', function (RouteCollector $r) use ($userController) {
+            $r->addRoute(['GET'], '/profile', [$userController, 'getUserProfile']);
+            $r->addRoute(['POST'], '/updateProfile', [$userController, 'updateProfile']);
+            $r->addRoute(['GET'], '/settings', 'App\Middleware\TokenValidationMiddleware');
+            $r->addRoute(['GET'], '/notifications', 'App\Middleware\TokenValidationMiddleware');
         });
 
-        $router->addRoute(['GET'], '/api/user/notifications', function (Request $request, RequestHandler $handler) {
-            return (new TokenValidationMiddleware())->__invoke($request, $handler);
-        });
-
-        $router->addRoute(['GET'], '/api/dashboard/metrics', function (Request $request, RequestHandler $handler) {
-            return (new TokenValidationMiddleware())->__invoke($request, $handler);
-        });
-
-        $router->addRoute(['GET'], '/api/dashboard/reports', function (Request $request, RequestHandler $handler) {
-            return (new TokenValidationMiddleware())->__invoke($request, $handler);
+        $router->addGroup('/api/dashboard', function (RouteCollector $r) {
+            $r->addRoute(['GET'], '/metrics', 'App\Middleware\TokenValidationMiddleware');
+            $r->addRoute(['GET'], '/reports', 'App\Middleware\TokenValidationMiddleware');
         });
 
         // Booking API Routes
-        $router->addRoute(['POST'], '/api/bookings/create', 'App\Controllers\BookingController@createBooking');
-        $router->addRoute(['GET'], '/api/bookings/view/{id:\d+}', 'App\Controllers\BookingController@viewBooking');
-        $router->addRoute(['POST'], '/api/bookings/cancel/{id:\d+}', 'App\Controllers\BookingController@cancelBooking');
-        $router->addRoute(['POST'], '/api/bookings/reschedule/{id:\d+}', 'App\Controllers\BookingController@rescheduleBooking');
+        $router->addGroup('/api/bookings', function (RouteCollector $r) {
+            $r->addRoute(['POST'], '/create', 'App\Controllers\BookingController@createBooking');
+            $r->addRoute(['GET'], '/view/{id:\d+}', 'App\Controllers\BookingController@viewBooking');
+            $r->addRoute(['POST'], '/cancel/{id:\d+}', 'App\Controllers\BookingController@cancelBooking');
+            $r->addRoute(['POST'], '/reschedule/{id:\d+}', 'App\Controllers\BookingController@rescheduleBooking');
+        });
 
         // Payment API Routes
-        $router->addRoute(['POST'], '/api/payments/process', 'App\Controllers\PaymentController@processPayment');
-        $router->addRoute(['POST'], '/api/payments/refund/{id:\d+}', 'App\Controllers\PaymentController@refundPayment');
-        $router->addRoute(['GET'], '/api/payments/history', 'App\Controllers\PaymentController@paymentHistory');
+        $router->addGroup('/api/payments', function (RouteCollector $r) {
+            $r->addRoute(['POST'], '/process', 'App\Controllers\PaymentController@processPayment');
+            $r->addRoute(['POST'], '/refund/{id:\d+}', 'App\Controllers\PaymentController@refundPayment');
+            $r->addRoute(['GET'], '/history', 'App\Controllers\PaymentController@paymentHistory');
+        });
 
         // Report API Routes
-        $router->addRoute(['POST'], '/api/reports/generate', 'App\Controllers\ReportController@generateReport');
-        $router->addRoute(['GET'], '/api/reports/view/{id:\d+}', 'App\Controllers\ReportController@viewReport');
+        $router->addGroup('/api/reports', function (RouteCollector $r) {
+            $r->addRoute(['POST'], '/generate', 'App\Controllers\ReportController@generateReport');
+            $r->addRoute(['GET'], '/view/{id:\d+}', 'App\Controllers\ReportController@viewReport');
+        });
 
         // Admin API Routes
-        $router->addRoute(['GET'], '/api/admin/users', function (Request $request, RequestHandler $handler) {
-            return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
-        });
-
-        $router->addRoute(['GET'], '/api/admin/dashboard', function (Request $request, RequestHandler $handler) {
-            return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
-        });
-
-        $router->addRoute(['GET'], '/api/admin/logs', function (Request $request, RequestHandler $handler) {
-            return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
+        $router->addGroup('/api/admin', function (RouteCollector $r) {
+            $r->addRoute(['GET'], '/users', 'App\Middleware\AuthMiddleware');
+            $r->addRoute(['GET'], '/dashboard', 'App\Middleware\AuthMiddleware');
+            $r->addRoute(['GET'], '/logs', 'App\Middleware\AuthMiddleware');
         });
 
         // Document API Routes
-        $router->addRoute(['POST'], '/api/documents/upload', 'App\Controllers\DocumentController@uploadDocument');
-        $router->addRoute(['POST'], '/api/documents/sign', 'App\Controllers\DocumentController@signDocument');
-        $router->addRoute(['GET'], '/api/documents/view/{id:\d+}', 'App\Controllers\DocumentController@viewDocument');
-
-        // System API Routes
-        $router->addRoute(['GET'], '/api/system/logs', function (Request $request, RequestHandler $handler) {
-            return (new AuthMiddleware())->__invoke($request, $handler, 'admin');
+        $router->addGroup('/api/documents', function (RouteCollector $r) {
+            $r->addRoute(['POST'], '/upload', 'App\Controllers\DocumentController@uploadDocument');
+            $r->addRoute(['POST'], '/sign', 'App\Controllers\DocumentController@signDocument');
+            $r->addRoute(['GET'], '/view/{id:\d+}', 'App\Controllers\DocumentController@viewDocument');
         });
 
-        $router->addRoute(['GET'], '/api/system/status', function (Request $request, RequestHandler $handler) {
-            return (new TokenValidationMiddleware())->__invoke($request, $handler);
+        // System API Routes
+        $router->addGroup('/api/system', function (RouteCollector $r) {
+            $r->addRoute(['GET'], '/logs', 'App\Middleware\AuthMiddleware');
+            $r->addRoute(['GET'], '/status', 'App\Middleware\TokenValidationMiddleware');
         });
 
         // Catch-All for Unmatched Requests
