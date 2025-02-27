@@ -41,10 +41,39 @@ class AuthController extends Controller
             return $this->jsonResponse($response, ["error" => "Email and password are required"], 400);
         }
 
-        $result = $this->authService->login($data);
-        $this->logger->info('User login attempt', ['email' => $data['email']]);
-
-        return $this->jsonResponse($response, $result);
+        try {
+            $result = $this->authService->login($data);
+            $this->logger->info('User login successful', ['email' => $data['email']]);
+            
+            // Set JWT token as a secure HttpOnly cookie
+            setcookie('jwt', $result['token'], [
+                'expires'  => time() + 3600,
+                'path'     => '/',
+                'secure'   => true,
+                'httponly' => true,
+                'samesite' => 'Strict',
+            ]);
+            
+            // Set refresh token as a secure HttpOnly cookie with longer expiration
+            setcookie('refresh_token', $result['refresh_token'], [
+                'expires'  => time() + 86400,
+                'path'     => '/',
+                'secure'   => true,
+                'httponly' => true,
+                'samesite' => 'Strict',
+            ]);
+            
+            // Return success message without exposing tokens in the response body
+            return $this->jsonResponse($response, [
+                "message" => "Login successful",
+                "user_id" => $result['user_id'] ?? null,
+                "name" => $result['name'] ?? null
+            ]);
+            
+        } catch (\Exception $e) {
+            $this->logger->error('Login failed', ['email' => $data['email'], 'error' => $e->getMessage()]);
+            return $this->jsonResponse($response, ["error" => $e->getMessage()], 401);
+        }
     }
 
     public function register(Request $request, Response $response)
@@ -83,10 +112,28 @@ class AuthController extends Controller
 
     public function logout(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
+        // Clear the auth cookies when logging out
+        setcookie('jwt', '', [
+            'expires'  => time() - 3600, // Set to expire in the past
+            'path'     => '/',
+            'secure'   => true,
+            'httponly' => true,
+            'samesite' => 'Strict',
+        ]);
+        
+        setcookie('refresh_token', '', [
+            'expires'  => time() - 3600, // Set to expire in the past
+            'path'     => '/',
+            'secure'   => true,
+            'httponly' => true,
+            'samesite' => 'Strict',
+        ]);
+        
+        $data = $request->getParsedBody() ?: [];
         $result = $this->authService->logout($data);
-        $this->logger->info('User logout attempt', ['data' => $data]);
-        return $this->jsonResponse($response, $result);
+        $this->logger->info('User logged out successfully');
+        
+        return $this->jsonResponse($response, ["message" => "Logout successful"]);
     }
 
     public function userDetails(Request $request, Response $response)

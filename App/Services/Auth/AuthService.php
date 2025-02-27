@@ -61,9 +61,13 @@ class AuthService
             $token = $this->tokenService->generateToken($userObject);
             $refreshToken = $this->tokenService->generateRefreshToken($userObject);
 
+            // Include minimal user information in the result
             return [
                 'token'         => $token,
-                'refresh_token' => $refreshToken
+                'refresh_token' => $refreshToken,
+                'user_id'       => $user['id'],
+                'name'          => $user['name'],
+                'email'         => $user['email']
             ];
         } catch (Exception $e) {
             $this->authLogger->error("[auth] ❌ Login error: " . $e->getMessage());
