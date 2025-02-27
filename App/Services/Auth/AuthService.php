@@ -39,8 +39,7 @@ class AuthService
         $this->encryptionConfig = $encryptionConfig;
         $this->validator = $validator;
 
-        // Log the database connection being used
-        $this->authLogger->info("Using database connection from app_database.");
+        $this->authLogger->info("AuthService initialized with app_database connection");
     }
 
     public function login(array $data)
@@ -52,7 +51,7 @@ class AuthService
 
             if (!$user || !password_verify($data['password'], $user['password_hash'])) {
                 $this->authLogger->warning("Authentication failed", ['email' => $data['email']]);
-                throw new InvalidCredentialsException("Invalid credentials");
+                throw new Exception("Invalid credentials", 401);
             }
 
             $token = $this->tokenService->generateToken($user);
@@ -63,7 +62,7 @@ class AuthService
                 'refresh_token' => $refreshToken
             ];
         } catch (Exception $e) {
-            $this->authLogger->error("[auth] ❌ Credential error: " . $e->getMessage());
+            $this->authLogger->error("[auth] ❌ Login error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -71,39 +70,68 @@ class AuthService
 
     public function register(array $data)
     {
-        $rules = [
-            'email'    => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
-            'name'     => 'required|string',
-            'surname'  => 'required|string',
-            'phone'    => 'string',
-        ];
-
         try {
+            $this->authLogger->info("Starting registration process", ['email' => $data['email'] ?? 'unknown']);
+            
+            $rules = [
+                'email'           => 'required|email|unique:users,email',
+                'password'        => 'required|min:8',
+                'confirm_password'=> 'required|same:password',
+                'name'            => 'required|string',
+                'surname'         => 'required|string',
+                'phone'           => 'string'
+            ];
+
+            // Log sanitized input data (without passwords)
+            $logData = $data;
+            if (isset($logData['password'])) unset($logData['password']);
+            if (isset($logData['confirm_password'])) unset($logData['confirm_password']);
+            $this->authLogger->debug("Registration input data", ['data' => $logData]);
+            
+            // Validate input data
             $this->validator->validate($data, $rules);
             
+            // Check passwords match
+            if (!isset($data['password']) || !isset($data['confirm_password']) || $data['password'] !== $data['confirm_password']) {
+                $this->authLogger->warning("Passwords don't match during registration");
+                throw new Exception("Passwords do not match", 400);
+            }
+            
+            // Prepare user data for database insertion
             $userData = [
                 'name' => $data['name'],
                 'surname' => $data['surname'],
                 'email' => $data['email'],
-                'password_hash' => password_hash($data['password'], PASSWORD_BCRYPT),
+                'password_hash' => password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]),
                 'phone' => $data['phone'] ?? null,
                 'role' => $data['role'] ?? 'user',
-                'active' => $data['active'] ?? 1,
-                'created_at' => date('Y-m-d H:i:s')
+                'status' => $data['status'] ?? 'active',
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s')
             ];
-
+            
+            // Log prepared data (without password_hash)
+            $logUserData = $userData;
+            unset($logUserData['password_hash']);
+            $this->authLogger->debug("Prepared user data for database", ['data' => $logUserData]);
+            
+            // Insert user into database
             $columns = implode(', ', array_keys($userData));
             $placeholders = implode(', ', array_fill(0, count($userData), '?'));
             
             $stmt = $this->pdo->prepare("INSERT INTO users ({$columns}) VALUES ({$placeholders})");
             $stmt->execute(array_values($userData));
             $userId = $this->pdo->lastInsertId();
-
+            
+            $this->authLogger->info("User registered successfully", ['user_id' => $userId, 'email' => $data['email']]);
+            $this->auditLogger->info("New user registration", ['user_id' => $userId, 'email' => $data['email']]);
+            
             return ['user_id' => $userId];
         } catch (\InvalidArgumentException $e) {
+            $this->authLogger->warning("Validation error during registration", ['error' => $e->getMessage()]);
             throw $e;
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
+            $this->authLogger->error("Registration error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -112,19 +140,27 @@ class AuthService
     public function refresh(array $data)
     {
         try {
+            if (!isset($data['refresh_token'])) {
+                $this->authLogger->warning("Missing refresh token");
+                throw new Exception("Refresh token is required", 400);
+            }
+            
             $decoded = JWT::decode($data['refresh_token'], new Key($this->tokenService->jwtSecret, 'HS256'));
             $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = ?");
             $stmt->execute([$decoded->sub]);
             $user = $stmt->fetch();
 
             if (!$user) {
-                throw new Exception("Invalid refresh token.");
+                $this->authLogger->warning("Invalid refresh token", ['token_sub' => $decoded->sub]);
+                throw new Exception("Invalid refresh token", 400);
             }
 
             $token = $this->tokenService->generateToken($user);
+            $this->authLogger->info("Token refreshed successfully", ['user_id' => $user['id']]);
+            
             return ['token' => $token];
         } catch (Exception $e) {
-            $this->authLogger->error("[auth] ❌ Refresh token error: " . $e->getMessage());
+            $this->authLogger->error("Refresh token error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -133,11 +169,12 @@ class AuthService
     public function logout(array $data)
     {
         $this->auditLogger->info("User logged out");
+        return ["message" => "Logged out successfully"];
     }
 
     public function updateProfile($user, array $data)
     {
-        // ...update profile logic...
+        // ...existing code...
     }
 }
 ?>

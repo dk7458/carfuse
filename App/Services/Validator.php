@@ -25,6 +25,7 @@ class Validator
         $this->logger = $logger;
         $this->db = $db;
         $this->exceptionHandler = $exceptionHandler;
+        $this->logger->debug("Validator initialized with database connection");
     }
 
     /**
@@ -32,7 +33,9 @@ class Validator
      */
     public function validate(array $data, array $rules): bool
     {
+        $this->logger->debug("Starting validation with rules", ['rules' => $rules]);
         $this->errors = [];
+        
         foreach ($rules as $field => $ruleSet) {
             $rulesArray = explode('|', $ruleSet);
             foreach ($rulesArray as $rule) {
@@ -42,13 +45,14 @@ class Validator
 
         if (!empty($this->errors)) {
             if (self::DEBUG_MODE) {
-                $this->logger->warning("[Validation] Validation failed", ['errors' => $this->errors]);
+                $this->logger->warning("Validation failed", ['errors' => $this->errors]);
             }
 
-            // **Throw an exception to prevent further execution**
+            // Throw an exception to prevent further execution
             throw new \InvalidArgumentException(json_encode(['errors' => $this->errors]));
         }
 
+        $this->logger->debug("Validation successful");
         return true;
     }
 
@@ -67,40 +71,58 @@ class Validator
     {
         try {
             if ($rule === 'required' && empty($value)) {
-                $this->errors[$field][] = 'This field is required.';
+                $this->errors[$field][] = "The {$field} field is required.";
             } elseif (strpos($rule, 'max:') === 0) {
                 $maxLength = (int)explode(':', $rule)[1];
                 if (!empty($value) && strlen($value) > $maxLength) {
-                    $this->errors[$field][] = "Maximum length is $maxLength characters.";
+                    $this->errors[$field][] = "The {$field} must not exceed {$maxLength} characters.";
                 }
             } elseif (strpos($rule, 'min:') === 0) {
                 $minLength = (int)explode(':', $rule)[1];
-                if (empty($value) || strlen($value) < $minLength) {
-                    $this->errors[$field][] = "Minimum length is $minLength characters.";
+                if (!empty($value) && strlen($value) < $minLength) {
+                    $this->errors[$field][] = "The {$field} must be at least {$minLength} characters.";
                 }
-            } elseif ($rule === 'email' && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
-                $this->errors[$field][] = 'Invalid email address.';
+            } elseif ($rule === 'email' && !empty($value) && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                $this->errors[$field][] = "The {$field} must be a valid email address.";
             } elseif (strpos($rule, 'regex:') === 0) {
                 $pattern = substr($rule, 6);
                 if (!empty($value) && !preg_match($pattern, $value)) {
-                    $this->errors[$field][] = 'Invalid format.';
+                    $this->errors[$field][] = "The {$field} format is invalid.";
                 }
             } elseif (strpos($rule, 'same:') === 0) {
                 $otherField = substr($rule, 5);
-                if (isset($data[$otherField]) && ($value ?? '') !== $data[$otherField]) {
-                    $this->errors[$field][] = "This field must match {$otherField}.";
+                if (!empty($value) && isset($data[$otherField]) && $value !== $data[$otherField]) {
+                    $this->errors[$field][] = "The {$field} and {$otherField} must match.";
                 }
             } elseif (strpos($rule, 'unique:') === 0) {
                 [$table, $column] = explode(',', substr($rule, 7));
-                $stmt = $this->db->getPdo()->prepare("SELECT COUNT(*) FROM {$table} WHERE {$column} = ?");
-                $stmt->execute([$value]);
-                if ($stmt->fetchColumn() > 0) {
-                    $this->errors[$field][] = "The {$field} must be unique.";
+                
+                $this->logger->debug("Checking uniqueness", [
+                    'field' => $field,
+                    'table' => $table,
+                    'column' => $column,
+                    'value' => $value
+                ]);
+                
+                if (!empty($value)) {
+                    $pdo = $this->db->getPdo(); // Get PDO instance from DatabaseHelper
+                    $stmt = $pdo->prepare("SELECT COUNT(*) FROM {$table} WHERE {$column} = ?");
+                    $stmt->execute([$value]);
+                    $count = (int)$stmt->fetchColumn();
+                    
+                    if ($count > 0) {
+                        $this->errors[$field][] = "The {$field} has already been taken.";
+                    }
                 }
             }
         } catch (\Exception $e) {
-            $this->logger->error("[Validation] ❌ Validation error: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
+            $this->logger->error("Validation error: " . $e->getMessage(), [
+                'field' => $field,
+                'rule' => $rule
+            ]);
+            
+            // Add a generic error and continue validation
+            $this->errors[$field][] = "An error occurred while validating {$field}.";
         }
     }
 }
