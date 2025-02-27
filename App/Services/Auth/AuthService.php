@@ -157,7 +157,8 @@ class AuthService
     public function refresh(array $data)
     {
         try {
-            $decoded = JWT::decode($data['refresh_token'], new Key($this->tokenService->jwtSecret, 'HS256'));
+            // Use the new method to decode the refresh token
+            $decoded = $this->tokenService->decodeRefreshToken($data['refresh_token']);
             
             // Query the users table with correct column names
             $stmt = $this->pdo->prepare("SELECT id, name, surname, email, password_hash, phone, role, created_at FROM users WHERE id = ?");

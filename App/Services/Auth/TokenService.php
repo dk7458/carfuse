@@ -92,6 +92,29 @@ class TokenService
         }
     }
 
+    /**
+     * Decode and validate a refresh token
+     *
+     * @param string $refreshToken The refresh token to decode
+     * @return object The decoded token payload
+     * @throws \Exception If token is invalid or expired
+     */
+    public function decodeRefreshToken(string $refreshToken)
+    {
+        try {
+            $decoded = JWT::decode($refreshToken, new Key($this->jwtRefreshSecret, 'HS256'));
+            if ($decoded->exp < time()) {
+                throw new \Exception("Refresh token has expired.");
+            }
+            $this->tokenLogger->debug("Refresh token decoded successfully", ['sub' => $decoded->sub]);
+            return $decoded;
+        } catch (\Exception $e) {
+            $this->tokenLogger->error("Failed to decode refresh token: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            throw $e;
+        }
+    }
+
     public function refreshToken(string $refreshToken): string
     {
         try {
