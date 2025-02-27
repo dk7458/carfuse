@@ -37,13 +37,15 @@ class AuthController extends Controller
 
     public function register(Request $request, Response $response)
     {
+        $request->getBody()->rewind();
         $rawBody = $request->getBody()->getContents();
         $this->logger->debug("Raw request body in register: " . $rawBody);
 
         $data = json_decode($rawBody, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->logger->error("JSON decoding error: " . json_last_error_msg());
-            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+            $errorMsg = json_last_error_msg();
+            $this->logger->error("JSON decoding error: " . $errorMsg);
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input: " . $errorMsg], 400);
         }
 
         $this->logger->debug("Decoded request data in register: " . print_r($data, true));
