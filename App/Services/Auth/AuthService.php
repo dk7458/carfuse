@@ -54,8 +54,12 @@ class AuthService
                 throw new Exception("Invalid credentials", 401);
             }
 
-            $token = $this->tokenService->generateToken($user);
-            $refreshToken = $this->tokenService->generateRefreshToken($user);
+            // Cast user array to object for TokenService
+            $userObject = (object)$user;
+            $this->authLogger->debug("User data converted to object", ['type' => gettype($userObject)]);
+
+            $token = $this->tokenService->generateToken($userObject);
+            $refreshToken = $this->tokenService->generateRefreshToken($userObject);
 
             return [
                 'token'         => $token,
@@ -155,7 +159,11 @@ class AuthService
                 throw new Exception("Invalid refresh token", 400);
             }
 
-            $token = $this->tokenService->generateToken($user);
+            // Cast user array to object for TokenService
+            $userObject = (object)$user;
+            $this->authLogger->debug("User data converted to object for token refresh", ['type' => gettype($userObject)]);
+
+            $token = $this->tokenService->generateToken($userObject);
             $this->authLogger->info("Token refreshed successfully", ['user_id' => $user['id']]);
             
             return ['token' => $token];

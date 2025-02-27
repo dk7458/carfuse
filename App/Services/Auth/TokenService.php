@@ -36,16 +36,19 @@ class TokenService
 
     public function generateToken($user): string
     {
+        // Extract user ID safely from either array or object
+        $userId = is_array($user) ? $user['id'] : $user->id;
+
         $payload = [
             'iss' => "your-issuer",
-            'sub' => $user->id,
+            'sub' => $userId,
             'iat' => time(),
             'exp' => time() + 3600
         ];
         try {
             $token = JWT::encode($payload, $this->jwtSecret, 'HS256');
             if (self::DEBUG_MODE) {
-                $this->tokenLogger->info("[auth] ✅ Token generated.", ['userId' => $user->id]);
+                $this->tokenLogger->info("[auth] ✅ Token generated.", ['userId' => $userId]);
             }
             return $token;
         } catch (\Exception $e) {
@@ -72,9 +75,12 @@ class TokenService
 
     public function generateRefreshToken($user): string
     {
+        // Extract user ID safely from either array or object
+        $userId = is_array($user) ? $user['id'] : $user->id;
+
         $payload = [
             'iss' => "your-issuer",
-            'sub' => $user->id,
+            'sub' => $userId,
             'iat' => time(),
             'exp' => time() + 604800
         ];
