@@ -188,5 +188,120 @@ class AuthService
     {
         // ...existing code...
     }
+
+    /**
+     * Initiates the password reset process
+     */
+    public function resetPasswordRequest(array $data): array
+    {
+        try {
+            if (!isset($data['email'])) {
+                throw new Exception("Email is required", 400);
+            }
+            
+            // Validate email format
+            if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+                throw new Exception("Invalid email format", 400);
+            }
+            
+            // Check if user exists
+            $stmt = $this->pdo->prepare("SELECT * FROM users WHERE email = ?");
+            $stmt->execute([$data['email']]);
+            $user = $stmt->fetch();
+            
+            if (!$user) {
+                // Don't reveal that the email doesn't exist (security best practice)
+                $this->authLogger->info("Password reset requested for non-existent email", ['email' => $data['email']]);
+                return ["message" => "If your email is registered, you will receive a password reset link"];
+            }
+            
+            // Generate a secure reset token
+            $resetToken = bin2hex(random_bytes(32));
+            $tokenExpiry = date('Y-m-d H:i:s', time() + 3600); // Token valid for 1 hour
+            
+            // Store the token in the database
+            $stmt = $this->pdo->prepare("
+                INSERT INTO password_reset_tokens (user_id, token, expires_at) 
+                VALUES (?, ?, ?)
+            ");
+            $stmt->execute([$user['id'], $resetToken, $tokenExpiry]);
+            
+            // Log the action
+            $this->authLogger->info("Password reset token generated", ['user_id' => $user['id']]);
+            $this->auditLogger->info("Password reset requested", ['user_id' => $user['id']]);
+            
+            // In a real application, you would send an email here
+            // For this example, we'll just return the token (not secure for production)
+            return [
+                "message" => "Password reset email sent",
+                "debug_token" => $resetToken // Remove this in production!
+            ];
+        } catch (Exception $e) {
+            $this->authLogger->error("Password reset request error: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Completes the password reset process
+     */
+    public function resetPassword(array $data): array
+    {
+        try {
+            // Validate required fields
+            if (!isset($data['token']) || !isset($data['password']) || !isset($data['confirm_password'])) {
+                throw new Exception("Token, password and confirmation are required", 400);
+            }
+            
+            // Validate password
+            if (strlen($data['password']) < 8) {
+                throw new Exception("Password must be at least 8 characters", 400);
+            }
+            
+            // Check passwords match
+            if ($data['password'] !== $data['confirm_password']) {
+                throw new Exception("Passwords do not match", 400);
+            }
+            
+            // Verify token
+            $stmt = $this->pdo->prepare("
+                SELECT * FROM password_reset_tokens 
+                WHERE token = ? AND expires_at > NOW() AND used = 0
+            ");
+            $stmt->execute([$data['token']]);
+            $tokenRecord = $stmt->fetch();
+            
+            if (!$tokenRecord) {
+                throw new Exception("Invalid or expired token", 400);
+            }
+            
+            // Get user
+            $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = ?");
+            $stmt->execute([$tokenRecord['user_id']]);
+            $user = $stmt->fetch();
+            
+            if (!$user) {
+                throw new Exception("User not found", 404);
+            }
+            
+            // Update the password
+            $hashedPassword = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]);
+            $stmt = $this->pdo->prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?");
+            $stmt->execute([$hashedPassword, $user['id']]);
+            
+            // Mark token as used
+            $stmt = $this->pdo->prepare("UPDATE password_reset_tokens SET used = 1 WHERE id = ?");
+            $stmt->execute([$tokenRecord['id']]);
+            
+            // Log the action
+            $this->authLogger->info("Password reset completed", ['user_id' => $user['id']]);
+            $this->auditLogger->info("Password reset completed", ['user_id' => $user['id']]);
+            
+            return ["message" => "Password has been reset successfully"];
+        } catch (Exception $e) {
+            $this->authLogger->error("Password reset error: " . $e->getMessage());
+            throw $e;
+        }
+    }
 }
 ?>

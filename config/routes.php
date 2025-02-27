@@ -29,6 +29,7 @@ return function (Container $container) {
         $router->addRoute(['POST'], '/api/auth/refresh', [$authController, 'refresh']);
         $router->addRoute(['POST'], '/api/auth/logout', [$authController, 'logout']);
         $router->addRoute(['POST'], '/api/auth/reset-request', [$authController, 'resetPasswordRequest']);
+        $router->addRoute(['POST'], '/api/auth/reset', [$authController, 'resetPassword']); // New endpoint
         $router->addRoute(['GET'], '/api/auth/userDetails', [$authController, 'userDetails']);
 
         // Protected API Routes (Require Authentication)

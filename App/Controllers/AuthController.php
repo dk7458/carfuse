@@ -104,17 +104,46 @@ class AuthController extends Controller
 
     public function refresh(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
-        $result = $this->authService->refresh($data);
-        $this->logger->info('Token refresh attempt', ['data' => $data]);
-        return $this->jsonResponse($response, $result);
+        try {
+            // Try to get refresh token from cookie first
+            $refreshToken = $_COOKIE['refresh_token'] ?? null;
+            
+            // If not in cookie, try to get from request body
+            if (!$refreshToken) {
+                $request->getBody()->rewind();
+                $data = $request->getParsedBody();
+                $refreshToken = $data['refresh_token'] ?? null;
+            }
+            
+            if (!$refreshToken) {
+                $this->logger->warning('Refresh token missing');
+                return $this->jsonResponse($response, ["error" => "Refresh token is required"], 400);
+            }
+            
+            $result = $this->authService->refresh(['refresh_token' => $refreshToken]);
+            $this->logger->info('Token refreshed successfully');
+            
+            // Set the new JWT token as a cookie
+            setcookie('jwt', $result['token'], [
+                'expires'  => time() + 3600,
+                'path'     => '/',
+                'secure'   => true,
+                'httponly' => true,
+                'samesite' => 'Strict',
+            ]);
+            
+            return $this->jsonResponse($response, ["message" => "Token refreshed successfully"]);
+        } catch (\Exception $e) {
+            $this->logger->error('Token refresh failed', ['error' => $e->getMessage()]);
+            return $this->jsonResponse($response, ["error" => $e->getMessage()], 401);
+        }
     }
 
     public function logout(Request $request, Response $response)
     {
-        // Clear the auth cookies when logging out
+        // Clear both JWT and refresh token cookies
         setcookie('jwt', '', [
-            'expires'  => time() - 3600, // Set to expire in the past
+            'expires'  => time() - 3600, // Expire in the past
             'path'     => '/',
             'secure'   => true,
             'httponly' => true,
@@ -122,16 +151,18 @@ class AuthController extends Controller
         ]);
         
         setcookie('refresh_token', '', [
-            'expires'  => time() - 3600, // Set to expire in the past
+            'expires'  => time() - 3600, // Expire in the past
             'path'     => '/',
             'secure'   => true,
             'httponly' => true,
             'samesite' => 'Strict',
         ]);
         
-        $data = $request->getParsedBody() ?: [];
-        $result = $this->authService->logout($data);
+        // Log the logout action
         $this->logger->info('User logged out successfully');
+        
+        // Call the service logout method if needed (e.g., to revoke tokens server-side)
+        $this->authService->logout([]);
         
         return $this->jsonResponse($response, ["message" => "Logout successful"]);
     }
@@ -145,15 +176,63 @@ class AuthController extends Controller
 
     public function resetPasswordRequest(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
-
+        $request->getBody()->rewind();
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            $this->logger->error("Invalid JSON input for password reset request");
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+        }
+        
         if (!isset($data['email'])) {
+            $this->logger->warning("Missing email in password reset request");
             return $this->jsonResponse($response, ["error" => "Email is required"], 400);
         }
+        
+        try {
+            $result = $this->authService->resetPasswordRequest($data);
+            $this->logger->info("Password reset requested", ['email' => $data['email']]);
+            return $this->jsonResponse($response, ["message" => "Password reset email sent"]);
+        } catch (\Exception $e) {
+            $this->logger->error("Password reset request failed", ['email' => $data['email'], 'error' => $e->getMessage()]);
+            return $this->jsonResponse($response, ["error" => $e->getMessage()], 400);
+        }
+    }
 
-        // Trigger password reset flow (implementation not shown)
-        // ...
-
-        return $this->jsonResponse($response, ["message" => "Password reset request received"]);
+    public function resetPassword(Request $request, Response $response)
+    {
+        $request->getBody()->rewind();
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            $this->logger->error("Invalid JSON input for password reset");
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+        }
+        
+        // Validate required fields
+        $requiredFields = ['token', 'password', 'confirm_password'];
+        $missingFields = array_diff($requiredFields, array_keys($data));
+        
+        if (!empty($missingFields)) {
+            $this->logger->warning("Missing fields in password reset", ['missing' => $missingFields]);
+            return $this->jsonResponse($response, [
+                "error" => "Missing required fields: " . implode(', ', $missingFields)
+            ], 400);
+        }
+        
+        // Check if passwords match
+        if ($data['password'] !== $data['confirm_password']) {
+            $this->logger->warning("Password mismatch in reset");
+            return $this->jsonResponse($response, ["error" => "Passwords do not match"], 400);
+        }
+        
+        try {
+            $result = $this->authService->resetPassword($data);
+            $this->logger->info("Password reset completed successfully");
+            return $this->jsonResponse($response, ["message" => "Password has been reset successfully"]);
+        } catch (\Exception $e) {
+            $this->logger->error("Password reset failed", ['error' => $e->getMessage()]);
+            return $this->jsonResponse($response, ["error" => $e->getMessage()], 400);
+        }
     }
 }
