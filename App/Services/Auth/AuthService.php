@@ -75,14 +75,29 @@ class AuthService
             'email'    => 'required|email|unique:users,email',
             'password' => 'required|min:6',
             'name'     => 'required|string',
+            'surname'  => 'required|string',
+            'phone'    => 'string',
         ];
 
         try {
             $this->validator->validate($data, $rules);
-            $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
+            
+            $userData = [
+                'name' => $data['name'],
+                'surname' => $data['surname'],
+                'email' => $data['email'],
+                'password_hash' => password_hash($data['password'], PASSWORD_BCRYPT),
+                'phone' => $data['phone'] ?? null,
+                'role' => $data['role'] ?? 'user',
+                'active' => $data['active'] ?? 1,
+                'created_at' => date('Y-m-d H:i:s')
+            ];
 
-            $stmt = $this->pdo->prepare("INSERT INTO users (name, email, password) VALUES (?, ?, ?)");
-            $stmt->execute([$data['name'], $data['email'], $data['password']]);
+            $columns = implode(', ', array_keys($userData));
+            $placeholders = implode(', ', array_fill(0, count($userData), '?'));
+            
+            $stmt = $this->pdo->prepare("INSERT INTO users ({$columns}) VALUES ({$placeholders})");
+            $stmt->execute(array_values($userData));
             $userId = $this->pdo->lastInsertId();
 
             return ['user_id' => $userId];

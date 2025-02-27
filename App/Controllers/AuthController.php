@@ -36,31 +36,30 @@ class AuthController extends Controller
     }
 
     public function register(Request $request, Response $response)
-{
-    // Use getParsedBody() since the parsed body was set in index.php
-    $data = $request->getParsedBody();
-    
-    if (!is_array($data)) {
-        $this->logger->error("Parsed body is not an array or is null.");
-        return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+    {
+        // Use getParsedBody() since the parsed body was set in index.php
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            $this->logger->error("Parsed body is not an array or is null.");
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+        }
+
+        $this->logger->debug("Parsed request data in register: " . print_r($data, true));
+
+        $requiredFields = ['name', 'surname', 'email', 'password'];
+        $missingFields = array_diff($requiredFields, array_keys($data));
+
+        if (!empty($missingFields)) {
+            $this->logger->warning("Missing required fields in register: " . implode(', ', $missingFields));
+            return $this->jsonResponse($response, ["error" => "Missing fields: " . implode(', ', $missingFields)], 400);
+        }
+
+        $result = $this->authService->register($data);
+        $this->logger->info('User registration attempt', ['data' => $data]);
+
+        return $this->jsonResponse($response, $result);
     }
-
-    $this->logger->debug("Parsed request data in register: " . print_r($data, true));
-
-    $requiredFields = ['name', 'email', 'password'];
-    $missingFields = array_diff($requiredFields, array_keys($data));
-
-    if (!empty($missingFields)) {
-        $this->logger->warning("Missing required fields in register: " . implode(', ', $missingFields));
-        return $this->jsonResponse($response, ["error" => "Missing fields: " . implode(', ', $missingFields)], 400);
-    }
-
-    $result = $this->authService->register($data);
-    $this->logger->info('User registration attempt', ['data' => $data]);
-
-    return $this->jsonResponse($response, $result);
-}
-
 
     public function refresh(Request $request, Response $response)
     {
