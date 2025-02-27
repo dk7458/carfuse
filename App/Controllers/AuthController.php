@@ -37,17 +37,22 @@ class AuthController extends Controller
 
     public function register(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
+        $rawBody = $request->getBody()->getContents();
+        $this->logger->debug("Raw request body in register: " . $rawBody);
 
-        if (!is_array($data)) {
-            $this->logger->error('Invalid JSON received', ['body' => $request->getBody()->getContents()]);
-            return $this->jsonResponse($response, ["error" => "Invalid JSON format"], 400);
+        $data = json_decode($rawBody, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $this->logger->error("JSON decoding error: " . json_last_error_msg());
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
         }
+
+        $this->logger->debug("Decoded request data in register: " . print_r($data, true));
 
         $requiredFields = ['name', 'email', 'password'];
         $missingFields = array_diff($requiredFields, array_keys($data));
 
         if (!empty($missingFields)) {
+            $this->logger->warning("Missing required fields in register: " . implode(', ', $missingFields));
             return $this->jsonResponse($response, ["error" => "Missing fields: " . implode(', ', $missingFields)], 400);
         }
 
