@@ -247,14 +247,14 @@ $container->set(KeyManager::class, fn() => new KeyManager(
     $container->get(ExceptionHandler::class)
 ));
 
-// New registration: AuthController with updated dependencies.
-$container->set(AuthController::class, function (Container $container) {
+$container->set(AuthController::class, function ($container) {
     return new AuthController(
         $container->get(LoggerInterface::class),
-        $container->get(AuthService::class)
+        $container->get(AuthService::class),
+        $container->get(TokenService::class),
+        $container->get(atabaseHelper::class)
     );
 });
-
 // Example of injecting LoggingHelper into a service.
 $container->set('SomeService', function($container) {
     $logger = $container->get('LoggingHelper')->getLoggerByCategory('some_category');

@@ -27,7 +27,7 @@ class AuthController extends Controller
         $this->tokenService = $tokenService;
         $this->logger = $logger;
         $this->pdo = $dbHelper->getPdo();
-    }
+    }    
 
     public function login(Request $request, Response $response)
     {
