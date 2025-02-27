@@ -23,14 +23,26 @@ class AuthController extends Controller
 
     public function login(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
+        // Rewind the request body stream in case it was consumed
+        $request->getBody()->rewind();
+        
+        // Use getParsedBody() for consistency with other endpoints
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            $this->logger->error("Parsed body is not an array or is null in login.");
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+        }
+
+        $this->logger->debug("Parsed request data in login: " . print_r($data, true));
 
         if (!isset($data['email']) || !isset($data['password'])) {
+            $this->logger->warning("Missing required fields in login");
             return $this->jsonResponse($response, ["error" => "Email and password are required"], 400);
         }
 
         $result = $this->authService->login($data);
-        $this->logger->info('User login attempt', ['data' => $data]);
+        $this->logger->info('User login attempt', ['email' => $data['email']]);
 
         return $this->jsonResponse($response, $result);
     }
