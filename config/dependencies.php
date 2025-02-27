@@ -38,6 +38,7 @@ use GuzzleHttp\Client;
 use App\Helpers\LoggingHelper;
 use App\Controllers\UserController;
 use App\Controllers\AuthController;
+
 // Step 1: Initialize DI Container
 try {
     $container = new Container();
@@ -86,8 +87,8 @@ foreach ($configFiles as $file) {
 // Step 3: Initialize DatabaseHelper instances BEFORE services that depend on them.
 try {
     DatabaseHelper::setLogger($container->get('db_logger'));
-    $database = DatabaseHelper::getInstance($config['database']['app_database']); // Pass the app_database config
-    $secureDatabase = DatabaseHelper::getSecureInstance($config['database']['secure_database']); // Pass the secure_database config
+    $database = DatabaseHelper::getInstance($config['database']['app_database']); // Use app_database config
+    $secureDatabase = DatabaseHelper::getSecureInstance($config['database']['secure_database']); // Use secure_database config
     $container->get('db_logger')->info("✅ Both databases initialized successfully.");
 } catch (Exception $e) {
     $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
@@ -95,8 +96,8 @@ try {
 }
 
 // ✅ Register database instances in DI container
-$container->set(DatabaseHelper::class, fn() => DatabaseHelper::getInstance()); // Register as DatabaseHelper class
-$container->set('db', fn() => DatabaseHelper::getInstance()); // Register generic key
+$container->set(DatabaseHelper::class, fn() => DatabaseHelper::getInstance()); // Use the default app_database instance
+$container->set('db', fn() => DatabaseHelper::getInstance());
 $container->set('secure_db', fn() => DatabaseHelper::getSecureInstance());
 
 // Debug database connection before proceeding.
@@ -113,9 +114,9 @@ try {
 
 // Step 4: Initialize EncryptionService.
 $encryptionService = new EncryptionService(
-    $container->get(LoggerInterface::class), // Pass the correct logger
-    $container->get(ExceptionHandler::class), // Pass the ExceptionHandler
-    $config['encryption']['encryption_key'] // Pass the encryption key from config
+    $container->get(LoggerInterface::class),
+    $container->get(ExceptionHandler::class),
+    $config['encryption']['encryption_key']
 );
 $container->set(EncryptionService::class, fn() => $encryptionService);
 $container->get(LoggerInterface::class)->info("Step 4: EncryptionService registered.");
@@ -127,9 +128,9 @@ if (!isset($config['filestorage']) || !is_array($config['filestorage'])) {
 }
 $container->set(FileStorage::class, function () use ($container, $config) {
     return new FileStorage(
-        $config['filestorage'],  // Pass correct config as an array.
-        $container->get('api_logger'), // Pass the proper logger.
-        $container->get(EncryptionService::class) // Inject EncryptionService.
+        $config['filestorage'],
+        $container->get('api_logger'),
+        $container->get(EncryptionService::class)
     );
 });
 $container->get(LoggerInterface::class)->info("Step 5: FileStorage registered.");
@@ -140,21 +141,19 @@ $container->get(LoggerInterface::class)->info("Step 6: Key Manager configuration
 
 // Step 7: Ensure required directories exist.
 $templateDirectory = __DIR__ . '/../storage/templates';
-$fileStorageConfig = $config['filestorage'] ?? [];
 if (!is_dir($templateDirectory)) {
     mkdir($templateDirectory, 0775, true);
 }
-
 $container->get(LoggerInterface::class)->info("Step 7: Required directories verified.");
 
 // Step 8: Register services with proper dependency order.
 $container->set(Validator::class, fn() => new Validator(
-    $container->get('api_logger'), // Pass the logger
-    $container->get(DatabaseHelper::class), // Pass the DatabaseHelper
+    $container->get('api_logger'),
+    $container->get(DatabaseHelper::class),
     $container->get(ExceptionHandler::class)
 ));
 $container->set(RateLimiter::class, fn() => new RateLimiter(
-    $container->get('db_logger'), 
+    $container->get('db_logger'),
     $container->get(ExceptionHandler::class)
 ));
 $container->set(AuditService::class, fn() => new AuditService(
@@ -163,20 +162,22 @@ $container->set(AuditService::class, fn() => new AuditService(
     $container->get(DatabaseHelper::class)
 ));
 $container->set(TokenService::class, fn() => new TokenService(
-    $config['encryption']['jwt_secret'], // Pass the JWT secret from config
-    $config['encryption']['jwt_refresh_secret'], // Pass the JWT refresh secret from config
+    $config['encryption']['jwt_secret'],
+    $config['encryption']['jwt_refresh_secret'],
     $container->get('auth_logger'),
     $container->get(ExceptionHandler::class)
 ));
-$container->set(AuthService::class, fn() => new AuthService(
-    DatabaseHelper::getInstance(),           // Use default app_database instance
-    $container->get(TokenService::class),
-    $container->get(ExceptionHandler::class),
-    $container->get('auth_logger'),
-    $container->get('audit_logger'),
-    $config['encryption'],                     // Entire encryption config for token settings
-    $container->get(Validator::class)
-));
+$container->set(AuthService::class, function (Container $container) use ($config) {
+    return new AuthService(
+        $container->get(DatabaseHelper::class),  // Use default (app_database)
+        $container->get(TokenService::class),
+        $container->get(ExceptionHandler::class),
+        $container->get('auth_logger'),
+        $container->get('audit_logger'),
+        $config['encryption'],
+        $container->get(Validator::class)
+    );
+});
 $container->set(UserController::class, function ($container) {
     return new UserController(
         $container->get(Validator::class),
@@ -238,7 +239,6 @@ $container->set(TemplateService::class, fn() => new TemplateService(
     __DIR__ . '/../storage/templates',
     $container->get(ExceptionHandler::class)
 ));
-// Removed duplicate registration for FileStorage and EncryptionService here since they are already registered.
 $container->set(KeyManager::class, fn() => new KeyManager(
     $config['keymanager'],
     $container->get('security_logger'),
@@ -253,15 +253,7 @@ $container->set(AuthController::class, function (Container $container) {
     );
 });
 
-$container->set('AuthService', function() {
-    return new AuthService(new DatabaseHelper());
-});
-
-$container->set('TokenService', function() {
-    return new TokenService();
-});
-
-// Example of injecting LoggingHelper into a service
+// Example of injecting LoggingHelper into a service.
 $container->set('SomeService', function($container) {
     $logger = $container->get('LoggingHelper')->getLoggerByCategory('some_category');
     return new SomeService($logger);
@@ -277,14 +269,20 @@ $requiredServices = [
     DatabaseHelper::class,
 ];
 $container->get('dependencies_logger')->info("🔄 Step 9: Checking for circular dependencies...");
+$failedServices = [];
 foreach ($requiredServices as $service) {
     try {
         $container->get($service);
         $container->get('dependencies_logger')->info("✅ Service loaded successfully: {$service}");
     } catch (Exception $e) {
-        $container->get('dependencies_logger')->critical("❌ Service failed to load: {$service}", ['trace' => $e->getTraceAsString()]);
-        die("❌ Service failure: {$service}: " . $e->getMessage() . "\n");
+        $errorMsg = "❌ Service failed to load: {$service}: " . $e->getMessage();
+        $container->get('dependencies_logger')->critical($errorMsg, ['trace' => $e->getTraceAsString()]);
+        $failedServices[] = $errorMsg;
     }
+}
+
+if (!empty($failedServices)) {
+    die("❌ Service failures: " . implode("\n", $failedServices) . "\n");
 }
 
 $container->get('dependencies_logger')->info("✅ DI container validation completed successfully.");
@@ -292,15 +290,14 @@ $container->get('dependencies_logger')->info("✅ DI container validation comple
 // Before returning the container, verify security-related services load successfully.
 try {
     $container->get(AuthService::class);
-// Ensure container integrity before return.
-return [
-    'db'                => $container->get('db'),
-    'secure_db'         => $container->get('secure_db'),
-    'logger'            => $container->get(LoggerInterface::class),
-    'auditService'      => $container->get(AuditService::class),
-    'encryptionService' => $container->get(EncryptionService::class),
-    'container'         => $container,
-];
+    return [
+        'db'                => $container->get('db'),
+        'secure_db'         => $container->get('secure_db'),
+        'logger'            => $container->get(LoggerInterface::class),
+        'auditService'      => $container->get(AuditService::class),
+        'encryptionService' => $container->get(EncryptionService::class),
+        'container'         => $container,
+    ];
 } catch (Exception $e) {
     $container->get('dependencies_logger')->critical("❌ Security services failed to load: " . $e->getMessage());
     die("❌ Security services failed to load: " . $e->getMessage() . "\n");
