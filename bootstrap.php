@@ -88,7 +88,7 @@ try {
 
 // Step 8: Verify Database Connection
 try {
-    $pdo = $database->getConnection()->getPdo();
+    $pdo = $database->getConnection();
     if (!$pdo) {
         throw new Exception("❌ Database connection failed.");
     }

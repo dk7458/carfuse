@@ -3,7 +3,7 @@
         'name' => 'carfuse/project',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '6573c1e2c5338b8fe1452bb4ee3a8e9f8236e59d',
+        'reference' => 'acf55ea330a343cce1b9139173f1e16bcd5df214',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -31,7 +31,7 @@
         'carfuse/project' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '6573c1e2c5338b8fe1452bb4ee3a8e9f8236e59d',
+            'reference' => 'acf55ea330a343cce1b9139173f1e16bcd5df214',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
