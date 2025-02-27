@@ -252,7 +252,7 @@ $container->set(AuthController::class, function ($container) {
         $container->get(LoggerInterface::class),
         $container->get(AuthService::class),
         $container->get(TokenService::class),
-        $container->get(atabaseHelper::class)
+        $container->get(DatabaseHelper::class)
     );
 });
 // Example of injecting LoggingHelper into a service.
