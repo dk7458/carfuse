@@ -95,13 +95,13 @@ try {
 }
 
 // ✅ Register database instances in DI container
-$container->set(DatabaseHelper::class, fn() => $database); // Register as DatabaseHelper class
-$container->set('db', fn() => $database); // Register generic key
-$container->set('secure_db', fn() => $secureDatabase);
+$container->set(DatabaseHelper::class, fn() => DatabaseHelper::getInstance()); // Register as DatabaseHelper class
+$container->set('db', fn() => DatabaseHelper::getInstance()); // Register generic key
+$container->set('secure_db', fn() => DatabaseHelper::getSecureInstance());
 
 // Debug database connection before proceeding.
 try {
-    $pdo = $container->get('db')->getConnection()->getPdo();
+    $pdo = $container->get('db')->getConnection();
     if (!$pdo) {
         throw new Exception("❌ Database connection failed.");
     }
