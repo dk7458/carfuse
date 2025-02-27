@@ -45,7 +45,9 @@ class AuthService
     public function login(array $data)
     {
         try {
-            $stmt = $this->pdo->prepare("SELECT * FROM users WHERE email = ?");
+            // Query the users table with correct column names from the existing schema
+            $stmt = $this->pdo->prepare("SELECT id, name, surname, email, password_hash, phone, role, address, pesel_or_id, active, created_at FROM users WHERE email = ? AND active = 1");
+            $this->authLogger->debug("Executing login query for user email: {$data['email']}");
             $stmt->execute([$data['email']]);
             $user = $stmt->fetch();
 
@@ -87,7 +89,9 @@ class AuthService
                 'confirm_password'=> 'required|same:password',
                 'name'            => 'required|string',
                 'surname'         => 'required|string',
-                'phone'           => 'string'
+                'phone'           => 'string',
+                'address'         => 'string',
+                'pesel_or_id'     => 'string'
             ];
 
             // Log sanitized input data (without passwords)
@@ -105,15 +109,19 @@ class AuthService
                 throw new Exception("Passwords do not match", 400);
             }
             
-            // Prepare user data for database insertion
+            // Prepare user data for database insertion with valid columns from the existing schema
             $userData = [
                 'name' => $data['name'],
                 'surname' => $data['surname'],
                 'email' => $data['email'],
                 'password_hash' => password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]),
                 'phone' => $data['phone'] ?? null,
+                'address' => $data['address'] ?? null,
+                'pesel_or_id' => $data['pesel_or_id'] ?? null,
                 'role' => $data['role'] ?? 'user',
-                'status' => $data['status'] ?? 'active',
+                'email_notifications' => $data['email_notifications'] ?? 0,
+                'sms_notifications' => $data['sms_notifications'] ?? 0,
+                'active' => 1,
                 'created_at' => date('Y-m-d H:i:s'),
                 'updated_at' => date('Y-m-d H:i:s')
             ];
@@ -127,6 +135,7 @@ class AuthService
             $columns = implode(', ', array_keys($userData));
             $placeholders = implode(', ', array_fill(0, count($userData), '?'));
             
+            $this->authLogger->debug("Executing register query with columns: {$columns}");
             $stmt = $this->pdo->prepare("INSERT INTO users ({$columns}) VALUES ({$placeholders})");
             $stmt->execute(array_values($userData));
             $userId = $this->pdo->lastInsertId();
@@ -148,13 +157,11 @@ class AuthService
     public function refresh(array $data)
     {
         try {
-            if (!isset($data['refresh_token'])) {
-                $this->authLogger->warning("Missing refresh token");
-                throw new Exception("Refresh token is required", 400);
-            }
-            
             $decoded = JWT::decode($data['refresh_token'], new Key($this->tokenService->jwtSecret, 'HS256'));
-            $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = ?");
+            
+            // Query the users table with correct column names
+            $stmt = $this->pdo->prepare("SELECT id, name, surname, email, password_hash, phone, role, created_at FROM users WHERE id = ?");
+            $this->authLogger->debug("Executing refresh query for user ID: {$decoded->sub}");
             $stmt->execute([$decoded->sub]);
             $user = $stmt->fetch();
 
@@ -204,8 +211,9 @@ class AuthService
                 throw new Exception("Invalid email format", 400);
             }
             
-            // Check if user exists
-            $stmt = $this->pdo->prepare("SELECT * FROM users WHERE email = ?");
+            // Check if user exists with correct column names
+            $stmt = $this->pdo->prepare("SELECT id, email FROM users WHERE email = ?");
+            $this->authLogger->debug("Executing password reset request query for email: {$data['email']}");
             $stmt->execute([$data['email']]);
             $user = $stmt->fetch();
             
@@ -218,13 +226,14 @@ class AuthService
             // Generate a secure reset token
             $resetToken = bin2hex(random_bytes(32));
             $tokenExpiry = date('Y-m-d H:i:s', time() + 3600); // Token valid for 1 hour
+            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
             
-            // Store the token in the database
+            // Store the token in the password_resets table matching the schema
             $stmt = $this->pdo->prepare("
-                INSERT INTO password_reset_tokens (user_id, token, expires_at) 
-                VALUES (?, ?, ?)
+                INSERT INTO password_resets (email, token, ip_address, expires_at, created_at) 
+                VALUES (?, ?, ?, ?, NOW())
             ");
-            $stmt->execute([$user['id'], $resetToken, $tokenExpiry]);
+            $stmt->execute([$user['email'], $resetToken, $ipAddress, $tokenExpiry]);
             
             // Log the action
             $this->authLogger->info("Password reset token generated", ['user_id' => $user['id']]);
@@ -263,11 +272,13 @@ class AuthService
                 throw new Exception("Passwords do not match", 400);
             }
             
-            // Verify token
+            // Verify token using correct table name and columns
             $stmt = $this->pdo->prepare("
-                SELECT * FROM password_reset_tokens 
-                WHERE token = ? AND expires_at > NOW() AND used = 0
+                SELECT * FROM password_resets 
+                WHERE token = ? AND expires_at > NOW()
+                ORDER BY created_at DESC LIMIT 1
             ");
+            $this->authLogger->debug("Verifying reset token: {$data['token']}");
             $stmt->execute([$data['token']]);
             $tokenRecord = $stmt->fetch();
             
@@ -275,22 +286,25 @@ class AuthService
                 throw new Exception("Invalid or expired token", 400);
             }
             
-            // Get user
-            $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = ?");
-            $stmt->execute([$tokenRecord['user_id']]);
+            // Get user with correct column names
+            $stmt = $this->pdo->prepare("SELECT id, name, email FROM users WHERE email = ?");
+            $this->authLogger->debug("Retrieving user for password reset, email: {$tokenRecord['email']}");
+            $stmt->execute([$tokenRecord['email']]);
             $user = $stmt->fetch();
             
             if (!$user) {
                 throw new Exception("User not found", 404);
             }
             
-            // Update the password
+            // Update the password with correct column name (password_hash)
             $hashedPassword = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]);
             $stmt = $this->pdo->prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?");
+            $this->authLogger->debug("Updating password for user ID: {$user['id']}");
             $stmt->execute([$hashedPassword, $user['id']]);
             
-            // Mark token as used
-            $stmt = $this->pdo->prepare("UPDATE password_reset_tokens SET used = 1 WHERE id = ?");
+            // Mark token as used by removing it or expiring it (since we don't have a "used" column)
+            // We'll expire it by setting expires_at to current time
+            $stmt = $this->pdo->prepare("UPDATE password_resets SET expires_at = NOW() WHERE id = ?");
             $stmt->execute([$tokenRecord['id']]);
             
             // Log the action
