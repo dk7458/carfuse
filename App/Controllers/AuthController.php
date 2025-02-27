@@ -23,21 +23,30 @@ class AuthController extends Controller
 
     public function login(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
+        // Use getParsedBody() for consistency with other endpoints
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            $this->logger->error("Parsed body is not an array or is null in login.");
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+        }
+
+        $this->logger->debug("Parsed request data in login: " . print_r($data, true));
 
         if (!isset($data['email']) || !isset($data['password'])) {
+            $this->logger->warning("Missing required fields in login");
             return $this->jsonResponse($response, ["error" => "Email and password are required"], 400);
         }
 
         $result = $this->authService->login($data);
-        $this->logger->info('User login attempt', ['data' => $data]);
+        $this->logger->info('User login attempt', ['email' => $data['email']]);
 
         return $this->jsonResponse($response, $result);
     }
 
     public function register(Request $request, Response $response)
     {
-        // Use getParsedBody() since the parsed body was set in index.php
+        // Already using getParsedBody() correctly
         $data = $request->getParsedBody();
         
         if (!is_array($data)) {
@@ -63,17 +72,43 @@ class AuthController extends Controller
 
     public function refresh(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
+        // Use getParsedBody() for consistency
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            $this->logger->error("Parsed body is not an array or is null in refresh.");
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+        }
+        
+        $this->logger->debug("Parsed request data in refresh: " . print_r($data, true));
+        
+        if (!isset($data['refresh_token'])) {
+            $this->logger->warning("Missing refresh token");
+            return $this->jsonResponse($response, ["error" => "Refresh token is required"], 400);
+        }
+        
         $result = $this->authService->refresh($data);
-        $this->logger->info('Token refresh attempt', ['data' => $data]);
+        $this->logger->info('Token refresh attempt');
+        
         return $this->jsonResponse($response, $result);
     }
 
     public function logout(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
+        // Use getParsedBody() for consistency
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            // Still proceed with logout even if body is invalid
+            $data = [];
+            $this->logger->warning("Parsed body is not an array in logout, proceeding anyway.");
+        }
+        
+        $this->logger->debug("Parsed request data in logout: " . print_r($data, true));
+        
         $result = $this->authService->logout($data);
-        $this->logger->info('User logout attempt', ['data' => $data]);
+        $this->logger->info('User logout attempt');
+        
         return $this->jsonResponse($response, $result);
     }
 
@@ -86,9 +121,18 @@ class AuthController extends Controller
 
     public function resetPasswordRequest(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
+        // Use getParsedBody() for consistency
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            $this->logger->error("Parsed body is not an array or is null in password reset.");
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+        }
+        
+        $this->logger->debug("Parsed request data in resetPasswordRequest: " . print_r($data, true));
 
         if (!isset($data['email'])) {
+            $this->logger->warning("Missing email in password reset request");
             return $this->jsonResponse($response, ["error" => "Email is required"], 400);
         }
 
