@@ -11,7 +11,9 @@ use Dotenv\Dotenv;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\LoggingHelper;
 use App\Helpers\SetupHelper;
+use App\Helpers\ExceptionHandler;
 use App\Services\AuditService;
+use Psr\Log\LoggerInterface;
 
 // Step 1: Initialize Logger First
 $loggingHelper = new LoggingHelper();
@@ -56,45 +58,63 @@ foreach ($configFiles as $file) {
     $logger->info("🔄 Configuration file loaded: {$file}.php");
 }
 
-// Step 4: Initialize Dependency Injection Container
+// Step 4: Initialize Exception Handler (needed for AuditService)
+$exceptionHandler = new ExceptionHandler(
+    $loggingHelper->getLoggerByCategory('db'),
+    $loggingHelper->getLoggerByCategory('auth'),
+    $logger
+);
+
+// Step 5: Initialize Database Connections (needed for AuditService)
+try {
+    DatabaseHelper::setLogger($loggingHelper->getLoggerByCategory('db'));
+    $database = DatabaseHelper::getInstance($config['database']['app_database']);
+    $secure_database = DatabaseHelper::getSecureInstance($config['database']['secure_database']);
+    $logger->info("🔄 Database instances loaded successfully.");
+} catch (Exception $e) {
+    $logger->critical("❌ Failed to load database instances: " . $e->getMessage());
+    exit("❌ Database initialization failed: " . $e->getMessage() . "\n");
+}
+
+// Step 6: Initialize AuditService early with audit logger
+try {
+    $auditLogger = $loggingHelper->getLoggerByCategory('audit');
+    $auditService = new AuditService($auditLogger, $exceptionHandler, $database);
+    $auditService->logEvent(
+        'system',
+        'AuditService initialized during bootstrap',
+        ['environment' => $_ENV['APP_ENV'] ?? 'unknown']
+    );
+    $logger->info("✅ AuditService initialized successfully early in bootstrap.");
+} catch (Exception $e) {
+    $logger->critical("❌ Failed to initialize AuditService: " . $e->getMessage());
+    exit("❌ AuditService initialization failed: " . $e->getMessage() . "\n");
+}
+
+// Step 7: Initialize Dependency Injection Container
 try {
     $container = new \DI\Container();
     $diDependencies = require_once __DIR__ . '/config/dependencies.php';
     $container = $diDependencies['container'];
-    if (!$container instanceof \DI\Container) {
+    
+    // Register our pre-initialized AuditService in the container
+    if ($container instanceof \DI\Container) {
+        $container->set(AuditService::class, $auditService);
+        $logger->info("✅ Pre-initialized AuditService registered in DI container.");
+    } else {
         throw new Exception("DI container initialization failed.");
     }
-    $container->get(LoggingHelper::class)->getLoggerByCategory('dependencies')->info("✅ Bootstrap: DI container initialized and validated.");
+    
     $logger->info("🔄 Dependencies initialized successfully.");
 } catch (Exception $e) {
     $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());
     exit("❌ DI container initialization failed: " . $e->getMessage() . "\n");
 }
 
-// Step 5: Register Logger in DI Container Before Other Services
+// Step 8: Register Logger in DI Container
 $container->set(LoggerInterface::class, fn() => $loggingHelper->getDefaultLogger());
 
-// Step 6: Load Security Helper and Other Critical Services
-
-// Step 7: Load Database Instances
-try {
-    DatabaseHelper::setLogger($container->get(LoggingHelper::class)->getLoggerByCategory('db'));
-    $database = DatabaseHelper::getInstance($config['database']['app_database']);
-    $secure_database = DatabaseHelper::getSecureInstance($config['database']['secure_database']);
-    $logger->info("🔄 Database instances loaded successfully.");
-    
-    // Initialize AuditService with secure database connection
-    $container->set(AuditService::class, function() use ($secure_database, $logger) {
-        $auditService = new AuditService($secure_database->getConnection(), $logger);
-        $logger->info("✅ AuditService initialized with secure database connection");
-        return $auditService;
-    });
-} catch (Exception $e) {
-    $logger->critical("❌ Failed to load database instances: " . $e->getMessage());
-    exit("❌ Database initialization failed: " . $e->getMessage() . "\n");
-}
-
-// Step 8: Verify Database Connection
+// Step 9: Verify Database Connection
 try {
     $pdo = $database->getConnection();
     if (!$pdo) {
@@ -106,14 +126,14 @@ try {
     exit("❌ Database connection issue: " . $e->getMessage() . "\n");
 }
 
-// Step 9: Validate Encryption Key
+// Step 10: Validate Encryption Key
 if (!isset($config['encryption']['encryption_key']) || strlen($config['encryption']['encryption_key']) < 32) {
     $logger->critical("❌ Encryption key missing or invalid.");
     exit("❌ Critical failure: Encryption key missing or invalid.\n");
 }
 $logger->info("🔄 Encryption key validated.");
 
-// Step 10: Validate Required Dependencies
+// Step 11: Validate Required Dependencies
 $missingDependencies = [];
 $requiredServices = [
     NotificationService::class,
@@ -143,8 +163,8 @@ try {
         $logger->info("Environment security checks passed");
     }
     
-    // Log successful bootstrap via AuditService
-    $container->get(AuditService::class)->logEvent(
+    // Log successful bootstrap via pre-initialized AuditService
+    $auditService->logEvent(
         'system',
         'Application bootstrap completed successfully',
         ['environment' => $_ENV['APP_ENV'] ?? 'unknown']
@@ -166,7 +186,7 @@ return [
     'secure_db'         => $secure_database,
     'logger'            => $logger,
     'container'         => $container,
-    'auditService'      => $container->get(\App\Services\AuditService::class),
+    'auditService'      => $auditService, // Return the pre-initialized audit service
     'encryptionService' => $container->get(\App\Services\EncryptionService::class),
     'config'            => $config, // Pass the configuration array
 ];
