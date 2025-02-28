@@ -175,9 +175,9 @@ $container->set(RateLimiter::class, fn() => new RateLimiter(
     $container->get(ExceptionHandler::class)
 ));
 $container->set(AuditService::class, fn() => new AuditService(
-    $container->get(DatabaseHelper::class),
     $container->get('security_logger'),
-    $container->get(ExceptionHandler::class)
+    $container->get(ExceptionHandler::class),
+    $container->get(DatabaseHelper::class)
 ));
 // Update TokenService registration:
 $container->set(TokenService::class, fn() => new TokenService(
