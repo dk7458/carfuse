@@ -36,6 +36,9 @@ use App\Services\AuditService;
 use App\Queues\NotificationQueue;
 use App\Queues\DocumentQueue;
 use App\Models\Payment;
+use App\Models\Booking;
+use App\Models\User;
+
 use GuzzleHttp\Client;
 use App\Helpers\LoggingHelper;
 use App\Controllers\UserController;
@@ -156,6 +159,11 @@ $container->set('bookingModel', fn() => new App\Models\Booking(
     $container->get('db_logger')
 ));
 
+// Register the User model.
+$container->set(User::class, fn() => new User(
+    $container->get(DatabaseHelper::class)
+));
+
 // Step 8: Register services with proper dependency order.
 $container->set(Validator::class, fn() => new Validator(
     $container->get('api_logger'),
@@ -180,15 +188,17 @@ $container->set(TokenService::class, fn() => new TokenService(
     $container->get(DatabaseHelper::class),
     $container->get(AuditService::class)
 ));
+// Update AuthService registration to pass AuditService and User model:
 $container->set(AuthService::class, function (Container $container) use ($config) {
     return new AuthService(
-        $container->get(DatabaseHelper::class),  // Use default (app_database)
-        $container->get(TokenService::class),
-        $container->get(ExceptionHandler::class),
-        $container->get('auth_logger'),
-        $container->get('audit_logger'),
-        $config['encryption'],
-        $container->get(Validator::class)
+        $container->get(DatabaseHelper::class),        // DatabaseHelper
+        $container->get(TokenService::class),           // TokenService
+        $container->get(ExceptionHandler::class),       // ExceptionHandler
+        $container->get('auth_logger'),                  // AuthLogger
+        $container->get(AuditService::class),            // AuditService (correct type)
+        $config['encryption'],                           // Encryption config array
+        $container->get(Validator::class),               // Validator
+        $container->get(User::class)                     // User model
     );
 });
 $container->set(UserController::class, function ($container) {
