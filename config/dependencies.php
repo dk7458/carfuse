@@ -131,8 +131,9 @@ if (!isset($config['filestorage']) || !is_array($config['filestorage'])) {
 $container->set(FileStorage::class, function () use ($container, $config) {
     return new FileStorage(
         $config['filestorage'],
+        $container->get(EncryptionService::class),
         $container->get('api_logger'),
-        $container->get(EncryptionService::class)
+        $container->get(ExceptionHandler::class)
     );
 });
 $container->get(LoggerInterface::class)->info("Step 5: FileStorage registered.");
@@ -147,6 +148,13 @@ if (!is_dir($templateDirectory)) {
     mkdir($templateDirectory, 0775, true);
 }
 $container->get(LoggerInterface::class)->info("Step 7: Required directories verified.");
+
+// Before Step 8: (if not already registered)
+$container->set('bookingModel', fn() => new App\Models\Booking(
+    // ...provide necessary dependencies or leave as placeholder...
+    $container->get(DatabaseHelper::class),
+    $container->get('db_logger')
+));
 
 // Step 8: Register services with proper dependency order.
 $container->set(Validator::class, fn() => new Validator(
@@ -191,7 +199,7 @@ $container->set(UserController::class, function ($container) {
 $container->set(UserService::class, fn() => new UserService(
     $container->get(DatabaseHelper::class),
     $container->get('auth_logger'),
-    $container->get('audit_logger')
+    $container->get(ExceptionHandler::class)
 ));
 $container->set(NotificationService::class, fn() => new NotificationService(
     $container->get('api_logger'),
@@ -200,27 +208,28 @@ $container->set(NotificationService::class, fn() => new NotificationService(
     $config['notifications'] ?? []
 ));
 $container->set(PaymentService::class, fn() => new PaymentService(
-    $container->get('db_logger'),
+    getLogger('payment'),
     $container->get(DatabaseHelper::class),
     $container->get(ExceptionHandler::class)
 ));
 $container->set(BookingService::class, fn() => new BookingService(
-    $container->get('api_logger'),
+    getLogger('booking'),
     $container->get(ExceptionHandler::class),
-    $container->get(DatabaseHelper::class)
+    $container->get(DatabaseHelper::class),
+    $container->get('bookingModel')
 ));
 $container->set(MetricsService::class, fn() => new MetricsService(
-    $container->get('api_logger'),
+    getLogger('metrics'),
     $container->get(ExceptionHandler::class),
     $container->get(DatabaseHelper::class)
 ));
 $container->set(ReportService::class, fn() => new ReportService(
-    $container->get('api_logger'),
+    getLogger('report'),
     $container->get(DatabaseHelper::class),
     $container->get(ExceptionHandler::class)
 ));
 $container->set(RevenueService::class, fn() => new RevenueService(
-    $container->get('db_logger'),
+    getLogger('revenue'),
     $container->get(DatabaseHelper::class),
     $container->get(ExceptionHandler::class)
 ));
@@ -230,23 +239,20 @@ $container->set(SignatureService::class, fn() => new SignatureService(
     $config['signature']
 ));
 $container->set(DocumentService::class, fn() => new DocumentService(
-    $container->get('api_logger'),
     $container->get(AuditService::class),
     $container->get(FileStorage::class),
-    $container->get(EncryptionService::class),
-    $container->get(TemplateService::class)
+    $container->get(EncryptionService::class)
 ));
 $container->set(TemplateService::class, fn() => new TemplateService(
     $container->get('api_logger'),
-    __DIR__ . '/../storage/templates',
-    $container->get(ExceptionHandler::class)
+    $container->get(ExceptionHandler::class),
+    $container->get(AuditService::class)
 ));
 $container->set(KeyManager::class, fn() => new KeyManager(
     $config['keymanager'],
-    $container->get('security_logger'),
+    getLogger('security'),
     $container->get(ExceptionHandler::class)
 ));
-
 $container->set(AuthController::class, function ($container) {
     return new AuthController(
         $container->get(LoggerInterface::class),
@@ -255,6 +261,18 @@ $container->set(AuthController::class, function ($container) {
         $container->get(DatabaseHelper::class)
     );
 });
+// Register TransactionService using a booking-specific logger.
+$container->set(TransactionService::class, fn() => new TransactionService(
+    getLogger('booking'),
+    $container->get(DatabaseHelper::class),
+    $container->get(ExceptionHandler::class)
+));
+// Update PayUService registration.
+$container->set(PayUService::class, fn() => new PayUService(
+    $config['payu'],
+    $container->get('api_logger'),
+    $container->get(ExceptionHandler::class)
+));
 // Example of injecting LoggingHelper into a service.
 $container->set('SomeService', function($container) {
     $logger = $container->get('LoggingHelper')->getLoggerByCategory('some_category');

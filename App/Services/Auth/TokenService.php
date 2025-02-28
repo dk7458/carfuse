@@ -6,6 +6,8 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
+use App\Helpers\DatabaseHelper;
+use App\Services\AuditService;
 
 class TokenService
 {
@@ -15,12 +17,16 @@ class TokenService
     private string $jwtRefreshSecret;
     private LoggerInterface $tokenLogger;
     private ExceptionHandler $exceptionHandler;
+    private DatabaseHelper $db;
+    private AuditService $auditService;
 
     public function __construct(
         string $jwtSecret,
         string $jwtRefreshSecret,
         LoggerInterface $tokenLogger,
-        ExceptionHandler $exceptionHandler
+        ExceptionHandler $exceptionHandler,
+        DatabaseHelper $db,
+        AuditService $auditService
     ) {
         $this->jwtSecret = $jwtSecret;
         $this->jwtRefreshSecret = $jwtRefreshSecret;
@@ -29,6 +35,9 @@ class TokenService
         }
         $this->tokenLogger = $tokenLogger;
         $this->exceptionHandler = $exceptionHandler;
+        $this->db = $db;
+        $this->auditService = $auditService;
+        
         if (self::DEBUG_MODE) {
             $this->tokenLogger->info("[auth] TokenService initialized.");
         }
@@ -50,6 +59,17 @@ class TokenService
             if (self::DEBUG_MODE) {
                 $this->tokenLogger->info("[auth] ✅ Token generated.", ['userId' => $userId]);
             }
+            
+            // Log JWT creation as a business-level event in audit trail
+            $this->auditService->logEvent(
+                'auth',
+                'jwt_created',
+                ['user_id' => $userId],
+                $userId,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+            
             return $token;
         } catch (\Exception $e) {
             $this->tokenLogger->error("[auth] ❌ Token generation failed: " . $e->getMessage());
@@ -85,10 +105,40 @@ class TokenService
             'exp' => time() + 604800
         ];
         try {
-            return JWT::encode($payload, $this->jwtRefreshSecret, 'HS256');
+            $refreshToken = JWT::encode($payload, $this->jwtRefreshSecret, 'HS256');
+            
+            // Store the refresh token in database using DatabaseHelper
+            $this->storeRefreshToken($userId, $refreshToken);
+            
+            return $refreshToken;
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
             throw $e;
+        }
+    }
+    
+    /**
+     * Store refresh token in database
+     */
+    private function storeRefreshToken(int $userId, string $refreshToken): void
+    {
+        try {
+            // Store the token in the refresh_tokens table using db helper
+            $this->db->table('refresh_tokens')->insert([
+                'user_id' => $userId,
+                'token' => hash('sha256', $refreshToken), // Store hashed token for security
+                'expires_at' => date('Y-m-d H:i:s', time() + 604800),
+                'created_at' => date('Y-m-d H:i:s'),
+                'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null
+            ]);
+            
+            if (self::DEBUG_MODE) {
+                $this->tokenLogger->info("[auth] Refresh token stored in database", ['user_id' => $userId]);
+            }
+        } catch (\Exception $e) {
+            $this->tokenLogger->error("[auth] Failed to store refresh token: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            // Continue without failing - JWT will still work even if storage fails
         }
     }
 
@@ -102,10 +152,17 @@ class TokenService
     public function decodeRefreshToken(string $refreshToken)
     {
         try {
+            // Check if token has been revoked
+            if ($this->isTokenRevoked($refreshToken)) {
+                throw new \Exception("Refresh token has been revoked.");
+            }
+            
             $decoded = JWT::decode($refreshToken, new Key($this->jwtRefreshSecret, 'HS256'));
+            
             if ($decoded->exp < time()) {
                 throw new \Exception("Refresh token has expired.");
             }
+            
             $this->tokenLogger->debug("Refresh token decoded successfully", ['sub' => $decoded->sub]);
             return $decoded;
         } catch (\Exception $e) {
@@ -114,18 +171,57 @@ class TokenService
             throw $e;
         }
     }
+    
+    /**
+     * Check if a token has been revoked
+     */
+    private function isTokenRevoked(string $refreshToken): bool
+    {
+        try {
+            // Check cache first for performance
+            if (apcu_exists("revoked_refresh_token_$refreshToken")) {
+                return true;
+            }
+            
+            // If not in cache, check database
+            $hashedToken = hash('sha256', $refreshToken);
+            $revoked = $this->db->table('refresh_tokens')
+                ->where('token', $hashedToken)
+                ->where('revoked', 1)
+                ->exists();
+                
+            // If revoked in database, store in cache for next time
+            if ($revoked) {
+                apcu_store("revoked_refresh_token_$refreshToken", true, 604800);
+            }
+            
+            return $revoked;
+        } catch (\Exception $e) {
+            $this->tokenLogger->warning("Error checking if token is revoked: " . $e->getMessage());
+            // Default to not revoked if there's an error checking, but log it
+            return false;
+        }
+    }
 
     public function refreshToken(string $refreshToken): string
     {
         try {
-            $decoded = JWT::decode($refreshToken, new Key($this->jwtRefreshSecret, 'HS256'));
-            if ($decoded->exp < time()) {
-                throw new \Exception("Refresh token has expired.");
-            }
-            if (apcu_exists("revoked_refresh_token_$refreshToken")) {
-                throw new \Exception("Refresh token has been revoked.");
-            }
-            return $this->generateToken((object)['id' => $decoded->sub]);
+            $decoded = $this->decodeRefreshToken($refreshToken);
+            
+            // Generate a new access token
+            $newToken = $this->generateToken((object)['id' => $decoded->sub]);
+            
+            // Log token refresh as a business event
+            $this->auditService->logEvent(
+                'auth',
+                'jwt_refreshed',
+                ['user_id' => $decoded->sub],
+                $decoded->sub,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+            
+            return $newToken;
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
             throw $e;
@@ -134,7 +230,83 @@ class TokenService
 
     public function revokeToken(string $token): void
     {
-        apcu_store("revoked_refresh_token_$token", true, 604800);
-        $this->tokenLogger->info("✅ [TokenService] Revoked refresh token.");
+        try {
+            // Store in cache for quick lookups
+            apcu_store("revoked_refresh_token_$token", true, 604800);
+            
+            // Store in database for persistence
+            $hashedToken = hash('sha256', $token);
+            
+            // Update the token status in database using db helper
+            $this->db->table('refresh_tokens')
+                ->where('token', $hashedToken)
+                ->update([
+                    'revoked' => 1,
+                    'revoked_at' => date('Y-m-d H:i:s')
+                ]);
+                
+            // Try to get the user ID for audit logging
+            $tokenData = $this->db->table('refresh_tokens')
+                ->where('token', $hashedToken)
+                ->first();
+            
+            $userId = $tokenData ? $tokenData->user_id : null;
+            
+            // Log token revocation as a business event
+            if ($userId) {
+                $this->auditService->logEvent(
+                    'auth',
+                    'token_revoked',
+                    [],
+                    $userId,
+                    null,
+                    $_SERVER['REMOTE_ADDR'] ?? null
+                );
+            }
+            
+            $this->tokenLogger->info("✅ [TokenService] Revoked refresh token.");
+        } catch (\Exception $e) {
+            $this->tokenLogger->error("Failed to revoke token: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+    
+    /**
+     * Remove expired tokens from the database
+     */
+    public function purgeExpiredTokens(): int
+    {
+        try {
+            $count = $this->db->table('refresh_tokens')
+                ->where('expires_at', '<', date('Y-m-d H:i:s'))
+                ->delete();
+                
+            $this->tokenLogger->info("[TokenService] Purged {$count} expired tokens");
+            return $count;
+        } catch (\Exception $e) {
+            $this->tokenLogger->error("Failed to purge expired tokens: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            return 0;
+        }
+    }
+    
+    /**
+     * Get all active tokens for a user
+     */
+    public function getActiveTokensForUser(int $userId): array
+    {
+        try {
+            $tokens = $this->db->table('refresh_tokens')
+                ->where('user_id', $userId)
+                ->where('revoked', 0)
+                ->where('expires_at', '>', date('Y-m-d H:i:s'))
+                ->get();
+                
+            return is_array($tokens) ? $tokens : [];
+        } catch (\Exception $e) {
+            $this->tokenLogger->error("Failed to get active tokens: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            return [];
+        }
     }
 }

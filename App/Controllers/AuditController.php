@@ -2,29 +2,42 @@
 
 namespace App\Controllers;
 
-use App\Models\AuditLog;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Response;
 use App\Services\AuditService;
+
 /**
  * AuditController - Handles viewing and retrieving audit logs.
  */
 class AuditController extends Controller
 {
+    private AuditService $auditService;
+    
     /**
-     * ✅ Render the audit log view for the admin.
+     * Constructor with dependency injection
+     */
+    public function __construct(AuditService $auditService)
+    {
+        $this->auditService = $auditService;
+    }
+    
+    /**
+     * ✅ Get audit logs data for admin dashboard
      */
     public function index()
     {
         try {
-            // Replace request->validate(...) with native PHP filters (assuming $_POST).
-            $filters = $_POST; // custom validation can be performed as needed
-            $logs = AuditLog::where($filters)->latest()->paginate(10);
-            extract(compact('logs'));
-            include BASE_PATH . '/public/views/admin/audit_logs.php';
+            // Check if user has admin role
+            if (!$this->hasAdminAccess()) {
+                return $this->jsonResponse('error', 'Admin access required', 403);
+            }
+            
+            // Process filters from request
+            $filters = $this->processFilters($_POST);
+            
+            // Get logs using the audit service
+            $logs = $this->auditService->getLogs($filters);
+            
+            return $this->jsonResponse('success', ['logs' => $logs], 200);
         } catch (\Exception $e) {
-            // Centralized error handling
             return $this->handleException($e);
         }
     }
@@ -35,14 +48,97 @@ class AuditController extends Controller
     public function fetchLogs()
     {
         try {
-            $filters = $_POST; // custom validation as needed
-            $logs = AuditLog::where($filters)->latest()->paginate(10);
-            header('Content-Type: application/json');
-            http_response_code(200);
-            echo json_encode(['status' => 'success', 'logs' => $logs]);
-            exit;
+            // Check if user has admin role
+            if (!$this->hasAdminAccess()) {
+                return $this->jsonResponse('error', 'Admin access required', 403);
+            }
+            
+            // Process filters from request
+            $filters = $this->processFilters($_POST);
+            
+            // Get logs using the audit service
+            $logs = $this->auditService->getLogs($filters);
+            
+            return $this->jsonResponse('success', ['logs' => $logs], 200);
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
+    }
+    
+    /**
+     * API Endpoint: Get log details by ID
+     */
+    public function getLog($id)
+    {
+        try {
+            // Check if user has admin role
+            if (!$this->hasAdminAccess()) {
+                return $this->jsonResponse('error', 'Admin access required', 403);
+            }
+            
+            $log = $this->auditService->getLogById((int)$id);
+            
+            return $this->jsonResponse('success', ['log' => $log], 200);
+        } catch (\Exception $e) {
+            return $this->handleException($e);
+        }
+    }
+    
+    /**
+     * Process and validate incoming filters
+     */
+    private function processFilters(array $rawFilters): array
+    {
+        $filters = [];
+        
+        // Category filter (unified log type)
+        if (!empty($rawFilters['category'])) {
+            $filters['category'] = $rawFilters['category'];
+        }
+        
+        // Action filter (for backward compatibility)
+        if (!empty($rawFilters['action'])) {
+            $filters['action'] = $rawFilters['action'];
+        }
+        
+        // User ID filter
+        if (!empty($rawFilters['user_id'])) {
+            $filters['user_id'] = (int)$rawFilters['user_id'];
+        }
+        
+        // Booking ID filter
+        if (!empty($rawFilters['booking_id'])) {
+            $filters['booking_id'] = (int)$rawFilters['booking_id'];
+        }
+        
+        // Date range filters
+        if (!empty($rawFilters['start_date'])) {
+            $filters['start_date'] = $rawFilters['start_date'];
+        }
+        
+        if (!empty($rawFilters['end_date'])) {
+            $filters['end_date'] = $rawFilters['end_date'];
+        }
+        
+        return $filters;
+    }
+    
+    /**
+     * Check if current user has admin access
+     */
+    private function hasAdminAccess(): bool
+    {
+        // Replace with your actual authentication logic
+        return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+    }
+    
+    /**
+     * Handle exceptions in a consistent way
+     */
+    private function handleException(\Exception $e)
+    {
+        // Log the exception
+        error_log($e->getMessage());
+        return $this->jsonResponse('error', 'An error occurred: ' . $e->getMessage(), 500);
     }
 }

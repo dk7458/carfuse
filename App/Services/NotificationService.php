@@ -2,11 +2,12 @@
 
 namespace App\Services;
 
-use App\Helpers\DatabaseHelper; // new import
+use App\Helpers\DatabaseHelper;
+use App\Models\Notification;
 use Psr\Log\LoggerInterface;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-use App\Helpers\ExceptionHandler; // assume this exists
+use App\Helpers\ExceptionHandler;
 use App\Helpers\LoggingHelper;
 
 /**
@@ -21,12 +22,19 @@ class NotificationService
     private ExceptionHandler $exceptionHandler;
     private array $config;
     private DatabaseHelper $db;
+    private Notification $notificationModel;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db, array $config)
-    {
+    public function __construct(
+        LoggerInterface $logger, 
+        ExceptionHandler $exceptionHandler, 
+        DatabaseHelper $db, 
+        Notification $notificationModel,
+        array $config
+    ) {
         $this->logger = LoggingHelper::getLoggerByCategory('notification');
         $this->exceptionHandler = $exceptionHandler;
         $this->db = $db;
+        $this->notificationModel = $notificationModel;
         $this->config = $config;
     }
 
@@ -37,7 +45,10 @@ class NotificationService
     {
         try {
             $this->storeNotification($userId, $type, $message);
-            $this->logger->info('Notification sent', ['user_id' => $userId, 'message' => $message]);
+            // Business-level logging - keep this separate from model-level audit
+            if (self::DEBUG_MODE) {
+                $this->logger->info('Notification prepared for dispatch', ['user_id' => $userId, 'type' => $type]);
+            }
             return $this->dispatchNotification($userId, $type, $message, $options);
         } catch (\Exception $e) {
             $this->logger->error('Failed to send notification', ['error' => $e->getMessage()]);
@@ -52,85 +63,92 @@ class NotificationService
     private function storeNotification(int $userId, string $type, string $message): void
     {
         try {
-            // Instead of Eloquent relationship, we use direct DB insert.
-            $this->db->table('notifications')->insert([
+            // Use the model to create the notification - model handles audit logging
+            $this->notificationModel->create([
                 'user_id' => $userId,
                 'type'    => $type,
                 'message' => $message,
                 'sent_at' => date('Y-m-d H:i:s'),
                 'is_read' => false,
             ]);
-            if (self::DEBUG_MODE) {
-                $this->logger->info("[Notification] Stored notification for user {$userId}");
-            }
         } catch (\Exception $e) {
-            $this->logger->error("[DB] ❌ storeNotification error: " . $e->getMessage());
+            $this->logger->error("[Notification] ❌ storeNotification error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
 
-    public function getUserNotifications(int $userId)
+    public function getUserNotifications(int $userId): array
     {
         try {
-            $notifications = $this->db->table('notifications')
-                                 ->where('user_id', $userId)
-                                 ->orderBy('created_at', 'desc')
-                                 ->get();
+            // Use the model to get user notifications
+            $notifications = $this->notificationModel->getByUserId($userId);
+            
+            // Business-level logging
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Notification] Retrieved notifications for user {$userId}");
             }
+            
             return $notifications;
         } catch (\Exception $e) {
-            $this->logger->error("[DB] ❌ getUserNotifications error: " . $e->getMessage());
+            $this->logger->error("[Notification] ❌ getUserNotifications error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
 
-    public function markAsRead(int $notificationId): void
+    public function markAsRead(int $notificationId): bool
     {
         try {
-            $this->db->table('notifications')
-                     ->where('id', $notificationId)
-                     ->update(['is_read' => true]);
-            if (self::DEBUG_MODE) {
+            // Use the model to mark notification as read - model handles audit logging
+            $result = $this->notificationModel->markAsRead($notificationId);
+            
+            // Business-level logging
+            if (self::DEBUG_MODE && $result) {
                 $this->logger->info("[Notification] Marked notification {$notificationId} as read");
             }
+            
+            return $result;
         } catch (\Exception $e) {
-            $this->logger->error("[DB] ❌ markAsRead error: " . $e->getMessage());
+            $this->logger->error("[Notification] ❌ markAsRead error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
 
-    public function deleteNotification(int $notificationId): void
+    public function deleteNotification(int $notificationId): bool
     {
         try {
-            $this->db->table('notifications')
-                     ->where('id', $notificationId)
-                     ->delete();
-            if (self::DEBUG_MODE) {
+            // Use the model to delete notification - model handles audit logging
+            $result = $this->notificationModel->delete($notificationId);
+            
+            // Business-level logging
+            if (self::DEBUG_MODE && $result) {
                 $this->logger->info("[Notification] Deleted notification {$notificationId}");
             }
+            
+            return $result;
         } catch (\Exception $e) {
-            $this->logger->error("[DB] ❌ deleteNotification error: " . $e->getMessage());
+            $this->logger->error("[Notification] ❌ deleteNotification error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
 
-    public function markAllAsRead(int $userId): void
+    public function markAllAsRead(int $userId): bool
     {
         try {
-            $this->db->table('notifications')
-                     ->where('user_id', $userId)
-                     ->update(['is_read' => true]);
-            if (self::DEBUG_MODE) {
+            // Use the model to mark all notifications as read - model handles audit logging
+            $result = $this->notificationModel->markAllAsRead($userId);
+            
+            // Business-level logging
+            if (self::DEBUG_MODE && $result) {
                 $this->logger->info("[Notification] Marked all notifications as read for user {$userId}");
             }
+            
+            return $result;
         } catch (\Exception $e) {
-            $this->logger->error("[DB] ❌ markAllAsRead error: " . $e->getMessage());
+            $this->logger->error("[Notification] ❌ markAllAsRead error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -141,13 +159,32 @@ class NotificationService
      */
     private function dispatchNotification(int $userId, string $type, string $message, array $options): bool
     {
-        return match ($type) {
-            'email' => $this->sendEmail($options['email'] ?? '', $message, $options['subject'] ?? 'Notification'),
-            'sms' => $this->sendSMS($options['phone'] ?? '', $message),
-            'webhook' => $this->sendWebhook($options['url'] ?? '', $message),
-            'push' => $this->sendPushNotification($options['device_token'] ?? '', $message),
-            default => throw new \InvalidArgumentException("Unsupported notification type: $type"),
-        };
+        $result = false;
+        
+        try {
+            $result = match ($type) {
+                'email' => $this->sendEmail($options['email'] ?? '', $message, $options['subject'] ?? 'Notification'),
+                'sms' => $this->sendSMS($options['phone'] ?? '', $message),
+                'webhook' => $this->sendWebhook($options['url'] ?? '', $message),
+                'push' => $this->sendPushNotification($options['device_token'] ?? '', $message),
+                default => throw new \InvalidArgumentException("Unsupported notification type: $type"),
+            };
+            
+            // Business-level logging of success/failure
+            if (self::DEBUG_MODE) {
+                if ($result) {
+                    $this->logger->info("[Notification] Successfully sent {$type} notification to user {$userId}");
+                } else {
+                    $this->logger->warning("[Notification] Failed to send {$type} notification to user {$userId}");
+                }
+            }
+            
+            return $result;
+        } catch (\Exception $e) {
+            $this->logger->error("[Notification] ❌ Dispatch error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            return false;
+        }
     }
 
     /**
@@ -172,6 +209,8 @@ class NotificationService
             $mail->isHTML(true);
             $mail->Body = "<p>$message</p>";
             $mail->send();
+
+            // Business-level logging only - no need for audit here
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Notification] Email sent to {$to}");
             }
@@ -192,6 +231,9 @@ class NotificationService
         if (empty($phone)) return false;
 
         try {
+            // SMS implementation code would go here
+            
+            // Business-level logging only
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Notification] SMS sent to {$phone}");
             }
@@ -219,9 +261,14 @@ class NotificationService
             $response = curl_exec($ch);
             curl_close($ch);
 
+            // Business-level logging only
+            if (self::DEBUG_MODE && $response !== false) {
+                $this->logger->info("[Notification] Webhook sent to {$url}");
+            }
+
             return $response !== false;
         } catch (\Exception $e) {
-            $this->logger->error('Webhook failed', ['error' => $e->getMessage()]);
+            $this->logger->error('[Notification] ❌ Webhook error: ' . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             return false;
         }
@@ -239,9 +286,17 @@ class NotificationService
                 'to' => $deviceToken,
                 'notification' => ['title' => 'Notification', 'body' => $message],
             ];
-            return $this->sendFCMRequest($payload);
+            
+            $result = $this->sendFCMRequest($payload);
+            
+            // Business-level logging only
+            if (self::DEBUG_MODE && $result) {
+                $this->logger->info("[Notification] Push notification sent to device {$deviceToken}");
+            }
+            
+            return $result;
         } catch (\Exception $e) {
-            $this->logger->error('Push notification failed', ['error' => $e->getMessage()]);
+            $this->logger->error('[Notification] ❌ Push notification error: ' . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             return false;
         }
@@ -264,5 +319,35 @@ class NotificationService
 
         curl_close($ch);
         return $response !== false;
+    }
+    
+    /**
+     * Get notification by ID
+     */
+    public function getNotificationById(int $id): ?array
+    {
+        try {
+            $notification = $this->notificationModel->find($id);
+            return $notification;
+        } catch (\Exception $e) {
+            $this->logger->error("[Notification] ❌ getNotificationById error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            return null;
+        }
+    }
+    
+    /**
+     * Get unread notifications count for user
+     */
+    public function getUnreadCount(int $userId): int
+    {
+        try {
+            $count = $this->notificationModel->getUnreadCount($userId);
+            return $count;
+        } catch (\Exception $e) {
+            $this->logger->error("[Notification] ❌ getUnreadCount error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            return 0;
+        }
     }
 }

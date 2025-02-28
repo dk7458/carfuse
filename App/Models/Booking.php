@@ -2,9 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
 
 /**
  * Booking Model
@@ -13,21 +12,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 class Booking extends BaseModel
 {
-    use SoftDeletes;
-
-    /**
-     * Attributes that are mass assignable.
-     *
-     * @var array
-     */
-    protected $fillable = [
-        'user_id',
-        'vehicle_id',
-        'pickup_date',
-        'dropoff_date',
-        'status'
-    ];
-
+    protected $table = 'bookings';
+    protected $resourceName = 'booking';
+    
     /**
      * Validation rules for the model.
      *
@@ -42,63 +29,93 @@ class Booking extends BaseModel
     ];
 
     /**
-     * Relationships
-     */
-
-    /**
-     * Get the user who made the booking.
+     * Get active bookings.
      *
-     * @return BelongsTo
+     * @return array
      */
-    public function user(): BelongsTo
+    public function getActive(): array
     {
-        return $this->belongsTo(User::class);
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE status = 'confirmed' AND deleted_at IS NULL
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
     /**
-     * Get the vehicle associated with the booking.
+     * Get bookings by user ID.
      *
-     * @return BelongsTo
-     */
-    public function vehicle(): BelongsTo
-    {
-        return $this->belongsTo(Vehicle::class);
-    }
-
-    /**
-     * Get the payment associated with the booking.
-     *
-     * @return HasOne
-     */
-    public function payment(): HasOne
-    {
-        return $this->hasOne(Payment::class);
-    }
-
-    /**
-     * Scopes
-     */
-
-    /**
-     * Scope a query to filter active bookings.
-     *
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
-    public function scopeActive($query)
-    {
-        return $query->where('status', 'confirmed');
-    }
-
-    /**
-     * Scope a query to filter bookings by user.
-     *
-     * @param \Illuminate\Database\Eloquent\Builder $query
      * @param int $userId
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return array
      */
-    public function scopeByUser($query, int $userId)
+    public function getByUser(int $userId): array
     {
-        return $query->where('user_id', $userId);
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE user_id = :user_id AND deleted_at IS NULL
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get user data for a booking.
+     *
+     * @param int $bookingId
+     * @return array|null
+     */
+    public function getUser(int $bookingId): ?array
+    {
+        $query = "
+            SELECT u.* FROM users u
+            JOIN {$this->table} b ON u.id = b.user_id
+            WHERE b.id = :booking_id AND b.deleted_at IS NULL
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':booking_id' => $bookingId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Get vehicle data for a booking.
+     *
+     * @param int $bookingId
+     * @return array|null
+     */
+    public function getVehicle(int $bookingId): ?array
+    {
+        $query = "
+            SELECT v.* FROM vehicles v
+            JOIN {$this->table} b ON v.id = b.vehicle_id
+            WHERE b.id = :booking_id AND b.deleted_at IS NULL
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':booking_id' => $bookingId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Get payment data for a booking.
+     *
+     * @param int $bookingId
+     * @return array|null
+     */
+    public function getPayment(int $bookingId): ?array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT p.* FROM payments p
+            WHERE p.booking_id = :booking_id AND p.deleted_at IS NULL
+        ");
+        $stmt->execute([':booking_id' => $bookingId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
     }
 }

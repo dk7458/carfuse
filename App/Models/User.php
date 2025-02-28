@@ -12,6 +12,8 @@ use App\Models\Payment;
 use App\Models\AuditTrail;
 use App\Models\Log;
 use App\Models\Contract;
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
 
 /**
  * User Model
@@ -38,6 +40,10 @@ class User extends BaseModel
     protected $primaryKey = 'id';
     public $incrementing = false;
     protected $keyType = 'string';
+    protected $resourceName = 'user';
+    protected $useTimestamps = true;
+    protected $useSoftDeletes = true;
+    protected $useUuid = true;
 
     protected $fillable = [
         'name',
@@ -181,5 +187,126 @@ class User extends BaseModel
         static::deleting(function ($user) {
             error_log("[SECURITY] User {$user->id} was deleted.");
         });
+    }
+
+    /**
+     * Create a new user.
+     *
+     * @param array $data
+     * @return int
+     */
+    public function create(array $data): int
+    {
+        if (isset($data['password'])) {
+            $data['password_hash'] = Hash::make($data['password']);
+            unset($data['password']);
+        }
+
+        if ($this->useUuid && !isset($data['id'])) {
+            $data['id'] = Uuid::uuid4()->toString();
+        }
+
+        return parent::create($data);
+    }
+
+    /**
+     * Update a user.
+     *
+     * @param int $id
+     * @param array $data
+     * @return bool
+     */
+    public function update(int $id, array $data): bool
+    {
+        if (isset($data['password'])) {
+            $data['password_hash'] = Hash::make($data['password']);
+            unset($data['password']);
+        }
+
+        return parent::update($id, $data);
+    }
+
+    /**
+     * Get bookings for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getBookings(int $userId): array
+    {
+        $query = "SELECT * FROM bookings WHERE user_id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get payments for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getPayments(int $userId): array
+    {
+        $query = "SELECT * FROM payments WHERE user_id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get notifications for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getNotifications(int $userId): array
+    {
+        $query = "SELECT * FROM notifications WHERE user_id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get logs for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getLogs(int $userId): array
+    {
+        $query = "SELECT * FROM logs WHERE user_reference = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get audit trails for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getAuditTrails(int $userId): array
+    {
+        $query = "SELECT * FROM audit_trails WHERE user_reference = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get contracts for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getContracts(int $userId): array
+    {
+        $query = "SELECT * FROM contracts WHERE user_reference = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 }

@@ -1,9 +1,9 @@
 <?php
 
-namespace DocumentManager\Models;
+namespace App\Models;
 
-use PDO;
-use Exception;
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
 
 /**
  * Document Model
@@ -11,60 +11,59 @@ use Exception;
  * Represents documents stored in the system and provides methods
  * for managing and querying them.
  */
-class Document
+class Document extends BaseModel
 {
-    private PDO $db;
-
-    public function __construct(PDO $db)
-    {
-        $this->db = $db;
-    }
+    protected $table = 'documents';
+    protected $resourceName = 'document';
+    protected $useSoftDeletes = false; // Document model doesn't use soft deletes
 
     /**
      * Create a new document record.
      *
-     * @param string $name The name of the document.
-     * @param string $filePath The file path of the stored document.
-     * @param int|null $userId The ID of the user associated with the document (if applicable).
-     * @param string|null $type The type of document (e.g., 'contract', 'terms').
+     * @param array $data Data including name, file_path, user_id, type
      * @return int The ID of the newly created document.
-     * @throws Exception If the document creation fails.
      */
-    public function create(string $name, string $filePath, ?int $userId = null, ?string $type = null): int
+    public function create(array $data): int
     {
-        $query = "
-            INSERT INTO documents (name, file_path, user_id, type, created_at)
-            VALUES (:name, :file_path, :user_id, :type, NOW())
-        ";
-
-        $stmt = $this->db->prepare($query);
-
-        if (!$stmt->execute([
-            ':name' => $name,
-            ':file_path' => $filePath,
-            ':user_id' => $userId,
-            ':type' => $type,
-        ])) {
-            throw new Exception('Failed to create document.');
+        // Add created_at if using timestamps but not provided
+        if ($this->useTimestamps && !isset($data['created_at'])) {
+            $data['created_at'] = date('Y-m-d H:i:s');
         }
-
-        return (int)$this->db->lastInsertId();
+        
+        $id = parent::create($data);
+        
+        // Add custom audit logging if needed
+        if ($this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'document_created', [
+                'id' => $id,
+                'name' => $data['name'] ?? null,
+                'type' => $data['type'] ?? null,
+                'user_id' => $data['user_id'] ?? null
+            ]);
+        }
+        
+        return $id;
     }
 
     /**
-     * Retrieve a document by its ID.
+     * Override find to add audit logging for views.
      *
-     * @param int $id The ID of the document.
-     * @return array|null The document record or null if not found.
+     * @param int $id
+     * @return array|null
      */
-    public function getById(int $id): ?array
+    public function find(int $id): ?array
     {
-        $query = "SELECT * FROM documents WHERE id = :id";
-        $stmt = $this->db->prepare($query);
-        $stmt->execute([':id' => $id]);
-
-        $document = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $document ?: null;
+        $document = parent::find($id);
+        
+        // Log view event if document was found
+        if ($document && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'document_viewed', [
+                'id' => $id,
+                'name' => $document['name'] ?? 'unknown'
+            ]);
+        }
+        
+        return $document;
     }
 
     /**
@@ -75,11 +74,15 @@ class Document
      */
     public function getByUserId(int $userId): array
     {
-        $query = "SELECT * FROM documents WHERE user_id = :user_id ORDER BY created_at DESC";
-        $stmt = $this->db->prepare($query);
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE user_id = :user_id 
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
         $stmt->execute([':user_id' => $userId]);
-
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
     /**
@@ -90,11 +93,15 @@ class Document
      */
     public function getByType(string $type): array
     {
-        $query = "SELECT * FROM documents WHERE type = :type ORDER BY created_at DESC";
-        $stmt = $this->db->prepare($query);
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE type = :type 
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
         $stmt->execute([':type' => $type]);
-
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
     /**
@@ -103,11 +110,57 @@ class Document
      * @param int $id The ID of the document to delete.
      * @return bool True on success, false otherwise.
      */
-    public function deleteById(int $id): bool
+    public function delete(int $id): bool
     {
-        $query = "DELETE FROM documents WHERE id = :id";
-        $stmt = $this->db->prepare($query);
-
-        return $stmt->execute([':id' => $id]);
+        // First, get document details for audit log
+        $document = $this->find($id);
+        
+        if (!$document) {
+            return false;
+        }
+        
+        $result = parent::delete($id);
+        
+        // Add custom audit log if needed
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'document_deleted', [
+                'id' => $id,
+                'name' => $document['name'] ?? 'unknown',
+                'type' => $document['type'] ?? null
+            ]);
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Update a document's details.
+     *
+     * @param int $id The ID of the document to update.
+     * @param array $data The data to update.
+     * @return bool True on success, false otherwise.
+     */
+    public function update(int $id, array $data): bool
+    {
+        // Filter data to only include allowed fields
+        $validData = array_filter($data, function($key) {
+            return in_array($key, ['name', 'file_path', 'type']);
+        }, ARRAY_FILTER_USE_KEY);
+        
+        if (empty($validData)) {
+            return false;
+        }
+        
+        $result = parent::update($id, $validData);
+        
+        // Add custom audit log if needed
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'document_updated', [
+                'id' => $id,
+                'updated_fields' => array_keys($validData)
+            ]);
+        }
+        
+        return $result;
     }
 }

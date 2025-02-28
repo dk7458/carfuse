@@ -6,6 +6,8 @@ use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use App\Helpers\LoggingHelper;
+use App\Models\DocumentTemplate;
+use App\Services\AuditService;
 
 /**
  * Template Service
@@ -16,61 +18,61 @@ use App\Helpers\LoggingHelper;
 class TemplateService
 {
     public const DEBUG_MODE = true;
-    private string $templateDirectory;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
+    private AuditService $auditService;
 
     /**
      * Constructor
      *
      * @param LoggerInterface $logger The logger instance.
-     * @param string $templateDirectory The directory where templates are stored.
      * @param ExceptionHandler $exceptionHandler The exception handler instance.
-     * @throws Exception If the directory is invalid or not readable.
+     * @param AuditService $auditService The audit service instance.
      */
-    public function __construct(LoggerInterface $logger, string $templateDirectory, ExceptionHandler $exceptionHandler)
-    {
-        if (!is_dir($templateDirectory) || !is_readable($templateDirectory)) {
-            throw new \InvalidArgumentException("Invalid template directory: $templateDirectory");
-        }
-
+    public function __construct(
+        LoggerInterface $logger, 
+        ExceptionHandler $exceptionHandler,
+        AuditService $auditService
+    ) {
         $this->logger = LoggingHelper::getLoggerByCategory('template');
-        $this->templateDirectory = $templateDirectory;
         $this->exceptionHandler = $exceptionHandler;
+        $this->auditService = $auditService;
     }
 
     /**
-     * List all available templates in the directory.
+     * List all available templates.
      *
-     * @return array List of template filenames with '.html' extension.
+     * @return array List of templates.
      */
     public function listTemplates(): array
     {
-        $files = scandir($this->templateDirectory);
-        return array_values(array_filter($files, fn($file) => pathinfo($file, PATHINFO_EXTENSION) === 'html'));
+        return DocumentTemplate::all()->toArray();
     }
 
     /**
      * Load the content of a template.
      *
-     * @param string $templateName The name of the template file.
-     * @return string The template content.
-     * @throws Exception If the template cannot be found or read.
+     * @param int|string $templateId The ID or name of the template.
+     * @return DocumentTemplate The template.
+     * @throws Exception If the template cannot be found.
      */
-    public function loadTemplate(string $templateName): string
+    public function loadTemplate($templateId): DocumentTemplate
     {
         try {
-            $filePath = $this->getTemplatePath($templateName);
-
-            if (!file_exists($filePath) || !is_readable($filePath)) {
-                throw new Exception("Template not found or unreadable: $templateName");
-            }
-
-            $content = file_get_contents($filePath);
+            $template = is_numeric($templateId) 
+                ? DocumentTemplate::findOrFail($templateId)
+                : DocumentTemplate::where('name', $templateId)->firstOrFail();
+            
             if (self::DEBUG_MODE) {
-                $this->logger->info("[system] Loaded template", ['template' => $templateName]);
+                $this->logger->info("[system] Loaded template", ['template' => $template->name]);
             }
-            return $content;
+            
+            $this->auditService->logEvent('template_loaded', [
+                'template_id' => $template->id,
+                'template_name' => $template->name
+            ]);
+            
+            return $template;
         } catch (\Exception $e) {
             $this->logger->error("[system] ❌ Error loading template: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
@@ -81,43 +83,54 @@ class TemplateService
     /**
      * Render a template by replacing placeholders with data.
      *
-     * @param string $templateName The name of the template file.
+     * @param int|string $templateId The ID or name of the template.
      * @param array $data Key-value pairs to replace placeholders.
      * @return string Rendered template with placeholders replaced.
      * @throws Exception If the template cannot be loaded.
      */
-    public function renderTemplate(string $templateName, array $data): string
+    public function renderTemplate($templateId, array $data): string
     {
-        $template = $this->loadTemplate($templateName);
+        $template = $this->loadTemplate($templateId);
+        $content = $template->content;
 
         foreach ($data as $key => $value) {
             $placeholder = '{{' . $key . '}}';
-            $template = str_replace($placeholder, htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'), $template);
+            $content = str_replace($placeholder, htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'), $content);
         }
 
-        $this->logger->info("Rendered template", ['template' => $templateName]);
-        return $template;
+        $this->auditService->logEvent('template_rendered', [
+            'template_id' => $template->id,
+            'template_name' => $template->name
+        ]);
+        
+        return $content;
     }
 
     /**
-     * Save a new or updated template file.
+     * Save a new or updated template.
      *
-     * @param string $templateName The name of the template file.
+     * @param string $templateName The name of the template.
      * @param string $content The template content to save.
-     * @return bool True if saved successfully, false otherwise.
+     * @param int|null $templateId The template ID for updates (null for new templates).
+     * @return DocumentTemplate The saved template.
      * @throws Exception If saving fails.
      */
-    public function saveTemplate(string $templateName, string $content): bool
+    public function saveTemplate(string $templateName, string $content, ?int $templateId = null): DocumentTemplate
     {
         try {
-            $filePath = $this->getTemplatePath($templateName);
-
-            if (file_put_contents($filePath, $content) === false) {
-                throw new Exception("Failed to save template: $templateName");
+            if ($templateId) {
+                $template = DocumentTemplate::findOrFail($templateId);
+                $template->name = $templateName;
+                $template->content = $content;
+                $template->save();
+            } else {
+                $template = DocumentTemplate::create([
+                    'name' => $templateName,
+                    'content' => $content
+                ]);
             }
-
-            $this->logger->info("Saved template", ['template' => $templateName]);
-            return true;
+            
+            return $template;
         } catch (\Exception $e) {
             $this->logger->error("Error saving template", ['template' => $templateName, 'error' => $e->getMessage()]);
             throw $e;
@@ -125,47 +138,22 @@ class TemplateService
     }
 
     /**
-     * Delete a template file.
+     * Delete a template.
      *
-     * @param string $templateName The name of the template file to delete.
-     * @return bool True if deleted successfully, false otherwise.
+     * @param int $templateId The ID of the template to delete.
+     * @return bool True if deleted successfully.
      * @throws Exception If the template cannot be found or deleted.
      */
-    public function deleteTemplate(string $templateName): bool
+    public function deleteTemplate(int $templateId): bool
     {
         try {
-            $filePath = $this->getTemplatePath($templateName);
-
-            if (!file_exists($filePath)) {
-                throw new Exception("Template not found: $templateName");
-            }
-
-            if (!unlink($filePath)) {
-                throw new Exception("Failed to delete template: $templateName");
-            }
-
-            $this->logger->info("Deleted template", ['template' => $templateName]);
+            $template = DocumentTemplate::findOrFail($templateId);
+            $template->delete();
+            
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("Error deleting template", ['template' => $templateName, 'error' => $e->getMessage()]);
+            $this->logger->error("Error deleting template", ['template_id' => $templateId, 'error' => $e->getMessage()]);
             throw $e;
         }
-    }
-
-    /**
-     * Validate and sanitize template filename.
-     *
-     * @param string $templateName The name of the template file.
-     * @return string Sanitized template file path.
-     */
-    private function getTemplatePath(string $templateName): string
-    {
-        $sanitizedFileName = preg_replace('/[^a-zA-Z0-9_\.-]/', '_', $templateName);
-
-        if (pathinfo($sanitizedFileName, PATHINFO_EXTENSION) !== 'html') {
-            $sanitizedFileName .= '.html';
-        }
-
-        return $this->templateDirectory . DIRECTORY_SEPARATOR . $sanitizedFileName;
     }
 }

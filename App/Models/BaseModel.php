@@ -2,73 +2,208 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
 
-
-class BaseModel extends Model
+/**
+ * Base Model
+ *
+ * Provides common functionality for all models.
+ */
+abstract class BaseModel
 {
-    use SoftDeletes;
-
+    protected $dbHelper;
+    protected $pdo;
+    protected $auditService;
+    
+    // The table associated with the model
+    protected $table;
+    
+    // Whether to use timestamps (created_at, updated_at)
+    protected $useTimestamps = true;
+    
+    // Whether to use soft deletes (deleted_at)
+    protected $useSoftDeletes = true;
+    
+    // The model's resource name for auditing
+    protected $resourceName;
+    
     /**
-     * The "booting" method of the model.
+     * Constructor
      *
-     * @return void
+     * @param DatabaseHelper $dbHelper
+     * @param AuditService|null $auditService
      */
-    protected static function boot()
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService = null)
     {
-        parent::boot();
-
-        // Automatically generate UUID for primary key
-        static::creating(function ($model) {
-            if (empty($model->{$model->getKeyName()})) {
-                $model->{$model->getKeyName()} = (string) Str::uuid();
-            }
-        });
-
-        // Apply global scope for soft deletes
-        static::addGlobalScope('softDeletes', function (Builder $builder) {
-            $builder->whereNull('deleted_at');
-        });
-
-        // Apply global scope for default ordering
-        static::addGlobalScope('order', function (Builder $builder) {
-            $builder->orderBy('created_at', 'desc');
-        });
+        $this->dbHelper = $dbHelper;
+        $this->pdo = $dbHelper->getPdo();
+        $this->auditService = $auditService;
+        
+        if (!$this->table) {
+            throw new \Exception("No table defined for " . get_class($this));
+        }
+        
+        if (!$this->resourceName) {
+            // Default resource name from class name
+            $className = (new \ReflectionClass($this))->getShortName();
+            $this->resourceName = strtolower($className);
+        }
     }
-
+    
     /**
-     * Indicates if the IDs are auto-incrementing.
+     * Find a record by ID.
      *
-     * @var bool
+     * @param int $id
+     * @return array|null
      */
-    public $incrementing = false;
-
-    /**
-     * The data type of the primary key.
-     *
-     * @var string
-     */
-    protected $keyType = 'string';
-
-    /**
-     * Attributes that are mass assignable.
-     *
-     * @var array
-     */
-    protected $fillable = [];
-
-    /**
-     * Log changes made to the model.
-     *
-     * @return void
-     */
-    protected static function bootLogging()
+    public function find(int $id): ?array
     {
-        static::updated(function ($model) {
-            // Log changes
-        });
+        $query = "SELECT * FROM {$this->table} WHERE id = :id";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':id' => $id]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+    
+    /**
+     * Get all records.
+     *
+     * @return array
+     */
+    public function all(): array
+    {
+        $query = "SELECT * FROM {$this->table}";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " WHERE deleted_at IS NULL";
+        }
+        
+        $query .= " ORDER BY created_at DESC";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+    
+    /**
+     * Create a new record.
+     *
+     * @param array $data
+     * @return int ID of the created record
+     */
+    public function create(array $data): int
+    {
+        $fields = array_keys($data);
+        $placeholders = [];
+        $params = [];
+        
+        foreach ($fields as $field) {
+            $placeholders[] = ":{$field}";
+            $params[":{$field}"] = $data[$field];
+        }
+        
+        if ($this->useTimestamps) {
+            $fields[] = 'created_at';
+            $placeholders[] = 'NOW()';
+            $fields[] = 'updated_at';
+            $placeholders[] = 'NOW()';
+        }
+        
+        $fieldsSql = implode(', ', $fields);
+        $placeholdersSql = implode(', ', $placeholders);
+        
+        $query = "INSERT INTO {$this->table} ({$fieldsSql}) VALUES ({$placeholdersSql})";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        $id = $this->pdo->lastInsertId();
+        
+        // Log audit if service is available
+        if ($this->auditService) {
+            $this->auditService->logEvent($this->resourceName, "Created {$this->resourceName}", [
+                "{$this->resourceName}_id" => $id,
+                'data' => $data
+            ]);
+        }
+        
+        return $id;
+    }
+    
+    /**
+     * Update a record.
+     *
+     * @param int $id
+     * @param array $data
+     * @return bool
+     */
+    public function update(int $id, array $data): bool
+    {
+        if (empty($data)) {
+            return false;
+        }
+        
+        $setClauses = [];
+        $params = [':id' => $id];
+        
+        foreach ($data as $key => $value) {
+            $setClauses[] = "{$key} = :{$key}";
+            $params[":{$key}"] = $value;
+        }
+        
+        if ($this->useTimestamps) {
+            $setClauses[] = "updated_at = NOW()";
+        }
+        
+        $setClause = implode(', ', $setClauses);
+        
+        $query = "UPDATE {$this->table} SET {$setClause} WHERE id = :id";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $stmt = $this->pdo->prepare($query);
+        $result = $stmt->execute($params);
+        
+        // Log audit if service is available and update was successful
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, "Updated {$this->resourceName}", [
+                "{$this->resourceName}_id" => $id,
+                'updated_fields' => array_keys($data)
+            ]);
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Soft delete a record.
+     *
+     * @param int $id
+     * @return bool
+     */
+    public function delete(int $id): bool
+    {
+        if (!$this->useSoftDeletes) {
+            $stmt = $this->pdo->prepare("DELETE FROM {$this->table} WHERE id = :id");
+            $result = $stmt->execute([':id' => $id]);
+        } else {
+            $stmt = $this->pdo->prepare("UPDATE {$this->table} SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL");
+            $result = $stmt->execute([':id' => $id]);
+        }
+        
+        // Log audit if service is available and delete was successful
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, "Deleted {$this->resourceName}", [
+                "{$this->resourceName}_id" => $id
+            ]);
+        }
+        
+        return $result;
     }
 }

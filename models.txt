@@ -1,0 +1,2307 @@
+=== App/Models/Booking.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * Booking Model
+ *
+ * Represents a booking and handles database interactions.
+ */
+class Booking extends BaseModel
+{
+    protected $table = 'bookings';
+    protected $resourceName = 'booking';
+    
+    /**
+     * Validation rules for the model.
+     *
+     * @var array
+     */
+    public static $rules = [
+        'user_id' => 'required|exists:users,id',
+        'vehicle_id' => 'required|exists:vehicles,id',
+        'pickup_date' => 'required|date',
+        'dropoff_date' => 'required|date|after_or_equal:pickup_date',
+        'status' => 'required|string|in:pending,confirmed,cancelled,completed',
+    ];
+
+    /**
+     * Get active bookings.
+     *
+     * @return array
+     */
+    public function getActive(): array
+    {
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE status = 'confirmed' AND deleted_at IS NULL
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get bookings by user ID.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getByUser(int $userId): array
+    {
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE user_id = :user_id AND deleted_at IS NULL
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get user data for a booking.
+     *
+     * @param int $bookingId
+     * @return array|null
+     */
+    public function getUser(int $bookingId): ?array
+    {
+        $query = "
+            SELECT u.* FROM users u
+            JOIN {$this->table} b ON u.id = b.user_id
+            WHERE b.id = :booking_id AND b.deleted_at IS NULL
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':booking_id' => $bookingId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Get vehicle data for a booking.
+     *
+     * @param int $bookingId
+     * @return array|null
+     */
+    public function getVehicle(int $bookingId): ?array
+    {
+        $query = "
+            SELECT v.* FROM vehicles v
+            JOIN {$this->table} b ON v.id = b.vehicle_id
+            WHERE b.id = :booking_id AND b.deleted_at IS NULL
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':booking_id' => $bookingId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Get payment data for a booking.
+     *
+     * @param int $bookingId
+     * @return array|null
+     */
+    public function getPayment(int $bookingId): ?array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT p.* FROM payments p
+            WHERE p.booking_id = :booking_id AND p.deleted_at IS NULL
+        ");
+        $stmt->execute([':booking_id' => $bookingId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+}
+=== App/Models/TransactionLog.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+use App\Services\EncryptionService;
+
+/**
+ * TransactionLog Model
+ *
+ * Represents a financial transaction and handles interactions with the `transaction_logs` table.
+ */
+class TransactionLog extends BaseModel
+{
+    protected $table = 'transaction_logs';
+    protected $resourceName = 'transaction_log';
+    protected $useTimestamps = true; // Transaction logs use timestamps
+    protected $useSoftDeletes = false; // Transaction logs don't use soft deletes
+
+    /**
+     * Create a new transaction log.
+     *
+     * @param array $data
+     * @return int
+     */
+    public function create(array $data): int
+    {
+        // Encrypt transaction details
+        $data['amount'] = EncryptionService::encrypt($data['amount']);
+
+        return parent::create($data);
+    }
+
+    /**
+     * Get transactions by user ID.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getByUserId(int $userId): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id ORDER BY created_at DESC";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        $transactions = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+        // Decrypt transaction details
+        foreach ($transactions as &$transaction) {
+            $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
+        }
+
+        return $transactions;
+    }
+
+    /**
+     * Get transaction by ID.
+     *
+     * @param int $id
+     * @return array|null
+     */
+    public function getById(int $id): ?array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE id = :id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':id' => $id]);
+        $transaction = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        if ($transaction) {
+            // Decrypt transaction details
+            $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
+        }
+
+        return $transaction ?: null;
+    }
+
+    /**
+     * Update transaction status.
+     *
+     * @param int $id
+     * @param string $status
+     * @return bool
+     */
+    public function updateStatus(int $id, string $status): bool
+    {
+        $result = parent::update($id, ['status' => $status]);
+
+        // Log the event
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'status_update', [
+                'id' => $id,
+                'status' => $status
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get recent transactions.
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getRecent(int $limit = 10): array
+    {
+        $query = "SELECT * FROM {$this->table} ORDER BY created_at DESC LIMIT :limit";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':limit' => $limit]);
+        $transactions = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+        // Decrypt transaction details
+        foreach ($transactions as &$transaction) {
+            $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
+        }
+
+        return $transactions;
+    }
+}
+=== App/Models/Payment.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * Payment Model
+ *
+ * Represents a payment transaction in the system.
+ *
+ * @property int $id Primary key
+ * @property int $user_id ID of the user who made the payment
+ * @property int $booking_id ID of the associated booking
+ * @property float $amount Transaction amount
+ * @property string $method Payment method (credit_card, PayPal, etc.)
+ * @property string $status Status of the payment (pending, completed, failed)
+ * @property string|null $transaction_id Unique external transaction identifier
+ */
+class Payment extends BaseModel
+{
+    protected $table = 'payments';
+    protected $resourceName = 'payment';
+    
+    /**
+     * Validation rules for the model.
+     *
+     * @var array
+     */
+    public static $rules = [
+        'user_id' => 'required|exists:users,id',
+        'booking_id' => 'required|exists:bookings,id',
+        'amount' => 'required|numeric|min:0',
+        'method' => 'required|string|in:credit_card,paypal,bank_transfer',
+        'status' => 'required|string|in:pending,completed,failed',
+        'transaction_id' => 'nullable|string|max:255',
+    ];
+
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService = null)
+    {
+        $this->pdo = $dbHelper->getPdo();
+        $this->auditService = $auditService;
+    }
+
+    /**
+     * Find a payment by ID.
+     *
+     * @param int $id
+     * @return array|null
+     */
+    public function find(int $id): ?array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT * FROM {$this->table} 
+            WHERE id = :id AND deleted_at IS NULL
+        ");
+        $stmt->execute([':id' => $id]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Get all payments.
+     *
+     * @return array
+     */
+    public function all(): array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT * FROM {$this->table} 
+            WHERE deleted_at IS NULL
+            ORDER BY created_at DESC
+        ");
+        $stmt->execute();
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Create a new payment.
+     *
+     * @param array $data
+     * @return int ID of the created payment
+     */
+    public function create(array $data): int
+    {
+        $stmt = $this->pdo->prepare("
+            INSERT INTO {$this->table} (
+                user_id, booking_id, amount, method, status, 
+                transaction_id, created_at, updated_at
+            ) VALUES (
+                :user_id, :booking_id, :amount, :method, :status, 
+                :transaction_id, NOW(), NOW()
+            )
+        ");
+        $stmt->execute([
+            ':user_id' => $data['user_id'],
+            ':booking_id' => $data['booking_id'],
+            ':amount' => $data['amount'],
+            ':method' => $data['method'],
+            ':status' => $data['status'] ?? 'pending',
+            ':transaction_id' => $data['transaction_id'] ?? null,
+        ]);
+        
+        $paymentId = $this->pdo->lastInsertId();
+        
+        // Log audit if service is available
+        if ($this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'Created payment', [
+                'payment_id' => $paymentId,
+                'user_id' => $data['user_id'],
+                'booking_id' => $data['booking_id'],
+                'amount' => $data['amount'],
+                'method' => $data['method']
+            ]);
+        }
+        
+        return $paymentId;
+    }
+
+    /**
+     * Update a payment.
+     *
+     * @param int $id
+     * @param array $data
+     * @return bool
+     */
+    public function update(int $id, array $data): bool
+    {
+        $setClauses = [];
+        $params = [':id' => $id];
+
+        foreach ($data as $key => $value) {
+            if (in_array($key, ['user_id', 'booking_id', 'amount', 'method', 'status', 'transaction_id'])) {
+                $setClauses[] = "$key = :$key";
+                $params[":$key"] = $value;
+            }
+        }
+
+        if (empty($setClauses)) {
+            return false;
+        }
+
+        $setClauses[] = "updated_at = NOW()";
+        $setClause = implode(', ', $setClauses);
+
+        $stmt = $this->pdo->prepare("
+            UPDATE {$this->table} 
+            SET $setClause 
+            WHERE id = :id AND deleted_at IS NULL
+        ");
+        
+        $result = $stmt->execute($params);
+        
+        // Log audit if service is available and update was successful
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'Updated payment', [
+                'payment_id' => $id,
+                'updated_fields' => array_keys($data)
+            ]);
+        }
+        
+        return $result;
+    }
+
+    /**
+     * Soft delete a payment.
+     *
+     * @param int $id
+     * @return bool
+     */
+    public function delete(int $id): bool
+    {
+        $stmt = $this->pdo->prepare("
+            UPDATE {$this->table} 
+            SET deleted_at = NOW() 
+            WHERE id = :id AND deleted_at IS NULL
+        ");
+        
+        $result = $stmt->execute([':id' => $id]);
+        
+        // Log audit if service is available and delete was successful
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'Deleted payment', [
+                'payment_id' => $id
+            ]);
+        }
+        
+        return $result;
+    }
+
+    /**
+     * Get payments by user ID.
+     * Replaces scopeByUser.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getByUser(int $userId): array
+    {
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE user_id = :user_id AND deleted_at IS NULL
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get completed payments.
+     * Replaces scopeCompleted.
+     *
+     * @return array
+     */
+    public function getCompleted(): array
+    {
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE status = 'completed' AND deleted_at IS NULL
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get payments by status.
+     * Replaces scopeByStatus.
+     *
+     * @param string $status
+     * @return array
+     */
+    public function getByStatus(string $status): array
+    {
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE status = :status AND deleted_at IS NULL
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':status' => $status]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get payments within a date range.
+     * Replaces scopeByDateRange.
+     *
+     * @param string $startDate
+     * @param string $endDate
+     * @return array
+     */
+    public function getByDateRange(string $startDate, string $endDate): array
+    {
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE created_at BETWEEN :start_date AND :end_date
+            AND deleted_at IS NULL
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([
+            ':start_date' => $startDate,
+            ':end_date' => $endDate
+        ]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get user data for a payment.
+     * Replaces user relationship.
+     *
+     * @param int $paymentId
+     * @return array|null
+     */
+    public function getUser(int $paymentId): ?array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT u.* FROM users u
+            JOIN {$this->table} p ON u.id = p.user_id
+            WHERE p.id = :payment_id AND p.deleted_at IS NULL
+        ");
+        $stmt->execute([':payment_id' => $paymentId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Get booking data for a payment.
+     * Replaces booking relationship.
+     *
+     * @param int $paymentId
+     * @return array|null
+     */
+    public function getBooking(int $paymentId): ?array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT b.* FROM bookings b
+            JOIN {$this->table} p ON b.id = p.booking_id
+            WHERE p.id = :payment_id AND p.deleted_at IS NULL AND b.deleted_at IS NULL
+        ");
+        $stmt->execute([':payment_id' => $paymentId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+}
+=== App/Models/Admin.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * Admin Model - Manages system administrators.
+ */
+class Admin extends BaseModel
+{
+    protected $table = 'admins';
+    protected $resourceName = 'admin';
+    protected $useTimestamps = true;
+    protected $useSoftDeletes = true;
+    
+    /**
+     * Constructor
+     *
+     * @param DatabaseHelper $dbHelper
+     * @param AuditService|null $auditService
+     */
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService = null)
+    {
+        parent::__construct($dbHelper, $auditService);
+    }
+    
+    /**
+     * Hash a password.
+     *
+     * @param string $password
+     * @return string
+     */
+    public static function hashPassword(string $password): string
+    {
+        return password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+    }
+    
+    /**
+     * Verify password.
+     *
+     * @param string $plainPassword
+     * @param string $hashedPassword
+     * @return bool
+     */
+    public static function verifyPassword(string $plainPassword, string $hashedPassword): bool
+    {
+        return password_verify($plainPassword, $hashedPassword);
+    }
+    
+    /**
+     * Create an admin.
+     * Override to handle password hashing.
+     *
+     * @param array $data
+     * @return int
+     */
+    public function create(array $data): int
+    {
+        if (isset($data['password'])) {
+            $data['password'] = self::hashPassword($data['password']);
+        }
+        
+        $id = parent::create($data);
+        
+        // Add custom audit logging if needed
+        if ($this->auditService) {
+            $this->auditService->logEvent('admin', 'admin_created', [
+                'id' => $id,
+                'name' => $data['name'] ?? null,
+                'email' => $data['email'] ?? null,
+                'role' => $data['role'] ?? null
+            ]);
+        }
+        
+        return $id;
+    }
+    
+    /**
+     * Update an admin.
+     * Override to handle password hashing.
+     *
+     * @param int $id
+     * @param array $data
+     * @return bool
+     */
+    public function update(int $id, array $data): bool
+    {
+        if (isset($data['password'])) {
+            $data['password'] = self::hashPassword($data['password']);
+        }
+        
+        $result = parent::update($id, $data);
+        
+        // Add custom audit logging if needed
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent('admin', 'admin_updated', [
+                'id' => $id,
+                'updated_fields' => array_keys($data)
+            ]);
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Get admin by email.
+     *
+     * @param string $email
+     * @return array|null
+     */
+    public function getByEmail(string $email): ?array
+    {
+        $query = "
+            SELECT * FROM {$this->table}
+            WHERE email = :email
+        ";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':email' => $email]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+    
+    /**
+     * Restore a soft deleted admin.
+     *
+     * @param int $id
+     * @return bool
+     */
+    public function restore(int $id): bool
+    {
+        if (!$this->useSoftDeletes) {
+            return false;
+        }
+        
+        $query = "UPDATE {$this->table} SET deleted_at = NULL WHERE id = :id";
+        $stmt = $this->pdo->prepare($query);
+        $result = $stmt->execute([':id' => $id]);
+        
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent('admin', 'admin_restored', [
+                'admin_id' => $id
+            ]);
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Get users managed by this admin.
+     *
+     * @param int $adminId
+     * @return array
+     */
+    public function getManagedUsers(int $adminId): array
+    {
+        $query = "
+            SELECT * FROM users
+            WHERE managed_by = :admin_id
+            ORDER BY name ASC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':admin_id' => $adminId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+}
+=== App/Models/Notification.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * Notification Model
+ *
+ * Represents a notification in the system.
+ */
+class Notification extends BaseModel
+{
+    protected $table = 'notifications';
+    protected $resourceName = 'notification';
+    protected $useTimestamps = false;  // We'll use sent_at instead of created_at
+    protected $useSoftDeletes = false; // Notifications don't use soft deletes
+
+    /**
+     * Mark a notification as read.
+     *
+     * @param int $id
+     * @return bool
+     */
+    public function markAsRead(int $id): bool
+    {
+        $query = "UPDATE {$this->table} SET is_read = 1 WHERE id = :id";
+        $stmt = $this->pdo->prepare($query);
+        $result = $stmt->execute([':id' => $id]);
+        
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'notification_read', [
+                'id' => $id
+            ]);
+        }
+        
+        return $result;
+    }
+
+    /**
+     * Create a new notification.
+     *
+     * @param array $data
+     * @return int
+     */
+    public function create(array $data): int
+    {
+        // Set sent_at to now if not provided
+        if (!isset($data['sent_at'])) {
+            $data['sent_at'] = date('Y-m-d H:i:s');
+        }
+        
+        // Default is_read to false if not provided
+        if (!isset($data['is_read'])) {
+            $data['is_read'] = 0;
+        }
+        
+        return parent::create($data);
+    }
+
+    /**
+     * Get notifications by user ID.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getByUserId(int $userId): array
+    {
+        $query = "
+            SELECT * FROM {$this->table}
+            WHERE user_id = :user_id
+            ORDER BY sent_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get unread notifications for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getUnreadByUserId(int $userId): array
+    {
+        $query = "
+            SELECT * FROM {$this->table}
+            WHERE user_id = :user_id AND is_read = 0
+            ORDER BY sent_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Mark all notifications as read for a user.
+     *
+     * @param int $userId
+     * @return bool
+     */
+    public function markAllAsReadForUser(int $userId): bool
+    {
+        $query = "UPDATE {$this->table} SET is_read = 1 WHERE user_id = :user_id AND is_read = 0";
+        $stmt = $this->pdo->prepare($query);
+        $result = $stmt->execute([':user_id' => $userId]);
+        
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'all_notifications_read', [
+                'user_id' => $userId
+            ]);
+        }
+        
+        return $result;
+    }
+
+    /**
+     * Get the user associated with a notification.
+     *
+     * @param int $notificationId
+     * @return array|null
+     */
+    public function getUser(int $notificationId): ?array
+    {
+        $notification = $this->find($notificationId);
+        
+        if (!$notification || !isset($notification['user_id'])) {
+            return null;
+        }
+        
+        $query = "SELECT * FROM users WHERE id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $notification['user_id']]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+}
+=== App/Models/PaymentMethod.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+
+/**
+ * PaymentMethod Model
+ *
+ * Represents a payment method and handles interactions with the `payment_methods` table.
+ */
+class PaymentMethod extends BaseModel
+{
+    protected $table = 'payment_methods';
+    protected $resourceName = 'payment_method';
+    
+    /**
+     * Validation rules for the model.
+     *
+     * @var array
+     */
+    public static $rules = [
+        'name' => 'required|string|max:255',
+        'description' => 'nullable|string',
+        'is_active' => 'boolean',
+        'user_id' => 'required|exists:users,id',
+        'payment_type' => 'required|string|in:credit_card,paypal,bank_transfer'
+    ];
+
+    public function __construct(DatabaseHelper $dbHelper)
+    {
+        $this->pdo = $dbHelper->getPdo();
+    }
+
+    /**
+     * Get all available payment methods.
+     */
+    public function getAll(): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE is_active = 1";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get payment method by ID.
+     */
+    public function getById(int $id): ?array
+    {
+        $stmt = $this->pdo->prepare("SELECT * FROM payment_methods WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Add a new payment method.
+     */
+    public function create(array $data): int
+    {
+        $validPaymentTypes = ['credit_card', 'paypal', 'bank_transfer'];
+        if (!in_array($data['payment_type'], $validPaymentTypes)) {
+            throw new \InvalidArgumentException("Invalid payment type.");
+        }
+
+        return parent::create($data);
+    }
+    
+    /**
+     * Update a payment method.
+     */
+    public function update(int $id, array $data): bool
+    {
+        $setClauses = [];
+        $params = [':id' => $id];
+
+        foreach ($data as $key => $value) {
+            if (in_array($key, ['name', 'description', 'is_active', 'payment_type'])) {
+                $setClauses[] = "$key = :$key";
+                $params[":$key"] = $value;
+            }
+        }
+
+        if (empty($setClauses)) {
+            return false;
+        }
+
+        $setClauses[] = "updated_at = NOW()";
+        $setClause = implode(', ', $setClauses);
+
+        $stmt = $this->pdo->prepare("
+            UPDATE payment_methods 
+            SET $setClause 
+            WHERE id = :id
+        ");
+        return $stmt->execute($params);
+    }
+    
+    /**
+     * Delete a payment method.
+     */
+    public function delete(int $id): bool
+    {
+        $stmt = $this->pdo->prepare("DELETE FROM payment_methods WHERE id = :id");
+        return $stmt->execute([':id' => $id]);
+    }
+
+    /**
+     * Get payment methods by user ID.
+     * Replaces scopeByUser.
+     */
+    public function getByUser(int $userId): array
+    {
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE user_id = :user_id
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+    
+    /**
+     * Get user data for a payment method.
+     * Replaces user relationship.
+     */
+    public function getUser(int $paymentMethodId): ?array
+    {
+        $query = "
+            SELECT u.* FROM users u
+            JOIN {$this->table} pm ON u.id = pm.user_id
+            WHERE pm.id = :payment_method_id
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':payment_method_id' => $paymentMethodId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+}
+=== App/Models/Document.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * Document Model
+ *
+ * Represents documents stored in the system and provides methods
+ * for managing and querying them.
+ */
+class Document extends BaseModel
+{
+    protected $table = 'documents';
+    protected $resourceName = 'document';
+    protected $useSoftDeletes = false; // Document model doesn't use soft deletes
+
+    /**
+     * Create a new document record.
+     *
+     * @param array $data Data including name, file_path, user_id, type
+     * @return int The ID of the newly created document.
+     */
+    public function create(array $data): int
+    {
+        // Add created_at if using timestamps but not provided
+        if ($this->useTimestamps && !isset($data['created_at'])) {
+            $data['created_at'] = date('Y-m-d H:i:s');
+        }
+        
+        $id = parent::create($data);
+        
+        // Add custom audit logging if needed
+        if ($this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'document_created', [
+                'id' => $id,
+                'name' => $data['name'] ?? null,
+                'type' => $data['type'] ?? null,
+                'user_id' => $data['user_id'] ?? null
+            ]);
+        }
+        
+        return $id;
+    }
+
+    /**
+     * Override find to add audit logging for views.
+     *
+     * @param int $id
+     * @return array|null
+     */
+    public function find(int $id): ?array
+    {
+        $document = parent::find($id);
+        
+        // Log view event if document was found
+        if ($document && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'document_viewed', [
+                'id' => $id,
+                'name' => $document['name'] ?? 'unknown'
+            ]);
+        }
+        
+        return $document;
+    }
+
+    /**
+     * Retrieve documents associated with a user.
+     *
+     * @param int $userId The ID of the user.
+     * @return array A list of documents associated with the user.
+     */
+    public function getByUserId(int $userId): array
+    {
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE user_id = :user_id 
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Retrieve documents by type.
+     *
+     * @param string $type The type of document (e.g., 'contract', 'terms').
+     * @return array A list of documents matching the specified type.
+     */
+    public function getByType(string $type): array
+    {
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE type = :type 
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':type' => $type]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Delete a document by its ID.
+     *
+     * @param int $id The ID of the document to delete.
+     * @return bool True on success, false otherwise.
+     */
+    public function delete(int $id): bool
+    {
+        // First, get document details for audit log
+        $document = $this->find($id);
+        
+        if (!$document) {
+            return false;
+        }
+        
+        $result = parent::delete($id);
+        
+        // Add custom audit log if needed
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'document_deleted', [
+                'id' => $id,
+                'name' => $document['name'] ?? 'unknown',
+                'type' => $document['type'] ?? null
+            ]);
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Update a document's details.
+     *
+     * @param int $id The ID of the document to update.
+     * @param array $data The data to update.
+     * @return bool True on success, false otherwise.
+     */
+    public function update(int $id, array $data): bool
+    {
+        // Filter data to only include allowed fields
+        $validData = array_filter($data, function($key) {
+            return in_array($key, ['name', 'file_path', 'type']);
+        }, ARRAY_FILTER_USE_KEY);
+        
+        if (empty($validData)) {
+            return false;
+        }
+        
+        $result = parent::update($id, $validData);
+        
+        // Add custom audit log if needed
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'document_updated', [
+                'id' => $id,
+                'updated_fields' => array_keys($validData)
+            ]);
+        }
+        
+        return $result;
+    }
+}
+=== App/Models/Vehicle.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * Vehicle Model
+ *
+ * Represents a vehicle in the system.
+ */
+class Vehicle extends BaseModel
+{
+    protected $table = 'vehicles';
+    protected $resourceName = 'vehicle';
+    protected $useSoftDeletes = false; // Vehicles use hard deletes
+
+    /**
+     * Validation rules for the model.
+     *
+     * @var array
+     */
+    public static $rules = [
+        'registration_number' => 'required|string|unique:vehicles,registration_number',
+        'type' => 'required|string',
+        'status' => 'required|in:available,unavailable,maintenance',
+        'make' => 'required|string|max:255',
+        'model' => 'required|string|max:255',
+        'year' => 'required|integer|min:1886|max:' . PHP_INT_MAX,
+    ];
+
+    /**
+     * Create a new vehicle
+     * 
+     * @param array $data
+     * @return int
+     */
+    public function create(array $data): int
+    {
+        // Ensure status is properly managed
+        if (empty($data['status'])) {
+            $data['status'] = 'available';
+        }
+
+        return parent::create($data);
+    }
+
+    /**
+     * Find available vehicles
+     *
+     * @return array
+     */
+    public function findAvailable(): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE status = :status";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':status' => 'available']);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Find vehicles by type
+     *
+     * @param string $type
+     * @return array
+     */
+    public function findByType(string $type): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE type = :type";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':type' => $type]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get vehicle's bookings
+     *
+     * @param int $vehicleId
+     * @return array
+     */
+    public function getBookings(int $vehicleId): array
+    {
+        $query = "SELECT * FROM bookings WHERE vehicle_id = :vehicle_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':vehicle_id' => $vehicleId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+    
+    /**
+     * Set a vehicle to maintenance status
+     *
+     * @param int $id
+     * @param string $reason
+     * @return bool
+     */
+    public function setToMaintenance(int $id, string $reason = ''): bool
+    {
+        $result = $this->update($id, ['status' => 'maintenance']);
+        
+        // Add custom audit logging for maintenance status
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'vehicle_maintenance', [
+                'vehicle_id' => $id,
+                'reason' => $reason
+            ]);
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Set a vehicle to available status
+     *
+     * @param int $id
+     * @return bool
+     */
+    public function setToAvailable(int $id): bool
+    {
+        return $this->update($id, ['status' => 'available']);
+    }
+}
+=== App/Models/DocumentTemplate.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+use Exception;
+
+/**
+ * DocumentTemplate Model
+ *
+ * Manages templates for documents such as contracts, invoices, and Terms & Conditions.
+ */
+class DocumentTemplate extends BaseModel
+{
+    protected $table = 'document_templates';
+    protected $resourceName = 'document_template';
+    protected $useSoftDeletes = false; // Document templates use hard deletes
+
+    /**
+     * Create a new document template.
+     *
+     * @param array $data
+     * @return int The ID of the newly created template.
+     * @throws Exception If the template creation fails.
+     */
+    public function create(array $data): int
+    {
+        if (!isset($data['name']) || !isset($data['file_path'])) {
+            throw new Exception('Template name and file path are required.');
+        }
+        
+        // Make a clean call to parent create
+        $id = parent::create($data);
+        
+        if (!$id) {
+            throw new Exception('Failed to create document template.');
+        }
+        
+        return $id;
+    }
+
+    /**
+     * Retrieve a template by its name.
+     *
+     * @param string $name The name of the template.
+     * @return array|null The template record or null if not found.
+     */
+    public function getByName(string $name): ?array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE name = :name";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':name' => $name]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Generate a document from this template.
+     *
+     * @param int $templateId
+     * @param array $replacements Key-value pairs to replace in the template
+     * @return string The path to the generated document
+     * @throws Exception If template not found or generation fails
+     */
+    public function generateDocument(int $templateId, array $replacements): string
+    {
+        $template = $this->find($templateId);
+        
+        if (!$template) {
+            throw new Exception('Template not found.');
+        }
+        
+        $templatePath = $template['file_path'];
+        
+        if (!file_exists($templatePath)) {
+            throw new Exception('Template file not found.');
+        }
+        
+        // Simple implementation - in a real app this would be more complex
+        $content = file_get_contents($templatePath);
+        
+        foreach ($replacements as $key => $value) {
+            $content = str_replace('{{' . $key . '}}', $value, $content);
+        }
+        
+        $outputPath = sys_get_temp_dir() . '/' . uniqid('doc_') . '.pdf';
+        
+        if (file_put_contents($outputPath, $content) === false) {
+            throw new Exception('Failed to generate document.');
+        }
+        
+        // Log the document generation
+        if ($this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'document_generated', [
+                'template_id' => $templateId,
+                'output_path' => $outputPath
+            ]);
+        }
+        
+        return $outputPath;
+    }
+    
+    /**
+     * Clone an existing template.
+     *
+     * @param int $sourceId
+     * @param string $newName
+     * @return int The ID of the cloned template
+     * @throws Exception If source template not found or cloning fails
+     */
+    public function cloneTemplate(int $sourceId, string $newName): int
+    {
+        $source = $this->find($sourceId);
+        
+        if (!$source) {
+            throw new Exception('Source template not found.');
+        }
+        
+        $newData = [
+            'name' => $newName,
+            'file_path' => $source['file_path'] . '.copy'
+        ];
+        
+        // Copy the actual file
+        if (!copy($source['file_path'], $newData['file_path'])) {
+            throw new Exception('Failed to copy template file.');
+        }
+        
+        $id = $this->create($newData);
+        
+        // Log the clone operation
+        if ($this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'template_cloned', [
+                'source_id' => $sourceId,
+                'new_id' => $id,
+                'new_name' => $newName
+            ]);
+        }
+        
+        return $id;
+    }
+}
+=== App/Models/User.php ===
+<?php
+
+namespace App\Models;
+
+use App\Models\BaseModel; // updated base model
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Hash;
+use Ramsey\Uuid\Uuid;
+use App\Models\Booking;
+use App\Models\Notification;
+use App\Models\Payment;
+use App\Models\AuditTrail;
+use App\Models\Log;
+use App\Models\Contract;
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * User Model
+ * 
+ * Represents a user in the system with their associated data and relationships.
+ * 
+ * @property string $id UUID of the user
+ * @property string $name User's first name
+ * @property string $surname User's last name
+ * @property string $email User's email address
+ * @property string $password_hash Hashed password
+ * @property string $role User role (user, admin, super_admin)
+ * @property string $phone Phone number
+ * @property string $address Physical address
+ * @property \DateTime $created_at
+ * @property \DateTime $updated_at
+ * @property \DateTime $deleted_at
+ */
+class User extends BaseModel
+{
+    use SoftDeletes;
+
+    protected $table = 'users';
+    protected $primaryKey = 'id';
+    public $incrementing = false;
+    protected $keyType = 'string';
+    protected $resourceName = 'user';
+    protected $useTimestamps = true;
+    protected $useSoftDeletes = true;
+    protected $useUuid = true;
+
+    protected $fillable = [
+        'name',
+        'surname',
+        'email',
+        'password_hash',
+        'role',
+        'phone',
+        'address',
+    ];
+
+    protected $hidden = [
+        'password_hash',
+        'remember_token',
+        'deleted_at',
+    ];
+
+    protected $dates = [
+        'created_at',
+        'updated_at',
+        'deleted_at',
+        'email_verified_at',
+    ];
+
+    public static array $rules = [
+        'name' => 'required|string|max:255',
+        'surname' => 'required|string|max:255',
+        'email' => 'required|email|unique:users,email',
+        'password' => 'required|min:8|regex:/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/',
+        'role' => 'required|in:user,admin,super_admin',
+        'phone' => 'nullable|string|max:20',
+        'address' => 'nullable|string|max:255',
+    ];
+
+    /**
+     * Relationships
+     */
+
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class, 'user_id', 'id');
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'user_id', 'id');
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class, 'user_id', 'id');
+    }
+
+    public function logs()
+    {
+        return $this->hasMany(Log::class, 'user_reference', 'id');
+    }
+
+    public function auditTrails()
+    {
+        return $this->hasMany(AuditTrail::class, 'user_reference', 'id');
+    }
+
+    public function contracts()
+    {
+        return $this->hasMany(Contract::class, 'user_reference', 'id');
+    }
+
+    /**
+     * Accessors
+     */
+    public function getFullNameAttribute(): string
+    {
+        return "{$this->name} {$this->surname}";
+    }
+
+    /**
+     * Mutators
+     */
+    public function setPasswordAttribute(string $value): void
+    {
+        $this->attributes['password_hash'] = Hash::make($value);
+    }
+
+    /**
+     * Helpers
+     */
+    public function isAdmin(): bool
+    {
+        return in_array($this->role, ['admin', 'super_admin']);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin';
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        $rolePermissions = [
+            'user' => ['read_own'],
+            'admin' => ['read_own', 'read_all', 'write_all'],
+            'super_admin' => ['read_own', 'read_all', 'write_all', 'delete_all'],
+        ];
+
+        return in_array($permission, $rolePermissions[$this->role] ?? []);
+    }
+
+    /**
+     * Scopes
+     */
+    public function scopeActive($query)
+    {
+        return $query->whereNull('deleted_at');
+    }
+
+    public function scopeWithRole($query, string $role)
+    {
+        return $query->where('role', $role);
+    }
+
+    /**
+     * Events
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($user) {
+            if (empty($user->id)) {
+                $user->id = (string) Uuid::uuid4();
+            }
+        });
+
+        static::updating(function ($user) {
+            if ($user->isDirty('email')) {
+                error_log("[SECURITY] User {$user->id} updated email to {$user->email}");
+            }
+        });
+
+        static::deleting(function ($user) {
+            error_log("[SECURITY] User {$user->id} was deleted.");
+        });
+    }
+
+    /**
+     * Create a new user.
+     *
+     * @param array $data
+     * @return int
+     */
+    public function create(array $data): int
+    {
+        if (isset($data['password'])) {
+            $data['password_hash'] = Hash::make($data['password']);
+            unset($data['password']);
+        }
+
+        if ($this->useUuid && !isset($data['id'])) {
+            $data['id'] = Uuid::uuid4()->toString();
+        }
+
+        return parent::create($data);
+    }
+
+    /**
+     * Update a user.
+     *
+     * @param int $id
+     * @param array $data
+     * @return bool
+     */
+    public function update(int $id, array $data): bool
+    {
+        if (isset($data['password'])) {
+            $data['password_hash'] = Hash::make($data['password']);
+            unset($data['password']);
+        }
+
+        return parent::update($id, $data);
+    }
+
+    /**
+     * Get bookings for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getBookings(int $userId): array
+    {
+        $query = "SELECT * FROM bookings WHERE user_id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get payments for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getPayments(int $userId): array
+    {
+        $query = "SELECT * FROM payments WHERE user_id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get notifications for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getNotifications(int $userId): array
+    {
+        $query = "SELECT * FROM notifications WHERE user_id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get logs for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getLogs(int $userId): array
+    {
+        $query = "SELECT * FROM logs WHERE user_reference = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get audit trails for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getAuditTrails(int $userId): array
+    {
+        $query = "SELECT * FROM audit_trails WHERE user_reference = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get contracts for a user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getContracts(int $userId): array
+    {
+        $query = "SELECT * FROM contracts WHERE user_reference = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+}
+=== App/Models/BaseModel.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * Base Model
+ *
+ * Provides common functionality for all models.
+ */
+abstract class BaseModel
+{
+    protected $dbHelper;
+    protected $pdo;
+    protected $auditService;
+    
+    // The table associated with the model
+    protected $table;
+    
+    // Whether to use timestamps (created_at, updated_at)
+    protected $useTimestamps = true;
+    
+    // Whether to use soft deletes (deleted_at)
+    protected $useSoftDeletes = true;
+    
+    // The model's resource name for auditing
+    protected $resourceName;
+    
+    /**
+     * Constructor
+     *
+     * @param DatabaseHelper $dbHelper
+     * @param AuditService|null $auditService
+     */
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService = null)
+    {
+        $this->dbHelper = $dbHelper;
+        $this->pdo = $dbHelper->getPdo();
+        $this->auditService = $auditService;
+        
+        if (!$this->table) {
+            throw new \Exception("No table defined for " . get_class($this));
+        }
+        
+        if (!$this->resourceName) {
+            // Default resource name from class name
+            $className = (new \ReflectionClass($this))->getShortName();
+            $this->resourceName = strtolower($className);
+        }
+    }
+    
+    /**
+     * Find a record by ID.
+     *
+     * @param int $id
+     * @return array|null
+     */
+    public function find(int $id): ?array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE id = :id";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':id' => $id]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+    
+    /**
+     * Get all records.
+     *
+     * @return array
+     */
+    public function all(): array
+    {
+        $query = "SELECT * FROM {$this->table}";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " WHERE deleted_at IS NULL";
+        }
+        
+        $query .= " ORDER BY created_at DESC";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+    
+    /**
+     * Create a new record.
+     *
+     * @param array $data
+     * @return int ID of the created record
+     */
+    public function create(array $data): int
+    {
+        $fields = array_keys($data);
+        $placeholders = [];
+        $params = [];
+        
+        foreach ($fields as $field) {
+            $placeholders[] = ":{$field}";
+            $params[":{$field}"] = $data[$field];
+        }
+        
+        if ($this->useTimestamps) {
+            $fields[] = 'created_at';
+            $placeholders[] = 'NOW()';
+            $fields[] = 'updated_at';
+            $placeholders[] = 'NOW()';
+        }
+        
+        $fieldsSql = implode(', ', $fields);
+        $placeholdersSql = implode(', ', $placeholders);
+        
+        $query = "INSERT INTO {$this->table} ({$fieldsSql}) VALUES ({$placeholdersSql})";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        $id = $this->pdo->lastInsertId();
+        
+        // Log audit if service is available
+        if ($this->auditService) {
+            $this->auditService->logEvent($this->resourceName, "Created {$this->resourceName}", [
+                "{$this->resourceName}_id" => $id,
+                'data' => $data
+            ]);
+        }
+        
+        return $id;
+    }
+    
+    /**
+     * Update a record.
+     *
+     * @param int $id
+     * @param array $data
+     * @return bool
+     */
+    public function update(int $id, array $data): bool
+    {
+        if (empty($data)) {
+            return false;
+        }
+        
+        $setClauses = [];
+        $params = [':id' => $id];
+        
+        foreach ($data as $key => $value) {
+            $setClauses[] = "{$key} = :{$key}";
+            $params[":{$key}"] = $value;
+        }
+        
+        if ($this->useTimestamps) {
+            $setClauses[] = "updated_at = NOW()";
+        }
+        
+        $setClause = implode(', ', $setClauses);
+        
+        $query = "UPDATE {$this->table} SET {$setClause} WHERE id = :id";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $stmt = $this->pdo->prepare($query);
+        $result = $stmt->execute($params);
+        
+        // Log audit if service is available and update was successful
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, "Updated {$this->resourceName}", [
+                "{$this->resourceName}_id" => $id,
+                'updated_fields' => array_keys($data)
+            ]);
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Soft delete a record.
+     *
+     * @param int $id
+     * @return bool
+     */
+    public function delete(int $id): bool
+    {
+        if (!$this->useSoftDeletes) {
+            $stmt = $this->pdo->prepare("DELETE FROM {$this->table} WHERE id = :id");
+            $result = $stmt->execute([':id' => $id]);
+        } else {
+            $stmt = $this->pdo->prepare("UPDATE {$this->table} SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL");
+            $result = $stmt->execute([':id' => $id]);
+        }
+        
+        // Log audit if service is available and delete was successful
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, "Deleted {$this->resourceName}", [
+                "{$this->resourceName}_id" => $id
+            ]);
+        }
+        
+        return $result;
+    }
+}
+=== App/Models/Report.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * Report Model
+ *
+ * Represents an admin report in the system.
+ */
+class Report extends BaseModel
+{
+    protected $table = 'reports';
+    protected $resourceName = 'report';
+    protected $useSoftDeletes = true;
+
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'admin_id',
+        'title',
+        'content',
+        'status',
+        'created_at',
+        'updated_at'
+    ];
+
+    /**
+     * Get reports within a date range.
+     *
+     * @param string $start
+     * @param string $end
+     * @return array
+     */
+    public function getByDateRange(string $start, string $end): array
+    {
+        $query = "
+            SELECT * FROM {$this->table}
+            WHERE created_at BETWEEN :start AND :end
+        ";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':start' => $start, ':end' => $end]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get the admin who created the report.
+     *
+     * @param int $reportId
+     * @return array|null
+     */
+    public function getAdmin(int $reportId): ?array
+    {
+        $report = $this->find($reportId);
+        
+        if (!$report || !isset($report['admin_id'])) {
+            return null;
+        }
+        
+        $query = "SELECT * FROM admins WHERE id = :admin_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':admin_id' => $report['admin_id']]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+}
+=== App/Models/AuditTrail.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * AuditTrail Model
+ *
+ * Represents the audit trails stored in the database and provides methods
+ * for accessing and filtering the logs.
+ */
+class AuditTrail extends BaseModel
+{
+    protected $table = 'audit_trails';
+    protected $resourceName = 'audit_trail';
+    protected $useTimestamps = true;
+    protected $useSoftDeletes = false;
+
+    /**
+     * Retrieve audit trail records based on filters.
+     *
+     * @param array $filters An associative array of filters:
+     *                       - 'user_id' (int): Filter by user ID.
+     *                       - 'booking_id' (int): Filter by booking ID.
+     *                       - 'action' (string): Filter by action type.
+     *                       - 'start_date' (string): Filter by start date (YYYY-MM-DD).
+     *                       - 'end_date' (string): Filter by end date (YYYY-MM-DD).
+     * @return array An array of matching audit trail records.
+     */
+    public function getLogs(array $filters = []): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE 1=1";
+        $params = [];
+
+        if (!empty($filters['user_id'])) {
+            $query .= " AND user_id = :user_id";
+            $params[':user_id'] = $filters['user_id'];
+        }
+
+        if (!empty($filters['booking_id'])) {
+            $query .= " AND booking_id = :booking_id";
+            $params[':booking_id'] = $filters['booking_id'];
+        }
+
+        if (!empty($filters['action'])) {
+            $query .= " AND action = :action";
+            $params[':action'] = $filters['action'];
+        }
+
+        if (!empty($filters['start_date'])) {
+            $query .= " AND created_at >= :start_date";
+            $params[':start_date'] = $filters['start_date'];
+        }
+
+        if (!empty($filters['end_date'])) {
+            $query .= " AND created_at <= :end_date";
+            $params[':end_date'] = $filters['end_date'];
+        }
+
+        $query .= " ORDER BY created_at DESC";
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+}
+=== App/Models/RefundLog.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * RefundLog Model
+ *
+ * Represents a refund and handles interactions with the `refund_logs` table.
+ */
+class RefundLog extends BaseModel
+{
+    protected $table = 'refund_logs';
+    protected $resourceName = 'refund_log';
+    protected $useTimestamps = true;
+    protected $useSoftDeletes = true;
+
+    /**
+     * Get the user associated with the refund.
+     *
+     * @param int $refundId
+     * @return array|null
+     */
+    public function getUser(int $refundId): ?array
+    {
+        $refund = $this->find($refundId);
+        
+        if (!$refund || !isset($refund['user_id'])) {
+            return null;
+        }
+        
+        $query = "SELECT * FROM users WHERE id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $refund['user_id']]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Get the payment associated with the refund.
+     *
+     * @param int $refundId
+     * @return array|null
+     */
+    public function getPayment(int $refundId): ?array
+    {
+        $refund = $this->find($refundId);
+        
+        if (!$refund || !isset($refund['payment_id'])) {
+            return null;
+        }
+        
+        $query = "SELECT * FROM payments WHERE id = :payment_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':payment_id' => $refund['payment_id']]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+}=== App/Models/Signature.php ===
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+use App\Services\EncryptionService;
+
+class Signature extends BaseModel
+{
+    protected $table = 'signatures';
+    protected $resourceName = 'signature';
+    protected $useTimestamps = true;
+    protected $useSoftDeletes = false;
+
+    /**
+     * Create a new signature.
+     *
+     * @param array $data
+     * @return int
+     */
+    public function create(array $data): int
+    {
+        if (isset($data['signature'])) {
+            $data['signature'] = EncryptionService::encrypt($data['signature']);
+        }
+
+        return parent::create($data);
+    }
+
+    /**
+     * Update a signature.
+     *
+     * @param int $id
+     * @param array $data
+     * @return bool
+     */
+    public function update(int $id, array $data): bool
+    {
+        if (isset($data['signature'])) {
+            $data['signature'] = EncryptionService::encrypt($data['signature']);
+        }
+
+        return parent::update($id, $data);
+    }
+
+    /**
+     * Get the signature.
+     *
+     * @param int $signatureId
+     * @return string|null
+     */
+    public function getSignature(int $signatureId): ?string
+    {
+        $signature = $this->find($signatureId);
+
+        if ($signature && isset($signature['signature'])) {
+            return EncryptionService::decrypt($signature['signature']);
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the user associated with the signature.
+     *
+     * @param int $signatureId
+     * @return array|null
+     */
+    public function getUser(int $signatureId): ?array
+    {
+        $signature = $this->find($signatureId);
+        
+        if (!$signature || !isset($signature['user_id'])) {
+            return null;
+        }
+        
+        $query = "SELECT * FROM users WHERE id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $signature['user_id']]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+}
+=== App/Models/PasswordReset.php ===
+<?php
+
+namespace App\Models;
+
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
+
+/**
+ * PasswordReset Model
+ *
+ * Represents a password reset request.
+ */
+class PasswordReset extends BaseModel
+{
+    protected $table = 'password_resets';
+    protected $resourceName = 'password_reset';
+    protected $useTimestamps = true;
+    protected $useSoftDeletes = false;
+
+    /**
+     * Find a password reset by token.
+     *
+     * @param string $token
+     * @return array|null
+     */
+    public function findByToken(string $token): ?array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE token = :token";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':token' => $token]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Create a new password reset.
+     *
+     * @param array $data
+     * @return int
+     */
+    public function create(array $data): int
+    {
+        // Generate a token if not provided
+        if (!isset($data['token'])) {
+            $data['token'] = bin2hex(random_bytes(32));
+        }
+
+        $id = parent::create($data);
+
+        // Add custom audit logging if needed
+        if ($this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'password_reset_created', [
+                'id' => $id,
+                'email' => $data['email'] ?? null
+            ]);
+        }
+
+        return $id;
+    }
+}

@@ -11,6 +11,7 @@ use Dotenv\Dotenv;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\LoggingHelper;
 use App\Helpers\SetupHelper;
+use App\Services\AuditService;
 
 // Step 1: Initialize Logger First
 $loggingHelper = new LoggingHelper();
@@ -75,13 +76,19 @@ $container->set(LoggerInterface::class, fn() => $loggingHelper->getDefaultLogger
 
 // Step 6: Load Security Helper and Other Critical Services
 
-
 // Step 7: Load Database Instances
 try {
     DatabaseHelper::setLogger($container->get(LoggingHelper::class)->getLoggerByCategory('db'));
     $database = DatabaseHelper::getInstance($config['database']['app_database']);
     $secure_database = DatabaseHelper::getSecureInstance($config['database']['secure_database']);
     $logger->info("🔄 Database instances loaded successfully.");
+    
+    // Initialize AuditService with secure database connection
+    $container->set(AuditService::class, function() use ($secure_database, $logger) {
+        $auditService = new AuditService($secure_database->getConnection(), $logger);
+        $logger->info("✅ AuditService initialized with secure database connection");
+        return $auditService;
+    });
 } catch (Exception $e) {
     $logger->critical("❌ Failed to load database instances: " . $e->getMessage());
     exit("❌ Database initialization failed: " . $e->getMessage() . "\n");
@@ -111,7 +118,8 @@ $missingDependencies = [];
 $requiredServices = [
     NotificationService::class,
     TokenService::class,
-    Validator::class
+    Validator::class,
+    AuditService::class // Added AuditService to required services
 ];
 if (!empty($missingDependencies)) {
     $logger->error("❌ Missing dependencies: " . implode(', ', $missingDependencies));
@@ -134,6 +142,13 @@ try {
     } else {
         $logger->info("Environment security checks passed");
     }
+    
+    // Log successful bootstrap via AuditService
+    $container->get(AuditService::class)->logEvent(
+        'system',
+        'Application bootstrap completed successfully',
+        ['environment' => $_ENV['APP_ENV'] ?? 'unknown']
+    );
     
     $logger->info("Application bootstrap completed successfully");
 } catch (Exception $e) {

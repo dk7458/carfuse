@@ -2,7 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
 use App\Services\EncryptionService;
 
 /**
@@ -12,48 +13,37 @@ use App\Services\EncryptionService;
  */
 class TransactionLog extends BaseModel
 {
-    // Define relationships
-    public function user()
+    protected $table = 'transaction_logs';
+    protected $resourceName = 'transaction_log';
+    protected $useTimestamps = true; // Transaction logs use timestamps
+    protected $useSoftDeletes = false; // Transaction logs don't use soft deletes
+
+    /**
+     * Create a new transaction log.
+     *
+     * @param array $data
+     * @return int
+     */
+    public function create(array $data): int
     {
-        return $this->belongsTo(User::class);
-    }
+        // Encrypt transaction details
+        $data['amount'] = EncryptionService::encrypt($data['amount']);
 
-    // Define query scopes
-    public function scopeRecent($query)
-    {
-        return $query->orderBy('created_at', 'desc');
-    }
-
-    public function scopeByUser($query, $userId)
-    {
-        return $query->where('user_id', $userId);
-    }
-
-    // Prevent modification of log entries after creation
-    public static function boot()
-    {
-        parent::boot();
-
-        static::updating(function ($model) {
-            return false;
-        });
-    }
-
-    private PDO $db;
-
-    public function __construct(PDO $db)
-    {
-        $this->db = $db;
+        return parent::create($data);
     }
 
     /**
-     * Get all transactions for a user.
+     * Get transactions by user ID.
+     *
+     * @param int $userId
+     * @return array
      */
     public function getByUserId(int $userId): array
     {
-        $stmt = $this->db->prepare("SELECT * FROM transaction_logs WHERE user_id = :user_id ORDER BY created_at DESC");
+        $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id ORDER BY created_at DESC";
+        $stmt = $this->pdo->prepare($query);
         $stmt->execute([':user_id' => $userId]);
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $transactions = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
 
         // Decrypt transaction details
         foreach ($transactions as &$transaction) {
@@ -65,49 +55,65 @@ class TransactionLog extends BaseModel
 
     /**
      * Get transaction by ID.
+     *
+     * @param int $id
+     * @return array|null
      */
     public function getById(int $id): ?array
     {
-        $stmt = $this->db->prepare("SELECT * FROM transaction_logs WHERE id = :id");
+        $query = "SELECT * FROM {$this->table} WHERE id = :id";
+        $stmt = $this->pdo->prepare($query);
         $stmt->execute([':id' => $id]);
-        $transaction = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        $transaction = $stmt->fetch(\PDO::FETCH_ASSOC);
 
         if ($transaction) {
             // Decrypt transaction details
             $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
         }
 
-        return $transaction;
-    }
-
-    /**
-     * Log a new transaction.
-     */
-    public function create(array $data): int
-    {
-        // Encrypt transaction details
-        $data['amount'] = EncryptionService::encrypt($data['amount']);
-
-        $stmt = $this->db->prepare("
-            INSERT INTO transaction_logs (user_id, booking_id, amount, type, status, created_at)
-            VALUES (:user_id, :booking_id, :amount, :type, :status, NOW())
-        ");
-        $stmt->execute([
-            ':user_id' => $data['user_id'],
-            ':booking_id' => $data['booking_id'],
-            ':amount' => $data['amount'],
-            ':type' => $data['type'],
-            ':status' => $data['status'] ?? 'pending',
-        ]);
-        return $this->db->lastInsertId();
+        return $transaction ?: null;
     }
 
     /**
      * Update transaction status.
+     *
+     * @param int $id
+     * @param string $status
+     * @return bool
      */
     public function updateStatus(int $id, string $status): bool
     {
-        $stmt = $this->db->prepare("UPDATE transaction_logs SET status = :status WHERE id = :id");
-        return $stmt->execute([':status' => $status, ':id' => $id]);
+        $result = parent::update($id, ['status' => $status]);
+
+        // Log the event
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'status_update', [
+                'id' => $id,
+                'status' => $status
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get recent transactions.
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getRecent(int $limit = 10): array
+    {
+        $query = "SELECT * FROM {$this->table} ORDER BY created_at DESC LIMIT :limit";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':limit' => $limit]);
+        $transactions = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+        // Decrypt transaction details
+        foreach ($transactions as &$transaction) {
+            $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
+        }
+
+        return $transactions;
     }
 }

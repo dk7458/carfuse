@@ -2,9 +2,7 @@
 
 namespace App\Models;
 
-use PDO;
-use App\Models\BaseModel;
-use App\Models\User;
+use App\Services\DatabaseHelper;
 
 /**
  * PaymentMethod Model
@@ -13,12 +11,25 @@ use App\Models\User;
  */
 class PaymentMethod extends BaseModel
 {
-    protected $fillable = ['name', 'description', 'is_active', 'user_id', 'payment_type'];
-    private PDO $db;
+    protected $table = 'payment_methods';
+    protected $resourceName = 'payment_method';
+    
+    /**
+     * Validation rules for the model.
+     *
+     * @var array
+     */
+    public static $rules = [
+        'name' => 'required|string|max:255',
+        'description' => 'nullable|string',
+        'is_active' => 'boolean',
+        'user_id' => 'required|exists:users,id',
+        'payment_type' => 'required|string|in:credit_card,paypal,bank_transfer'
+    ];
 
-    public function __construct(PDO $db)
+    public function __construct(DatabaseHelper $dbHelper)
     {
-        $this->db = $db;
+        $this->pdo = $dbHelper->getPdo();
     }
 
     /**
@@ -26,8 +37,10 @@ class PaymentMethod extends BaseModel
      */
     public function getAll(): array
     {
-        $stmt = $this->db->query("SELECT * FROM payment_methods WHERE is_active = 1");
-        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $query = "SELECT * FROM {$this->table} WHERE is_active = 1";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
     /**
@@ -35,9 +48,9 @@ class PaymentMethod extends BaseModel
      */
     public function getById(int $id): ?array
     {
-        $stmt = $this->db->prepare("SELECT * FROM payment_methods WHERE id = :id");
+        $stmt = $this->pdo->prepare("SELECT * FROM payment_methods WHERE id = :id");
         $stmt->execute([':id' => $id]);
-        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
     }
 
     /**
@@ -50,33 +63,79 @@ class PaymentMethod extends BaseModel
             throw new \InvalidArgumentException("Invalid payment type.");
         }
 
-        $stmt = $this->db->prepare("
-            INSERT INTO payment_methods (name, description, is_active, created_at, user_id, payment_type)
-            VALUES (:name, :description, :is_active, NOW(), :user_id, :payment_type)
+        return parent::create($data);
+    }
+    
+    /**
+     * Update a payment method.
+     */
+    public function update(int $id, array $data): bool
+    {
+        $setClauses = [];
+        $params = [':id' => $id];
+
+        foreach ($data as $key => $value) {
+            if (in_array($key, ['name', 'description', 'is_active', 'payment_type'])) {
+                $setClauses[] = "$key = :$key";
+                $params[":$key"] = $value;
+            }
+        }
+
+        if (empty($setClauses)) {
+            return false;
+        }
+
+        $setClauses[] = "updated_at = NOW()";
+        $setClause = implode(', ', $setClauses);
+
+        $stmt = $this->pdo->prepare("
+            UPDATE payment_methods 
+            SET $setClause 
+            WHERE id = :id
         ");
-        $stmt->execute([
-            ':name' => $data['name'],
-            ':description' => $data['description'] ?? '',
-            ':is_active' => $data['is_active'] ?? 1,
-            ':user_id' => $data['user_id'],
-            ':payment_type' => $data['payment_type'],
-        ]);
-        return $this->db->lastInsertId();
+        return $stmt->execute($params);
+    }
+    
+    /**
+     * Delete a payment method.
+     */
+    public function delete(int $id): bool
+    {
+        $stmt = $this->pdo->prepare("DELETE FROM payment_methods WHERE id = :id");
+        return $stmt->execute([':id' => $id]);
     }
 
     /**
-     * Define relationship with User.
+     * Get payment methods by user ID.
+     * Replaces scopeByUser.
      */
-    public function user()
+    public function getByUser(int $userId): array
     {
-        return $this->belongsTo(User::class);
+        $query = "
+            SELECT * FROM {$this->table} 
+            WHERE user_id = :user_id
+            ORDER BY created_at DESC
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
-
+    
     /**
-     * Scope to filter by user.
+     * Get user data for a payment method.
+     * Replaces user relationship.
      */
-    public function scopeByUser($query, $userId)
+    public function getUser(int $paymentMethodId): ?array
     {
-        return $query->where('user_id', $userId);
+        $query = "
+            SELECT u.* FROM users u
+            JOIN {$this->table} pm ON u.id = pm.user_id
+            WHERE pm.id = :payment_method_id
+        ";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':payment_method_id' => $paymentMethodId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
     }
 }

@@ -2,10 +2,8 @@
 
 namespace App\Models;
 
-use App\Models\BaseModel;
-use App\Models\Admin;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
 
 /**
  * Report Model
@@ -14,7 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Report extends BaseModel
 {
-    use SoftDeletes;
+    protected $table = 'reports';
+    protected $resourceName = 'report';
+    protected $useSoftDeletes = true;
 
     /**
      * Attributes that are mass assignable.
@@ -31,33 +31,40 @@ class Report extends BaseModel
     ];
 
     /**
-     * Relationships
+     * Get reports within a date range.
+     *
+     * @param string $start
+     * @param string $end
+     * @return array
      */
+    public function getByDateRange(string $start, string $end): array
+    {
+        $query = "
+            SELECT * FROM {$this->table}
+            WHERE created_at BETWEEN :start AND :end
+        ";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':start' => $start, ':end' => $end]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
 
     /**
      * Get the admin who created the report.
      *
-     * @return BelongsTo
+     * @param int $reportId
+     * @return array|null
      */
-    public function admin(): BelongsTo
+    public function getAdmin(int $reportId): ?array
     {
-        return $this->belongsTo(Admin::class);
-    }
-
-    /**
-     * Scopes
-     */
-
-    /**
-     * Scope a query to filter reports by a date range.
-     *
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @param string $start
-     * @param string $end
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
-    public function scopeByDateRange($query, string $start, string $end)
-    {
-        return $query->whereBetween('created_at', [$start, $end]);
+        $report = $this->find($reportId);
+        
+        if (!$report || !isset($report['admin_id'])) {
+            return null;
+        }
+        
+        $query = "SELECT * FROM admins WHERE id = :admin_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':admin_id' => $report['admin_id']]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
     }
 }

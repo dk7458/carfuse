@@ -3,7 +3,7 @@
 namespace DocumentManager\Services;
 
 use Exception;
-use App\Helpers\DatabaseHelper; // added for database operations
+use App\Helpers\DatabaseHelper;
 use AuditManager\Services\AuditService;
 use DocumentManager\Services\FileStorage;
 use DocumentManager\Services\TemplateService;
@@ -11,6 +11,11 @@ use App\Services\EncryptionService;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use App\Helpers\LoggingHelper;
+use App\Models\Document;
+use App\Models\DocumentTemplate;
+use App\Models\Contract;
+use App\Models\User;
+use App\Models\Booking;
 
 /**
  * Document Service
@@ -28,6 +33,11 @@ class DocumentService
     private FileStorage $fileStorage;
     private EncryptionService $encryptionService;
     private TemplateService $templateService;
+    private Document $documentModel;
+    private DocumentTemplate $templateModel;
+    private Contract $contractModel;
+    private User $userModel;
+    private Booking $bookingModel;
 
     public function __construct(
         AuditService $auditService,
@@ -35,7 +45,12 @@ class DocumentService
         EncryptionService $encryptionService,
         TemplateService $templateService,
         LoggerInterface $logger,
-        ExceptionHandler $exceptionHandler
+        ExceptionHandler $exceptionHandler,
+        Document $documentModel,
+        DocumentTemplate $templateModel,
+        Contract $contractModel,
+        User $userModel,
+        Booking $bookingModel
     ) {
         $this->logger = LoggingHelper::getLoggerByCategory('document');
         $this->exceptionHandler = $exceptionHandler;
@@ -44,6 +59,11 @@ class DocumentService
         $this->fileStorage = $fileStorage;
         $this->encryptionService = $encryptionService;
         $this->templateService = $templateService;
+        $this->documentModel = $documentModel;
+        $this->templateModel = $templateModel;
+        $this->contractModel = $contractModel;
+        $this->userModel = $userModel;
+        $this->bookingModel = $bookingModel;
     }
 
     /**
@@ -71,9 +91,34 @@ class DocumentService
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Document] Uploading template: {$name}");
             }
+            
             $encryptedContent = $this->encryptionService->encrypt($content);
-            $this->templateService->saveTemplate("{$name}.html", $encryptedContent);
+            $filePath = $this->fileStorage->storeFile("templates", "{$name}.html", $encryptedContent);
+            
+            // Use template model instead of direct DB access
+            $existingTemplate = $this->templateModel->findByName($name);
+            
+            if ($existingTemplate) {
+                // Update existing template
+                $this->templateModel->update($existingTemplate['id'], [
+                    'content' => $encryptedContent,
+                    'file_path' => $filePath,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+            } else {
+                // Create new template
+                $this->templateModel->create([
+                    'name' => $name,
+                    'content' => $encryptedContent,
+                    'file_path' => $filePath,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+            }
+            
+            // Business-level audit logging - template operations are important business events
             $this->auditService->log($logAction, ['template' => $name]);
+            
         } catch (Exception $e) {
             $this->logger->error("[Document] ❌ Upload template exception: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
@@ -91,22 +136,46 @@ class DocumentService
                 $this->logger->info("[Document] Generating contract for booking {$bookingId}");
             }
 
-            $templateContent = $this->templateService->loadTemplate('rental_contract.html');
-            $data = array_merge($this->fetchUserData($userId), $this->fetchBookingData($bookingId));
-            $renderedContent = $this->templateService->renderTemplate('rental_contract.html', $data);
+            // Load the contract template using template model
+            $templateData = $this->templateModel->findByName('rental_contract');
+            if (!$templateData) {
+                throw new Exception("Contract template not found");
+            }
+            
+            // Get user and booking data using models
+            $userData = $this->userModel->find($userId);
+            $bookingData = $this->bookingModel->find($bookingId);
+            
+            if (!$userData || !$bookingData) {
+                throw new Exception("User or booking data not found");
+            }
 
+            // Prepare data for template rendering
+            $data = array_merge($userData, $bookingData);
+            
+            // Decrypt template content and render with data
+            $templateContent = $this->encryptionService->decrypt($templateData['content']);
+            $renderedContent = $this->templateService->renderTemplateContent($templateContent, $data);
+
+            // Encrypt the rendered content
             $encryptedContract = $this->encryptionService->encrypt($renderedContent);
+            
+            // Store the file
             $filePath = $this->fileStorage->storeFile("contracts", "contract_{$bookingId}.pdf", $encryptedContract);
 
-            // Replace raw SQL insert/prepare with DatabaseHelper query
-            $this->db->table('contracts')->insert([
+            // Store contract record using contract model
+            $this->contractModel->create([
                 'booking_id'  => $bookingId,
                 'user_id'     => $userId,
                 'contract_pdf'=> $filePath,
-                'created_at'  => now()
+                'created_at'  => date('Y-m-d H:i:s')
             ]);
 
-            $this->auditService->log('contract_generated', ['booking_id' => $bookingId, 'user_id' => $userId]);
+            // Business-level audit log for contract generation - important business event
+            $this->auditService->log('contract_generated', [
+                'booking_id' => $bookingId, 
+                'user_id' => $userId
+            ]);
 
             return $filePath;
         } catch (Exception $e) {
@@ -129,6 +198,7 @@ class DocumentService
             $encryptedContent = $this->fileStorage->retrieveFile($filePath);
             $decryptedContent = $this->encryptionService->decrypt($encryptedContent);
 
+            // Business-level audit log for document retrieval - security-sensitive event
             $this->auditService->log('document_retrieved', ['file_path' => $filePath]);
 
             return $decryptedContent;
@@ -149,17 +219,22 @@ class DocumentService
                 $this->logger->info("[Document] Deleting document ID {$documentId}");
             }
 
-            // Replace raw PDO prepare with DatabaseHelper query
-            $document = $this->db->table('documents')->where('id', $documentId)->first();
+            // Get document using model
+            $document = $this->documentModel->find($documentId);
 
             if (!$document) {
                 throw new Exception("Document not found.");
             }
 
-            $this->fileStorage->deleteFile($document->file_path);
-            $this->db->table('documents')->where('id', $documentId)->delete();
+            // Delete the physical file
+            $this->fileStorage->deleteFile($document['file_path']);
+            
+            // Delete the document record using model
+            $this->documentModel->delete($documentId);
 
+            // Business-level audit log for document deletion - security-sensitive event
             $this->auditService->log('document_deleted', ['document_id' => $documentId]);
+            
         } catch (Exception $e) {
             $this->logger->error("[Document] ❌ Delete document error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
@@ -168,47 +243,90 @@ class DocumentService
     }
 
     /**
-     * Fetch user data.
+     * Get a list of available templates.
      */
-    private function fetchUserData(int $userId): array
-    {
-        return $this->fetchRecord("SELECT * FROM users WHERE id = :id", ['id' => $userId], "User not found.");
-    }
-
-    /**
-     * Fetch booking data.
-     */
-    private function fetchBookingData(int $bookingId): array
-    {
-        return $this->fetchRecord("SELECT * FROM bookings WHERE id = :id", ['id' => $bookingId], "Booking not found.");
-    }
-
-    /**
-     * Fetch a record from the database.
-     */
-    private function fetchRecord(string $query, array $params, string $errorMessage): array
+    public function getTemplates(): array
     {
         try {
-            // Replace raw PDO query with DatabaseHelper call (assuming a helper method exists)
-            $record = $this->db->table(explode(' ', $query)[3])
-                               ->where(key($params), current($params))
-                               ->first();
-            if (!$record) {
-                throw new Exception($errorMessage);
-            }
-            return (array)$record;
+            // Use template model to get all templates
+            $templates = $this->templateModel->getAll();
+            
+            // Return only necessary information, not the entire model
+            return array_map(function($template) {
+                return [
+                    'id' => $template['id'],
+                    'name' => $template['name'],
+                    'created_at' => $template['created_at'],
+                    'updated_at' => $template['updated_at']
+                ];
+            }, $templates);
+            
         } catch (Exception $e) {
-            $this->logger->error("[DocumentService] Database error: " . $e->getMessage(), ['category' => 'database']);
+            $this->logger->error("[Document] ❌ Get templates error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
             throw $e;
         }
     }
-
+    
     /**
-     * Handle exceptions and log errors.
+     * Get a specific template by ID.
      */
-    private function handleException(string $message, Exception $e): void
+    public function getTemplateById(int $templateId): array
     {
-        $this->logger->error($message, ['error' => $e->getMessage(), 'category' => 'document']);
-        throw new Exception($message . " " . $e->getMessage());
+        try {
+            // Use template model to get template by ID
+            $template = $this->templateModel->find($templateId);
+            
+            if (!$template) {
+                throw new Exception("Template not found.");
+            }
+            
+            // Decrypt the content for use
+            $template['content'] = $this->encryptionService->decrypt($template['content']);
+            
+            return $template;
+        } catch (Exception $e) {
+            $this->logger->error("[Document] ❌ Get template error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            throw $e;
+        }
+    }
+    
+    /**
+     * Get contracts for a specific user.
+     */
+    public function getUserContracts(int $userId): array
+    {
+        try {
+            // Use contract model to get user contracts
+            $contracts = $this->contractModel->getByUserId($userId);
+            
+            return $contracts;
+        } catch (Exception $e) {
+            $this->logger->error("[Document] ❌ Get user contracts error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            throw $e;
+        }
+    }
+    
+    /**
+     * Get contract for a specific booking.
+     */
+    public function getBookingContract(int $bookingId): array
+    {
+        try {
+            // Use contract model to get booking contract
+            $contract = $this->contractModel->getByBookingId($bookingId);
+            
+            if (!$contract) {
+                throw new Exception("Contract not found for booking.");
+            }
+            
+            return $contract;
+        } catch (Exception $e) {
+            $this->logger->error("[Document] ❌ Get booking contract error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            throw $e;
+        }
     }
 }

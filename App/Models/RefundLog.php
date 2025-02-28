@@ -2,46 +2,58 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
 
 /**
  * RefundLog Model
  *
  * Represents a refund and handles interactions with the `refund_logs` table.
  */
-class RefundLog extends Model  // Directly extend Eloquent's Model for testing
+class RefundLog extends BaseModel
 {
-    use SoftDeletes;
-
-    protected $fillable = ['booking_id', 'amount', 'reason', 'status', 'user_id', 'payment_id'];
-
-    /**
-     * Validation rules for the model.
-     */
-    public static $rules = [
-        'booking_id' => 'required|exists:bookings,id',
-        'amount' => 'required|numeric|min:0',
-        'reason' => 'nullable|string',
-        'status' => 'required|string|in:pending,approved,denied',
-        'user_id' => 'required|exists:users,id',
-        'payment_id' => 'required|exists:payments,id',
-    ];
+    protected $table = 'refund_logs';
+    protected $resourceName = 'refund_log';
+    protected $useTimestamps = true;
+    protected $useSoftDeletes = true;
 
     /**
-     * Relationship with User.
+     * Get the user associated with the refund.
+     *
+     * @param int $refundId
+     * @return array|null
      */
-    public function user(): BelongsTo
+    public function getUser(int $refundId): ?array
     {
-        return $this->belongsTo(User::class);
+        $refund = $this->find($refundId);
+        
+        if (!$refund || !isset($refund['user_id'])) {
+            return null;
+        }
+        
+        $query = "SELECT * FROM users WHERE id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $refund['user_id']]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
     }
 
     /**
-     * Relationship with Payment.
+     * Get the payment associated with the refund.
+     *
+     * @param int $refundId
+     * @return array|null
      */
-    public function payment(): BelongsTo
+    public function getPayment(int $refundId): ?array
     {
-        return $this->belongsTo(Payment::class);
+        $refund = $this->find($refundId);
+        
+        if (!$refund || !isset($refund['payment_id'])) {
+            return null;
+        }
+        
+        $query = "SELECT * FROM payments WHERE id = :payment_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':payment_id' => $refund['payment_id']]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
     }
 }

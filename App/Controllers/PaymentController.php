@@ -6,8 +6,10 @@ use App\Models\Payment;
 use App\Models\RefundLog;
 use App\Models\TransactionLog;
 use App\Models\InstallmentPlan;
-use Illuminate\Support\Facades\Auth;
-use App\Helpers\LoggingHelper;
+use App\Services\AuditService;
+use App\Helpers\TokenValidator;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ResponseFactoryInterface;
 
 /**
  * Payment Controller
@@ -21,7 +23,7 @@ class PaymentController extends Controller
     private NotificationService $notificationService;
     private AuditService $auditService;
     private PDO $db;
-    private LoggerInterface $logger;
+    private ResponseFactoryInterface $responseFactory;
 
     public function __construct(
         PaymentService $paymentService,
@@ -29,49 +31,98 @@ class PaymentController extends Controller
         NotificationService $notificationService,
         AuditService $auditService,
         PDO $db,
-        LoggerInterface $logger
+        ResponseFactoryInterface $responseFactory
     ) {
         $this->paymentService = $paymentService;
         $this->validator = $validator;
         $this->notificationService = $notificationService;
         $this->auditService = $auditService;
         $this->db = $db;
-        $this->logger = LoggingHelper::getLoggerByCategory('payment');
+        $this->responseFactory = $responseFactory;
+    }
+
+    /**
+     * Create standardized PSR-7 JSON response
+     */
+    protected function jsonResponse(array $data, int $status = 200): ResponseInterface
+    {
+        $response = $this->responseFactory->createResponse($status);
+        $response->getBody()->write(json_encode($data));
+        return $response->withHeader('Content-Type', 'application/json');
     }
 
     /**
      * Process a payment.
      */
-    public function processPayment(): void
+    public function processPayment(): ResponseInterface
     {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Unauthorized access'
+            ], 401);
+        }
+        
         $data = $this->validateRequest($_POST, [
-            'user_id'          => 'required|integer',
             'booking_id'       => 'required|integer',
             'amount'           => 'required|numeric|min:0.01',
             'payment_method_id' => 'required|integer',
         ]);
+        
         try {
             $payment = Payment::create([
                 'booking_id'     => $data['booking_id'],
-                'user_id'        => $data['user_id'],
+                'user_id'        => $user->id,
                 'amount'         => $data['amount'],
                 'payment_method' => $data['payment_method_id'],
                 'status'         => 'completed'
             ]);
+            
             // Update related booking status via Eloquent relationship
             $payment->booking()->update(['status' => 'paid']);
-            $this->logger->info('Payment processed', ['payment_id' => $payment->id]);
-            $this->jsonResponse([
+            
+            // Log the payment in the secure audit logs
+            $this->auditService->logEvent(
+                'payment_processed',
+                "Payment of {$data['amount']} processed for booking #{$data['booking_id']}",
+                [
+                    'payment_id' => $payment->id,
+                    'booking_id' => $data['booking_id'],
+                    'user_id' => $user->id,
+                    'amount' => $data['amount'],
+                    'payment_method' => $data['payment_method_id']
+                ],
+                $user->id,
+                $data['booking_id'],
+                'payment'
+            );
+            
+            return $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Payment processed',
                 'data'    => ['payment' => $payment]
-            ], 200);
+            ]);
         } catch (\Exception $e) {
-            $this->logger->error('Payment processing failed', ['error' => $e->getMessage()]);
-            $this->jsonResponse([
+            // Log the error
+            $this->auditService->logEvent(
+                'payment_failed',
+                "Payment processing failed for booking #{$data['booking_id']}",
+                [
+                    'booking_id' => $data['booking_id'],
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage()
+                ],
+                $user->id,
+                $data['booking_id'],
+                'payment',
+                'error'
+            );
+            
+            return $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Payment processing failed',
-                'data'    => []
+                'error'   => $e->getMessage()
             ], 500);
         }
     }
@@ -79,30 +130,73 @@ class PaymentController extends Controller
     /**
      * Refund a payment.
      */
-    public function refundPayment(): void
+    public function refundPayment(): ResponseInterface
     {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Unauthorized - admin rights required'
+            ], 401);
+        }
+        
         $data = $this->validateRequest($_POST, [
             'transaction_id' => 'required|integer',
             'amount'         => 'required|numeric|min:0.01',
         ]);
+        
         try {
+            // Get the original transaction
+            $transaction = TransactionLog::findOrFail($data['transaction_id']);
+            
             $refund = RefundLog::create([
                 'transaction_id' => $data['transaction_id'],
                 'amount'         => $data['amount'],
                 'status'         => 'processed'
             ]);
-            $this->logger->info('Refund processed', ['refund_id' => $refund->id]);
-            $this->jsonResponse([
+            
+            // Log the refund in the secure audit logs
+            $this->auditService->logEvent(
+                'refund_processed',
+                "Refund of {$data['amount']} processed for transaction #{$data['transaction_id']}",
+                [
+                    'refund_id' => $refund->id,
+                    'transaction_id' => $data['transaction_id'],
+                    'booking_id' => $transaction->booking_id,
+                    'user_id' => $transaction->user_id,
+                    'admin_id' => $admin->id,
+                    'amount' => $data['amount']
+                ],
+                $admin->id,
+                $transaction->booking_id,
+                'payment'
+            );
+            
+            return $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Refund processed',
                 'data'    => ['refund' => $refund]
-            ], 200);
+            ]);
         } catch (\Exception $e) {
-            $this->logger->error('Refund processing failed', ['error' => $e->getMessage()]);
-            $this->jsonResponse([
+            // Log the error
+            $this->auditService->logEvent(
+                'refund_failed',
+                "Refund processing failed for transaction #{$data['transaction_id']}",
+                [
+                    'transaction_id' => $data['transaction_id'],
+                    'admin_id' => $admin->id,
+                    'error' => $e->getMessage()
+                ],
+                $admin->id,
+                null,
+                'payment',
+                'error'
+            );
+            
+            return $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Refund processing failed',
-                'data'    => []
+                'error'   => $e->getMessage()
             ], 500);
         }
     }
@@ -110,33 +204,73 @@ class PaymentController extends Controller
     /**
      * Set up installment payments.
      */
-    public function setupInstallment(): void
+    public function setupInstallment(): ResponseInterface
     {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Unauthorized access'
+            ], 401);
+        }
+        
         $data = $this->validateRequest($_POST, [
-            'user_id'           => 'required|integer',
             'total_amount'      => 'required|numeric|min:0.01',
             'installments'      => 'required|integer|min:2',
             'payment_method_id' => 'required|integer',
+            'booking_id'        => 'required|integer',
         ]);
+        
         try {
             $plan = InstallmentPlan::create([
-                'user_id'        => $data['user_id'],
+                'user_id'        => $user->id,
+                'booking_id'     => $data['booking_id'],
                 'total_amount'   => $data['total_amount'],
                 'installments'   => $data['installments'],
                 'payment_method' => $data['payment_method_id'],
             ]);
-            $this->logger->info('Installment plan created', ['plan_id' => $plan->id]);
-            $this->jsonResponse([
+            
+            // Log the installment plan creation
+            $this->auditService->logEvent(
+                'installment_plan_created',
+                "Installment plan created for user #{$user->id} with {$data['installments']} installments",
+                [
+                    'plan_id' => $plan->id,
+                    'user_id' => $user->id,
+                    'booking_id' => $data['booking_id'],
+                    'total_amount' => $data['total_amount'],
+                    'installments' => $data['installments']
+                ],
+                $user->id,
+                $data['booking_id'],
+                'payment'
+            );
+            
+            return $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Installment plan created',
                 'data'    => ['installment_plan' => $plan]
-            ], 200);
+            ]);
         } catch (\Exception $e) {
-            $this->logger->error('Installment plan setup failed', ['error' => $e->getMessage()]);
-            $this->jsonResponse([
+            // Log the error
+            $this->auditService->logEvent(
+                'installment_plan_failed',
+                "Installment plan creation failed for user #{$user->id}",
+                [
+                    'user_id' => $user->id,
+                    'booking_id' => $data['booking_id'] ?? null,
+                    'error' => $e->getMessage()
+                ],
+                $user->id,
+                $data['booking_id'] ?? null,
+                'payment',
+                'error'
+            );
+            
+            return $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Installment plan setup failed',
-                'data'    => []
+                'error'   => $e->getMessage()
             ], 500);
         }
     }
@@ -144,25 +278,42 @@ class PaymentController extends Controller
     /**
      * Fetch all user transactions.
      */
-    public function getUserTransactions(): void
+    public function getUserTransactions(): ResponseInterface
     {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Unauthorized access'
+            ], 401);
+        }
+        
         try {
             $transactions = TransactionLog::with(['payment', 'booking'])
-                ->where('user_id', $_SESSION['user_id'] ?? null)
+                ->where('user_id', $user->id)
                 ->latest()
                 ->get();
-            $this->logger->info('User transactions fetched', ['user_id' => $_SESSION['user_id'] ?? null]);
-            $this->jsonResponse([
+            
+            // Log the transaction view activity
+            $this->auditService->logEvent(
+                'transactions_viewed',
+                "User viewed their transaction history",
+                ['user_id' => $user->id],
+                $user->id,
+                null,
+                'payment'
+            );
+            
+            return $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Transactions fetched',
                 'data'    => ['transactions' => $transactions]
-            ], 200);
+            ]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch user transactions', ['error' => $e->getMessage()]);
-            $this->jsonResponse([
+            return $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch user transactions',
-                'data'    => []
+                'error'   => $e->getMessage()
             ], 500);
         }
     }
@@ -170,22 +321,51 @@ class PaymentController extends Controller
     /**
      * Fetch payment details.
      */
-    public function getPaymentDetails(int $transactionId): void
+    public function getPaymentDetails(int $transactionId): ResponseInterface
     {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Unauthorized access'
+            ], 401);
+        }
+        
         try {
             $details = TransactionLog::findOrFail($transactionId);
-            $this->logger->info('Payment details fetched', ['transaction_id' => $transactionId]);
-            $this->jsonResponse([
+            
+            // Verify the user owns this transaction or is an admin
+            if ($details->user_id != $user->id && !$user->isAdmin()) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'You do not have permission to view this transaction'
+                ], 403);
+            }
+            
+            // Log the access to payment details
+            $this->auditService->logEvent(
+                'payment_details_viewed',
+                "Payment details accessed for transaction #{$transactionId}",
+                [
+                    'transaction_id' => $transactionId,
+                    'user_id' => $user->id,
+                    'is_admin' => $user->isAdmin() ? 'yes' : 'no'
+                ],
+                $user->id,
+                $details->booking_id ?? null,
+                'payment'
+            );
+            
+            return $this->jsonResponse([
                 'status'  => 'success',
                 'message' => 'Payment details fetched',
                 'data'    => ['details' => $details]
-            ], 200);
+            ]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch payment details', ['error' => $e->getMessage()]);
-            $this->jsonResponse([
+            return $this->jsonResponse([
                 'status'  => 'error',
                 'message' => 'Failed to fetch payment details',
-                'data'    => []
+                'error'   => $e->getMessage()
             ], 500);
         }
     }

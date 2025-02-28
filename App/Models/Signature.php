@@ -1,32 +1,81 @@
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Services\DatabaseHelper;
+use App\Services\AuditService;
 use App\Services\EncryptionService;
 
 class Signature extends BaseModel
 {
-    // Define relationships
-    public function user()
+    protected $table = 'signatures';
+    protected $resourceName = 'signature';
+    protected $useTimestamps = true;
+    protected $useSoftDeletes = false;
+
+    /**
+     * Create a new signature.
+     *
+     * @param array $data
+     * @return int
+     */
+    public function create(array $data): int
     {
-        return $this->belongsTo(User::class);
+        if (isset($data['signature'])) {
+            $data['signature'] = EncryptionService::encrypt($data['signature']);
+        }
+
+        return parent::create($data);
     }
 
-    // Ensure secure storage handling using encryption
-    public function setSignatureAttribute($value)
+    /**
+     * Update a signature.
+     *
+     * @param int $id
+     * @param array $data
+     * @return bool
+     */
+    public function update(int $id, array $data): bool
     {
-        $this->attributes['signature'] = EncryptionService::encrypt($value);
+        if (isset($data['signature'])) {
+            $data['signature'] = EncryptionService::encrypt($data['signature']);
+        }
+
+        return parent::update($id, $data);
     }
 
-    public function getSignatureAttribute($value)
+    /**
+     * Get the signature.
+     *
+     * @param int $signatureId
+     * @return string|null
+     */
+    public function getSignature(int $signatureId): ?string
     {
-        return EncryptionService::decrypt($value);
+        $signature = $this->find($signatureId);
+
+        if ($signature && isset($signature['signature'])) {
+            return EncryptionService::decrypt($signature['signature']);
+        }
+
+        return null;
     }
 
-    // Implement validation rules to only allow specific file types
-    public static function rules()
+    /**
+     * Get the user associated with the signature.
+     *
+     * @param int $signatureId
+     * @return array|null
+     */
+    public function getUser(int $signatureId): ?array
     {
-        return [
-            'signature' => 'required|mimes:png,jpg,svg|max:2048',
-        ];
+        $signature = $this->find($signatureId);
+        
+        if (!$signature || !isset($signature['user_id'])) {
+            return null;
+        }
+        
+        $query = "SELECT * FROM users WHERE id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $signature['user_id']]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
     }
 }

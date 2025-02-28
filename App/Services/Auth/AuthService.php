@@ -11,6 +11,7 @@ use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ApiHelper;
 use App\Services\Validator;
+use App\Services\AuditService;
 
 class AuthService
 {
@@ -18,26 +19,29 @@ class AuthService
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $authLogger;
-    private LoggerInterface $auditLogger;
+    private AuditService $auditService;
     private array $encryptionConfig;
     private Validator $validator;
+    private User $userModel;
 
     public function __construct(
         DatabaseHelper $dbHelper,
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         LoggerInterface $authLogger,
-        LoggerInterface $auditLogger,
+        AuditService $auditService,
         array $encryptionConfig,
-        Validator $validator
+        Validator $validator,
+        User $userModel
     ) {
         $this->pdo = $dbHelper->getPdo();
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authLogger = $authLogger;
-        $this->auditLogger = $auditLogger;
+        $this->auditService = $auditService;
         $this->encryptionConfig = $encryptionConfig;
         $this->validator = $validator;
+        $this->userModel = $userModel;
 
         $this->authLogger->info("AuthService initialized with app_database connection");
     }
@@ -45,14 +49,23 @@ class AuthService
     public function login(array $data)
     {
         try {
-            // Query the users table with correct column names from the existing schema
-            $stmt = $this->pdo->prepare("SELECT id, name, surname, email, password_hash, phone, role, address, pesel_or_id, active, created_at FROM users WHERE email = ? AND active = 1");
+            // Use the User model to find by email
+            $user = $this->userModel->findByEmail($data['email']);
             $this->authLogger->debug("Executing login query for user email: {$data['email']}");
-            $stmt->execute([$data['email']]);
-            $user = $stmt->fetch();
-
-            if (!$user || !password_verify($data['password'], $user['password_hash'])) {
+            
+            if (!$user || !password_verify($data['password'], $user['password_hash']) || !$user['active']) {
                 $this->authLogger->warning("Authentication failed", ['email' => $data['email']]);
+                
+                // Log failed authentication with unified AuditService
+                $this->auditService->logEvent(
+                    'auth',
+                    'Authentication failed',
+                    ['email' => $data['email']],
+                    null,
+                    null,
+                    $_SERVER['REMOTE_ADDR'] ?? null
+                );
+                
                 throw new Exception("Invalid credentials", 401);
             }
 
@@ -62,6 +75,16 @@ class AuthService
 
             $token = $this->tokenService->generateToken($userObject);
             $refreshToken = $this->tokenService->generateRefreshToken($userObject);
+
+            // Log successful login with unified AuditService
+            $this->auditService->logEvent(
+                'auth',
+                'Authentication successful',
+                ['email' => $user['email'], 'user_id' => $user['id']],
+                $user['id'],
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
 
             // Include minimal user information in the result
             return [
@@ -110,7 +133,7 @@ class AuthService
                 throw new Exception("Passwords do not match", 400);
             }
             
-            // Prepare user data for database insertion with valid columns only
+            // Prepare user data for creation via model
             $userData = [
                 'name' => $data['name'],
                 'surname' => $data['surname'],
@@ -132,17 +155,20 @@ class AuthService
             unset($logUserData['password_hash']);
             $this->authLogger->debug("Prepared user data for database", ['data' => $logUserData]);
             
-            // Insert user into database
-            $columns = implode(', ', array_keys($userData));
-            $placeholders = implode(', ', array_fill(0, count($userData), '?'));
-            
-            $this->authLogger->debug("Executing register query with columns: {$columns}");
-            $stmt = $this->pdo->prepare("INSERT INTO users ({$columns}) VALUES ({$placeholders})");
-            $stmt->execute(array_values($userData));
-            $userId = $this->pdo->lastInsertId();
+            // Use the User model to create the user
+            $userId = $this->userModel->create($userData);
             
             $this->authLogger->info("User registered successfully", ['user_id' => $userId, 'email' => $data['email']]);
-            $this->auditLogger->info("New user registration", ['user_id' => $userId, 'email' => $data['email']]);
+            
+            // Log registration with unified AuditService - business logic event
+            $this->auditService->logEvent(
+                'auth',
+                'User registration',
+                ['email' => $data['email'], 'name' => $data['name']],
+                $userId,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
             
             return ['user_id' => $userId];
         } catch (\InvalidArgumentException $e) {
@@ -161,12 +187,10 @@ class AuthService
             // Use the new method to decode the refresh token
             $decoded = $this->tokenService->decodeRefreshToken($data['refresh_token']);
             
-            // Query the users table with correct column names
-            $stmt = $this->pdo->prepare("SELECT id, name, surname, email, password_hash, phone, role, created_at FROM users WHERE id = ?");
+            // Use the User model to find user by ID
+            $user = $this->userModel->find($decoded->sub);
             $this->authLogger->debug("Executing refresh query for user ID: {$decoded->sub}");
-            $stmt->execute([$decoded->sub]);
-            $user = $stmt->fetch();
-
+            
             if (!$user) {
                 $this->authLogger->warning("Invalid refresh token", ['token_sub' => $decoded->sub]);
                 throw new Exception("Invalid refresh token", 400);
@@ -179,6 +203,16 @@ class AuthService
             $token = $this->tokenService->generateToken($userObject);
             $this->authLogger->info("Token refreshed successfully", ['user_id' => $user['id']]);
             
+            // Log token refresh with unified AuditService - business logic event
+            $this->auditService->logEvent(
+                'auth',
+                'Token refreshed',
+                ['user_id' => $user['id']],
+                $user['id'],
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+            
             return ['token' => $token];
         } catch (Exception $e) {
             $this->authLogger->error("Refresh token error: " . $e->getMessage());
@@ -189,13 +223,83 @@ class AuthService
 
     public function logout(array $data)
     {
-        $this->auditLogger->info("User logged out");
+        // Extract user ID from token if available
+        $userId = null;
+        if (!empty($data['user_id'])) {
+            $userId = (int)$data['user_id'];
+        }
+        
+        // Log logout with unified AuditService - business logic event
+        $this->auditService->logEvent(
+            'auth',
+            'User logged out',
+            [],
+            $userId,
+            null,
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
+        
         return ["message" => "Logged out successfully"];
     }
 
-    public function updateProfile($user, array $data)
+    public function updateProfile($userId, array $data)
     {
-        // ...existing code...
+        try {
+            // Get current user data
+            $user = $this->userModel->find($userId);
+            if (!$user) {
+                throw new Exception("User not found", 404);
+            }
+            
+            // Prepare update data
+            $updateData = [];
+            
+            // Handle fields that can be updated
+            if (isset($data['name'])) {
+                $updateData['name'] = $data['name'];
+            }
+            if (isset($data['surname'])) {
+                $updateData['surname'] = $data['surname'];
+            }
+            if (isset($data['phone'])) {
+                $updateData['phone'] = $data['phone'];
+            }
+            if (isset($data['address'])) {
+                $updateData['address'] = $data['address'];
+            }
+            if (isset($data['email_notifications'])) {
+                $updateData['email_notifications'] = (int)$data['email_notifications'];
+            }
+            if (isset($data['sms_notifications'])) {
+                $updateData['sms_notifications'] = (int)$data['sms_notifications'];
+            }
+            
+            // Only update if we have data
+            if (!empty($updateData)) {
+                $updateData['updated_at'] = date('Y-m-d H:i:s');
+                
+                // Update the user via model
+                $this->userModel->update($userId, $updateData);
+                
+                // Log the profile update - business logic event
+                $this->auditService->logEvent(
+                    'auth',
+                    'Profile updated',
+                    ['user_id' => $userId],
+                    $userId,
+                    null,
+                    $_SERVER['REMOTE_ADDR'] ?? null
+                );
+                
+                return ["message" => "Profile updated successfully"];
+            }
+            
+            return ["message" => "No changes to update"];
+        } catch (Exception $e) {
+            $this->authLogger->error("Update profile error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            throw $e;
+        }
     }
 
     /**
@@ -213,11 +317,9 @@ class AuthService
                 throw new Exception("Invalid email format", 400);
             }
             
-            // Check if user exists with correct column names
-            $stmt = $this->pdo->prepare("SELECT id, email FROM users WHERE email = ?");
+            // Use the User model to find user by email
+            $user = $this->userModel->findByEmail($data['email']);
             $this->authLogger->debug("Executing password reset request query for email: {$data['email']}");
-            $stmt->execute([$data['email']]);
-            $user = $stmt->fetch();
             
             if (!$user) {
                 // Don't reveal that the email doesn't exist (security best practice)
@@ -230,16 +332,18 @@ class AuthService
             $tokenExpiry = date('Y-m-d H:i:s', time() + 3600); // Token valid for 1 hour
             $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
             
-            // Store the token in the password_resets table matching the schema
-            $stmt = $this->pdo->prepare("
-                INSERT INTO password_resets (email, token, ip_address, expires_at, created_at) 
-                VALUES (?, ?, ?, ?, NOW())
-            ");
-            $stmt->execute([$user['email'], $resetToken, $ipAddress, $tokenExpiry]);
+            // Store the token using a model method
+            $this->userModel->createPasswordReset($user['email'], $resetToken, $ipAddress, $tokenExpiry);
             
-            // Log the action
-            $this->authLogger->info("Password reset token generated", ['user_id' => $user['id']]);
-            $this->auditLogger->info("Password reset requested", ['user_id' => $user['id']]);
+            // Log password reset request with unified AuditService - business logic event
+            $this->auditService->logEvent(
+                'auth',
+                'Password reset requested',
+                ['email' => $user['email']],
+                $user['id'],
+                null,
+                $ipAddress
+            );
             
             // In a real application, you would send an email here
             // For this example, we'll just return the token (not secure for production)
@@ -274,44 +378,39 @@ class AuthService
                 throw new Exception("Passwords do not match", 400);
             }
             
-            // Verify token using correct table name and columns
-            $stmt = $this->pdo->prepare("
-                SELECT * FROM password_resets 
-                WHERE token = ? AND expires_at > NOW()
-                ORDER BY created_at DESC LIMIT 1
-            ");
+            // Verify token using the User model
+            $tokenRecord = $this->userModel->verifyResetToken($data['token']);
             $this->authLogger->debug("Verifying reset token: {$data['token']}");
-            $stmt->execute([$data['token']]);
-            $tokenRecord = $stmt->fetch();
             
             if (!$tokenRecord) {
                 throw new Exception("Invalid or expired token", 400);
             }
             
-            // Get user with correct column names
-            $stmt = $this->pdo->prepare("SELECT id, name, email FROM users WHERE email = ?");
+            // Get user via model
+            $user = $this->userModel->findByEmail($tokenRecord['email']);
             $this->authLogger->debug("Retrieving user for password reset, email: {$tokenRecord['email']}");
-            $stmt->execute([$tokenRecord['email']]);
-            $user = $stmt->fetch();
             
             if (!$user) {
                 throw new Exception("User not found", 404);
             }
             
-            // Update the password with correct column name (password_hash)
+            // Update the password via model
             $hashedPassword = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]);
-            $stmt = $this->pdo->prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?");
+            $this->userModel->updatePassword($user['id'], $hashedPassword);
             $this->authLogger->debug("Updating password for user ID: {$user['id']}");
-            $stmt->execute([$hashedPassword, $user['id']]);
             
-            // Mark token as used by removing it or expiring it (since we don't have a "used" column)
-            // We'll expire it by setting expires_at to current time
-            $stmt = $this->pdo->prepare("UPDATE password_resets SET expires_at = NOW() WHERE id = ?");
-            $stmt->execute([$tokenRecord['id']]);
+            // Mark token as used via model
+            $this->userModel->markResetTokenUsed($tokenRecord['id']);
             
-            // Log the action
-            $this->authLogger->info("Password reset completed", ['user_id' => $user['id']]);
-            $this->auditLogger->info("Password reset completed", ['user_id' => $user['id']]);
+            // Log password reset completion with unified AuditService - business logic event
+            $this->auditService->logEvent(
+                'auth',
+                'Password reset completed',
+                ['email' => $user['email']],
+                $user['id'],
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
             
             return ["message" => "Password has been reset successfully"];
         } catch (Exception $e) {
