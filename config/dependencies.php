@@ -171,11 +171,14 @@ $container->set(AuditService::class, fn() => new AuditService(
     $container->get(ExceptionHandler::class),
     $container->get(DatabaseHelper::class)
 ));
+// Update TokenService registration:
 $container->set(TokenService::class, fn() => new TokenService(
     $config['encryption']['jwt_secret'],
     $config['encryption']['jwt_refresh_secret'],
     $container->get('auth_logger'),
-    $container->get(ExceptionHandler::class)
+    $container->get(ExceptionHandler::class),
+    $container->get(DatabaseHelper::class),
+    $container->get(AuditService::class)
 ));
 $container->set(AuthService::class, function (Container $container) use ($config) {
     return new AuthService(
