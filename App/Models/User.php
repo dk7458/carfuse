@@ -12,7 +12,7 @@ use App\Models\Payment;
 use App\Models\AuditTrail;
 use App\Models\Log;
 use App\Models\Contract;
-use App\Services\DatabaseHelper;
+use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
 
 /**

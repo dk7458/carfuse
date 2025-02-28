@@ -1,6 +1,6 @@
 namespace App\Models;
 
-use App\Services\DatabaseHelper;
+use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
 use App\Services\EncryptionService;
 
