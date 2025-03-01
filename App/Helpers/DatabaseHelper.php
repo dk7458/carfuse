@@ -63,6 +63,7 @@ class DatabaseHelper
         if (self::$secureInstance === null) {
             try {
                 self::$secureInstance = new DatabaseHelper(self::getDatabaseConfig('secure'));
+                error_log("[DEBUG] Initializing Secure Database", 3, __DIR__ . "/debug.log"); // Ensure log file is writable
             } catch (Exception $e) {
                 self::$logger->critical("❌ Secure database initialization failed: " . $e->getMessage());
                 die("Secure database initialization failed.");
