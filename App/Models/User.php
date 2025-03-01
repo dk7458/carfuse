@@ -309,4 +309,16 @@ class User extends BaseModel
         $stmt->execute([':user_id' => $userId]);
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
+
+    /**
+     * Find a user by email.
+     *
+     * @param string $email
+     * @return User|null
+     */
+    public static function findByEmail(string $email): ?array
+    {
+        $user = self::where('email', $email)->first();
+        return $user ? $user->toArray() : null;
+    }
 }

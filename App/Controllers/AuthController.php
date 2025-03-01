@@ -54,7 +54,8 @@ class AuthController extends Controller
 
         // Rate Limiting Logic
         $email = $data['email'];
-        $ipAddress = $request->getServerParams()['REMOTE_ADDR'];
+        $ipAddress = $request->getServerParams()['REMOTE_ADDR'] ?? 'UNKNOWN';
+
     
         if ($this->rateLimiter->isRateLimited($email, $ipAddress, 'login')) {
             $this->logger->warning("Rate limit exceeded for login", ['email' => $email, 'ip' => $ipAddress]);

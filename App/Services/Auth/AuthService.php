@@ -50,10 +50,10 @@ class AuthService
     {
         try {
             // Use the User model to find by email
-            $user = $this->userModel->findByEmail($data['email']);
+            $user = User::findByEmail($data['email']);
             $this->logger->debug("Executing login query for user email: {$data['email']}");
             
-            if (!$user || !password_verify($data['password'], $user['password_hash']) || !$user['active']) {
+            if (!$user || !password_verify($data['password'], $user['password_hash'])) {
                 $this->logger->warning("Authentication failed", ['email' => $data['email']]);
                 
                 // Log failed authentication with unified AuditService
@@ -66,7 +66,7 @@ class AuthService
                     $_SERVER['REMOTE_ADDR'] ?? null
                 );
                 
-                throw new Exception("Invalid credentials", 401);
+                throw new Exception("Invalid email or password", 401);
             }
 
             // Cast user array to object for TokenService
