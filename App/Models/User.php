@@ -358,7 +358,7 @@ class User extends BaseModel
      */
     public static function findByEmail(string $email): ?array
     {
-        $dbHelper = new DatabaseHelper();
+        $dbHelper = DatabaseHelper::getInstance()->getPdo();
         $pdo = $dbHelper->getPdo();
         $query = "SELECT * FROM users WHERE email = :email AND deleted_at IS NULL";
         $stmt = $pdo->prepare($query);
