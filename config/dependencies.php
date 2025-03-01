@@ -206,15 +206,13 @@ $container->set(RateLimiter::class, function($c) {
     );
 });
 
-// Configure AuditService to accept pre-initialized instance if available
-// The bootstrap process will override this with set() later
-// This registration is a fallback if bootstrap fails to initialize AuditService
+// Configure AuditService to use the secure database instance
 $container->set(AuditService::class, function($c) {
-    $c->get('dependencies_logger')->info("Creating new AuditService instance (fallback)");
+    $c->get('dependencies_logger')->info("Creating AuditService instance with secure database");
     return new AuditService(
         $c->get('audit_logger'),
         $c->get(ExceptionHandler::class),
-        $c->get(DatabaseHelper::class)
+        DatabaseHelper::getSecureInstance() // Use secure database instance
     );
 });
 
