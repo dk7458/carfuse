@@ -56,20 +56,25 @@ class AuditService
             // Ensure category is standardized
             $category = strtolower(trim($category));
             
-            $this->db->table('audit_logs')->insert([
+            // Prepare data for insertion using DatabaseHelper::insert instead of table()->insert
+            $data = [
                 'action'     => $category,  // Using action field to store category
                 'message'    => $message,
                 'details'    => json_encode($context, JSON_UNESCAPED_UNICODE),
                 'user_id'    => $userId,
                 'booking_id' => $bookingId,
                 'ip_address' => $ipAddress,
-                'created_at' => now()
-            ]);
+                'created_at' => date('Y-m-d H:i:s') // Replace now() function with PHP date
+            ];
+            
+            // Use DatabaseHelper::insert instead of $this->db->table()->insert()
+            $insertId = DatabaseHelper::insert('audit_logs', $data);
             
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Audit] Logged {$category} event: {$message}", [
                     'user_id' => $userId,
-                    'booking_id' => $bookingId
+                    'booking_id' => $bookingId,
+                    'insert_id' => $insertId
                 ]);
             }
         } catch (Exception $e) {
@@ -99,53 +104,93 @@ class AuditService
      * Retrieve logs from the unified audit_logs table with applied filters.
      *
      * @param array $filters Various filters to apply (category, user_id, etc.)
-     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     * @return array Paginated result containing logs and pagination metadata
      * @throws Exception If fetching logs fails
      */
-    public function getLogs(array $filters = []): \Illuminate\Contracts\Pagination\LengthAwarePaginator
+    public function getLogs(array $filters = []): array
     {
         try {
-            $query = $this->db->table('audit_logs');
+            // Build WHERE clause and parameters for both count and select queries
+            $whereClause = "1=1"; // Always true condition to start with
+            $params = [];
             
             // Apply filters
             if (!empty($filters['user_id'])) {
-                $query->where('user_id', $filters['user_id']);
+                $whereClause .= " AND user_id = ?";
+                $params[] = $filters['user_id'];
             }
             
             if (!empty($filters['booking_id'])) {
-                $query->where('booking_id', $filters['booking_id']);
+                $whereClause .= " AND booking_id = ?";
+                $params[] = $filters['booking_id'];
             }
             
-            // Support both 'category' and 'action' fields (they map to the same DB column)
+            // Support both 'category' and 'action' fields
             if (!empty($filters['category'])) {
-                $query->where('action', $filters['category']);
+                $whereClause .= " AND action = ?";
+                $params[] = $filters['category'];
             } elseif (!empty($filters['action'])) {
-                $query->where('action', $filters['action']);
+                $whereClause .= " AND action = ?";
+                $params[] = $filters['action'];
             }
             
             // Date range filters
             if (!empty($filters['start_date'])) {
-                $query->where('created_at', '>=', $filters['start_date']);
+                $whereClause .= " AND created_at >= ?";
+                $params[] = $filters['start_date'];
             }
             
             if (!empty($filters['end_date'])) {
-                $query->where('created_at', '<=', $filters['end_date']);
+                $whereClause .= " AND created_at <= ?";
+                $params[] = $filters['end_date'];
             }
             
             // Message search
             if (!empty($filters['search'])) {
-                $query->where('message', 'LIKE', '%' . $filters['search'] . '%');
+                $whereClause .= " AND message LIKE ?";
+                $params[] = '%' . $filters['search'] . '%';
             }
             
+            // Get total count first (for pagination)
+            $countSql = "SELECT COUNT(*) as total FROM audit_logs WHERE {$whereClause}";
+            $countResult = DatabaseHelper::select($countSql, $params);
+            $totalItems = isset($countResult[0]['total']) ? (int)$countResult[0]['total'] : 0;
+            
+            // Pagination parameters
+            $page = isset($filters['page']) ? max(1, (int)$filters['page']) : 1;
+            $perPage = isset($filters['per_page']) ? max(1, (int)$filters['per_page']) : 10;
+            $offset = ($page - 1) * $perPage;
+            $totalPages = ceil($totalItems / $perPage);
+            
             // Custom sort options
-            $sortField = $filters['sort_field'] ?? 'created_at';
-            $sortOrder = $filters['sort_order'] ?? 'desc';
-            $query->orderBy($sortField, $sortOrder);
+            $allowedSortFields = ['id', 'action', 'message', 'user_id', 'booking_id', 'created_at'];
+            $sortField = in_array($filters['sort_field'] ?? '', $allowedSortFields) ? $filters['sort_field'] : 'created_at';
+            $sortOrder = strtoupper($filters['sort_order'] ?? 'desc') === 'ASC' ? 'ASC' : 'DESC';
             
-            // Paginate results
-            $perPage = $filters['per_page'] ?? 10;
+            // Build and execute the main query
+            $sql = "SELECT * FROM audit_logs WHERE {$whereClause} ORDER BY {$sortField} {$sortOrder} LIMIT {$perPage} OFFSET {$offset}";
+            $logs = DatabaseHelper::select($sql, $params);
             
-            return $query->paginate($perPage);
+            // Process the results - parse JSON details
+            foreach ($logs as &$log) {
+                if (isset($log['details']) && is_string($log['details'])) {
+                    $log['details'] = json_decode($log['details'], true);
+                }
+            }
+            
+            // Create a custom paginated result array
+            return [
+                'data' => $logs,
+                'pagination' => [
+                    'total' => $totalItems,
+                    'per_page' => $perPage,
+                    'current_page' => $page,
+                    'last_page' => $totalPages,
+                    'from' => $offset + 1,
+                    'to' => min($offset + $perPage, $totalItems),
+                ]
+            ];
+            
         } catch (Exception $e) {
             $this->logger->error("[Audit] ❌ getLogs error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
@@ -157,20 +202,23 @@ class AuditService
      * Retrieve a single log entry by ID from the audit_logs table.
      * 
      * @param int $logId The ID of the log entry
-     * @return object The log entry
+     * @return array|null The log entry
      * @throws Exception If the log entry is not found
      */
     public function getLogById(int $logId)
     {
         try {
-            $log = $this->db->table('audit_logs')->where('id', $logId)->first();
+            // Use DatabaseHelper::select instead of $this->db->table()->where()->first()
+            $logs = DatabaseHelper::select("SELECT * FROM audit_logs WHERE id = ? LIMIT 1", [$logId]);
+            $log = !empty($logs) ? $logs[0] : null;
+            
             if (!$log) {
                 throw new Exception('Log entry not found.');
             }
             
             // Parse JSON details if present
-            if (isset($log->details) && is_string($log->details)) {
-                $log->details = json_decode($log->details);
+            if (isset($log['details']) && is_string($log['details'])) {
+                $log['details'] = json_decode($log['details'], true);
             }
             
             return $log;
@@ -191,34 +239,48 @@ class AuditService
     public function deleteLogs(array $filters): int
     {
         try {
-            $query = $this->db->table('audit_logs');
+            // Build WHERE clause and parameters
+            $whereClause = "1=1";
+            $params = [];
             
             // Apply filters
             if (!empty($filters['user_id'])) {
-                $query->where('user_id', $filters['user_id']);
+                $whereClause .= " AND user_id = ?";
+                $params[] = $filters['user_id'];
             }
             
             if (!empty($filters['booking_id'])) {
-                $query->where('booking_id', $filters['booking_id']);
+                $whereClause .= " AND booking_id = ?";
+                $params[] = $filters['booking_id'];
             }
             
             // Support both 'category' and 'action' fields
             if (!empty($filters['category'])) {
-                $query->where('action', $filters['category']);
+                $whereClause .= " AND action = ?";
+                $params[] = $filters['category'];
             } elseif (!empty($filters['action'])) {
-                $query->where('action', $filters['action']);
+                $whereClause .= " AND action = ?";
+                $params[] = $filters['action'];
             }
             
             // Date range filters
             if (!empty($filters['start_date'])) {
-                $query->where('created_at', '>=', $filters['start_date']);
+                $whereClause .= " AND created_at >= ?";
+                $params[] = $filters['start_date'];
             }
             
             if (!empty($filters['end_date'])) {
-                $query->where('created_at', '<=', $filters['end_date']);
+                $whereClause .= " AND created_at <= ?";
+                $params[] = $filters['end_date'];
             }
             
-            $deleted = $query->delete();
+            // Use DatabaseHelper::safeQuery for custom DELETE query
+            $sql = "DELETE FROM audit_logs WHERE {$whereClause}";
+            $deleted = DatabaseHelper::safeQuery(function ($pdo) use ($sql, $params) {
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+                return $stmt->rowCount();
+            });
             
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Audit] Deleted {$deleted} logs with filters: " . json_encode($filters));
@@ -242,27 +304,42 @@ class AuditService
     public function exportLogs(array $filters): string
     {
         try {
-            // Get logs without pagination
-            $query = $this->db->table('audit_logs');
+            // Build WHERE clause and parameters
+            $whereClause = "1=1";
+            $params = [];
             
             // Apply the same filters as in getLogs
-            // ...apply filters based on $filters array...
             if (!empty($filters['user_id'])) {
-                $query->where('user_id', $filters['user_id']);
+                $whereClause .= " AND user_id = ?";
+                $params[] = $filters['user_id'];
             }
             
             if (!empty($filters['booking_id'])) {
-                $query->where('booking_id', $filters['booking_id']);
+                $whereClause .= " AND booking_id = ?";
+                $params[] = $filters['booking_id'];
             }
             
             if (!empty($filters['category'])) {
-                $query->where('action', $filters['category']);
+                $whereClause .= " AND action = ?";
+                $params[] = $filters['category'];
             } elseif (!empty($filters['action'])) {
-                $query->where('action', $filters['action']);
+                $whereClause .= " AND action = ?";
+                $params[] = $filters['action'];
             }
             
-            // Get results
-            $logs = $query->orderBy('created_at', 'desc')->get();
+            if (!empty($filters['start_date'])) {
+                $whereClause .= " AND created_at >= ?";
+                $params[] = $filters['start_date'];
+            }
+            
+            if (!empty($filters['end_date'])) {
+                $whereClause .= " AND created_at <= ?";
+                $params[] = $filters['end_date'];
+            }
+            
+            // Use DatabaseHelper::select instead of query builder get()
+            $sql = "SELECT * FROM audit_logs WHERE {$whereClause} ORDER BY created_at DESC";
+            $logs = DatabaseHelper::select($sql, $params);
             
             // Create CSV file
             $filename = 'audit_logs_export_' . date('Y-m-d_His') . '.csv';
@@ -276,19 +353,20 @@ class AuditService
             // Write data rows
             foreach ($logs as $log) {
                 fputcsv($file, [
-                    $log->id,
-                    $log->action,
-                    $log->message,
-                    $log->user_id,
-                    $log->booking_id,
-                    $log->ip_address,
-                    $log->created_at,
-                    $log->details
+                    $log['id'],
+                    $log['action'],
+                    $log['message'],
+                    $log['user_id'],
+                    $log['booking_id'],
+                    $log['ip_address'],
+                    $log['created_at'],
+                    $log['details'] // This will be JSON string already
                 ]);
             }
             
             fclose($file);
             
+            // Log the export action using our refactored logEvent method
             $this->logEvent(
                 'system',
                 'Audit logs exported',
