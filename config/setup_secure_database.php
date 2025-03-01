@@ -9,7 +9,7 @@ $secureDbHelper = DatabaseHelper::getSecureInstance();
 $pdoSecure = $secureDbHelper->getPdo();
 
 // Log Setup
-$logFilePath = __DIR__ . '/../logs/secure_db_setup.log';
+$logFilePath = __DIR__ . '/../../logs/secure_db_setup.log';
 file_put_contents($logFilePath, "🚀 Secure Database Setup Started at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
 
 // Define Secure Tables (No Cross-Database Foreign Keys)
