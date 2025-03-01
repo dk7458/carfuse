@@ -2,7 +2,7 @@
 // setup_secure_database.php
 // Description: Initializes the secure database using the new PDO-based DatabaseHelper,
 // creates required secure tables, and migrates legacy logs if applicable.
-// Changelog: 2025-03-01 - Added directory existence check, enhanced error handling, and improved logging.
+// Changelog: 2025-03-01 - Enhanced logging to capture each step for troubleshooting.
 // Dependencies: Requires autoload.php, DatabaseHelper, and proper configuration.
 
 require_once __DIR__ . '/../vendor/autoload.php';
@@ -10,17 +10,31 @@ require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 
 use App\Helpers\DatabaseHelper;
 
-// Initialize Secure Database using the new PDO-based DatabaseHelper
-$secureDbHelper = DatabaseHelper::getSecureInstance();
-$pdoSecure = $secureDbHelper->getPdo();
-
-// Update log file path to use current directory instead of separate logs folder
+// Set up log file path in the current directory
 $logFilePath = __DIR__ . '/setup_secure_db.log';
 
-// Log setup start
-file_put_contents($logFilePath, "🚀 Secure Database Setup Started at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
+// Helper function to log messages with timestamps
+function logMessage($message) {
+    global $logFilePath;
+    file_put_contents($logFilePath, "[" . date('Y-m-d H:i:s') . "] " . $message . "\n", FILE_APPEND);
+}
 
-// Define Secure Tables (No Cross-Database Foreign Keys)
+// Log the start of the setup
+logMessage("🚀 Secure Database Setup Started");
+
+// Step 1: Initialize Secure Database using DatabaseHelper
+try {
+    logMessage("Initializing secure database instance...");
+    $secureDbHelper = DatabaseHelper::getSecureInstance();
+    $pdoSecure = $secureDbHelper->getPdo();
+    logMessage("Secure database connection established.");
+} catch (Exception $e) {
+    logMessage("[❌] Failed to initialize secure database: " . $e->getMessage());
+    exit("[❌] Secure database initialization failed. Check log for details.\n");
+}
+
+// Step 2: Define Secure Tables
+logMessage("Defining secure tables...");
 $tables = [
     // Consent logs table
     "consent_logs" => "
@@ -62,26 +76,38 @@ $tables = [
     "
 ];
 
-// Execute Table Creation with enhanced error handling using PDOException
+// Step 3: Execute Table Creation
+logMessage("Creating secure tables...");
 foreach ($tables as $tableName => $sql) {
+    logMessage("Attempting to create table: {$tableName}");
     try {
         $pdoSecure->exec($sql);
-        file_put_contents($logFilePath, "[✅] Secure Table `{$tableName}` created successfully.\n", FILE_APPEND);
+        logMessage("[✅] Secure Table `{$tableName}` created successfully.");
     } catch (PDOException $e) {
-        file_put_contents($logFilePath, "[❌] Error creating `{$tableName}`: " . $e->getMessage() . "\n", FILE_APPEND);
+        logMessage("[❌] Error creating `{$tableName}`: " . $e->getMessage());
     }
 }
 
-// Legacy Migration Section for older logs
+// Step 4: Legacy Migration Section
+logMessage("Starting legacy migration for legacy logs...");
+
+// Initialize default DB instance for legacy migrations
 try {
-    // Get default (app) PDO instance for legacy tables
+    logMessage("Initializing default database instance for legacy migration...");
     $defaultDbHelper = DatabaseHelper::getInstance();
     $pdoDefault = $defaultDbHelper->getPdo();
-    
-    // Migrate legacy transaction_logs if they exist
+    logMessage("Default database connection established.");
+} catch (Exception $e) {
+    logMessage("[❌] Failed to initialize default database for migration: " . $e->getMessage());
+}
+
+// Migrate legacy transaction_logs if available
+try {
+    logMessage("Checking for legacy 'transaction_logs' table...");
     $stmt = $pdoDefault->query("SHOW TABLES LIKE 'transaction_logs'");
     $hasLegacyTables = $stmt->fetchAll();
     if (!empty($hasLegacyTables)) {
+        logMessage("Legacy 'transaction_logs' found. Starting migration...");
         $migrationSql = "
             INSERT INTO audit_logs (action, message, details, user_reference, transaction_reference, category, created_at)
             SELECT 'transaction', 'Legacy transaction log', 
@@ -91,18 +117,24 @@ try {
         ";
         try {
             $pdoSecure->exec($migrationSql);
-            file_put_contents($logFilePath, "[✅] Legacy transaction logs migrated to audit_logs.\n", FILE_APPEND);
+            logMessage("[✅] Legacy transaction logs migrated to audit_logs.");
         } catch (PDOException $e) {
-            file_put_contents($logFilePath, "[❌] Error migrating legacy transaction logs: " . $e->getMessage() . "\n", FILE_APPEND);
+            logMessage("[❌] Error migrating legacy transaction logs: " . $e->getMessage());
         }
     } else {
-        file_put_contents($logFilePath, "[ℹ️] No legacy transaction_logs table found; skipping migration.\n", FILE_APPEND);
+        logMessage("[ℹ️] No legacy 'transaction_logs' table found; skipping migration.");
     }
-    
-    // Migrate legacy booking_logs if they exist
+} catch (PDOException $e) {
+    logMessage("[❌] Error checking for legacy 'transaction_logs': " . $e->getMessage());
+}
+
+// Migrate legacy booking_logs if available
+try {
+    logMessage("Checking for legacy 'booking_logs' table...");
     $stmt = $pdoDefault->query("SHOW TABLES LIKE 'booking_logs'");
     $hasBookingLogs = $stmt->fetchAll();
     if (!empty($hasBookingLogs)) {
+        logMessage("Legacy 'booking_logs' found. Starting migration...");
         $migrationSql = "
             INSERT INTO audit_logs (action, message, details, user_reference, booking_reference, category, created_at)
             SELECT 'booking_update', note, 
@@ -112,17 +144,17 @@ try {
         ";
         try {
             $pdoSecure->exec($migrationSql);
-            file_put_contents($logFilePath, "[✅] Legacy booking logs migrated to audit_logs.\n", FILE_APPEND);
+            logMessage("[✅] Legacy booking logs migrated to audit_logs.");
         } catch (PDOException $e) {
-            file_put_contents($logFilePath, "[❌] Error migrating legacy booking logs: " . $e->getMessage() . "\n", FILE_APPEND);
+            logMessage("[❌] Error migrating legacy booking logs: " . $e->getMessage());
         }
     } else {
-        file_put_contents($logFilePath, "[ℹ️] No legacy booking_logs table found; skipping migration.\n", FILE_APPEND);
+        logMessage("[ℹ️] No legacy 'booking_logs' table found; skipping migration.");
     }
-    
 } catch (PDOException $e) {
-    file_put_contents($logFilePath, "[❌] Error during legacy migration: " . $e->getMessage() . "\n", FILE_APPEND);
+    logMessage("[❌] Error checking for legacy 'booking_logs': " . $e->getMessage());
 }
 
-file_put_contents($logFilePath, "✅ Secure Database Setup Completed Successfully at " . date('Y-m-d H:i:s') . ".\n", FILE_APPEND);
-echo "[🚀] Secure database setup completed. Check `setup_secure_db.log` for details.\n";
+// Step 5: Finalize Setup
+logMessage("✅ Secure Database Setup Completed Successfully at " . date('Y-m-d H:i:s'));
+echo "[🚀] Secure database setup completed. Check 'setup_secure_db.log' for details.\n";
