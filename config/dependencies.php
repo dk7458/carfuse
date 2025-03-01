@@ -348,7 +348,9 @@ $container->set(UserController::class, function($c) {
     return new UserController(
         $c->get(LoggerInterface::class),
         $c->get(Validator::class),
-        $c->get(TokenService::class)
+        $c->get(TokenService::class),
+        $c->get(ExceptionHandler::class),
+        $c->get(AuthService::class),
     );
 });
 
