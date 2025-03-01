@@ -13,7 +13,6 @@ use App\Services\AuditService;
 abstract class BaseModel
 {
     protected $dbHelper;
-    protected $pdo;
     protected $auditService;
     
     // The table associated with the model
@@ -37,7 +36,6 @@ abstract class BaseModel
     public function __construct(DatabaseHelper $dbHelper, AuditService $auditService = null)
     {
         $this->dbHelper = $dbHelper;
-        $this->pdo = $dbHelper->getPdo();
         $this->auditService = $auditService;
         
         if (!$this->table) {
@@ -65,9 +63,8 @@ abstract class BaseModel
             $query .= " AND deleted_at IS NULL";
         }
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':id' => $id]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':id' => $id]);
+        return $result[0] ?? null; // Return first result or null
     }
     
     /**
@@ -85,9 +82,7 @@ abstract class BaseModel
         
         $query .= " ORDER BY created_at DESC";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute();
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return $this->dbHelper->select($query);
     }
     
     /**
@@ -98,30 +93,11 @@ abstract class BaseModel
      */
     public function create(array $data): int
     {
-        $fields = array_keys($data);
-        $placeholders = [];
-        $params = [];
-        
-        foreach ($fields as $field) {
-            $placeholders[] = ":{$field}";
-            $params[":{$field}"] = $data[$field];
-        }
-        
         if ($this->useTimestamps) {
-            $fields[] = 'created_at';
-            $placeholders[] = 'NOW()';
-            $fields[] = 'updated_at';
-            $placeholders[] = 'NOW()';
+            $data['created_at'] = $data['updated_at'] = date('Y-m-d H:i:s');
         }
         
-        $fieldsSql = implode(', ', $fields);
-        $placeholdersSql = implode(', ', $placeholders);
-        
-        $query = "INSERT INTO {$this->table} ({$fieldsSql}) VALUES ({$placeholdersSql})";
-        
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-        $id = $this->pdo->lastInsertId();
+        $id = $this->dbHelper->insert($this->table, $data);
         
         // Log audit if service is available
         if ($this->auditService) {
@@ -143,32 +119,11 @@ abstract class BaseModel
      */
     public function update(int $id, array $data): bool
     {
-        if (empty($data)) {
-            return false;
-        }
-        
-        $setClauses = [];
-        $params = [':id' => $id];
-        
-        foreach ($data as $key => $value) {
-            $setClauses[] = "{$key} = :{$key}";
-            $params[":{$key}"] = $value;
-        }
-        
         if ($this->useTimestamps) {
-            $setClauses[] = "updated_at = NOW()";
+            $data['updated_at'] = date('Y-m-d H:i:s');
         }
         
-        $setClause = implode(', ', $setClauses);
-        
-        $query = "UPDATE {$this->table} SET {$setClause} WHERE id = :id";
-        
-        if ($this->useSoftDeletes) {
-            $query .= " AND deleted_at IS NULL";
-        }
-        
-        $stmt = $this->pdo->prepare($query);
-        $result = $stmt->execute($params);
+        $result = $this->dbHelper->update($this->table, $data, ['id' => $id, 'deleted_at IS NULL']);
         
         // Log audit if service is available and update was successful
         if ($result && $this->auditService) {
@@ -189,13 +144,8 @@ abstract class BaseModel
      */
     public function delete(int $id): bool
     {
-        if (!$this->useSoftDeletes) {
-            $stmt = $this->pdo->prepare("DELETE FROM {$this->table} WHERE id = :id");
-            $result = $stmt->execute([':id' => $id]);
-        } else {
-            $stmt = $this->pdo->prepare("UPDATE {$this->table} SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL");
-            $result = $stmt->execute([':id' => $id]);
-        }
+        $data = $this->useSoftDeletes ? ['deleted_at' => date('Y-m-d H:i:s')] : [];
+        $result = $this->dbHelper->update($this->table, $data, ['id' => $id]);
         
         // Log audit if service is available and delete was successful
         if ($result && $this->auditService) {
