@@ -78,8 +78,8 @@ class AuditService
             // Log the query being executed
             $this->logger->info("[Audit] Executing query: INSERT INTO audit_logs", $data);
             
-            // Use DatabaseHelper::insert instead of $this->db->table()->insert()
-            $insertId = DatabaseHelper::insert('audit_logs', $data);
+            // Use DatabaseHelper::insert with secure database
+            $insertId = DatabaseHelper::insert('audit_logs', $data, true);
             
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Audit] Logged {$category} event: {$message}", [

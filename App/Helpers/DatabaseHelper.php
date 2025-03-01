@@ -109,9 +109,11 @@ class DatabaseHelper
     /**
      * ✅ Wrapper for Insert Queries
      */
-    public static function insert($table, $data)
+    public static function insert($table, $data, $useSecureDb = false)
     {
-        return self::safeQuery(function ($pdo) use ($table, $data) {
+        return self::safeQuery(function ($pdo) use ($table, $data, $useSecureDb) {
+            $dbInstance = $useSecureDb ? self::getSecureInstance() : self::getInstance();
+            $pdo = $dbInstance->getPdo();
             $columns = implode(", ", array_keys($data));
             $placeholders = implode(", ", array_fill(0, count($data), "?"));
             $stmt = $pdo->prepare("INSERT INTO {$table} ({$columns}) VALUES ({$placeholders})");
