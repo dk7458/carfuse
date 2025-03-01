@@ -39,7 +39,7 @@ class Payment extends BaseModel
 
     public function __construct(DatabaseHelper $dbHelper, AuditService $auditService = null)
     {
-        $this->pdo = $dbHelper->getPdo();
+        $this->dbHelper = $dbHelper;
         $this->auditService = $auditService;
     }
 
@@ -51,13 +51,11 @@ class Payment extends BaseModel
      */
     public function find(int $id): ?array
     {
-        $stmt = $this->pdo->prepare("
-            SELECT * FROM {$this->table} 
-            WHERE id = :id AND deleted_at IS NULL
-        ");
-        $stmt->execute([':id' => $id]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $query = "SELECT * FROM {$this->table} WHERE id = :id AND deleted_at IS NULL LIMIT 1";
+        $result = $this->dbHelper->select($query, [':id' => $id]);
+        return $result[0] ?? null; // Return first result or null
     }
+    
 
     /**
      * Get all payments.
@@ -66,13 +64,8 @@ class Payment extends BaseModel
      */
     public function all(): array
     {
-        $stmt = $this->pdo->prepare("
-            SELECT * FROM {$this->table} 
-            WHERE deleted_at IS NULL
-            ORDER BY created_at DESC
-        ");
-        $stmt->execute();
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $query = "SELECT * FROM {$this->table} WHERE deleted_at IS NULL ORDER BY created_at DESC";
+        return $this->dbHelper->select($query);
     }
 
     /**
@@ -81,41 +74,28 @@ class Payment extends BaseModel
      * @param array $data
      * @return int ID of the created payment
      */
-    public function create(array $data): int
-    {
-        $stmt = $this->pdo->prepare("
-            INSERT INTO {$this->table} (
-                user_id, booking_id, amount, method, status, 
-                transaction_id, created_at, updated_at
-            ) VALUES (
-                :user_id, :booking_id, :amount, :method, :status, 
-                :transaction_id, NOW(), NOW()
-            )
-        ");
-        $stmt->execute([
-            ':user_id' => $data['user_id'],
-            ':booking_id' => $data['booking_id'],
-            ':amount' => $data['amount'],
-            ':method' => $data['method'],
-            ':status' => $data['status'] ?? 'pending',
-            ':transaction_id' => $data['transaction_id'] ?? null,
-        ]);
-        
-        $paymentId = $this->pdo->lastInsertId();
-        
-        // Log audit if service is available
-        if ($this->auditService) {
-            $this->auditService->logEvent($this->resourceName, 'Created payment', [
-                'payment_id' => $paymentId,
-                'user_id' => $data['user_id'],
-                'booking_id' => $data['booking_id'],
-                'amount' => $data['amount'],
-                'method' => $data['method']
-            ]);
-        }
-        
-        return $paymentId;
+    public function create(array $data): ?int
+{
+    $data['created_at'] = $data['updated_at'] = date('Y-m-d H:i:s');
+    $paymentId = $this->dbHelper->insert($this->table, $data);
+    
+    if (!$paymentId) {
+        return null; // Return null if insertion fails
     }
+
+    if ($this->auditService) {
+        $this->auditService->logEvent($this->resourceName, 'Created payment', [
+            'payment_id' => $paymentId,
+            'user_id' => $data['user_id'],
+            'booking_id' => $data['booking_id'],
+            'amount' => $data['amount'],
+            'method' => $data['method']
+        ]);
+    }
+    
+    return (int) $paymentId; // Ensure ID is always an integer
+}
+
 
     /**
      * Update a payment.
@@ -126,30 +106,8 @@ class Payment extends BaseModel
      */
     public function update(int $id, array $data): bool
     {
-        $setClauses = [];
-        $params = [':id' => $id];
-
-        foreach ($data as $key => $value) {
-            if (in_array($key, ['user_id', 'booking_id', 'amount', 'method', 'status', 'transaction_id'])) {
-                $setClauses[] = "$key = :$key";
-                $params[":$key"] = $value;
-            }
-        }
-
-        if (empty($setClauses)) {
-            return false;
-        }
-
-        $setClauses[] = "updated_at = NOW()";
-        $setClause = implode(', ', $setClauses);
-
-        $stmt = $this->pdo->prepare("
-            UPDATE {$this->table} 
-            SET $setClause 
-            WHERE id = :id AND deleted_at IS NULL
-        ");
-        
-        $result = $stmt->execute($params);
+        $data['updated_at'] = date('Y-m-d H:i:s');
+        $result = $this->dbHelper->update($this->table, $data, ['id' => $id, 'deleted_at IS NULL']);
         
         // Log audit if service is available and update was successful
         if ($result && $this->auditService) {
@@ -170,23 +128,15 @@ class Payment extends BaseModel
      */
     public function delete(int $id): bool
     {
-        $stmt = $this->pdo->prepare("
-            UPDATE {$this->table} 
-            SET deleted_at = NOW() 
-            WHERE id = :id AND deleted_at IS NULL
-        ");
-        
-        $result = $stmt->execute([':id' => $id]);
-        
-        // Log audit if service is available and delete was successful
+        $result = $this->dbHelper->update($this->table, ['deleted_at' => date('Y-m-d H:i:s')], ['id' => $id]);
+    
         if ($result && $this->auditService) {
-            $this->auditService->logEvent($this->resourceName, 'Deleted payment', [
-                'payment_id' => $id
-            ]);
+            $this->auditService->logEvent($this->resourceName, 'Deleted payment', ['payment_id' => $id]);
         }
         
         return $result;
     }
+    
 
     /**
      * Get payments by user ID.
@@ -197,15 +147,8 @@ class Payment extends BaseModel
      */
     public function getByUser(int $userId): array
     {
-        $query = "
-            SELECT * FROM {$this->table} 
-            WHERE user_id = :user_id AND deleted_at IS NULL
-            ORDER BY created_at DESC
-        ";
-        
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id AND deleted_at IS NULL ORDER BY created_at DESC";
+        return $this->dbHelper->select($query, [':user_id' => $userId]);
     }
 
     /**
@@ -216,15 +159,8 @@ class Payment extends BaseModel
      */
     public function getCompleted(): array
     {
-        $query = "
-            SELECT * FROM {$this->table} 
-            WHERE status = 'completed' AND deleted_at IS NULL
-            ORDER BY created_at DESC
-        ";
-        
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute();
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $query = "SELECT * FROM {$this->table} WHERE status = 'completed' AND deleted_at IS NULL ORDER BY created_at DESC";
+        return $this->dbHelper->select($query);
     }
 
     /**
@@ -236,15 +172,8 @@ class Payment extends BaseModel
      */
     public function getByStatus(string $status): array
     {
-        $query = "
-            SELECT * FROM {$this->table} 
-            WHERE status = :status AND deleted_at IS NULL
-            ORDER BY created_at DESC
-        ";
-        
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':status' => $status]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $query = "SELECT * FROM {$this->table} WHERE status = :status AND deleted_at IS NULL ORDER BY created_at DESC";
+        return $this->dbHelper->select($query, [':status' => $status]);
     }
 
     /**
@@ -257,19 +186,8 @@ class Payment extends BaseModel
      */
     public function getByDateRange(string $startDate, string $endDate): array
     {
-        $query = "
-            SELECT * FROM {$this->table} 
-            WHERE created_at BETWEEN :start_date AND :end_date
-            AND deleted_at IS NULL
-            ORDER BY created_at DESC
-        ";
-        
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([
-            ':start_date' => $startDate,
-            ':end_date' => $endDate
-        ]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $query = "SELECT * FROM {$this->table} WHERE created_at BETWEEN :start_date AND :end_date AND deleted_at IS NULL ORDER BY created_at DESC";
+        return $this->dbHelper->select($query, [':start_date' => $startDate, ':end_date' => $endDate]);
     }
 
     /**
@@ -281,13 +199,8 @@ class Payment extends BaseModel
      */
     public function getUser(int $paymentId): ?array
     {
-        $stmt = $this->pdo->prepare("
-            SELECT u.* FROM users u
-            JOIN {$this->table} p ON u.id = p.user_id
-            WHERE p.id = :payment_id AND p.deleted_at IS NULL
-        ");
-        $stmt->execute([':payment_id' => $paymentId]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $query = "SELECT u.* FROM users u JOIN {$this->table} p ON u.id = p.user_id WHERE p.id = :payment_id AND p.deleted_at IS NULL";
+        return $this->dbHelper->select($query, [':payment_id' => $paymentId]);
     }
 
     /**
@@ -299,12 +212,7 @@ class Payment extends BaseModel
      */
     public function getBooking(int $paymentId): ?array
     {
-        $stmt = $this->pdo->prepare("
-            SELECT b.* FROM bookings b
-            JOIN {$this->table} p ON b.id = p.booking_id
-            WHERE p.id = :payment_id AND p.deleted_at IS NULL AND b.deleted_at IS NULL
-        ");
-        $stmt->execute([':payment_id' => $paymentId]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $query = "SELECT b.* FROM bookings b JOIN {$this->table} p ON b.id = p.booking_id WHERE p.id = :payment_id AND p.deleted_at IS NULL AND b.deleted_at IS NULL";
+        return $this->dbHelper->select($query, [':payment_id' => $paymentId]);
     }
 }

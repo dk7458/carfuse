@@ -206,30 +206,7 @@ class User extends BaseModel
             $data['id'] = Uuid::uuid4()->toString();
         }
 
-        $fields = array_keys($data);
-        $placeholders = [];
-        $params = [];
-
-        foreach ($fields as $field) {
-            $placeholders[] = ":{$field}";
-            $params[":{$field}"] = $data[$field];
-        }
-
-        if ($this->useTimestamps) {
-            $fields[] = 'created_at';
-            $placeholders[] = 'NOW()';
-            $fields[] = 'updated_at';
-            $placeholders[] = 'NOW()';
-        }
-
-        $fieldsSql = implode(', ', $fields);
-        $placeholdersSql = implode(', ', $placeholders);
-
-        $query = "INSERT INTO {$this->table} ({$fieldsSql}) VALUES ({$placeholdersSql})";
-
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-        return $this->pdo->lastInsertId();
+        return DatabaseHelper::insert($this->table, $data);
     }
 
     /**
@@ -246,24 +223,7 @@ class User extends BaseModel
             unset($data['password']);
         }
 
-        $setClauses = [];
-        $params = [':id' => $id];
-
-        foreach ($data as $key => $value) {
-            $setClauses[] = "{$key} = :{$key}";
-            $params[":{$key}"] = $value;
-        }
-
-        if ($this->useTimestamps) {
-            $setClauses[] = "updated_at = NOW()";
-        }
-
-        $setClause = implode(', ', $setClauses);
-
-        $query = "UPDATE {$this->table} SET {$setClause} WHERE id = :id AND deleted_at IS NULL";
-
-        $stmt = $this->pdo->prepare($query);
-        return $stmt->execute($params);
+        return DatabaseHelper::update($this->table, $data, ['id' => $id]);
     }
 
     /**
@@ -275,9 +235,7 @@ class User extends BaseModel
     public function getBookings(int $userId): array
     {
         $query = "SELECT * FROM bookings WHERE user_id = :user_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return DatabaseHelper::select($query, [':user_id' => $userId]);
     }
 
     /**
@@ -289,9 +247,7 @@ class User extends BaseModel
     public function getPayments(int $userId): array
     {
         $query = "SELECT * FROM payments WHERE user_id = :user_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return DatabaseHelper::select($query, [':user_id' => $userId]);
     }
 
     /**
@@ -303,9 +259,7 @@ class User extends BaseModel
     public function getNotifications(int $userId): array
     {
         $query = "SELECT * FROM notifications WHERE user_id = :user_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return DatabaseHelper::select($query, [':user_id' => $userId]);
     }
 
     /**
@@ -317,9 +271,7 @@ class User extends BaseModel
     public function getLogs(int $userId): array
     {
         $query = "SELECT * FROM logs WHERE user_reference = :user_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return DatabaseHelper::select($query, [':user_id' => $userId]);
     }
 
     /**
@@ -331,9 +283,7 @@ class User extends BaseModel
     public function getAuditTrails(int $userId): array
     {
         $query = "SELECT * FROM audit_trails WHERE user_reference = :user_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return DatabaseHelper::select($query, [':user_id' => $userId]);
     }
 
     /**
@@ -345,9 +295,7 @@ class User extends BaseModel
     public function getContracts(int $userId): array
     {
         $query = "SELECT * FROM contracts WHERE user_reference = :user_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return DatabaseHelper::select($query, [':user_id' => $userId]);
     }
 
     /**
@@ -358,11 +306,8 @@ class User extends BaseModel
      */
     public static function findByEmail(string $email): ?array
     {
-        $dbHelper = DatabaseHelper::getInstance()->getPdo();
-        $pdo = $dbHelper->getPdo();
         $query = "SELECT * FROM users WHERE email = :email AND deleted_at IS NULL";
-        $stmt = $pdo->prepare($query);
-        $stmt->execute([':email' => $email]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = DatabaseHelper::select($query, [':email' => $email]);
+        return $result ? $result[0] : null;
     }
 }
