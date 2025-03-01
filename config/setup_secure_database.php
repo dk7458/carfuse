@@ -2,17 +2,17 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 
-use Illuminate\Database\Capsule\Manager as Capsule;
 use App\Helpers\DatabaseHelper;
 
-// ✅ Initialize Secure Database
-DatabaseHelper::getSecureInstance();
+// Initialize Secure Database using the new PDO-based DatabaseHelper
+$secureDbHelper = DatabaseHelper::getSecureInstance();
+$pdoSecure = $secureDbHelper->getPdo();
 
-// ✅ Log Setup
+// Log Setup
 $logFilePath = __DIR__ . '/../logs/secure_db_setup.log';
 file_put_contents($logFilePath, "🚀 Secure Database Setup Started at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
 
-// ✅ Define Secure Tables (No Cross-Database Foreign Keys)
+// Define Secure Tables (No Cross-Database Foreign Keys)
 $tables = [
     // Consent logs remain unchanged
     "consent_logs" => "
@@ -29,15 +29,15 @@ $tables = [
     "audit_logs" => "
         CREATE TABLE IF NOT EXISTS audit_logs (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            action VARCHAR(255) NOT NULL,       -- e.g., 'booking_created', 'payment_processed', 'user_login'
-            message VARCHAR(255) NULL,          -- human-readable message describing event
-            details TEXT NOT NULL,              -- stores JSON data with event specifics
-            user_reference BIGINT UNSIGNED NULL,-- user ID if applicable
-            booking_reference BIGINT UNSIGNED NULL,-- booking ID if applicable 
-            transaction_reference BIGINT UNSIGNED NULL,-- transaction ID if applicable
-            ip_address VARCHAR(45),             -- client IP
-            category VARCHAR(50) NOT NULL,      -- e.g., 'system', 'booking', 'payment', 'user', 'admin'
-            severity VARCHAR(20) DEFAULT 'info',-- e.g., 'info', 'warning', 'error', 'critical'
+            action VARCHAR(255) NOT NULL,
+            message VARCHAR(255) NULL,
+            details TEXT NOT NULL,
+            user_reference BIGINT UNSIGNED NULL,
+            booking_reference BIGINT UNSIGNED NULL,
+            transaction_reference BIGINT UNSIGNED NULL,
+            ip_address VARCHAR(45),
+            category VARCHAR(50) NOT NULL,
+            severity VARCHAR(20) DEFAULT 'info',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ",
@@ -54,43 +54,49 @@ $tables = [
     "
 ];
 
-// ✅ Execute Table Creation with Error Handling
+// Execute Table Creation with Error Handling using PDO
 foreach ($tables as $tableName => $sql) {
     try {
-        Capsule::connection('secure')->statement($sql);
+        $pdoSecure->exec($sql);
         file_put_contents($logFilePath, "[✅] Secure Table `{$tableName}` created successfully.\n", FILE_APPEND);
     } catch (Exception $e) {
         file_put_contents($logFilePath, "[❌] Error creating `{$tableName}`: " . $e->getMessage() . "\n", FILE_APPEND);
     }
 }
 
-// ✅ Migration script for older logs (if applicable)
+// Migration script for older logs (if applicable)
 try {
-    // Check if legacy tables exist and migrate their data
-    $hasLegacyTables = Capsule::connection('default')->select("SHOW TABLES LIKE 'transaction_logs'");
+    // Get default (app) PDO instance for legacy tables
+    $defaultDbHelper = DatabaseHelper::getInstance();
+    $pdoDefault = $defaultDbHelper->getPdo();
+    
+    // Migrate legacy transaction_logs if they exist
+    $stmt = $pdoDefault->query("SHOW TABLES LIKE 'transaction_logs'");
+    $hasLegacyTables = $stmt->fetchAll();
     if (!empty($hasLegacyTables)) {
-        // Migrate transaction logs
-        Capsule::connection('secure')->statement(
-            "INSERT INTO audit_logs (action, message, details, user_reference, transaction_reference, category, created_at)
-             SELECT 'transaction', 'Legacy transaction log', 
-                    JSON_OBJECT('amount', amount, 'status', status, 'type', type),
-                    user_id, id, 'payment', created_at
-             FROM default.transaction_logs"
-        );
+        $migrationSql = "
+            INSERT INTO audit_logs (action, message, details, user_reference, transaction_reference, category, created_at)
+            SELECT 'transaction', 'Legacy transaction log', 
+                   JSON_OBJECT('amount', amount, 'status', status, 'type', type),
+                   user_id, id, 'payment', created_at
+            FROM transaction_logs
+        ";
+        $pdoSecure->exec($migrationSql);
         file_put_contents($logFilePath, "[✅] Legacy transaction logs migrated to audit_logs.\n", FILE_APPEND);
     }
     
-    // Check for booking_logs legacy table
-    $hasBookingLogs = Capsule::connection('default')->select("SHOW TABLES LIKE 'booking_logs'");
+    // Migrate legacy booking_logs if they exist
+    $stmt = $pdoDefault->query("SHOW TABLES LIKE 'booking_logs'");
+    $hasBookingLogs = $stmt->fetchAll();
     if (!empty($hasBookingLogs)) {
-        // Migrate booking logs
-        Capsule::connection('secure')->statement(
-            "INSERT INTO audit_logs (action, message, details, user_reference, booking_reference, category, created_at)
-             SELECT 'booking_update', note, 
-                    JSON_OBJECT('status', status, 'type', log_type),
-                    user_id, booking_id, 'booking', created_at
-             FROM default.booking_logs"
-        );
+        $migrationSql = "
+            INSERT INTO audit_logs (action, message, details, user_reference, booking_reference, category, created_at)
+            SELECT 'booking_update', note, 
+                   JSON_OBJECT('status', status, 'type', log_type),
+                   user_id, booking_id, 'booking', created_at
+            FROM booking_logs
+        ";
+        $pdoSecure->exec($migrationSql);
         file_put_contents($logFilePath, "[✅] Legacy booking logs migrated to audit_logs.\n", FILE_APPEND);
     }
     

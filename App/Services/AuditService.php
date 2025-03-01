@@ -58,22 +58,25 @@ class AuditService
             
             // Prepare data for insertion using DatabaseHelper::insert instead of table()->insert
             $data = [
-                'action'     => $category,  // Using action field to store category
-                'message'    => $message,
-                'details'    => json_encode($context, JSON_UNESCAPED_UNICODE),
-                'user_id'    => $userId,
-                'booking_id' => $bookingId,
-                'ip_address' => $ipAddress,
-                'created_at' => date('Y-m-d H:i:s') // Replace now() function with PHP date
+                'action'             => $category,  // Using action field to store category
+                'message'            => $message,
+                'details'            => json_encode($context, JSON_UNESCAPED_UNICODE),
+                'user_reference'     => $userId,
+                'booking_reference'  => $bookingId,
+                'ip_address'         => $ipAddress,
+                'created_at'         => date('Y-m-d H:i:s') // Replace now() function with PHP date
             ];
+            
+            // Log the data array before insertion
+            $this->logger->info("[Audit] Data to be inserted: ", $data);
             
             // Use DatabaseHelper::insert instead of $this->db->table()->insert()
             $insertId = DatabaseHelper::insert('audit_logs', $data);
             
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Audit] Logged {$category} event: {$message}", [
-                    'user_id' => $userId,
-                    'booking_id' => $bookingId,
+                    'user_reference' => $userId,
+                    'booking_reference' => $bookingId,
                     'insert_id' => $insertId
                 ]);
             }
@@ -116,12 +119,12 @@ class AuditService
             
             // Apply filters
             if (!empty($filters['user_id'])) {
-                $whereClause .= " AND user_id = ?";
+                $whereClause .= " AND user_reference = ?";
                 $params[] = $filters['user_id'];
             }
             
             if (!empty($filters['booking_id'])) {
-                $whereClause .= " AND booking_id = ?";
+                $whereClause .= " AND booking_reference = ?";
                 $params[] = $filters['booking_id'];
             }
             
@@ -163,7 +166,7 @@ class AuditService
             $totalPages = ceil($totalItems / $perPage);
             
             // Custom sort options
-            $allowedSortFields = ['id', 'action', 'message', 'user_id', 'booking_id', 'created_at'];
+            $allowedSortFields = ['id', 'action', 'message', 'user_reference', 'booking_reference', 'created_at'];
             $sortField = in_array($filters['sort_field'] ?? '', $allowedSortFields) ? $filters['sort_field'] : 'created_at';
             $sortOrder = strtoupper($filters['sort_order'] ?? 'desc') === 'ASC' ? 'ASC' : 'DESC';
             
@@ -245,12 +248,12 @@ class AuditService
             
             // Apply filters
             if (!empty($filters['user_id'])) {
-                $whereClause .= " AND user_id = ?";
+                $whereClause .= " AND user_reference = ?";
                 $params[] = $filters['user_id'];
             }
             
             if (!empty($filters['booking_id'])) {
-                $whereClause .= " AND booking_id = ?";
+                $whereClause .= " AND booking_reference = ?";
                 $params[] = $filters['booking_id'];
             }
             
@@ -310,12 +313,12 @@ class AuditService
             
             // Apply the same filters as in getLogs
             if (!empty($filters['user_id'])) {
-                $whereClause .= " AND user_id = ?";
+                $whereClause .= " AND user_reference = ?";
                 $params[] = $filters['user_id'];
             }
             
             if (!empty($filters['booking_id'])) {
-                $whereClause .= " AND booking_id = ?";
+                $whereClause .= " AND booking_reference = ?";
                 $params[] = $filters['booking_id'];
             }
             
@@ -348,7 +351,7 @@ class AuditService
             $file = fopen($filepath, 'w');
             
             // Write CSV header
-            fputcsv($file, ['ID', 'Category', 'Message', 'User ID', 'Booking ID', 'IP Address', 'Created At', 'Details']);
+            fputcsv($file, ['ID', 'Category', 'Message', 'User Reference', 'Booking Reference', 'IP Address', 'Created At', 'Details']);
             
             // Write data rows
             foreach ($logs as $log) {
@@ -356,8 +359,8 @@ class AuditService
                     $log['id'],
                     $log['action'],
                     $log['message'],
-                    $log['user_id'],
-                    $log['booking_id'],
+                    $log['user_reference'],
+                    $log['booking_reference'],
                     $log['ip_address'],
                     $log['created_at'],
                     $log['details'] // This will be JSON string already
