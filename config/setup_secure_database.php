@@ -14,12 +14,8 @@ use App\Helpers\DatabaseHelper;
 $secureDbHelper = DatabaseHelper::getSecureInstance();
 $pdoSecure = $secureDbHelper->getPdo();
 
-// Ensure logs directory exists
-$logsDir = __DIR__ . '/../../logs';
-if (!is_dir($logsDir)) {
-    mkdir($logsDir, 0777, true);
-}
-$logFilePath = $logsDir . '/secure_db_setup.log';
+// Update log file path to use current directory instead of separate logs folder
+$logFilePath = __DIR__ . '/setup_secure_db.log';
 
 // Log setup start
 file_put_contents($logFilePath, "🚀 Secure Database Setup Started at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
@@ -129,4 +125,4 @@ try {
 }
 
 file_put_contents($logFilePath, "✅ Secure Database Setup Completed Successfully at " . date('Y-m-d H:i:s') . ".\n", FILE_APPEND);
-echo "[🚀] Secure database setup completed. Check `logs/secure_db_setup.log` for details.\n";
+echo "[🚀] Secure database setup completed. Check `setup_secure_db.log` for details.\n";
