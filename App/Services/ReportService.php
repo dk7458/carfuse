@@ -20,7 +20,7 @@ class ReportService
 
     public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
-        $this->logger = LoggingHelper::getLoggerByCategory('report');
+        $this->logger = $logger;
         $this->db = $db;
         $this->exceptionHandler = $exceptionHandler;
     }    

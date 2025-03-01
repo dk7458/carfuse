@@ -21,13 +21,13 @@ class UserService
     private AuditService $auditService;
 
     public function __construct(
-        DatabaseHelper $db,
         LoggerInterface $logger,
+        DatabaseHelper $db,
         ExceptionHandler $exceptionHandler,
         AuditService $auditService
     ) {
+        $this->logger = $logger;
         $this->db = $db;
-        $this->logger = LoggingHelper::getLoggerByCategory('user');
         $this->exceptionHandler = $exceptionHandler;
         $this->auditService = $auditService;
         

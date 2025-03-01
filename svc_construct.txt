@@ -5,15 +5,15 @@ File: /home/dorian/carfuse/App/Services/TemplateService.php
         AuditService $auditService
 
 File: /home/dorian/carfuse/App/Services/MetricsService.php
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
-    {
-        $this->logger = LoggingHelper::getLoggerByCategory('metrics');
-        $this->exceptionHandler = $exceptionHandler;
+    public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        DatabaseHelper $db
 
 File: /home/dorian/carfuse/App/Services/UserService.php
     public function __construct(
-        DatabaseHelper $db,
         LoggerInterface $logger,
+        DatabaseHelper $db,
         ExceptionHandler $exceptionHandler,
 
 File: /home/dorian/carfuse/App/Services/Validator.php
@@ -23,16 +23,16 @@ File: /home/dorian/carfuse/App/Services/Validator.php
         $this->db = $db;
 
 File: /home/dorian/carfuse/App/Services/BookingService.php
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db, Booking $bookingModel)
-    {
-        $this->logger = LoggingHelper::getLoggerByCategory('booking');
-        $this->exceptionHandler = $exceptionHandler;
+    public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        DatabaseHelper $db,
 
 File: /home/dorian/carfuse/App/Services/Auth/TokenService.php
     public function __construct(
         string $jwtSecret,
         string $jwtRefreshSecret,
-        LoggerInterface $tokenLogger,
+        LoggerInterface $logger,
 
 File: /home/dorian/carfuse/App/Services/Auth/AuthService.php
     public function __construct(
@@ -42,9 +42,9 @@ File: /home/dorian/carfuse/App/Services/Auth/AuthService.php
 
 File: /home/dorian/carfuse/App/Services/DocumentService.php
     public function __construct(
-        AuditService $auditService,
-        FileStorage $fileStorage,
-        EncryptionService $encryptionService,
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        DatabaseHelper $db,
 
 File: /home/dorian/carfuse/App/Services/NotificationService.php
     public function __construct(
@@ -53,28 +53,28 @@ File: /home/dorian/carfuse/App/Services/NotificationService.php
         DatabaseHelper $db, 
 
 File: /home/dorian/carfuse/App/Services/AuditService.php
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
-    {
-        $this->db = $db;
-        $this->logger = $logger;
+    public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        DatabaseHelper $db
 
 File: /home/dorian/carfuse/App/Services/TransactionService.php
-    public function __construct(LoggerInterface $bookingLogger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
+    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
-        $this->bookingLogger = $bookingLogger;
+        $this->logger = $logger;
         $this->db = $db;
 
 File: /home/dorian/carfuse/App/Services/EncryptionService.php
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, string $encryptionKey)
-    {
-        $this->logger = $logger;
-        $this->exceptionHandler = $exceptionHandler;
+    public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        string $encryptionKey
 
 File: /home/dorian/carfuse/App/Services/FileStorage.php
-    public function __construct(array $config, EncryptionService $encryptionService, LoggerInterface $logger, ExceptionHandler $exceptionHandler)
-    {
-        $this->logger = $logger;
-        $this->exceptionHandler = $exceptionHandler;
+    public function __construct(
+        array $config,
+        EncryptionService $encryptionService,
+        LoggerInterface $logger,
 
 File: /home/dorian/carfuse/App/Services/RateLimiter.php
     public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler)
@@ -85,14 +85,14 @@ File: /home/dorian/carfuse/App/Services/RateLimiter.php
 File: /home/dorian/carfuse/App/Services/RevenueService.php
     public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
-        $this->logger = LoggingHelper::getLoggerByCategory('revenue');
+        $this->logger = getLogger('revenue');
         $this->db = $db;
 
 File: /home/dorian/carfuse/App/Services/Security/KeyManager.php
-    public function __construct(array $keys, LoggerInterface $logger, ExceptionHandler $exceptionHandler)
-    {
-        $this->logger = LoggingHelper::getLoggerByCategory('security');
-        $this->exceptionHandler = $exceptionHandler;
+    public function __construct(
+        array $keys,
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler
 
 File: /home/dorian/carfuse/App/Services/SignatureService.php
     public function __construct(
@@ -103,7 +103,7 @@ File: /home/dorian/carfuse/App/Services/SignatureService.php
 File: /home/dorian/carfuse/App/Services/ReportService.php
     public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
-        $this->logger = LoggingHelper::getLoggerByCategory('report');
+        $this->logger = $logger;
         $this->db = $db;
 
 File: /home/dorian/carfuse/App/Services/PaymentService.php

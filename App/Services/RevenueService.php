@@ -19,7 +19,7 @@ class RevenueService
     // Assume dependency injection now supplies the logger.
     public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
-        $this->logger = LoggingHelper::getLoggerByCategory('revenue');
+        $this->logger = getLogger('revenue');
         $this->db = $db;
         $this->exceptionHandler = $exceptionHandler;
     }

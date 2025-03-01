@@ -15,7 +15,7 @@ class TokenService
 
     private string $jwtSecret;
     private string $jwtRefreshSecret;
-    private LoggerInterface $tokenLogger;
+    private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
     private DatabaseHelper $db;
     private AuditService $auditService;
@@ -23,7 +23,7 @@ class TokenService
     public function __construct(
         string $jwtSecret,
         string $jwtRefreshSecret,
-        LoggerInterface $tokenLogger,
+        LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
         DatabaseHelper $db,
         AuditService $auditService
@@ -33,13 +33,13 @@ class TokenService
         if (empty($this->jwtSecret) || empty($this->jwtRefreshSecret)) {
             throw new \RuntimeException('❌ JWT secrets are missing.');
         }
-        $this->tokenLogger = $tokenLogger;
+        $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
         $this->db = $db;
         $this->auditService = $auditService;
         
         if (self::DEBUG_MODE) {
-            $this->tokenLogger->info("[auth] TokenService initialized.");
+            $this->logger->info("[auth] TokenService initialized.");
         }
     }
 
@@ -57,7 +57,7 @@ class TokenService
         try {
             $token = JWT::encode($payload, $this->jwtSecret, 'HS256');
             if (self::DEBUG_MODE) {
-                $this->tokenLogger->info("[auth] ✅ Token generated.", ['userId' => $userId]);
+                $this->logger->info("[auth] ✅ Token generated.", ['userId' => $userId]);
             }
             
             // Log JWT creation as a business-level event in audit trail
@@ -72,7 +72,7 @@ class TokenService
             
             return $token;
         } catch (\Exception $e) {
-            $this->tokenLogger->error("[auth] ❌ Token generation failed: " . $e->getMessage());
+            $this->logger->error("[auth] ❌ Token generation failed: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -85,7 +85,7 @@ class TokenService
             if ($decoded->exp < time()) {
                 throw new \Exception("Token has expired.");
             }
-            $this->tokenLogger->info("✅ Token verified.", ['userId' => $decoded->sub]);
+            $this->logger->info("✅ Token verified.", ['userId' => $decoded->sub]);
             return (array)$decoded;
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
@@ -133,10 +133,10 @@ class TokenService
             ]);
             
             if (self::DEBUG_MODE) {
-                $this->tokenLogger->info("[auth] Refresh token stored in database", ['user_id' => $userId]);
+                $this->logger->info("[auth] Refresh token stored in database", ['user_id' => $userId]);
             }
         } catch (\Exception $e) {
-            $this->tokenLogger->error("[auth] Failed to store refresh token: " . $e->getMessage());
+            $this->logger->error("[auth] Failed to store refresh token: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             // Continue without failing - JWT will still work even if storage fails
         }
@@ -163,10 +163,10 @@ class TokenService
                 throw new \Exception("Refresh token has expired.");
             }
             
-            $this->tokenLogger->debug("Refresh token decoded successfully", ['sub' => $decoded->sub]);
+            $this->logger->debug("Refresh token decoded successfully", ['sub' => $decoded->sub]);
             return $decoded;
         } catch (\Exception $e) {
-            $this->tokenLogger->error("Failed to decode refresh token: " . $e->getMessage());
+            $this->logger->error("Failed to decode refresh token: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -197,7 +197,7 @@ class TokenService
             
             return $revoked;
         } catch (\Exception $e) {
-            $this->tokenLogger->warning("Error checking if token is revoked: " . $e->getMessage());
+            $this->logger->warning("Error checking if token is revoked: " . $e->getMessage());
             // Default to not revoked if there's an error checking, but log it
             return false;
         }
@@ -264,9 +264,9 @@ class TokenService
                 );
             }
             
-            $this->tokenLogger->info("✅ [TokenService] Revoked refresh token.");
+            $this->logger->info("✅ [TokenService] Revoked refresh token.");
         } catch (\Exception $e) {
-            $this->tokenLogger->error("Failed to revoke token: " . $e->getMessage());
+            $this->logger->error("Failed to revoke token: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
         }
     }
@@ -281,10 +281,10 @@ class TokenService
                 ->where('expires_at', '<', date('Y-m-d H:i:s'))
                 ->delete();
                 
-            $this->tokenLogger->info("[TokenService] Purged {$count} expired tokens");
+            $this->logger->info("[TokenService] Purged {$count} expired tokens");
             return $count;
         } catch (\Exception $e) {
-            $this->tokenLogger->error("Failed to purge expired tokens: " . $e->getMessage());
+            $this->logger->error("Failed to purge expired tokens: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             return 0;
         }
@@ -304,7 +304,7 @@ class TokenService
                 
             return is_array($tokens) ? $tokens : [];
         } catch (\Exception $e) {
-            $this->tokenLogger->error("Failed to get active tokens: " . $e->getMessage());
+            $this->logger->error("Failed to get active tokens: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             return [];
         }

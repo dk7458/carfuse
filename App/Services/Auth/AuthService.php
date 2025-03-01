@@ -18,7 +18,7 @@ class AuthService
     private $pdo;
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
-    private LoggerInterface $authLogger;
+    private LoggerInterface $logger;
     private AuditService $auditService;
     private array $encryptionConfig;
     private Validator $validator;
@@ -28,7 +28,7 @@ class AuthService
         DatabaseHelper $dbHelper,
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
-        LoggerInterface $authLogger,
+        LoggerInterface $logger,
         AuditService $auditService,
         array $encryptionConfig,
         Validator $validator,
@@ -37,13 +37,13 @@ class AuthService
         $this->pdo = $dbHelper->getPdo();
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
-        $this->authLogger = $authLogger;
+        $this->logger = $logger;
         $this->auditService = $auditService;
         $this->encryptionConfig = $encryptionConfig;
         $this->validator = $validator;
         $this->userModel = $userModel;
 
-        $this->authLogger->info("AuthService initialized with app_database connection");
+        $this->logger->info("AuthService initialized with app_database connection");
     }
 
     public function login(array $data)
@@ -51,10 +51,10 @@ class AuthService
         try {
             // Use the User model to find by email
             $user = $this->userModel->findByEmail($data['email']);
-            $this->authLogger->debug("Executing login query for user email: {$data['email']}");
+            $this->logger->debug("Executing login query for user email: {$data['email']}");
             
             if (!$user || !password_verify($data['password'], $user['password_hash']) || !$user['active']) {
-                $this->authLogger->warning("Authentication failed", ['email' => $data['email']]);
+                $this->logger->warning("Authentication failed", ['email' => $data['email']]);
                 
                 // Log failed authentication with unified AuditService
                 $this->auditService->logEvent(
@@ -71,7 +71,7 @@ class AuthService
 
             // Cast user array to object for TokenService
             $userObject = (object)$user;
-            $this->authLogger->debug("User data converted to object", ['type' => gettype($userObject)]);
+            $this->logger->debug("User data converted to object", ['type' => gettype($userObject)]);
 
             $token = $this->tokenService->generateToken($userObject);
             $refreshToken = $this->tokenService->generateRefreshToken($userObject);
@@ -95,7 +95,7 @@ class AuthService
                 'email'         => $user['email']
             ];
         } catch (Exception $e) {
-            $this->authLogger->error("[auth] ❌ Login error: " . $e->getMessage());
+            $this->logger->error("[auth] ❌ Login error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -104,7 +104,7 @@ class AuthService
     public function register(array $data)
     {
         try {
-            $this->authLogger->info("Starting registration process", ['email' => $data['email'] ?? 'unknown']);
+            $this->logger->info("Starting registration process", ['email' => $data['email'] ?? 'unknown']);
             
             // Define the validation rules, ensuring surname and confirm_password are required
             $rules = [
@@ -122,14 +122,14 @@ class AuthService
             $logData = $data;
             if (isset($logData['password'])) unset($logData['password']);
             if (isset($logData['confirm_password'])) unset($logData['confirm_password']);
-            $this->authLogger->debug("Registration input data", ['data' => $logData]);
+            $this->logger->debug("Registration input data", ['data' => $logData]);
             
             // Validate input data
             $this->validator->validate($data, $rules);
             
             // Check passwords match (redundant with validation but keeping as a double-check)
             if (!isset($data['password']) || !isset($data['confirm_password']) || $data['password'] !== $data['confirm_password']) {
-                $this->authLogger->warning("Passwords don't match during registration");
+                $this->logger->warning("Passwords don't match during registration");
                 throw new Exception("Passwords do not match", 400);
             }
             
@@ -153,12 +153,12 @@ class AuthService
             // Log prepared data (without password_hash)
             $logUserData = $userData;
             unset($logUserData['password_hash']);
-            $this->authLogger->debug("Prepared user data for database", ['data' => $logUserData]);
+            $this->logger->debug("Prepared user data for database", ['data' => $logUserData]);
             
             // Use the User model to create the user
             $userId = $this->userModel->create($userData);
             
-            $this->authLogger->info("User registered successfully", ['user_id' => $userId, 'email' => $data['email']]);
+            $this->logger->info("User registered successfully", ['user_id' => $userId, 'email' => $data['email']]);
             
             // Log registration with unified AuditService - business logic event
             $this->auditService->logEvent(
@@ -172,10 +172,10 @@ class AuthService
             
             return ['user_id' => $userId];
         } catch (\InvalidArgumentException $e) {
-            $this->authLogger->warning("Validation error during registration", ['error' => $e->getMessage()]);
+            $this->logger->warning("Validation error during registration", ['error' => $e->getMessage()]);
             throw $e;
         } catch (Exception $e) {
-            $this->authLogger->error("Registration error: " . $e->getMessage());
+            $this->logger->error("Registration error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -189,19 +189,19 @@ class AuthService
             
             // Use the User model to find user by ID
             $user = $this->userModel->find($decoded->sub);
-            $this->authLogger->debug("Executing refresh query for user ID: {$decoded->sub}");
+            $this->logger->debug("Executing refresh query for user ID: {$decoded->sub}");
             
             if (!$user) {
-                $this->authLogger->warning("Invalid refresh token", ['token_sub' => $decoded->sub]);
+                $this->logger->warning("Invalid refresh token", ['token_sub' => $decoded->sub]);
                 throw new Exception("Invalid refresh token", 400);
             }
 
             // Cast user array to object for TokenService
             $userObject = (object)$user;
-            $this->authLogger->debug("User data converted to object for token refresh", ['type' => gettype($userObject)]);
+            $this->logger->debug("User data converted to object for token refresh", ['type' => gettype($userObject)]);
 
             $token = $this->tokenService->generateToken($userObject);
-            $this->authLogger->info("Token refreshed successfully", ['user_id' => $user['id']]);
+            $this->logger->info("Token refreshed successfully", ['user_id' => $user['id']]);
             
             // Log token refresh with unified AuditService - business logic event
             $this->auditService->logEvent(
@@ -215,7 +215,7 @@ class AuthService
             
             return ['token' => $token];
         } catch (Exception $e) {
-            $this->authLogger->error("Refresh token error: " . $e->getMessage());
+            $this->logger->error("Refresh token error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -296,7 +296,7 @@ class AuthService
             
             return ["message" => "No changes to update"];
         } catch (Exception $e) {
-            $this->authLogger->error("Update profile error: " . $e->getMessage());
+            $this->logger->error("Update profile error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -319,11 +319,11 @@ class AuthService
             
             // Use the User model to find user by email
             $user = $this->userModel->findByEmail($data['email']);
-            $this->authLogger->debug("Executing password reset request query for email: {$data['email']}");
+            $this->logger->debug("Executing password reset request query for email: {$data['email']}");
             
             if (!$user) {
                 // Don't reveal that the email doesn't exist (security best practice)
-                $this->authLogger->info("Password reset requested for non-existent email", ['email' => $data['email']]);
+                $this->logger->info("Password reset requested for non-existent email", ['email' => $data['email']]);
                 return ["message" => "If your email is registered, you will receive a password reset link"];
             }
             
@@ -352,7 +352,7 @@ class AuthService
                 "debug_token" => $resetToken // Remove this in production!
             ];
         } catch (Exception $e) {
-            $this->authLogger->error("Password reset request error: " . $e->getMessage());
+            $this->logger->error("Password reset request error: " . $e->getMessage());
             throw $e;
         }
     }
@@ -380,7 +380,7 @@ class AuthService
             
             // Verify token using the User model
             $tokenRecord = $this->userModel->verifyResetToken($data['token']);
-            $this->authLogger->debug("Verifying reset token: {$data['token']}");
+            $this->logger->debug("Verifying reset token: {$data['token']}");
             
             if (!$tokenRecord) {
                 throw new Exception("Invalid or expired token", 400);
@@ -388,7 +388,7 @@ class AuthService
             
             // Get user via model
             $user = $this->userModel->findByEmail($tokenRecord['email']);
-            $this->authLogger->debug("Retrieving user for password reset, email: {$tokenRecord['email']}");
+            $this->logger->debug("Retrieving user for password reset, email: {$tokenRecord['email']}");
             
             if (!$user) {
                 throw new Exception("User not found", 404);
@@ -397,7 +397,7 @@ class AuthService
             // Update the password via model
             $hashedPassword = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]);
             $this->userModel->updatePassword($user['id'], $hashedPassword);
-            $this->authLogger->debug("Updating password for user ID: {$user['id']}");
+            $this->logger->debug("Updating password for user ID: {$user['id']}");
             
             // Mark token as used via model
             $this->userModel->markResetTokenUsed($tokenRecord['id']);
@@ -414,7 +414,7 @@ class AuthService
             
             return ["message" => "Password has been reset successfully"];
         } catch (Exception $e) {
-            $this->authLogger->error("Password reset error: " . $e->getMessage());
+            $this->logger->error("Password reset error: " . $e->getMessage());
             throw $e;
         }
     }

@@ -23,12 +23,13 @@ class DocumentController extends Controller
         DocumentService $documentService,
         Validator $validator,
         AuditService $auditService,
-        LoggerInterface $documentLogger
+        LoggerInterface $logger
     ) {
+        parent::__construct($logger);
         $this->documentService = $documentService;
         $this->validator = $validator;
         $this->auditService = $auditService;
-        $this->logger = $documentLogger;
+        $this->logger = $logger;
     }
     
     /**

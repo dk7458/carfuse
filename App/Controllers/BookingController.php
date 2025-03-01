@@ -10,6 +10,7 @@ use App\Helpers\DatabaseHelper;
 use App\Helpers\TokenValidator;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
+use Psr\Log\LoggerInterface;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -27,6 +28,7 @@ class BookingController extends Controller
     private AuditService $auditService;
     private NotificationService $notificationService;
     private ResponseFactoryInterface $responseFactory;
+    private LoggerInterface $logger;
 
     public function __construct(
         BookingService $bookingService,
@@ -34,14 +36,17 @@ class BookingController extends Controller
         Validator $validator,
         AuditService $auditService,
         NotificationService $notificationService,
-        ResponseFactoryInterface $responseFactory
+        ResponseFactoryInterface $responseFactory,
+        LoggerInterface $logger
     ) {
+        parent::__construct($logger);
         $this->bookingService = $bookingService;
         $this->paymentService = $paymentService;
         $this->validator = $validator;
         $this->auditService = $auditService;
         $this->notificationService = $notificationService;
         $this->responseFactory = $responseFactory;
+        $this->logger = $logger;
     }
 
     /**

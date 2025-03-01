@@ -13,7 +13,7 @@ class PaymentService
 {
     public const DEBUG_MODE = true;
     private LoggerInterface $logger;
-    private $db;
+    private DatabaseHelper $db;
     private ExceptionHandler $exceptionHandler;
     private Payment $paymentModel;
     private Booking $bookingModel;
@@ -25,7 +25,7 @@ class PaymentService
         Payment $paymentModel,
         Booking $bookingModel
     ) {
-        $this->logger = LoggingHelper::getLoggerByCategory('payment');
+        $this->logger = $logger;
         $this->db = $db;
         $this->exceptionHandler = $exceptionHandler;
         $this->paymentModel = $paymentModel;

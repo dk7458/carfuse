@@ -25,8 +25,11 @@ class AuditService
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
-    {
+    public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        DatabaseHelper $db
+    ) {
         $this->db = $db;
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;

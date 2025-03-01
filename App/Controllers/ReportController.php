@@ -19,13 +19,13 @@ class ReportController extends Controller
 
     public function __construct(
         ReportService $reportService,
-        /* Removed Validator */ $validator,
         NotificationService $notificationService,
-        LoggerInterface $reportLogger
+        LoggerInterface $logger
     ) {
+        parent::__construct($logger);
         $this->reportService = $reportService;
         $this->notificationService = $notificationService;
-        $this->logger = $reportLogger;
+        $this->logger = $logger;
     }
 
     /**

@@ -10,6 +10,7 @@ use App\Services\AuditService;
 use App\Helpers\TokenValidator;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
+use Psr\Log\LoggerInterface;
 
 /**
  * Payment Controller
@@ -24,6 +25,7 @@ class PaymentController extends Controller
     private AuditService $auditService;
     private PDO $db;
     private ResponseFactoryInterface $responseFactory;
+    private LoggerInterface $logger;
 
     public function __construct(
         PaymentService $paymentService,
@@ -31,14 +33,17 @@ class PaymentController extends Controller
         NotificationService $notificationService,
         AuditService $auditService,
         PDO $db,
-        ResponseFactoryInterface $responseFactory
+        ResponseFactoryInterface $responseFactory,
+        LoggerInterface $logger
     ) {
+        parent::__construct($logger);
         $this->paymentService = $paymentService;
         $this->validator = $validator;
         $this->notificationService = $notificationService;
         $this->auditService = $auditService;
         $this->db = $db;
         $this->responseFactory = $responseFactory;
+        $this->logger = $logger;
     }
 
     /**

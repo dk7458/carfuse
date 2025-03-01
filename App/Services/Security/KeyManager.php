@@ -3,7 +3,6 @@
 namespace App\Services\Security;
 
 use Exception;
-use App\Helpers\LoggingHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 
@@ -14,9 +13,12 @@ class KeyManager
     private ExceptionHandler $exceptionHandler;
     private array $keys;
 
-    public function __construct(array $keys, LoggerInterface $logger, ExceptionHandler $exceptionHandler)
-    {
-        $this->logger = LoggingHelper::getLoggerByCategory('security');
+    public function __construct(
+        array $keys,
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler
+    ) {
+        $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
         $this->keys = $keys;
     }

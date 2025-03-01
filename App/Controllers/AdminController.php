@@ -15,6 +15,7 @@ use App\Helpers\JsonResponse;
 use App\Helpers\TokenValidator;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
+use Psr\Log\LoggerInterface;
 
 /**
  * AdminController - Handles admin user management and dashboard operations.
@@ -23,13 +24,17 @@ class AdminController extends Controller
 {
     private AuditService $auditService;
     private ResponseFactoryInterface $responseFactory;
+    private LoggerInterface $logger;
 
     public function __construct(
         AuditService $auditService,
-        ResponseFactoryInterface $responseFactory
+        ResponseFactoryInterface $responseFactory,
+        LoggerInterface $logger
     ) {
+        parent::__construct($logger);
         $this->auditService = $auditService;
         $this->responseFactory = $responseFactory;
+        $this->logger = $logger;
     }
 
     /**

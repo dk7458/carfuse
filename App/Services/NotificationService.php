@@ -31,7 +31,7 @@ class NotificationService
         Notification $notificationModel,
         array $config
     ) {
-        $this->logger = LoggingHelper::getLoggerByCategory('notification');
+        $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
         $this->db = $db;
         $this->notificationModel = $notificationModel;

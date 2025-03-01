@@ -15,8 +15,11 @@ class EncryptionService
     private ExceptionHandler $exceptionHandler;
     private string $encryptionKey;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, string $encryptionKey)
-    {
+    public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        string $encryptionKey
+    ) {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
         $this->encryptionKey = $encryptionKey;

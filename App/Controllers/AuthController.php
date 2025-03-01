@@ -25,7 +25,6 @@ class AuthController extends Controller
         parent::__construct($logger);
         $this->authService = $authService;
         $this->tokenService = $tokenService;
-        $this->logger = $logger;
         $this->pdo = $dbHelper->getPdo();
     }    
 

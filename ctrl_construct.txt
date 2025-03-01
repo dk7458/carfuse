@@ -1,0 +1,118 @@
+File: /home/dorian/carfuse/App/Controllers/UserController.php
+    public function __construct(
+        Validator $validator,
+        TokenService $tokenService,
+        ExceptionHandler $exceptionHandler,
+        parent::__construct($logger);
+        $this->validator = $validator;
+        $this->tokenService = $tokenService;
+        $this->exceptionHandler = $exceptionHandler;
+
+File: /home/dorian/carfuse/App/Controllers/BookingController.php
+    public function __construct(
+        BookingService $bookingService,
+        PaymentService $paymentService,
+        Validator $validator,
+        parent::__construct($logger);
+        $this->bookingService = $bookingService;
+        $this->paymentService = $paymentService;
+        $this->validator = $validator;
+
+File: /home/dorian/carfuse/App/Controllers/NotificationController.php
+    public function __construct(LoggerInterface $logger)
+    {
+        parent::__construct($logger);
+        $this->logger = $logger;
+    }
+
+File: /home/dorian/carfuse/App/Controllers/AdminController.php
+    public function __construct(
+        AuditService $auditService,
+        ResponseFactoryInterface $responseFactory,
+        LoggerInterface $logger
+        parent::__construct($logger);
+        $this->auditService = $auditService;
+        $this->responseFactory = $responseFactory;
+        $this->logger = $logger;
+
+File: /home/dorian/carfuse/App/Controllers/AuthController.php
+    public function __construct(
+        LoggerInterface $logger,
+        AuthService $authService,
+        TokenService $tokenService,
+        parent::__construct($logger);
+        $this->authService = $authService;
+        $this->tokenService = $tokenService;
+        $this->pdo = $dbHelper->getPdo();
+
+File: /home/dorian/carfuse/App/Controllers/SignatureController.php
+    public function __construct(
+        SignatureService $signatureService,
+        LoggerInterface $logger
+    ) {
+        parent::__construct($logger);
+        $this->signatureService = $signatureService;
+        $this->logger = $logger;
+    }
+
+File: /home/dorian/carfuse/App/Controllers/DashboardController.php
+    public function __construct(
+        BookingService $bookingService,
+        StatisticsService $statisticsService,
+        NotificationService $notificationService,
+        parent::__construct($logger);
+        $this->bookingService = $bookingService;
+        $this->statisticsService = $statisticsService;
+        $this->notificationService = $notificationService;
+
+File: /home/dorian/carfuse/App/Controllers/AdminDashboardController.php
+    public function __construct(LoggerInterface $logger)
+    {
+        parent::__construct($logger);
+        $this->logger = $logger;
+    }
+
+File: /home/dorian/carfuse/App/Controllers/PaymentController.php
+    public function __construct(
+        PaymentService $paymentService,
+        Validator $validator,
+        NotificationService $notificationService,
+        parent::__construct($logger);
+        $this->paymentService = $paymentService;
+        $this->validator = $validator;
+        $this->notificationService = $notificationService;
+
+File: /home/dorian/carfuse/App/Controllers/Controller.php
+    public function __construct(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+    }
+
+File: /home/dorian/carfuse/App/Controllers/DocumentController.php
+    public function __construct(
+        DocumentService $documentService,
+        Validator $validator,
+        AuditService $auditService,
+        parent::__construct($logger);
+        $this->documentService = $documentService;
+        $this->validator = $validator;
+        $this->auditService = $auditService;
+
+File: /home/dorian/carfuse/App/Controllers/ReportController.php
+    public function __construct(
+        ReportService $reportService,
+        NotificationService $notificationService,
+        LoggerInterface $logger
+        parent::__construct($logger);
+        $this->reportService = $reportService;
+        $this->notificationService = $notificationService;
+        $this->logger = $logger;
+
+File: /home/dorian/carfuse/App/Controllers/AuditController.php
+    public function __construct(LoggerInterface $logger, AuditService $auditService)
+    {
+        parent::__construct($logger);
+        $this->auditService = $auditService;
+    }
+    
+

@@ -34,7 +34,7 @@ class TemplateService
         ExceptionHandler $exceptionHandler,
         AuditService $auditService
     ) {
-        $this->logger = LoggingHelper::getLoggerByCategory('template');
+        $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
         $this->auditService = $auditService;
     }

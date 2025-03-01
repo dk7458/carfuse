@@ -244,8 +244,8 @@ $container->set(AuthService::class, function($c) use ($config) {
 
 $container->set(UserService::class, function($c) {
     return new UserService(
-        $c->get(DatabaseHelper::class),
         $c->get('auth_logger'),
+        $c->get(DatabaseHelper::class),
         $c->get(ExceptionHandler::class)
     );
 });
@@ -310,9 +310,9 @@ $container->set(SignatureService::class, function($c) use ($config) {
 
 $container->set(DocumentService::class, function($c) {
     return new DocumentService(
-        $c->get(AuditService::class),
-        $c->get(FileStorage::class),
-        $c->get(EncryptionService::class)
+        $c->get('api_logger'),
+        $c->get(ExceptionHandler::class),
+        $c->get(DatabaseHelper::class)
     );
 });
 
@@ -338,7 +338,7 @@ $container->set(UserController::class, function($c) {
         $c->get(Validator::class),
         $c->get(TokenService::class),
         $c->get(ExceptionHandler::class),
-        $c->get(AuthService::class)
+        $c->get('api_logger')
     );
 });
 

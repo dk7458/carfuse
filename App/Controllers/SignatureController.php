@@ -3,9 +3,9 @@
 namespace App\Controllers;
 
 use App\Services\SignatureService;
-use App\Helpers\LoggingHelper;
 use App\Helpers\JsonResponse;
 use App\Helpers\TokenValidator;
+use Psr\Log\LoggerInterface;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -18,13 +18,15 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 class SignatureController extends Controller
 {
     private SignatureService $signatureService;
-    private $logger;
+    private LoggerInterface $logger;
 
     public function __construct(
-        SignatureService $signatureService
+        SignatureService $signatureService,
+        LoggerInterface $logger
     ) {
+        parent::__construct($logger);
         $this->signatureService = $signatureService;
-        $this->logger = LoggingHelper::getLoggerByCategory('signature');
+        $this->logger = $logger;
     }
 
     /**

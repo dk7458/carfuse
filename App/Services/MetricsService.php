@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
-use App\Helpers\LoggingHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use Exception;
@@ -11,13 +10,16 @@ use Exception;
 class MetricsService
 {
     public const DEBUG_MODE = true;
-    private $db;
+    private DatabaseHelper $db;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db)
-    {
-        $this->logger = LoggingHelper::getLoggerByCategory('metrics');
+    public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        DatabaseHelper $db
+    ) {
+        $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
         $this->db = $db;
     }

@@ -17,9 +17,13 @@ class BookingService
     private DatabaseHelper $db;
     private Booking $bookingModel;
 
-    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler, DatabaseHelper $db, Booking $bookingModel)
-    {
-        $this->logger = LoggingHelper::getLoggerByCategory('booking');
+    public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        DatabaseHelper $db,
+        Booking $bookingModel
+    ) {
+        $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
         $this->db = $db;
         $this->bookingModel = $bookingModel;

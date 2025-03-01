@@ -3,19 +3,22 @@
 namespace App\Controllers;
 
 use App\Services\AuditService;
+use Psr\Log\LoggerInterface;
 
 /**
  * AuditController - Handles viewing and retrieving audit logs.
  */
 class AuditController extends Controller
 {
+    protected LoggerInterface $logger;
     private AuditService $auditService;
     
     /**
      * Constructor with dependency injection
      */
-    public function __construct(AuditService $auditService)
+    public function __construct(LoggerInterface $logger, AuditService $auditService)
     {
+        parent::__construct($logger);
         $this->auditService = $auditService;
     }
     

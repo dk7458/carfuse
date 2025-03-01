@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Services\AuthService;
 use App\Helpers\JsonResponse;
 use App\Helpers\TokenValidator;
-use App\Helpers\LoggingHelper;
+use Psr\Log\LoggerInterface;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -20,11 +20,12 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
  */
 class NotificationController extends Controller
 {
-    private $logger;
+    private LoggerInterface $logger;
 
-    public function __construct()
+    public function __construct(LoggerInterface $logger)
     {
-        $this->logger = LoggingHelper::getLoggerByCategory('notification');
+        parent::__construct($logger);
+        $this->logger = $logger;
     }
 
     /**

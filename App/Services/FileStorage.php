@@ -16,8 +16,12 @@ class FileStorage
     private ExceptionHandler $exceptionHandler;
     private EncryptionService $encryptionService;
 
-    public function __construct(array $config, EncryptionService $encryptionService, LoggerInterface $logger, ExceptionHandler $exceptionHandler)
-    {
+    public function __construct(
+        array $config,
+        EncryptionService $encryptionService,
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler
+    ) {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
         $this->config = $config;

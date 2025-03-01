@@ -28,7 +28,7 @@ class DocumentService
     public const DEBUG_MODE = true;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
-    private $db;
+    private DatabaseHelper $db;
     private AuditService $auditService;
     private FileStorage $fileStorage;
     private EncryptionService $encryptionService;
@@ -40,21 +40,22 @@ class DocumentService
     private Booking $bookingModel;
 
     public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        DatabaseHelper $db,
         AuditService $auditService,
         FileStorage $fileStorage,
         EncryptionService $encryptionService,
         TemplateService $templateService,
-        LoggerInterface $logger,
-        ExceptionHandler $exceptionHandler,
         Document $documentModel,
         DocumentTemplate $templateModel,
         Contract $contractModel,
         User $userModel,
         Booking $bookingModel
     ) {
-        $this->logger = LoggingHelper::getLoggerByCategory('document');
+        $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
-        $this->db = DatabaseHelper::getInstance();
+        $this->db = $db;
         $this->auditService = $auditService;
         $this->fileStorage = $fileStorage;
         $this->encryptionService = $encryptionService;

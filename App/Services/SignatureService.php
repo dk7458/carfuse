@@ -19,7 +19,7 @@ class SignatureService
 {
     public const DEBUG_MODE = true;
     private LoggerInterface $logger;
-    private $db;
+    private DatabaseHelper $db;
     private string $apiEndpoint;
     private string $apiKey;
     private FileStorage $fileStorage;

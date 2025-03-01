@@ -19,7 +19,7 @@ use App\Helpers\LoggingHelper;
  *
  * Handles profile management, password resets, and dashboard access.
  */
-class UserController
+class UserController extends Controller
 {
     private Validator $validator;
     private TokenService $tokenService;
@@ -31,12 +31,14 @@ class UserController
         Validator $validator,
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
-        AuthService $authService
+        AuthService $authService,
+        LoggerInterface $logger
     ) {
+        parent::__construct($logger);
         $this->validator = $validator;
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
-        $this->logger = LoggingHelper::getLoggerByCategory('user');
+        $this->logger = $logger;
         $this->authService = $authService;
     }
 
