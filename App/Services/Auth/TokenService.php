@@ -124,7 +124,7 @@ class TokenService
     {
         try {
             // Store the token in the refresh_tokens table using db helper
-            $this->db->table('refresh_tokens')->insert([
+            $this->db->insert('refresh_tokens', [
                 'user_id' => $userId,
                 'token' => hash('sha256', $refreshToken), // Store hashed token for security
                 'expires_at' => date('Y-m-d H:i:s', time() + 604800),
@@ -185,17 +185,15 @@ class TokenService
             
             // If not in cache, check database
             $hashedToken = hash('sha256', $refreshToken);
-            $revoked = $this->db->table('refresh_tokens')
-                ->where('token', $hashedToken)
-                ->where('revoked', 1)
-                ->exists();
+            $query = "SELECT 1 FROM refresh_tokens WHERE token = :token AND revoked = 1 LIMIT 1";
+            $revoked = $this->db->select($query, [':token' => $hashedToken]);
                 
             // If revoked in database, store in cache for next time
             if ($revoked) {
                 apcu_store("revoked_refresh_token_$refreshToken", true, 604800);
             }
             
-            return $revoked;
+            return !empty($revoked);
         } catch (\Exception $e) {
             $this->logger->warning("Error checking if token is revoked: " . $e->getMessage());
             // Default to not revoked if there's an error checking, but log it
@@ -238,19 +236,16 @@ class TokenService
             $hashedToken = hash('sha256', $token);
             
             // Update the token status in database using db helper
-            $this->db->table('refresh_tokens')
-                ->where('token', $hashedToken)
-                ->update([
-                    'revoked' => 1,
-                    'revoked_at' => date('Y-m-d H:i:s')
-                ]);
+            $this->db->update('refresh_tokens', [
+                'revoked' => 1,
+                'revoked_at' => date('Y-m-d H:i:s')
+            ], ['token' => $hashedToken]);
                 
             // Try to get the user ID for audit logging
-            $tokenData = $this->db->table('refresh_tokens')
-                ->where('token', $hashedToken)
-                ->first();
+            $query = "SELECT user_id FROM refresh_tokens WHERE token = :token LIMIT 1";
+            $tokenData = $this->db->select($query, [':token' => $hashedToken]);
             
-            $userId = $tokenData ? $tokenData->user_id : null;
+            $userId = $tokenData[0]['user_id'] ?? null;
             
             // Log token revocation as a business event
             if ($userId) {
@@ -277,9 +272,8 @@ class TokenService
     public function purgeExpiredTokens(): int
     {
         try {
-            $count = $this->db->table('refresh_tokens')
-                ->where('expires_at', '<', date('Y-m-d H:i:s'))
-                ->delete();
+            $query = "DELETE FROM refresh_tokens WHERE expires_at < :now";
+            $count = $this->db->update($query, [':now' => date('Y-m-d H:i:s')]);
                 
             $this->logger->info("[TokenService] Purged {$count} expired tokens");
             return $count;
@@ -296,13 +290,13 @@ class TokenService
     public function getActiveTokensForUser(int $userId): array
     {
         try {
-            $tokens = $this->db->table('refresh_tokens')
-                ->where('user_id', $userId)
-                ->where('revoked', 0)
-                ->where('expires_at', '>', date('Y-m-d H:i:s'))
-                ->get();
+            $query = "SELECT * FROM refresh_tokens WHERE user_id = :user_id AND revoked = 0 AND expires_at > :now";
+            $tokens = $this->db->select($query, [
+                ':user_id' => $userId,
+                ':now' => date('Y-m-d H:i:s')
+            ]);
                 
-            return is_array($tokens) ? $tokens : [];
+            return $tokens ?: [];
         } catch (\Exception $e) {
             $this->logger->error("Failed to get active tokens: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
