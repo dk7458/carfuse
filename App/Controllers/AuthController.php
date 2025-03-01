@@ -8,6 +8,7 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Log\LoggerInterface;
 use App\Services\Auth\TokenService;
 use App\Helpers\DatabaseHelper;
+use App\Services\RateLimiter;
 
 class AuthController extends Controller
 {
@@ -15,17 +16,20 @@ class AuthController extends Controller
     private AuthService $authService;
     private TokenService $tokenService;
     private $pdo;
+    private RateLimiter $rateLimiter;
 
     public function __construct(
         LoggerInterface $logger,
         AuthService $authService,
         TokenService $tokenService,
-        DatabaseHelper $dbHelper
+        DatabaseHelper $dbHelper,
+        RateLimiter $rateLimiter
     ) {
         parent::__construct($logger);
         $this->authService = $authService;
         $this->tokenService = $tokenService;
         $this->pdo = $dbHelper->getPdo();
+        $this->rateLimiter = $rateLimiter;
     }    
 
     public function login(Request $request, Response $response)
@@ -46,6 +50,15 @@ class AuthController extends Controller
         if (!isset($data['email']) || !isset($data['password'])) {
             $this->logger->warning("Missing required fields in login");
             return $this->jsonResponse($response, ["error" => "Email and password are required"], 400);
+        }
+
+        // Rate Limiting Logic
+        $email = $data['email'];
+        $ipAddress = $request->getServerParams()['REMOTE_ADDR'];
+    
+        if ($this->rateLimiter->isRateLimited($email, $ipAddress, 'login')) {
+            $this->logger->warning("Rate limit exceeded for login", ['email' => $email, 'ip' => $ipAddress]);
+            return $this->jsonResponse($response, ["error" => "Too many login attempts. Please try again later."], 429);
         }
 
         try {
@@ -79,7 +92,11 @@ class AuthController extends Controller
             
         } catch (\Exception $e) {
             $this->logger->error('Login failed', ['email' => $data['email'], 'error' => $e->getMessage()]);
-            return $this->jsonResponse($response, ["error" => $e->getMessage()], 401);
+            
+            // Increment rate limiter on failed login attempt
+            $this->rateLimiter->incrementFailedAttempt($email, $ipAddress, 'login');
+            
+            return $this->jsonResponse($response, ["error" => "Authentication failed"], 401);
         }
     }
 
