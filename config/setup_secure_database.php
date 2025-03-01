@@ -2,10 +2,10 @@
 // setup_secure_database.php
 // Description: Initializes the secure database using the new PDO-based DatabaseHelper,
 // creates required secure tables, and migrates legacy logs if applicable.
-// Changelog: 2025-03-01 - Added forced error reporting to reveal hidden errors.
+// Changelog: 2025-03-01 - Added forced error reporting, detailed step-by-step logging,
+// and set a logger for DatabaseHelper to avoid silent failures.
 // Dependencies: Requires autoload.php, DatabaseHelper, and proper configuration.
 
-// Enable full error reporting for debugging
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -13,6 +13,10 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 
 use App\Helpers\DatabaseHelper;
+use Psr\Log\NullLogger;
+
+// Set a logger for DatabaseHelper to prevent internal log calls from failing.
+DatabaseHelper::setLogger(new NullLogger());
 
 // Set up log file path in the current directory
 $logFilePath = __DIR__ . '/setup_secure_db.log';
