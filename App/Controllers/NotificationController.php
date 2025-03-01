@@ -20,12 +20,11 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
  */
 class NotificationController extends Controller
 {
-    private LoggerInterface $logger;
+    protected LoggerInterface $logger;
 
     public function __construct(LoggerInterface $logger)
     {
         parent::__construct($logger);
-        $this->logger = $logger;
     }
 
     /**

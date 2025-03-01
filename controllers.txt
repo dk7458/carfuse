@@ -1,0 +1,2522 @@
+=== App/Controllers/UserController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Models\User;
+use App\Helpers\ApiHelper;
+use App\Services\Validator;
+use App\Services\Auth\TokenService;
+use Psr\Log\LoggerInterface;
+use App\Helpers\ExceptionHandler;
+use App\Services\Auth\AuthService;
+use Exception;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use App\Helpers\LoggingHelper;
+
+/**
+ * User Management Controller
+ *
+ * Handles profile management, password resets, and dashboard access.
+ */
+class UserController extends Controller
+{
+    private Validator $validator;
+    private TokenService $tokenService;
+    private ExceptionHandler $exceptionHandler;
+    private LoggerInterface $logger;
+    private AuthService $authService;
+
+    public function __construct(
+        Validator $validator,
+        TokenService $tokenService,
+        ExceptionHandler $exceptionHandler,
+        AuthService $authService,
+        LoggerInterface $logger
+    ) {
+        parent::__construct($logger);
+        $this->validator = $validator;
+        $this->tokenService = $tokenService;
+        $this->exceptionHandler = $exceptionHandler;
+        $this->logger = $logger;
+        $this->authService = $authService;
+    }
+
+    /**
+     * Register a new user.
+     */
+    public function registerUser(Request $request, Response $response)
+    {
+        $data = json_decode($request->getBody()->getContents(), true);
+
+        $rules = [
+            'email'    => 'required|email|unique:users,email',
+            'password' => 'required|min:6',
+            'name'     => 'required|string',
+        ];
+
+        try {
+            $this->validator->validate($data, $rules);
+            $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
+            $user = User::create($data);
+            $this->logger->info("User registered successfully", ['email' => $data['email']]);
+            return ApiHelper::sendJsonResponse('success', 'User registered successfully', ['user_id' => $user->id], 201);
+        } catch (\InvalidArgumentException $e) {
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * Retrieve current user profile.
+     */
+    public function getUserProfile(Request $request, Response $response)
+    {
+        $user = $request->getAttribute('user');
+        return $this->jsonResponse($response, $user);
+    }
+
+    /**
+     * Update user profile.
+     */
+    public function updateProfile(Request $request, Response $response)
+    {
+        $user = $request->getAttribute('user');
+        $data = json_decode($request->getBody()->getContents(), true);
+        $result = $this->authService->updateProfile($user, $data);
+        return $this->jsonResponse($response, $result);
+    }
+
+    /**
+     * Request password reset.
+     */
+    public function requestPasswordReset(Request $request, Response $response)
+    {
+        $data = json_decode($request->getBody()->getContents(), true);
+
+        if (!isset($data['email'])) {
+            return ApiHelper::sendJsonResponse('error', 'Email is required', null, 400);
+        }
+
+        try {
+            $token = Str::random(60);
+            \App\Models\PasswordReset::create([
+                'email'      => $data['email'],
+                'token'      => $token,
+                'expires_at' => now()->addHour(),
+            ]);
+            return ApiHelper::sendJsonResponse('success', 'Password reset requested', null, 200);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+        }
+    }
+
+    /**
+     * User dashboard access.
+     */
+    public function userDashboard(Request $request, Response $response)
+    {
+        // Rendering HTML for dashboard via ApiHelper response
+        $html = "<html><body><h1>User Dashboard</h1><!-- ...existing dashboard HTML... --></body></html>";
+        return ApiHelper::sendJsonResponse('success', 'User Dashboard', $html, 200);
+    }
+}
+=== App/Controllers/BookingController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Models\Booking;
+use App\Models\RefundLog;
+use App\Services\AuthService;
+use App\Services\AuditService;
+use App\Helpers\DatabaseHelper;
+use App\Helpers\TokenValidator;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ResponseFactoryInterface;
+use Psr\Log\LoggerInterface;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+/**
+ * Booking Controller
+ *
+ * Handles booking operations, including creating, rescheduling,
+ * canceling bookings, and fetching booking details or logs.
+ */
+class BookingController extends Controller
+{
+    private BookingService $bookingService;
+    private PaymentService $paymentService;
+    private Validator $validator;
+    private AuditService $auditService;
+    private NotificationService $notificationService;
+    private ResponseFactoryInterface $responseFactory;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        BookingService $bookingService,
+        PaymentService $paymentService,
+        Validator $validator,
+        AuditService $auditService,
+        NotificationService $notificationService,
+        ResponseFactoryInterface $responseFactory,
+        LoggerInterface $logger
+    ) {
+        parent::__construct($logger);
+        $this->bookingService = $bookingService;
+        $this->paymentService = $paymentService;
+        $this->validator = $validator;
+        $this->auditService = $auditService;
+        $this->notificationService = $notificationService;
+        $this->responseFactory = $responseFactory;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Create standardized PSR-7 JSON response
+     */
+    protected function jsonResponse(array $data, int $status = 200): ResponseInterface
+    {
+        $response = $this->responseFactory->createResponse($status);
+        $response->getBody()->write(json_encode($data));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    /**
+     * View Booking Details
+     */
+    public function viewBooking(int $id): ResponseInterface
+    {
+        try {
+            $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+            $booking = Booking::with('logs')->findOrFail($id);
+            
+            // Audit log for viewing booking
+            $this->auditService->logEvent(
+                'booking_viewed',
+                "Booking #{$id} details viewed",
+                ['booking_id' => $id, 'user_id' => $user->id],
+                $user->id,
+                $id,
+                'booking'
+            );
+            
+            return $this->jsonResponse([
+                'status' => 'success',
+                'message' => 'Booking details fetched',
+                'data' => ['booking' => $booking]
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Booking not found',
+                'error' => $e->getMessage()
+            ], 404);
+        }
+    }
+
+    /**
+     * Reschedule Booking
+     */
+    public function rescheduleBooking(int $id): ResponseInterface
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        $data = $_POST; // minimal custom validation assumed
+        
+        try {
+            $booking = Booking::findOrFail($id);
+            $oldPickup = $booking->pickup_date;
+            $oldDropoff = $booking->dropoff_date;
+            
+            $booking->update([
+                'pickup_date'  => $data['pickup_date'],
+                'dropoff_date' => $data['dropoff_date'],
+            ]);
+            
+            // Audit the rescheduling action
+            $this->auditService->logEvent(
+                'booking_rescheduled',
+                "Booking #{$id} rescheduled",
+                [
+                    'booking_id' => $id,
+                    'user_id' => $user->id,
+                    'old_pickup' => $oldPickup,
+                    'new_pickup' => $data['pickup_date'],
+                    'old_dropoff' => $oldDropoff,
+                    'new_dropoff' => $data['dropoff_date']
+                ],
+                $user->id,
+                $id,
+                'booking'
+            );
+            
+            return $this->jsonResponse([
+                'status' => 'success',
+                'message' => 'Booking rescheduled successfully'
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Failed to reschedule booking',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Cancel Booking
+     */
+    public function cancelBooking(int $id): ResponseInterface
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        
+        try {
+            $booking = Booking::findOrFail($id);
+            $oldStatus = $booking->status;
+            $booking->update(['status' => 'canceled']);
+
+            // Process refund if applicable.
+            $refundAmount = $booking->calculateRefund(); // Assumes a calculateRefund() method exists.
+            if ($refundAmount > 0) {
+                $refund = RefundLog::create([
+                    'booking_id' => $id,
+                    'amount'     => $refundAmount,
+                    'status'     => 'processed'
+                ]);
+                
+                // Audit the refund processed
+                $this->auditService->logEvent(
+                    'refund_processed',
+                    "Refund processed for booking #{$id}",
+                    [
+                        'booking_id' => $id,
+                        'user_id' => $user->id,
+                        'refund_amount' => $refundAmount,
+                        'refund_id' => $refund->id
+                    ],
+                    $user->id,
+                    $id,
+                    'payment'
+                );
+            }
+            
+            // Audit the cancellation
+            $this->auditService->logEvent(
+                'booking_canceled',
+                "Booking #{$id} canceled",
+                [
+                    'booking_id' => $id,
+                    'user_id' => $user->id,
+                    'old_status' => $oldStatus,
+                    'refund_amount' => $refundAmount ?? 0
+                ],
+                $user->id,
+                $id,
+                'booking'
+            );
+            
+            return $this->jsonResponse([
+                'status' => 'success',
+                'message' => 'Booking canceled successfully'
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Failed to cancel booking',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Fetch Booking Logs
+     */
+    public function getBookingLogs(int $bookingId): ResponseInterface
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Unauthorized access'
+            ], 401);
+        }
+        
+        try {
+            // Instead of getting booking logs directly from a logs table,
+            // fetch audit events related to this booking from the audit service
+            $logs = $this->auditService->getEventsByReference('booking_reference', $bookingId);
+            
+            // Log this access to audit logs
+            $this->auditService->logEvent(
+                'booking_logs_viewed',
+                "Booking #{$bookingId} logs accessed",
+                [
+                    'booking_id' => $bookingId,
+                    'user_id' => $user->id
+                ],
+                $user->id,
+                $bookingId,
+                'booking'
+            );
+            
+            return $this->jsonResponse([
+                'status' => 'success',
+                'message' => 'Booking logs fetched successfully',
+                'data' => ['logs' => $logs]
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Failed to fetch booking logs',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * List All Bookings for a User
+     */
+    public function getUserBookings(): ResponseInterface
+    {
+        try {
+            $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+            if (!$user) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'Unauthorized access'
+                ], 401);
+            }
+            
+            $bookings = Booking::where('user_id', $user->id)->latest()->get();
+            
+            // Log the fetch operation
+            $this->auditService->logEvent(
+                'user_bookings_listed',
+                "User retrieved their booking list",
+                ['user_id' => $user->id],
+                $user->id,
+                null,
+                'booking'
+            );
+            
+            return $this->jsonResponse([
+                'status' => 'success',
+                'message' => 'User bookings fetched successfully',
+                'data' => ['bookings' => $bookings]
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Failed to fetch user bookings',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Create New Booking
+     */
+    public function createBooking(): ResponseInterface
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid token'
+            ], 401);
+        }
+
+        $data = $_POST; // assuming custom validation is performed elsewhere
+        
+        try {
+            // Check vehicle availability using an assumed Booking::isAvailable() scope.
+            if (!Booking::isAvailable($data['vehicle_id'], $data['pickup_date'], $data['dropoff_date'])) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'Vehicle is not available for the selected dates'
+                ], 400);
+            }
+            
+            $booking = Booking::create($data);
+            
+            // Log the booking creation to the audit logs
+            $this->auditService->logEvent(
+                'booking_created',
+                "New booking #{$booking->id} created",
+                [
+                    'booking_id' => $booking->id,
+                    'user_id' => $user->id,
+                    'vehicle_id' => $data['vehicle_id'],
+                    'pickup_date' => $data['pickup_date'], 
+                    'dropoff_date' => $data['dropoff_date']
+                ],
+                $user->id,
+                $booking->id,
+                'booking'
+            );
+            
+            return $this->jsonResponse([
+                'status' => 'success',
+                'message' => 'Booking created successfully',
+                'data' => ['booking_id' => $booking->id]
+            ], 201);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Failed to create booking',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+}
+=== App/Controllers/NotificationController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Models\Notification;
+use Illuminate\Support\Facades\Auth;
+use App\Services\AuthService;
+use App\Helpers\JsonResponse;
+use App\Helpers\TokenValidator;
+use Psr\Log\LoggerInterface;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+/**
+ * Notification Controller
+ *
+ * Handles notification management, including sending notifications,
+ * marking notifications as read, deleting notifications, and
+ * fetching user notifications for display.
+ */
+class NotificationController extends Controller
+{
+    private LoggerInterface $logger;
+
+    public function __construct(LoggerInterface $logger)
+    {
+        parent::__construct($logger);
+        $this->logger = $logger;
+    }
+
+    /**
+     * Display user notifications.
+     */
+    public function viewNotifications()
+    {
+        try {
+            $notifications = Notification::with('user')
+                ->where('user_id', AuthService::getUserIdFromToken())
+                ->latest()
+                ->get();
+            $this->jsonResponse([
+                'status'  => 'success',
+                'message' => 'Notifications loaded',
+                'data'    => ['notifications' => $notifications]
+            ], 200);
+        } catch (\Exception $e) {
+            $this->logger->error('An error occurred while fetching notifications', ['exception' => $e]);
+            $this->jsonResponse([
+                'status'  => 'error',
+                'message' => 'An error occurred while fetching notifications',
+                'data'    => []
+            ], 500);
+        }
+    }
+
+    /**
+     * Fetch all notifications for the authenticated user.
+     */
+    public function getUserNotifications()
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
+        try {
+            $notifications = Notification::with('user')
+                ->where('user_id', AuthService::getUserIdFromToken())
+                ->latest()
+                ->get();
+            return JsonResponse::success('Notifications retrieved successfully', $notifications);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch user notifications', ['exception' => $e]);
+            return JsonResponse::error('Failed to fetch user notifications', []);
+        }
+    }
+
+    /**
+     * Fetch unread notifications via AJAX.
+     */
+    public function fetchNotificationsAjax()
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
+        try {
+            $notifications = Notification::with('user')
+                ->where('user_id', AuthService::getUserIdFromToken())
+                ->where('is_read', false)
+                ->latest()
+                ->get();
+            return JsonResponse::success('Notifications retrieved successfully', $notifications);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch notifications', ['exception' => $e]);
+            return JsonResponse::error('Failed to fetch notifications', []);
+        }
+    }
+
+    /**
+     * Mark a notification as read.
+     */
+    public function markNotificationAsRead()
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
+        $data = $this->validateRequest($_POST, [
+            'notification_id' => 'required|integer'
+        ]);
+
+        try {
+            $notification = Notification::findOrFail($data['notification_id']);
+            $notification->update(['is_read' => true]);
+            $this->logger->info('Notification marked as read', ['notification_id' => $data['notification_id']]);
+            return JsonResponse::success('Notification marked as read', []);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to mark notification as read', ['exception' => $e]);
+            return JsonResponse::error('Failed to mark notification as read', []);
+        }
+    }
+
+    /**
+     * Delete a notification.
+     */
+    public function deleteNotification()
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
+        $data = $this->validateRequest($_POST, [
+            'notification_id' => 'required|integer'
+        ]);
+
+        try {
+            $notification = Notification::findOrFail($data['notification_id']);
+            $notification->delete();
+            $this->logger->info('Notification deleted', ['notification_id' => $data['notification_id']]);
+            return JsonResponse::success('Notification deleted', []);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to delete notification', ['exception' => $e]);
+            return JsonResponse::error('Failed to delete notification', []);
+        }
+    }
+
+    /**
+     * Send a notification.
+     */
+    public function sendNotification()
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
+        $data = $this->validateRequest($_POST, [
+            'user_id' => 'required|integer',
+            'type'    => 'required|in:email,sms,webhook,push',
+            'message' => 'required|string|max:1000',
+            'options' => 'nullable|array',
+        ]);
+
+        try {
+            // Store notification via Eloquent
+            $notification = Notification::create([
+                'user_id' => $data['user_id'],
+                'type'    => $data['type'],
+                'message' => $data['message'],
+                'sent_at' => date('Y-m-d H:i:s'),
+                'is_read' => false,
+            ]);
+            // Optionally dispatch via queue or any external channel here.
+            $this->logger->info('Notification sent successfully', ['notification_id' => $notification->id]);
+            return JsonResponse::success('Notification sent successfully', ['notification' => $notification]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send notification', ['exception' => $e]);
+            return JsonResponse::error('Failed to send notification', []);
+        }
+    }
+}
+=== App/Controllers/AdminController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Models\User;
+use App\Models\Admin;
+use App\Models\Booking;
+use App\Models\Payment;
+use App\Models\TransactionLog;
+use Illuminate\Http\Request;
+use App\Services\AuditService;
+use Illuminate\Support\Facades\Hash;
+use App\Services\AuthService;
+use App\Helpers\JsonResponse;
+use App\Helpers\TokenValidator;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ResponseFactoryInterface;
+use Psr\Log\LoggerInterface;
+
+/**
+ * AdminController - Handles admin user management and dashboard operations.
+ */
+class AdminController extends Controller
+{
+    private AuditService $auditService;
+    private ResponseFactoryInterface $responseFactory;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        AuditService $auditService,
+        ResponseFactoryInterface $responseFactory,
+        LoggerInterface $logger
+    ) {
+        parent::__construct($logger);
+        $this->auditService = $auditService;
+        $this->responseFactory = $responseFactory;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Create standardized PSR-7 JSON response
+     */
+    protected function jsonResponse(array $data, int $status = 200): ResponseInterface
+    {
+        $response = $this->responseFactory->createResponse($status);
+        $response->getBody()->write(json_encode($data));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    /**
+     * ✅ Get a paginated list of all users with their roles.
+     */
+    public function getAllUsers(): ResponseInterface
+    {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid token or insufficient permissions'
+            ], 401);
+        }
+
+        $users = User::with('roles')->latest()->paginate(10);
+        
+        $this->auditService->logEvent(
+            'user_list_viewed',
+            'Admin viewed user list',
+            ['admin_id' => $admin->id, 'page' => $users->currentPage()],
+            $admin->id,
+            null,
+            'admin'
+        );
+        
+        return $this->jsonResponse([
+            'status' => 'success', 
+            'message' => 'User list retrieved successfully', 
+            'data' => $users
+        ]);
+    }
+
+    /**
+     * ✅ Update a user's role.
+     */
+    public function updateUserRole($userId): ResponseInterface
+    {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid token or insufficient permissions'
+            ], 401);
+        }
+
+        // Replace Laravel validation with native checks.
+        $role = $_POST['role'] ?? '';
+        $allowedRoles = ['user', 'admin', 'manager'];
+        if (!$role || !in_array($role, $allowedRoles)) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid role'
+            ], 400);
+        }
+        
+        $user = User::findOrFail($userId);
+        $oldRole = $user->role;
+        $user->update(['role' => $role]);
+        
+        $this->auditService->logEvent(
+            'user_role_updated',
+            "User role updated from {$oldRole} to {$role}",
+            [
+                'user_id' => $userId,
+                'old_role' => $oldRole,
+                'new_role' => $role,
+                'admin_id' => $admin->id
+            ],
+            $admin->id,
+            null,
+            'admin'
+        );
+        
+        return $this->jsonResponse([
+            'status' => 'success',
+            'message' => 'User role updated successfully'
+        ]);
+    }
+
+    /**
+     * ✅ Delete a user (Soft delete).
+     */
+    public function deleteUser($userId): ResponseInterface
+    {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid token or insufficient permissions'
+            ], 401);
+        }
+
+        $user = User::findOrFail($userId);
+        $userEmail = $user->email; // Save for audit log
+        $user->delete();
+        
+        $this->auditService->logEvent(
+            'user_deleted',
+            "User {$userEmail} was deleted",
+            [
+                'user_id' => $userId,
+                'user_email' => $userEmail,
+                'admin_id' => $admin->id
+            ],
+            $admin->id,
+            null,
+            'admin'
+        );
+        
+        return $this->jsonResponse([
+            'status' => 'success',
+            'message' => 'User deleted successfully'
+        ]);
+    }
+
+    /**
+     * ✅ Fetch admin dashboard statistics.
+     */
+    public function getDashboardData(): ResponseInterface
+    {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid token or insufficient permissions'
+            ], 401);
+        }
+
+        $dashboardData = [
+            'total_users' => User::count(),
+            'total_bookings' => Booking::count(),
+            'total_revenue' => Payment::sum('amount'),
+            'latest_users' => User::with('roles')->latest()->limit(5)->get(),
+            'latest_transactions' => TransactionLog::latest()->limit(5)->get(),
+        ];
+        
+        $this->auditService->logEvent(
+            'dashboard_viewed',
+            'Admin viewed dashboard',
+            ['admin_id' => $admin->id],
+            $admin->id,
+            null,
+            'admin'
+        );
+        
+        return $this->jsonResponse([
+            'status' => 'success',
+            'message' => 'Dashboard data retrieved successfully',
+            'data' => $dashboardData
+        ]);
+    }
+
+    /**
+     * ✅ Create a new admin user.
+     */
+    public function createAdmin(): ResponseInterface
+    {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid token or insufficient permissions'
+            ], 401);
+        }
+
+        // Use native PHP POST handling.
+        $data = $_POST;
+        // Basic native validation.
+        if (!isset($data['name'], $data['email'], $data['password']) ||
+            !filter_var($data['email'], FILTER_VALIDATE_EMAIL) ||
+            strlen($data['password']) < 8
+        ) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid input'
+            ], 400);
+        }
+
+        $newAdmin = Admin::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+            'role' => 'admin'
+        ]);
+        
+        $this->auditService->logEvent(
+            'admin_created',
+            "New admin user created: {$newAdmin->email}",
+            [
+                'created_by' => $admin->id,
+                'new_admin_id' => $newAdmin->id,
+                'new_admin_email' => $newAdmin->email
+            ],
+            $admin->id,
+            null,
+            'admin'
+        );
+        
+        return $this->jsonResponse([
+            'status' => 'success',
+            'message' => 'Admin created successfully',
+            'data' => $newAdmin
+        ], 201);
+    }
+}
+=== App/Controllers/AuthController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\Auth\AuthService;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Log\LoggerInterface;
+use App\Services\Auth\TokenService;
+use App\Helpers\DatabaseHelper;
+
+class AuthController extends Controller
+{
+    protected LoggerInterface $logger;
+    private AuthService $authService;
+    private TokenService $tokenService;
+    private $pdo;
+
+    public function __construct(
+        LoggerInterface $logger,
+        AuthService $authService,
+        TokenService $tokenService,
+        DatabaseHelper $dbHelper
+    ) {
+        parent::__construct($logger);
+        $this->authService = $authService;
+        $this->tokenService = $tokenService;
+        $this->pdo = $dbHelper->getPdo();
+    }    
+
+    public function login(Request $request, Response $response)
+    {
+        // Rewind the request body stream in case it was consumed
+        $request->getBody()->rewind();
+        
+        // Use getParsedBody() for consistency with other endpoints
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            $this->logger->error("Parsed body is not an array or is null in login.");
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+        }
+
+        $this->logger->debug("Parsed request data in login: " . print_r($data, true));
+
+        if (!isset($data['email']) || !isset($data['password'])) {
+            $this->logger->warning("Missing required fields in login");
+            return $this->jsonResponse($response, ["error" => "Email and password are required"], 400);
+        }
+
+        try {
+            $result = $this->authService->login($data);
+            $this->logger->info('User login successful', ['email' => $data['email']]);
+            
+            // Set JWT token as a secure HttpOnly cookie
+            setcookie('jwt', $result['token'], [
+                'expires'  => time() + 3600,
+                'path'     => '/',
+                'secure'   => true,
+                'httponly' => true,
+                'samesite' => 'Strict',
+            ]);
+            
+            // Set refresh token as a secure HttpOnly cookie with longer expiration
+            setcookie('refresh_token', $result['refresh_token'], [
+                'expires'  => time() + 86400,
+                'path'     => '/',
+                'secure'   => true,
+                'httponly' => true,
+                'samesite' => 'Strict',
+            ]);
+            
+            // Return success message without exposing tokens in the response body
+            return $this->jsonResponse($response, [
+                "message" => "Login successful",
+                "user_id" => $result['user_id'] ?? null,
+                "name" => $result['name'] ?? null
+            ]);
+            
+        } catch (\Exception $e) {
+            $this->logger->error('Login failed', ['email' => $data['email'], 'error' => $e->getMessage()]);
+            return $this->jsonResponse($response, ["error" => $e->getMessage()], 401);
+        }
+    }
+
+    public function register(Request $request, Response $response)
+    {
+        // Use getParsedBody() since the parsed body was set in index.php
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            $this->logger->error("Parsed body is not an array or is null.");
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+        }
+
+        $this->logger->debug("Parsed request data in register: " . print_r($data, true));
+
+        $requiredFields = ['name', 'surname', 'email', 'password'];
+        $missingFields = array_diff($requiredFields, array_keys($data));
+
+        if (!empty($missingFields)) {
+            $this->logger->warning("Missing required fields in register: " . implode(', ', $missingFields));
+            return $this->jsonResponse($response, ["error" => "Missing fields: " . implode(', ', $missingFields)], 400);
+        }
+
+        $result = $this->authService->register($data);
+        $this->logger->info('User registration attempt', ['data' => $data]);
+
+        return $this->jsonResponse($response, $result);
+    }
+
+    public function refresh(Request $request, Response $response)
+    {
+        try {
+            // Try to get refresh token from cookie first
+            $refreshToken = $_COOKIE['refresh_token'] ?? null;
+            
+            // If not in cookie, try to get from request body
+            if (!$refreshToken) {
+                $request->getBody()->rewind();
+                $data = $request->getParsedBody();
+                $refreshToken = $data['refresh_token'] ?? null;
+            }
+            
+            if (!$refreshToken) {
+                $this->logger->warning('Refresh token missing');
+                return $this->jsonResponse($response, ["error" => "Refresh token is required"], 400);
+            }
+            
+            $result = $this->authService->refresh(['refresh_token' => $refreshToken]);
+            $this->logger->info('Token refreshed successfully');
+            
+            // Set the new JWT token as a cookie
+            setcookie('jwt', $result['token'], [
+                'expires'  => time() + 3600,
+                'path'     => '/',
+                'secure'   => true,
+                'httponly' => true,
+                'samesite' => 'Strict',
+            ]);
+            
+            return $this->jsonResponse($response, ["message" => "Token refreshed successfully"]);
+        } catch (\Exception $e) {
+            $this->logger->error('Token refresh failed', ['error' => $e->getMessage()]);
+            return $this->jsonResponse($response, ["error" => $e->getMessage()], 401);
+        }
+    }
+
+    public function logout(Request $request, Response $response)
+    {
+        // Clear both JWT and refresh token cookies
+        setcookie('jwt', '', [
+            'expires'  => time() - 3600, // Expire in the past
+            'path'     => '/',
+            'secure'   => true,
+            'httponly' => true,
+            'samesite' => 'Strict',
+        ]);
+        
+        setcookie('refresh_token', '', [
+            'expires'  => time() - 3600, // Expire in the past
+            'path'     => '/',
+            'secure'   => true,
+            'httponly' => true,
+            'samesite' => 'Strict',
+        ]);
+        
+        // Log the logout action
+        $this->logger->info('User logged out successfully');
+        
+        // Call the service logout method if needed (e.g., to revoke tokens server-side)
+        $this->authService->logout([]);
+        
+        return $this->jsonResponse($response, ["message" => "Logout successful"]);
+    }
+
+    /**
+     * Get authenticated user details
+     * 
+     * This endpoint assumes AuthMiddleware is applied to the route.
+     * For protected routes, use AuthMiddleware with required=true.
+     */
+    public function userDetails(Request $request, Response $response): Response
+    {
+        $user = $request->getAttribute('user');
+        
+        if (!$user) {
+            $this->logger->error("User not authenticated");
+            return $this->jsonResponse($response->withStatus(401), ['error' => 'Authentication required']);
+        }
+        
+        // Remove sensitive fields
+        $userDetails = array_diff_key($user, array_flip(['password_hash']));
+        
+        $this->logger->info("User details retrieved successfully", ['user_id' => $user['id']]);
+        return $this->jsonResponse($response, ['user' => $userDetails]);
+    }
+
+    public function resetPasswordRequest(Request $request, Response $response)
+    {
+        $request->getBody()->rewind();
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            $this->logger->error("Invalid JSON input for password reset request");
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+        }
+        
+        if (!isset($data['email'])) {
+            $this->logger->warning("Missing email in password reset request");
+            return $this->jsonResponse($response, ["error" => "Email is required"], 400);
+        }
+        
+        try {
+            $result = $this->authService->resetPasswordRequest($data);
+            $this->logger->info("Password reset requested", ['email' => $data['email']]);
+            return $this->jsonResponse($response, ["message" => "Password reset email sent"]);
+        } catch (\Exception $e) {
+            $this->logger->error("Password reset request failed", ['email' => $data['email'], 'error' => $e->getMessage()]);
+            return $this->jsonResponse($response, ["error" => $e->getMessage()], 400);
+        }
+    }
+
+    public function resetPassword(Request $request, Response $response)
+    {
+        $request->getBody()->rewind();
+        $data = $request->getParsedBody();
+        
+        if (!is_array($data)) {
+            $this->logger->error("Invalid JSON input for password reset");
+            return $this->jsonResponse($response, ["error" => "Invalid JSON input"], 400);
+        }
+        
+        // Validate required fields
+        $requiredFields = ['token', 'password', 'confirm_password'];
+        $missingFields = array_diff($requiredFields, array_keys($data));
+        
+        if (!empty($missingFields)) {
+            $this->logger->warning("Missing fields in password reset", ['missing' => $missingFields]);
+            return $this->jsonResponse($response, [
+                "error" => "Missing required fields: " . implode(', ', $missingFields)
+            ], 400);
+        }
+        
+        // Check if passwords match
+        if ($data['password'] !== $data['confirm_password']) {
+            $this->logger->warning("Password mismatch in reset");
+            return $this->jsonResponse($response, ["error" => "Passwords do not match"], 400);
+        }
+        
+        try {
+            $result = $this->authService->resetPassword($data);
+            $this->logger->info("Password reset completed successfully");
+            return $this->jsonResponse($response, ["message" => "Password has been reset successfully"]);
+        } catch (\Exception $e) {
+            $this->logger->error("Password reset failed", ['error' => $e->getMessage()]);
+            return $this->jsonResponse($response, ["error" => $e->getMessage()], 400);
+        }
+    }
+}
+=== App/Controllers/SignatureController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\SignatureService;
+use App\Helpers\JsonResponse;
+use App\Helpers\TokenValidator;
+use Psr\Log\LoggerInterface;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+/**
+ * Signature Controller
+ *
+ * Handles the management of user signatures, including uploading,
+ * verifying, and retrieving signatures for documents.
+ */
+class SignatureController extends Controller
+{
+    private SignatureService $signatureService;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        SignatureService $signatureService,
+        LoggerInterface $logger
+    ) {
+        parent::__construct($logger);
+        $this->signatureService = $signatureService;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Upload a signature.
+     *
+     * @param array $data The uploaded signature file and associated metadata.
+     * @return array Response indicating success or failure.
+     */
+    public function uploadSignature(array $data): array
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return JsonResponse::unauthorized('Invalid token');
+        }
+
+        $rules = [
+            'user_id' => 'required|integer',
+            'file' => 'required|file|mimes:png,jpg,jpeg|max:2048', // Max 2MB
+        ];
+
+        try {
+            custom_validate($data, $rules);
+        } catch (\Exception $ex) {
+            $this->logger->error("Warning: Signature validation failed. Data: " . json_encode($data));
+            return JsonResponse::error('Validation failed', $ex->getMessage());
+        }
+
+        try {
+            $signaturePath = $this->signatureService->uploadSignature($data['user_id'], $data['file']);
+            $this->logger->info("Info: Signature uploaded successfully for user_id: " . $data['user_id']);
+            return JsonResponse::success('Signature uploaded successfully', $signaturePath);
+        } catch (\Exception $e) {
+            $this->logger->error("Error: Failed to upload signature, error: " . $e->getMessage());
+            return JsonResponse::error('Failed to upload signature');
+        }
+    }
+
+    /**
+     * Verify a signature.
+     *
+     * @param int $userId The ID of the user whose signature is to be verified.
+     * @param string $documentHash The hash of the document to verify against the signature.
+     * @return array Verification result.
+     */
+    public function verifySignature(int $userId, string $documentHash): array
+    {
+        try {
+            $isValid = $this->signatureService->verifySignature($userId, $documentHash);
+
+            if ($isValid) {
+                $this->logger->info("Info: Signature verified successfully for user_id: {$userId}");
+                return JsonResponse::success('Signature verified successfully');
+            }
+
+            return JsonResponse::error('Signature verification failed');
+        } catch (\Exception $e) {
+            $this->logger->error("Error: Failed to verify signature, error: " . $e->getMessage());
+            return JsonResponse::error('Failed to verify signature');
+        }
+    }
+
+    /**
+     * Retrieve a user's signature.
+     *
+     * @param int $userId The ID of the user.
+     * @return array Response containing the signature path or error message.
+     */
+    public function getSignature(int $userId): array
+    {
+        try {
+            $signaturePath = $this->signatureService->getSignature($userId);
+
+            if ($signaturePath) {
+                $this->logger->info("Info: Signature retrieved successfully for user_id: {$userId}");
+                return JsonResponse::success('Signature retrieved successfully', $signaturePath);
+            }
+
+            return JsonResponse::error('Signature not found');
+        } catch (\Exception $e) {
+            $this->logger->error("Error: Failed to retrieve signature, error: " . $e->getMessage());
+            return JsonResponse::error('Failed to retrieve signature');
+        }
+    }
+
+    private function jsonResponse(array $data): array
+    {
+        return $data;
+    }
+}
+=== App/Controllers/DashboardController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Models\Booking;
+use App\Models\Payment;
+use App\Models\Notification;
+use App\Models\User;
+use Illuminate\Support\Facades\Cache;
+use Psr\Log\LoggerInterface;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+class DashboardController extends Controller
+{
+    private BookingService $bookingService;
+    private StatisticsService $statisticsService;
+    private NotificationService $notificationService;
+    private UserService $userService;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        BookingService $bookingService,
+        StatisticsService $statisticsService,
+        NotificationService $notificationService,
+        UserService $userService,
+        LoggerInterface $logger
+    ) {
+        parent::__construct($logger);
+        $this->bookingService = $bookingService;
+        $this->statisticsService = $statisticsService;
+        $this->notificationService = $notificationService;
+        $this->userService = $userService;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Render user dashboard view.
+     */
+    public function userDashboard()
+    {
+        try {
+            // Assume session_start() is already called.
+            $user = (object)['id' => $_SESSION['user_id'] ?? null]; // Replace with native session retrieval
+            // ...existing code for eager loading if needed...
+            $statistics = Cache::remember('user_dashboard_' . $user->id, 60, function () use ($user) {
+                return [
+                    'total_bookings'     => Booking::where('user_id', $user->id)->count(),
+                    'completed_bookings' => Booking::where('user_id', $user->id)->where('status', 'completed')->count(),
+                    'total_payments'     => Payment::where('user_id', $user->id)->sum('amount'),
+                ];
+            });
+            view('dashboard/user_dashboard', ['user' => $user, 'statistics' => $statistics]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to load user dashboard: ' . $e->getMessage());
+            abort(500, 'Error loading dashboard');
+        }
+    }
+
+    /**
+     * Fetch user bookings.
+     */
+    public function getUserBookings(): void
+    {
+        try {
+            $bookings = Booking::where('user_id', $_SESSION['user_id'] ?? null)->get();
+            http_response_code(200);
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'Bookings fetched',
+                'data'    => ['bookings' => $bookings]
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch bookings: ' . $e->getMessage());
+            abort(500, 'Failed to fetch bookings');
+        }
+    }
+
+    /**
+     * Fetch dashboard statistics.
+     */
+    public function fetchStatistics(): void
+    {
+        try {
+            $stats = Cache::remember('dashboard_statistics', 60, function () {
+                return [
+                    'total_bookings'     => Booking::count(),
+                    'completed_bookings' => Booking::where('status', 'completed')->count(),
+                    'total_revenue'      => Payment::sum('amount')
+                ];
+            });
+            http_response_code(200);
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'Statistics fetched',
+                'data'    => $stats
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch statistics: ' . $e->getMessage());
+            abort(500, 'Failed to fetch statistics');
+        }
+    }
+
+    /**
+     * Fetch user notifications.
+     */
+    public function fetchNotifications(): void
+    {
+        try {
+            $notifications = Notification::where('user_id', $_SESSION['user_id'] ?? null)
+                ->latest()
+                ->get();
+            http_response_code(200);
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'Notifications fetched',
+                'data'    => ['notifications' => $notifications]
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch notifications: ' . $e->getMessage());
+            abort(500, 'Failed to fetch notifications');
+        }
+    }
+
+    /**
+     * Fetch user profile.
+     */
+    public function fetchUserProfile(): void
+    {
+        try {
+            $profile = User::findOrFail($_SESSION['user_id'] ?? null);
+            http_response_code(200);
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'User profile fetched',
+                'data'    => ['profile' => $profile]
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to fetch user profile: ' . $e->getMessage());
+            abort(500, 'Failed to fetch user profile');
+        }
+    }
+}
+=== App/Controllers/AdminDashboardController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Models\User;
+use App\Models\Booking;
+use App\Models\Payment;
+use Illuminate\Support\Facades\Cache;
+use Psr\Log\LoggerInterface;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+class AdminDashboardController extends Controller
+{
+    private LoggerInterface $logger;
+
+    public function __construct(LoggerInterface $logger)
+    {
+        parent::__construct($logger);
+        $this->logger = $logger;
+    }
+
+    public function index(): void
+    {
+        try {
+            $metrics = Cache::remember('dashboard_metrics', 60, function () {
+                $totalRevenue = Payment::where('status', 'completed')->sum('amount');
+                $totalRefunds = Payment::where('status', 'completed')->where('type', 'refund')->sum('amount');
+                return [
+                    'total_users'        => User::count(),
+                    'active_users'       => User::where('active', true)->count(),
+                    'total_bookings'     => Booking::count(),
+                    'completed_bookings' => Booking::where('status', 'completed')->count(),
+                    'canceled_bookings'  => Booking::where('status', 'canceled')->count(),
+                    'total_revenue'      => $totalRevenue,
+                    'total_refunds'      => $totalRefunds,
+                    'net_revenue'        => $totalRevenue - $totalRefunds,
+                ];
+            });
+            $recentBookings = Booking::with('user')->latest()->limit(5)->get();
+
+            extract(compact('metrics', 'recentBookings'));
+            include BASE_PATH . '/public/views/admin/dashboard.php';
+        } catch (\Exception $e) {
+            $this->logger->error("DASHBOARD ERROR: " . $e->getMessage());
+            http_response_code(500);
+            echo 'Error loading the dashboard. Please try again later.';
+        }
+    }
+
+    public function getDashboardData(): void
+    {
+        requireAuth(); // ensure admin authentication is in place
+        try {
+            $metrics = Cache::remember('dashboard_metrics', 60, function () {
+                $totalRevenue = Payment::where('status', 'completed')->sum('amount');
+                $totalRefunds = Payment::where('status', 'completed')->where('type', 'refund')->sum('amount');
+                return [
+                    'total_users'        => User::count(),
+                    'active_users'       => User::where('active', true)->count(),
+                    'total_bookings'     => Booking::count(),
+                    'completed_bookings' => Booking::where('status', 'completed')->count(),
+                    'canceled_bookings'  => Booking::where('status', 'canceled')->count(),
+                    'total_revenue'      => $totalRevenue,
+                    'total_refunds'      => $totalRefunds,
+                    'net_revenue'        => $totalRevenue - $totalRefunds,
+                ];
+            });
+            $recentBookings = Booking::with('user')->latest()->limit(5)->get();
+
+            header('Content-Type: application/json');
+            http_response_code(200);
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'Dashboard data fetched',
+                'data'    => [
+                    'metrics'         => $metrics,
+                    'recent_bookings' => $recentBookings,
+                ]
+            ]);
+            exit;
+        } catch (\Exception $e) {
+            $this->logger->error("DASHBOARD ERROR: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Failed to fetch dashboard data',
+                'data'    => []
+            ]);
+            exit;
+        }
+    }
+}
+=== App/Controllers/PaymentController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Models\Payment;
+use App\Models\RefundLog;
+use App\Models\TransactionLog;
+use App\Models\InstallmentPlan;
+use App\Services\AuditService;
+use App\Helpers\TokenValidator;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ResponseFactoryInterface;
+use Psr\Log\LoggerInterface;
+
+/**
+ * Payment Controller
+ *
+ * Handles payment processing, refunds, installment payments, and user transactions.
+ */
+class PaymentController extends Controller
+{
+    private PaymentService $paymentService;
+    private Validator $validator;
+    private NotificationService $notificationService;
+    private AuditService $auditService;
+    private PDO $db;
+    private ResponseFactoryInterface $responseFactory;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        PaymentService $paymentService,
+        Validator $validator,
+        NotificationService $notificationService,
+        AuditService $auditService,
+        PDO $db,
+        ResponseFactoryInterface $responseFactory,
+        LoggerInterface $logger
+    ) {
+        parent::__construct($logger);
+        $this->paymentService = $paymentService;
+        $this->validator = $validator;
+        $this->notificationService = $notificationService;
+        $this->auditService = $auditService;
+        $this->db = $db;
+        $this->responseFactory = $responseFactory;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Create standardized PSR-7 JSON response
+     */
+    protected function jsonResponse(array $data, int $status = 200): ResponseInterface
+    {
+        $response = $this->responseFactory->createResponse($status);
+        $response->getBody()->write(json_encode($data));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    /**
+     * Process a payment.
+     */
+    public function processPayment(): ResponseInterface
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Unauthorized access'
+            ], 401);
+        }
+        
+        $data = $this->validateRequest($_POST, [
+            'booking_id'       => 'required|integer',
+            'amount'           => 'required|numeric|min:0.01',
+            'payment_method_id' => 'required|integer',
+        ]);
+        
+        try {
+            $payment = Payment::create([
+                'booking_id'     => $data['booking_id'],
+                'user_id'        => $user->id,
+                'amount'         => $data['amount'],
+                'payment_method' => $data['payment_method_id'],
+                'status'         => 'completed'
+            ]);
+            
+            // Update related booking status via Eloquent relationship
+            $payment->booking()->update(['status' => 'paid']);
+            
+            // Log the payment in the secure audit logs
+            $this->auditService->logEvent(
+                'payment_processed',
+                "Payment of {$data['amount']} processed for booking #{$data['booking_id']}",
+                [
+                    'payment_id' => $payment->id,
+                    'booking_id' => $data['booking_id'],
+                    'user_id' => $user->id,
+                    'amount' => $data['amount'],
+                    'payment_method' => $data['payment_method_id']
+                ],
+                $user->id,
+                $data['booking_id'],
+                'payment'
+            );
+            
+            return $this->jsonResponse([
+                'status'  => 'success',
+                'message' => 'Payment processed',
+                'data'    => ['payment' => $payment]
+            ]);
+        } catch (\Exception $e) {
+            // Log the error
+            $this->auditService->logEvent(
+                'payment_failed',
+                "Payment processing failed for booking #{$data['booking_id']}",
+                [
+                    'booking_id' => $data['booking_id'],
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage()
+                ],
+                $user->id,
+                $data['booking_id'],
+                'payment',
+                'error'
+            );
+            
+            return $this->jsonResponse([
+                'status'  => 'error',
+                'message' => 'Payment processing failed',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Refund a payment.
+     */
+    public function refundPayment(): ResponseInterface
+    {
+        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$admin || !$admin->isAdmin()) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Unauthorized - admin rights required'
+            ], 401);
+        }
+        
+        $data = $this->validateRequest($_POST, [
+            'transaction_id' => 'required|integer',
+            'amount'         => 'required|numeric|min:0.01',
+        ]);
+        
+        try {
+            // Get the original transaction
+            $transaction = TransactionLog::findOrFail($data['transaction_id']);
+            
+            $refund = RefundLog::create([
+                'transaction_id' => $data['transaction_id'],
+                'amount'         => $data['amount'],
+                'status'         => 'processed'
+            ]);
+            
+            // Log the refund in the secure audit logs
+            $this->auditService->logEvent(
+                'refund_processed',
+                "Refund of {$data['amount']} processed for transaction #{$data['transaction_id']}",
+                [
+                    'refund_id' => $refund->id,
+                    'transaction_id' => $data['transaction_id'],
+                    'booking_id' => $transaction->booking_id,
+                    'user_id' => $transaction->user_id,
+                    'admin_id' => $admin->id,
+                    'amount' => $data['amount']
+                ],
+                $admin->id,
+                $transaction->booking_id,
+                'payment'
+            );
+            
+            return $this->jsonResponse([
+                'status'  => 'success',
+                'message' => 'Refund processed',
+                'data'    => ['refund' => $refund]
+            ]);
+        } catch (\Exception $e) {
+            // Log the error
+            $this->auditService->logEvent(
+                'refund_failed',
+                "Refund processing failed for transaction #{$data['transaction_id']}",
+                [
+                    'transaction_id' => $data['transaction_id'],
+                    'admin_id' => $admin->id,
+                    'error' => $e->getMessage()
+                ],
+                $admin->id,
+                null,
+                'payment',
+                'error'
+            );
+            
+            return $this->jsonResponse([
+                'status'  => 'error',
+                'message' => 'Refund processing failed',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Set up installment payments.
+     */
+    public function setupInstallment(): ResponseInterface
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Unauthorized access'
+            ], 401);
+        }
+        
+        $data = $this->validateRequest($_POST, [
+            'total_amount'      => 'required|numeric|min:0.01',
+            'installments'      => 'required|integer|min:2',
+            'payment_method_id' => 'required|integer',
+            'booking_id'        => 'required|integer',
+        ]);
+        
+        try {
+            $plan = InstallmentPlan::create([
+                'user_id'        => $user->id,
+                'booking_id'     => $data['booking_id'],
+                'total_amount'   => $data['total_amount'],
+                'installments'   => $data['installments'],
+                'payment_method' => $data['payment_method_id'],
+            ]);
+            
+            // Log the installment plan creation
+            $this->auditService->logEvent(
+                'installment_plan_created',
+                "Installment plan created for user #{$user->id} with {$data['installments']} installments",
+                [
+                    'plan_id' => $plan->id,
+                    'user_id' => $user->id,
+                    'booking_id' => $data['booking_id'],
+                    'total_amount' => $data['total_amount'],
+                    'installments' => $data['installments']
+                ],
+                $user->id,
+                $data['booking_id'],
+                'payment'
+            );
+            
+            return $this->jsonResponse([
+                'status'  => 'success',
+                'message' => 'Installment plan created',
+                'data'    => ['installment_plan' => $plan]
+            ]);
+        } catch (\Exception $e) {
+            // Log the error
+            $this->auditService->logEvent(
+                'installment_plan_failed',
+                "Installment plan creation failed for user #{$user->id}",
+                [
+                    'user_id' => $user->id,
+                    'booking_id' => $data['booking_id'] ?? null,
+                    'error' => $e->getMessage()
+                ],
+                $user->id,
+                $data['booking_id'] ?? null,
+                'payment',
+                'error'
+            );
+            
+            return $this->jsonResponse([
+                'status'  => 'error',
+                'message' => 'Installment plan setup failed',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Fetch all user transactions.
+     */
+    public function getUserTransactions(): ResponseInterface
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Unauthorized access'
+            ], 401);
+        }
+        
+        try {
+            $transactions = TransactionLog::with(['payment', 'booking'])
+                ->where('user_id', $user->id)
+                ->latest()
+                ->get();
+            
+            // Log the transaction view activity
+            $this->auditService->logEvent(
+                'transactions_viewed',
+                "User viewed their transaction history",
+                ['user_id' => $user->id],
+                $user->id,
+                null,
+                'payment'
+            );
+            
+            return $this->jsonResponse([
+                'status'  => 'success',
+                'message' => 'Transactions fetched',
+                'data'    => ['transactions' => $transactions]
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'status'  => 'error',
+                'message' => 'Failed to fetch user transactions',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Fetch payment details.
+     */
+    public function getPaymentDetails(int $transactionId): ResponseInterface
+    {
+        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+        if (!$user) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Unauthorized access'
+            ], 401);
+        }
+        
+        try {
+            $details = TransactionLog::findOrFail($transactionId);
+            
+            // Verify the user owns this transaction or is an admin
+            if ($details->user_id != $user->id && !$user->isAdmin()) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'You do not have permission to view this transaction'
+                ], 403);
+            }
+            
+            // Log the access to payment details
+            $this->auditService->logEvent(
+                'payment_details_viewed',
+                "Payment details accessed for transaction #{$transactionId}",
+                [
+                    'transaction_id' => $transactionId,
+                    'user_id' => $user->id,
+                    'is_admin' => $user->isAdmin() ? 'yes' : 'no'
+                ],
+                $user->id,
+                $details->booking_id ?? null,
+                'payment'
+            );
+            
+            return $this->jsonResponse([
+                'status'  => 'success',
+                'message' => 'Payment details fetched',
+                'data'    => ['details' => $details]
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'status'  => 'error',
+                'message' => 'Failed to fetch payment details',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
+}
+=== App/Controllers/Controller.php ===
+<?php
+
+namespace App\Controllers;
+
+use Exception;
+use Psr\Log\LoggerInterface;
+use Psr\Http\Message\ResponseInterface as Response;
+
+/**
+ * Base Controller - Provides shared methods for all controllers.
+ */
+class Controller
+{
+    protected LoggerInterface $logger;
+
+    public function __construct(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+    }
+
+    /**
+     * ✅ Standard JSON Response
+     */
+    protected function jsonResponse(Response $response, $data, $status = 200)
+    {
+        $response->getBody()->write(json_encode($data));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+    }
+
+    /**
+     * ✅ Error Response
+     */
+    protected function errorResponse(Response $response, $message, $status = 400)
+    {
+        return $this->jsonResponse($response, ['error' => $message], $status);
+    }
+
+    /**
+     * ✅ Handle Exceptions & Log Errors
+     */
+    protected function handleException(Exception $e, string $context = 'General Error'): void
+    {
+        $this->logger->error("{$context}: " . $e->getMessage());
+        $this->jsonResponse(['status' => 'error', 'message' => 'An error occurred.'], 500);
+    }
+
+    /**
+     * ✅ Input Validation Helper
+     */
+    protected function validateRequest(array $data, array $rules): array
+    {
+        $errors = [];
+
+        foreach ($rules as $field => $rule) {
+            $value = $data[$field] ?? null;
+
+            if (strpos($rule, 'required') !== false && empty($value)) {
+                $errors[$field] = "{$field} is required.";
+            }
+
+            if (strpos($rule, 'integer') !== false && !filter_var($value, FILTER_VALIDATE_INT)) {
+                $errors[$field] = "{$field} must be an integer.";
+            }
+
+            if (strpos($rule, 'email') !== false && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                $errors[$field] = "{$field} must be a valid email.";
+            }
+        }
+
+        if (!empty($errors)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $errors], 422);
+        }
+
+        return $data;
+    }
+}
+=== App/Controllers/DocumentController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\DocumentService;
+use App\Services\EncryptionService;
+use App\Services\FileStorage;
+use App\Services\Validator;
+use App\Services\AuditService;
+use Psr\Log\LoggerInterface;
+use App\Models\DocumentTemplate;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+class DocumentController extends Controller
+{
+    private DocumentService $documentService;
+    private Validator $validator;
+    private AuditService $auditService;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        DocumentService $documentService,
+        Validator $validator,
+        AuditService $auditService,
+        LoggerInterface $logger
+    ) {
+        parent::__construct($logger);
+        $this->documentService = $documentService;
+        $this->validator = $validator;
+        $this->auditService = $auditService;
+        $this->logger = $logger;
+    }
+    
+    /**
+     * Upload a document template.
+     */
+    public function uploadTemplate(array $data): array
+    {
+        $rules = [
+            'name' => 'required|string|max:255',
+            'file' => 'required|file|mimes:pdf,docx|max:10240', // Max 10MB
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            return $this->jsonResponse('error', ['message' => 'Validation failed', 'errors' => $this->validator->errors()], 400);
+        }
+
+        try {
+            // Store file using FileStorage service
+            $filePath = FileStorage::store($data['file']);
+            // Create a new template using Eloquent ORM
+            $template = DocumentTemplate::create([
+                'name' => $data['name'],
+                'file_path' => $filePath,
+            ]);
+            
+            // Log document creation using unified audit service
+            $this->auditService->logEvent(
+                'document', 
+                'Template uploaded successfully', 
+                ['template_id' => $template->id, 'template_name' => $data['name']],
+                $_SESSION['user_id'] ?? null,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+            
+            return $this->jsonResponse('success', ['message' => 'Template uploaded successfully', 'template_id' => $template->id], 201);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to upload template: ' . $e->getMessage());
+            return $this->jsonResponse('error', ['message' => 'Failed to upload template'], 500);
+        }
+    }
+
+    /**
+     * Generate a contract for a booking.
+     */
+    public function generateContract(int $bookingId, int $userId): array
+    {
+        try {
+            // Use a secure contract generation method ensuring encryption is applied
+            $contractPath = $this->documentService->generateContractSecure($bookingId, $userId);
+            
+            // Log the contract generation using unified audit service
+            $this->auditService->logEvent(
+                'document',
+                'Contract generated successfully',
+                ['contract_type' => 'booking'], 
+                $userId,
+                $bookingId,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+            
+            return $this->jsonResponse('success', ['message' => 'Contract generated successfully', 'contract_path' => $contractPath], 200);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to generate contract: ' . $e->getMessage());
+            return $this->jsonResponse('error', ['message' => 'Failed to generate contract'], 500);
+        }
+    }
+
+    /**
+     * Upload and manage the Terms & Conditions document.
+     */
+    public function uploadTerms(array $data): array
+    {
+        $rules = [
+            'file' => 'required|file|mimes:pdf|max:5120', // Max 5MB
+        ];
+
+        if (!$this->validator->validate($data, $rules)) {
+            return $this->jsonResponse('error', ['message' => 'Validation failed', 'errors' => $this->validator->errors()], 400);
+        }
+
+        try {
+            $path = $this->documentService->uploadTerms($data['file']);
+            
+            // Log using the unified audit service
+            $this->auditService->logEvent(
+                'document',
+                'Terms and Conditions document uploaded',
+                ['document_type' => 'terms_conditions', 'path' => $path],
+                $_SESSION['user_id'] ?? null,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            return $this->jsonResponse('success', ['message' => 'T&C document uploaded successfully'], 201);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to upload T&C document: ' . $e->getMessage());
+            return $this->jsonResponse('error', ['message' => 'Failed to upload T&C document'], 500);
+        }
+    }
+
+    /**
+     * Generate an invoice for a booking.
+     */
+    public function generateInvoice(int $bookingId): array
+    {
+        try {
+            $invoicePath = $this->documentService->generateInvoice($bookingId);
+            
+            // Log using the unified audit service
+            $this->auditService->logEvent(
+                'document',
+                'Invoice generated successfully',
+                ['document_type' => 'invoice'],
+                $_SESSION['user_id'] ?? null,
+                $bookingId,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            return $this->jsonResponse('success', ['message' => 'Invoice generated successfully', 'invoice_path' => $invoicePath], 200);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to generate invoice: ' . $e->getMessage());
+            return $this->jsonResponse('error', ['message' => 'Failed to generate invoice'], 500);
+        }
+    }
+
+    /**
+     * Delete a document (template or user-specific).
+     */
+    public function deleteDocument(int $documentId): array
+    {
+        try {
+            $this->documentService->deleteDocument($documentId);
+            
+            // Log using the unified audit service
+            $this->auditService->logEvent(
+                'document',
+                'Document deleted successfully',
+                ['document_id' => $documentId],
+                $_SESSION['user_id'] ?? null,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            return $this->jsonResponse('success', ['message' => 'Document deleted successfully'], 200);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to delete document: ' . $e->getMessage());
+            return $this->jsonResponse('error', ['message' => 'Failed to delete document'], 500);
+        }
+    }
+}
+=== App/Controllers/ReportController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Models\Booking;
+use App\Models\Payment;
+use App\Models\User;
+use Maatwebsite\Excel\Facades\Excel;
+use PDF;
+use Psr\Log\LoggerInterface;
+
+require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+
+class ReportController extends Controller
+{
+    private ReportService $reportService;
+    private NotificationService $notificationService;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        ReportService $reportService,
+        NotificationService $notificationService,
+        LoggerInterface $logger
+    ) {
+        parent::__construct($logger);
+        $this->reportService = $reportService;
+        $this->notificationService = $notificationService;
+        $this->logger = $logger;
+    }
+
+    /**
+     * Admin Report Dashboard View
+     */
+    public function index()
+    {
+        try {
+            $data = ['view' => 'admin/reports'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Report dashboard loaded', 'data' => $data]);
+        } catch (\Exception $e) {
+            $this->logger->error(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            $this->logger->error("Error: Failed to load admin report dashboard, error: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load report dashboard', 'data' => []]);
+        }
+        exit;
+    }
+
+    /**
+     * Generate Report for Admin using Eloquent ORM.
+     */
+    public function generateReport()
+    {
+        // Replace Request validation with native PHP validation
+        $validated = $_POST; // Assumes JSON-decoded input or form data
+
+        $start      = $validated['date_range']['start'] ?? null;
+        $end        = $validated['date_range']['end'] ?? null;
+        $format     = $validated['format'] ?? null;
+        $reportType = $validated['report_type'] ?? null;
+
+        if (!$start || !$end || !$format || !$reportType) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Missing required parameters']);
+            exit;
+        }
+
+        switch ($reportType) {
+            case 'bookings':
+                $data = Booking::with(['user', 'vehicle'])
+                    ->whereBetween('created_at', [$start, $end])
+                    ->get()
+                    ->toArray();
+                break;
+            case 'payments':
+                $data = Payment::whereBetween('created_at', [$start, $end])
+                    ->get()
+                    ->toArray();
+                break;
+            case 'users':
+                $data = User::whereBetween('created_at', [$start, $end])
+                    ->get()
+                    ->toArray();
+                break;
+            default:
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Invalid report type']);
+                exit;
+        }
+
+        $filename = "{$reportType}_report_" . date('YmdHis');
+        if ($format === 'csv') {
+            // Assuming Excel::download now returns file content in native PHP
+            return Excel::download(new \App\Exports\ReportExport($data), $filename . ".csv");
+        } elseif ($format === 'pdf') {
+            $pdf = PDF::loadView('reports.template', ['data' => $data]);
+            return $pdf->download($filename . ".pdf");
+        } else {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Unsupported format']);
+            exit;
+        }
+    }
+
+    /**
+     * User Report Dashboard View
+     */
+    public function userReports()
+    {
+        try {
+            $data = ['view' => 'user/reports'];
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'User report dashboard loaded', 'data' => $data]);
+        } catch (\Exception $e) {
+            $this->logger->error(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            $this->logger->error("Error: Failed to load user report dashboard, error: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to load report dashboard', 'data' => []]);
+        }
+        exit;
+    }
+
+    /**
+     * Generate Report for a User using Eloquent ORM.
+     */
+    public function generateUserReport()
+    {
+        $validated = $_POST;
+        $userId     = $validated['user_id'] ?? null;
+        $start      = $validated['date_range']['start'] ?? null;
+        $end        = $validated['date_range']['end'] ?? null;
+        $format     = $validated['format'] ?? null;
+        $reportType = $validated['report_type'] ?? null;
+
+        if (!$userId || !$start || !$end || !$format || !$reportType) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Missing required parameters']);
+            exit;
+        }
+
+        switch ($reportType) {
+            case 'bookings':
+                $data = Booking::with(['user', 'vehicle'])
+                    ->where('user_reference', $userId)
+                    ->whereBetween('created_at', [$start, $end])
+                    ->get()
+                    ->toArray();
+                break;
+            case 'payments':
+                $data = Payment::where('user_id', $userId)
+                    ->whereBetween('created_at', [$start, $end])
+                    ->get()
+                    ->toArray();
+                break;
+            default:
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Invalid report type']);
+                exit;
+        }
+
+        $filename = "user_{$userId}_{$reportType}_report_" . date('YmdHis');
+        if ($format === 'csv') {
+            return Excel::download(new \App\Exports\ReportExport($data), $filename . ".csv");
+        } elseif ($format === 'pdf') {
+            $pdf = PDF::loadView('reports.template', ['data' => $data]);
+            return $pdf->download($filename . ".pdf");
+        } else {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Unsupported format']);
+            exit;
+        }
+    }
+
+    /**
+     * Download a Report
+     */
+    public function downloadReport(string $filePath): void
+    {
+        try {
+            if (!file_exists($filePath)) {
+                http_response_code(404);
+                echo json_encode(['status' => 'error', 'message' => 'Report not found', 'data' => []]);
+                return;
+            }
+
+            header('Content-Description: File Transfer');
+            header('Content-Type: application/octet-stream');
+            header('Content-Disposition: attachment; filename=' . basename($filePath));
+            header('Expires: 0');
+            header('Cache-Control: must-revalidate');
+            header('Pragma: public');
+            header('Content-Length: ' . filesize($filePath));
+            readfile($filePath);
+            exit;
+        } catch (\Exception $e) {
+            $this->logger->error(date('Y-m-d H:i:s') . ' ' . $e->getMessage());
+            $this->logger->error("Error: Failed to download report, error: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to download report', 'data' => []]);
+        }
+    }
+}
+=== App/Controllers/AuditController.php ===
+<?php
+
+namespace App\Controllers;
+
+use App\Services\AuditService;
+use Psr\Log\LoggerInterface;
+
+/**
+ * AuditController - Handles viewing and retrieving audit logs.
+ */
+class AuditController extends Controller
+{
+    protected LoggerInterface $logger;
+    private AuditService $auditService;
+    
+    /**
+     * Constructor with dependency injection
+     */
+    public function __construct(LoggerInterface $logger, AuditService $auditService)
+    {
+        parent::__construct($logger);
+        $this->auditService = $auditService;
+    }
+    
+    /**
+     * ✅ Get audit logs data for admin dashboard
+     */
+    public function index()
+    {
+        try {
+            // Check if user has admin role
+            if (!$this->hasAdminAccess()) {
+                return $this->jsonResponse('error', 'Admin access required', 403);
+            }
+            
+            // Process filters from request
+            $filters = $this->processFilters($_POST);
+            
+            // Get logs using the audit service
+            $logs = $this->auditService->getLogs($filters);
+            
+            return $this->jsonResponse('success', ['logs' => $logs], 200);
+        } catch (\Exception $e) {
+            return $this->handleException($e);
+        }
+    }
+
+    /**
+     * ✅ API Endpoint: Fetch logs based on filters.
+     */
+    public function fetchLogs()
+    {
+        try {
+            // Check if user has admin role
+            if (!$this->hasAdminAccess()) {
+                return $this->jsonResponse('error', 'Admin access required', 403);
+            }
+            
+            // Process filters from request
+            $filters = $this->processFilters($_POST);
+            
+            // Get logs using the audit service
+            $logs = $this->auditService->getLogs($filters);
+            
+            return $this->jsonResponse('success', ['logs' => $logs], 200);
+        } catch (\Exception $e) {
+            return $this->handleException($e);
+        }
+    }
+    
+    /**
+     * API Endpoint: Get log details by ID
+     */
+    public function getLog($id)
+    {
+        try {
+            // Check if user has admin role
+            if (!$this->hasAdminAccess()) {
+                return $this->jsonResponse('error', 'Admin access required', 403);
+            }
+            
+            $log = $this->auditService->getLogById((int)$id);
+            
+            return $this->jsonResponse('success', ['log' => $log], 200);
+        } catch (\Exception $e) {
+            return $this->handleException($e);
+        }
+    }
+    
+    /**
+     * Process and validate incoming filters
+     */
+    private function processFilters(array $rawFilters): array
+    {
+        $filters = [];
+        
+        // Category filter (unified log type)
+        if (!empty($rawFilters['category'])) {
+            $filters['category'] = $rawFilters['category'];
+        }
+        
+        // Action filter (for backward compatibility)
+        if (!empty($rawFilters['action'])) {
+            $filters['action'] = $rawFilters['action'];
+        }
+        
+        // User ID filter
+        if (!empty($rawFilters['user_id'])) {
+            $filters['user_id'] = (int)$rawFilters['user_id'];
+        }
+        
+        // Booking ID filter
+        if (!empty($rawFilters['booking_id'])) {
+            $filters['booking_id'] = (int)$rawFilters['booking_id'];
+        }
+        
+        // Date range filters
+        if (!empty($rawFilters['start_date'])) {
+            $filters['start_date'] = $rawFilters['start_date'];
+        }
+        
+        if (!empty($rawFilters['end_date'])) {
+            $filters['end_date'] = $rawFilters['end_date'];
+        }
+        
+        return $filters;
+    }
+    
+    /**
+     * Check if current user has admin access
+     */
+    private function hasAdminAccess(): bool
+    {
+        // Replace with your actual authentication logic
+        return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+    }
+    
+    /**
+     * Handle exceptions in a consistent way
+     */
+    private function handleException(\Exception $e)
+    {
+        // Log the exception
+        error_log($e->getMessage());
+        return $this->jsonResponse('error', 'An error occurred: ' . $e->getMessage(), 500);
+    }
+}

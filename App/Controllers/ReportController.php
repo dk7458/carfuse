@@ -15,17 +15,16 @@ class ReportController extends Controller
 {
     private ReportService $reportService;
     private NotificationService $notificationService;
-    private LoggerInterface $logger;
+    protected LoggerInterface $logger;
 
     public function __construct(
+        LoggerInterface $logger,
         ReportService $reportService,
         NotificationService $notificationService,
-        LoggerInterface $logger
     ) {
         parent::__construct($logger);
         $this->reportService = $reportService;
         $this->notificationService = $notificationService;
-        $this->logger = $logger;
     }
 
     /**

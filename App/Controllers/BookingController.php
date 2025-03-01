@@ -28,16 +28,16 @@ class BookingController extends Controller
     private AuditService $auditService;
     private NotificationService $notificationService;
     private ResponseFactoryInterface $responseFactory;
-    private LoggerInterface $logger;
+    protected LoggerInterface $logger;
 
     public function __construct(
+        LoggerInterface $logger,
         BookingService $bookingService,
         PaymentService $paymentService,
         Validator $validator,
         AuditService $auditService,
         NotificationService $notificationService,
         ResponseFactoryInterface $responseFactory,
-        LoggerInterface $logger
     ) {
         parent::__construct($logger);
         $this->bookingService = $bookingService;
@@ -46,7 +46,6 @@ class BookingController extends Controller
         $this->auditService = $auditService;
         $this->notificationService = $notificationService;
         $this->responseFactory = $responseFactory;
-        $this->logger = $logger;
     }
 
     /**

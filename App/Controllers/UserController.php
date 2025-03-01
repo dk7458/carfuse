@@ -24,21 +24,20 @@ class UserController extends Controller
     private Validator $validator;
     private TokenService $tokenService;
     private ExceptionHandler $exceptionHandler;
-    private LoggerInterface $logger;
+    protected LoggerInterface $logger;
     private AuthService $authService;
 
     public function __construct(
+        LoggerInterface $logger,
         Validator $validator,
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         AuthService $authService,
-        LoggerInterface $logger
     ) {
         parent::__construct($logger);
         $this->validator = $validator;
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
-        $this->logger = $logger;
         $this->authService = $authService;
     }
 

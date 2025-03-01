@@ -17,19 +17,18 @@ class DocumentController extends Controller
     private DocumentService $documentService;
     private Validator $validator;
     private AuditService $auditService;
-    private LoggerInterface $logger;
+    protected LoggerInterface $logger;
 
     public function __construct(
+        LoggerInterface $logger,
         DocumentService $documentService,
         Validator $validator,
         AuditService $auditService,
-        LoggerInterface $logger
     ) {
         parent::__construct($logger);
         $this->documentService = $documentService;
         $this->validator = $validator;
         $this->auditService = $auditService;
-        $this->logger = $logger;
     }
     
     /**

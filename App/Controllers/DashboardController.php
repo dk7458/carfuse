@@ -17,21 +17,20 @@ class DashboardController extends Controller
     private StatisticsService $statisticsService;
     private NotificationService $notificationService;
     private UserService $userService;
-    private LoggerInterface $logger;
+    protected LoggerInterface $logger;
 
     public function __construct(
+        LoggerInterface $logger,
         BookingService $bookingService,
         StatisticsService $statisticsService,
         NotificationService $notificationService,
         UserService $userService,
-        LoggerInterface $logger
     ) {
         parent::__construct($logger);
         $this->bookingService = $bookingService;
         $this->statisticsService = $statisticsService;
         $this->notificationService = $notificationService;
         $this->userService = $userService;
-        $this->logger = $logger;
     }
 
     /**

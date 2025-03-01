@@ -18,15 +18,14 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 class SignatureController extends Controller
 {
     private SignatureService $signatureService;
-    private LoggerInterface $logger;
+    protected LoggerInterface $logger;
 
     public function __construct(
+        LoggerInterface $logger,
         SignatureService $signatureService,
-        LoggerInterface $logger
     ) {
         parent::__construct($logger);
         $this->signatureService = $signatureService;
-        $this->logger = $logger;
     }
 
     /**

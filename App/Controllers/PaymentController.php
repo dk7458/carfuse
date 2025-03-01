@@ -25,16 +25,16 @@ class PaymentController extends Controller
     private AuditService $auditService;
     private PDO $db;
     private ResponseFactoryInterface $responseFactory;
-    private LoggerInterface $logger;
+    protected LoggerInterface $logger;
 
     public function __construct(
+        LoggerInterface $logger,
         PaymentService $paymentService,
         Validator $validator,
         NotificationService $notificationService,
         AuditService $auditService,
         PDO $db,
         ResponseFactoryInterface $responseFactory,
-        LoggerInterface $logger
     ) {
         parent::__construct($logger);
         $this->paymentService = $paymentService;
@@ -43,7 +43,6 @@ class PaymentController extends Controller
         $this->auditService = $auditService;
         $this->db = $db;
         $this->responseFactory = $responseFactory;
-        $this->logger = $logger;
     }
 
     /**

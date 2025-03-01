@@ -45,6 +45,17 @@ use App\Models\User;
 use GuzzleHttp\Client;
 use App\Controllers\UserController;
 use App\Controllers\AuthController;
+use App\Controllers\BookingController;
+use App\Controllers\NotificationController;
+use App\Controllers\AdminController;
+use App\Controllers\SignatureController;
+use App\Controllers\DashboardController;
+use App\Controllers\AdminDashboardController;
+use App\Controllers\PaymentController;
+use App\Controllers\DocumentController;
+use App\Controllers\ReportController;
+use App\Controllers\AuditController;
+use Psr\Http\Message\ResponseFactoryInterface;
 
 // Step 1: Initialize DI Container and LoggingHelper
 try {
@@ -335,10 +346,9 @@ $container->set(KeyManager::class, function($c) use ($config) {
 // Controllers
 $container->set(UserController::class, function($c) {
     return new UserController(
+        $c->get(LoggerInterface::class),
         $c->get(Validator::class),
-        $c->get(TokenService::class),
-        $c->get(ExceptionHandler::class),
-        $c->get('api_logger')
+        $c->get(TokenService::class)
     );
 });
 
@@ -348,6 +358,84 @@ $container->set(AuthController::class, function($c) {
         $c->get(AuthService::class),
         $c->get(TokenService::class),
         $c->get(DatabaseHelper::class)
+    );
+});
+
+$container->set(BookingController::class, function($c) {
+    return new BookingController(
+        $c->get(LoggerInterface::class),
+        $c->get(BookingService::class),
+        $c->get(PaymentService::class),
+        $c->get(Validator::class)
+    );
+});
+
+$container->set(NotificationController::class, function($c) {
+    return new NotificationController(
+        $c->get(LoggerInterface::class)
+    );
+});
+
+$container->set(AdminController::class, function($c) {
+    return new AdminController(
+        $c->get(LoggerInterface::class),
+        $c->get(AuditService::class),
+        $c->get(ResponseFactoryInterface::class)
+    );
+});
+
+$container->set(SignatureController::class, function($c) {
+    return new SignatureController(
+        $c->get(LoggerInterface::class),
+        $c->get(SignatureService::class)
+    );
+});
+
+$container->set(DashboardController::class, function($c) {
+    return new DashboardController(
+        $c->get(LoggerInterface::class),
+        $c->get(BookingService::class),
+        $c->get(StatisticsService::class),
+        $c->get(NotificationService::class)
+    );
+});
+
+$container->set(AdminDashboardController::class, function($c) {
+    return new AdminDashboardController(
+        $c->get(LoggerInterface::class)
+    );
+});
+
+$container->set(PaymentController::class, function($c) {
+    return new PaymentController(
+        $c->get(LoggerInterface::class),
+        $c->get(PaymentService::class),
+        $c->get(Validator::class),
+        $c->get(NotificationService::class)
+    );
+});
+
+$container->set(DocumentController::class, function($c) {
+    return new DocumentController(
+        $c->get(LoggerInterface::class),
+        $c->get(DocumentService::class),
+        $c->get(Validator::class),
+        $c->get(AuditService::class)
+    );
+});
+
+$container->set(ReportController::class, function($c) {
+    return new ReportController(
+        $c->get(LoggerInterface::class),
+        $c->get(ReportService::class),
+        $c->get(NotificationService::class)
+    );
+});
+
+$container->set(AuditController::class, function($c) {
+    return new AuditController(
+        $c->get(LoggerInterface::class),
+        $c->get(AuditService::class)
     );
 });
 

@@ -24,17 +24,16 @@ class AdminController extends Controller
 {
     private AuditService $auditService;
     private ResponseFactoryInterface $responseFactory;
-    private LoggerInterface $logger;
+    protected LoggerInterface $logger;
 
     public function __construct(
+        LoggerInterface $logger,
         AuditService $auditService,
         ResponseFactoryInterface $responseFactory,
-        LoggerInterface $logger
     ) {
         parent::__construct($logger);
         $this->auditService = $auditService;
         $this->responseFactory = $responseFactory;
-        $this->logger = $logger;
     }
 
     /**
