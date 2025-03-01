@@ -206,7 +206,30 @@ class User extends BaseModel
             $data['id'] = Uuid::uuid4()->toString();
         }
 
-        return parent::create($data);
+        $fields = array_keys($data);
+        $placeholders = [];
+        $params = [];
+
+        foreach ($fields as $field) {
+            $placeholders[] = ":{$field}";
+            $params[":{$field}"] = $data[$field];
+        }
+
+        if ($this->useTimestamps) {
+            $fields[] = 'created_at';
+            $placeholders[] = 'NOW()';
+            $fields[] = 'updated_at';
+            $placeholders[] = 'NOW()';
+        }
+
+        $fieldsSql = implode(', ', $fields);
+        $placeholdersSql = implode(', ', $placeholders);
+
+        $query = "INSERT INTO {$this->table} ({$fieldsSql}) VALUES ({$placeholdersSql})";
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        return $this->pdo->lastInsertId();
     }
 
     /**
@@ -223,7 +246,24 @@ class User extends BaseModel
             unset($data['password']);
         }
 
-        return parent::update($id, $data);
+        $setClauses = [];
+        $params = [':id' => $id];
+
+        foreach ($data as $key => $value) {
+            $setClauses[] = "{$key} = :{$key}";
+            $params[":{$key}"] = $value;
+        }
+
+        if ($this->useTimestamps) {
+            $setClauses[] = "updated_at = NOW()";
+        }
+
+        $setClause = implode(', ', $setClauses);
+
+        $query = "UPDATE {$this->table} SET {$setClause} WHERE id = :id AND deleted_at IS NULL";
+
+        $stmt = $this->pdo->prepare($query);
+        return $stmt->execute($params);
     }
 
     /**
@@ -314,11 +354,15 @@ class User extends BaseModel
      * Find a user by email.
      *
      * @param string $email
-     * @return User|null
+     * @return array|null
      */
     public static function findByEmail(string $email): ?array
     {
-        $user = self::where('email', $email)->first();
-        return $user ? $user->toArray() : null;
+        $dbHelper = new DatabaseHelper();
+        $pdo = $dbHelper->getPdo();
+        $query = "SELECT * FROM users WHERE email = :email AND deleted_at IS NULL";
+        $stmt = $pdo->prepare($query);
+        $stmt->execute([':email' => $email]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
     }
 }
