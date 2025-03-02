@@ -1,6 +1,6 @@
 <?php
 // setup_database.php
-// Description: Initializes the main application database using Illuminate/Database,
+// Description: Initializes the main application database using PDO via DatabaseHelper,
 // creates required tables, and performs any necessary migrations.
 // Dependencies: Requires autoload.php, DatabaseHelper, and proper configuration.
 
@@ -11,7 +11,6 @@ ini_set('display_errors', 1);
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 
-use Illuminate\Database\Capsule\Manager as Capsule;
 use App\Helpers\DatabaseHelper;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
@@ -55,6 +54,7 @@ logMessage("🚀 Main Database Setup Started");
 try {
     logMessage("Initializing main database instance...");
     $dbHelper = DatabaseHelper::getInstance();
+    $pdo = $dbHelper->getPdo();
     logMessage("✅ Main database connection established.");
 } catch (Exception $e) {
     logMessage("❌ Failed to initialize main database: " . $e->getMessage());
@@ -225,9 +225,9 @@ $allTablesCreated = true;
 foreach ($tables as $tableName => $sql) {
     logMessage("Attempting to create table: {$tableName}");
     try {
-        Capsule::statement($sql);
+        $pdo->exec($sql);
         logMessage("✅ Table `{$tableName}` created successfully.");
-    } catch (Exception $e) {
+    } catch (PDOException $e) {
         logMessage("❌ Error creating `{$tableName}`: " . $e->getMessage());
         $allTablesCreated = false;
     }
@@ -236,32 +236,37 @@ foreach ($tables as $tableName => $sql) {
 // Step 4: Check for data seeding needs
 logMessage("Checking if data seeding is needed...");
 try {
-    // Check if admin user exists
-    $adminExists = Capsule::table('users')
-        ->where('role', 'admin')
-        ->exists();
+    // Check if admin user exists using PDO
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE role = 'admin'");
+    $stmt->execute();
+    $adminCount = (int)$stmt->fetchColumn();
     
-    if (!$adminExists) {
+    if ($adminCount === 0) {
         logMessage("No admin user found. Creating default admin account...");
         try {
-            Capsule::table('users')->insert([
-                'name' => 'Admin',
-                'surname' => 'User',
-                'email' => 'admin@carfuse.com',
-                'password_hash' => password_hash('admin123', PASSWORD_BCRYPT), // Change in production!
-                'role' => 'admin',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
-                'active' => 1
+            $hashedPassword = password_hash('admin123', PASSWORD_BCRYPT); // Change in production!
+            $stmt = $pdo->prepare("
+                INSERT INTO users (name, surname, email, password_hash, role, created_at, updated_at, active) 
+                VALUES (:name, :surname, :email, :password_hash, :role, :created_at, :updated_at, :active)
+            ");
+            $stmt->execute([
+                ':name' => 'Admin',
+                ':surname' => 'User',
+                ':email' => 'admin@carfuse.com',
+                ':password_hash' => $hashedPassword,
+                ':role' => 'admin',
+                ':created_at' => date('Y-m-d H:i:s'),
+                ':updated_at' => date('Y-m-d H:i:s'),
+                ':active' => 1
             ]);
             logMessage("✅ Default admin user created successfully.");
-        } catch (Exception $e) {
+        } catch (PDOException $e) {
             logMessage("❌ Error creating admin user: " . $e->getMessage());
         }
     } else {
         logMessage("ℹ️ Admin user already exists. Skipping creation.");
     }
-} catch (Exception $e) {
+} catch (PDOException $e) {
     logMessage("❌ Error checking for admin user: " . $e->getMessage());
 }
 
