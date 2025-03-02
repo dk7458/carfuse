@@ -45,18 +45,48 @@ if (!$_ENV['DB_HOST']) {
 }
 $logger->info("🔄 Environment variables loaded from {$dotenvPath}");
 
-// Step 3: Load Configuration Files
-$configFiles = ['database', 'encryption', 'app', 'filestorage'];
+// Step 3: Load Configuration Files Dynamically
 $config = [];
-foreach ($configFiles as $file) {
-    $path = __DIR__ . "/config/{$file}.php";
+$configDir = __DIR__ . '/config';
+$requiredConfigs = ['database', 'encryption', 'app', 'filestorage'];
+
+// First, load required configuration files
+foreach ($requiredConfigs as $file) {
+    $path = "{$configDir}/{$file}.php";
     if (!file_exists($path)) {
-        $logger->critical("❌ Missing configuration file: {$file}.php");
-        exit("❌ Missing configuration file: {$file}.php\n");
+        $logger->critical("❌ Missing required configuration file: {$file}.php");
+        exit("❌ Missing required configuration file: {$file}.php\n");
     }
-    $config[$file] = require $path;
-    $logger->info("🔄 Configuration file loaded: {$file}.php");
+    try {
+        $config[$file] = require $path;
+        $logger->info("🔄 Required configuration file loaded: {$file}.php");
+    } catch (Exception $e) {
+        $logger->critical("❌ Error loading required configuration file {$file}.php: " . $e->getMessage());
+        exit("❌ Error loading required configuration file: {$file}.php\n");
+    }
 }
+
+// Then, load any additional configuration files from the config directory
+$additionalFiles = array_diff(scandir($configDir), ['.', '..', '.gitignore']);
+foreach ($additionalFiles as $file) {
+    // Skip already loaded required configs and non-PHP files
+    $filename = pathinfo($file, PATHINFO_FILENAME);
+    $extension = pathinfo($file, PATHINFO_EXTENSION);
+    
+    if ($extension !== 'php' || in_array($filename, $requiredConfigs)) {
+        continue;
+    }
+    
+    try {
+        $config[$filename] = require "{$configDir}/{$file}";
+        $logger->info("🔄 Additional configuration file loaded: {$file}");
+    } catch (Exception $e) {
+        $logger->warning("⚠️ Error loading optional configuration file {$file}: " . $e->getMessage());
+        // Don't exit for optional configs
+    }
+}
+
+$logger->info("✅ All configuration files loaded successfully.");
 
 // Step 4: Initialize Exception Handler (needed for AuditService)
 $exceptionHandler = new ExceptionHandler(
