@@ -76,6 +76,7 @@ return function (Container $container, array $config) {
             $config['encryption']['jwt_refresh_secret'],
             $c->get('auth_logger'),
             $c->get(ExceptionHandler::class),
+            $c->get('db'),
             $c->get('secure_db'), // Use secure database instance
             $c->get(AuditService::class) // Will use pre-initialized instance
         );
