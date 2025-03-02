@@ -217,7 +217,7 @@ try {
     
     $logger->info("Application bootstrap completed successfully");
 } catch (Exception $e) {
-    $logger->critical("Bootstrap failed: " . $e->getMessage()", [
+    $logger->critical("Bootstrap failed: " . $e->getMessage(), [
         'exception' => get_class($e),
         'trace' => $e->getTraceAsString()
     ]);
