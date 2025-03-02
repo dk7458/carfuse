@@ -2572,9 +2572,7 @@ class Booking extends BaseModel
             ORDER BY created_at DESC
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute();
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return $this->dbHelper->select($query);
     }
 
     /**
@@ -2591,9 +2589,7 @@ class Booking extends BaseModel
             ORDER BY created_at DESC
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return $this->dbHelper->select($query, [':user_id' => $userId]);
     }
 
     /**
@@ -2610,9 +2606,8 @@ class Booking extends BaseModel
             WHERE b.id = :booking_id AND b.deleted_at IS NULL
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':booking_id' => $bookingId]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+        return $result[0] ?? null;
     }
 
     /**
@@ -2629,9 +2624,8 @@ class Booking extends BaseModel
             WHERE b.id = :booking_id AND b.deleted_at IS NULL
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':booking_id' => $bookingId]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+        return $result[0] ?? null;
     }
 
     /**
@@ -2642,12 +2636,12 @@ class Booking extends BaseModel
      */
     public function getPayment(int $bookingId): ?array
     {
-        $stmt = $this->pdo->prepare("
+        $query = "
             SELECT p.* FROM payments p
             WHERE p.booking_id = :booking_id AND p.deleted_at IS NULL
-        ");
-        $stmt->execute([':booking_id' => $bookingId]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        ";
+        $result = $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+        return $result[0] ?? null;
     }
 }
 === App/Models/TransactionLog.php ===
@@ -2694,9 +2688,7 @@ class TransactionLog extends BaseModel
     public function getByUserId(int $userId): array
     {
         $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id ORDER BY created_at DESC";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        $transactions = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $transactions = $this->dbHelper->select($query, [':user_id' => $userId]);
 
         // Decrypt transaction details
         foreach ($transactions as &$transaction) {
@@ -2715,11 +2707,10 @@ class TransactionLog extends BaseModel
     public function getById(int $id): ?array
     {
         $query = "SELECT * FROM {$this->table} WHERE id = :id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':id' => $id]);
-        $transaction = $stmt->fetch(\PDO::FETCH_ASSOC);
+        $transaction = $this->dbHelper->select($query, [':id' => $id]);
 
         if ($transaction) {
+            $transaction = $transaction[0] ?? null;
             // Decrypt transaction details
             $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
         }
@@ -2758,9 +2749,7 @@ class TransactionLog extends BaseModel
     public function getRecent(int $limit = 10): array
     {
         $query = "SELECT * FROM {$this->table} ORDER BY created_at DESC LIMIT :limit";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':limit' => $limit]);
-        $transactions = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $transactions = $this->dbHelper->select($query, [':limit' => $limit]);
 
         // Decrypt transaction details
         foreach ($transactions as &$transaction) {
@@ -3130,9 +3119,7 @@ class Admin extends BaseModel
             return false;
         }
         
-        $query = "UPDATE {$this->table} SET deleted_at = NULL WHERE id = :id";
-        $stmt = $this->pdo->prepare($query);
-        $result = $stmt->execute([':id' => $id]);
+        $result = $this->dbHelper->update($this->table, ['deleted_at' => null], ['id' => $id]);
         
         if ($result && $this->auditService) {
             $this->auditService->logEvent('admin', 'admin_restored', [
@@ -3157,9 +3144,7 @@ class Admin extends BaseModel
             ORDER BY name ASC
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':admin_id' => $adminId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return $this->dbHelper->select($query, [':admin_id' => $adminId]);
     }
 }
 === App/Models/Notification.php ===
@@ -3190,9 +3175,7 @@ class Notification extends BaseModel
      */
     public function markAsRead(int $id): bool
     {
-        $query = "UPDATE {$this->table} SET is_read = 1 WHERE id = :id";
-        $stmt = $this->pdo->prepare($query);
-        $result = $stmt->execute([':id' => $id]);
+        $result = $this->dbHelper->update($this->table, ['is_read' => 1], ['id' => $id]);
         
         if ($result && $this->auditService) {
             $this->auditService->logEvent($this->resourceName, 'notification_read', [
@@ -3238,9 +3221,8 @@ class Notification extends BaseModel
             ORDER BY sent_at DESC
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $notifications = $this->dbHelper->select($query, [':user_id' => $userId]);
+        return $notifications ?: [];
     }
 
     /**
@@ -3257,9 +3239,8 @@ class Notification extends BaseModel
             ORDER BY sent_at DESC
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $notifications = $this->dbHelper->select($query, [':user_id' => $userId]);
+        return $notifications ?: [];
     }
 
     /**
@@ -3270,9 +3251,7 @@ class Notification extends BaseModel
      */
     public function markAllAsReadForUser(int $userId): bool
     {
-        $query = "UPDATE {$this->table} SET is_read = 1 WHERE user_id = :user_id AND is_read = 0";
-        $stmt = $this->pdo->prepare($query);
-        $result = $stmt->execute([':user_id' => $userId]);
+        $result = $this->dbHelper->update($this->table, ['is_read' => 1], ['user_id' => $userId, 'is_read' => 0]);
         
         if ($result && $this->auditService) {
             $this->auditService->logEvent($this->resourceName, 'all_notifications_read', [
@@ -3298,9 +3277,8 @@ class Notification extends BaseModel
         }
         
         $query = "SELECT * FROM users WHERE id = :user_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $notification['user_id']]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':user_id' => $notification['user_id']]);
+        return $result[0] ?? null;
     }
 }
 === App/Models/PaymentMethod.php ===
@@ -4398,10 +4376,7 @@ class AuditTrail extends BaseModel
 
         $query .= " ORDER BY created_at DESC";
 
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return $this->dbHelper->select($query, $params);
     }
 }
 === App/Models/RefundLog.php ===
@@ -4439,9 +4414,8 @@ class RefundLog extends BaseModel
         }
         
         $query = "SELECT * FROM users WHERE id = :user_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $refund['user_id']]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':user_id' => $refund['user_id']]);
+        return $result[0] ?? null;
     }
 
     /**
@@ -4459,9 +4433,8 @@ class RefundLog extends BaseModel
         }
         
         $query = "SELECT * FROM payments WHERE id = :payment_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':payment_id' => $refund['payment_id']]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':payment_id' => $refund['payment_id']]);
+        return $result[0] ?? null;
     }
 }=== App/Models/Signature.php ===
 namespace App\Models;
@@ -9637,6 +9610,7 @@ class DatabaseHelper
             $this->pdo = new PDO($dsn, $config['username'], $config['password'], [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
             ]);
 
             // ✅ Log successful initialization
@@ -9709,22 +9683,20 @@ class DatabaseHelper
     /**
      * ✅ Safe Query Execution with Exception Handling
      */
-    public static function safeQuery(callable $query)
+    public static function safeQuery(callable $query, string $queryDescription = 'Database Query')
     {
         try {
-            return $query(self::getInstance()->getPdo());
+            $result = $query(self::getInstance()->getPdo());
+            self::$logger->info("✅ {$queryDescription} executed successfully.");
+            return $result;
         } catch (\PDOException $e) {
-            if (self::$logger) {
-                self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            }
+            self::$logger->error("❌ {$queryDescription} Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             if ($e->getCode() == "23000") {
                 return ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
             }
             return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         } catch (\Exception $e) {
-            if (self::$logger) {
-                self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            }
+            self::$logger->error("❌ {$queryDescription} Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         }
     }
@@ -9732,56 +9704,71 @@ class DatabaseHelper
     /**
      * ✅ Wrapper for Insert Queries
      */
-    public static function insert($table, $data, $useSecureDb = false)
+    public static function insert(string $table, array $data, bool $useSecureDb = false): string
     {
         return self::safeQuery(function ($pdo) use ($table, $data, $useSecureDb) {
             $dbInstance = $useSecureDb ? self::getSecureInstance() : self::getInstance();
             $pdo = $dbInstance->getPdo();
             $columns = implode(", ", array_keys($data));
             $placeholders = implode(", ", array_fill(0, count($data), "?"));
-            $stmt = $pdo->prepare("INSERT INTO {$table} ({$columns}) VALUES ({$placeholders})");
+            $sql = "INSERT INTO {$table} ({$columns}) VALUES ({$placeholders})";
+            $stmt = $pdo->prepare($sql);
             $stmt->execute(array_values($data));
-            return $pdo->lastInsertId();
-        });
+            $lastInsertId = $pdo->lastInsertId();
+            self::$logger->info("✅ Inserted into {$table} with ID {$lastInsertId}");
+            return $lastInsertId;
+        }, "Insert into {$table}");
     }
 
     /**
      * ✅ Wrapper for Update Queries
      */
-    public static function update($table, $data, $where)
+    public static function update(string $table, array $data, array $where): int
     {
         return self::safeQuery(function ($pdo) use ($table, $data, $where) {
             $set = implode(", ", array_map(fn($key) => "{$key} = ?", array_keys($data)));
             $whereClause = implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
-            $stmt = $pdo->prepare("UPDATE {$table} SET {$set} WHERE {$whereClause}");
-            $stmt->execute(array_merge(array_values($data), array_values($where)));
-            return $stmt->rowCount();
-        });
+            $sql = "UPDATE {$table} SET {$set} WHERE {$whereClause}";
+            $stmt = $pdo->prepare($sql);
+            $params = array_merge(array_values($data), array_values($where));
+            $stmt->execute($params);
+            $rowCount = $stmt->rowCount();
+            self::$logger->info("✅ Updated {$rowCount} rows in {$table}");
+            return $rowCount;
+        }, "Update {$table}");
     }
 
     /**
      * ✅ Wrapper for Delete Queries
      */
-    public static function delete($table, $where)
+    public static function delete(string $table, array $where, bool $softDelete = false): int
     {
-        return self::safeQuery(function ($pdo) use ($table, $where) {
-            $whereClause = implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
-            $stmt = $pdo->prepare("DELETE FROM {$table} WHERE {$whereClause}");
+        return self::safeQuery(function ($pdo) use ($table, $where, $softDelete) {
+            if ($softDelete) {
+                $sql = "UPDATE {$table} SET deleted_at = NOW() WHERE " . implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
+            } else {
+                $sql = "DELETE FROM {$table} WHERE " . implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
+            }
+            $stmt = $pdo->prepare($sql);
             $stmt->execute(array_values($where));
-            return $stmt->rowCount();
-        });
+            $rowCount = $stmt->rowCount();
+            self::$logger->info("✅ Deleted {$rowCount} rows from {$table}");
+            return $rowCount;
+        }, "Delete from {$table}");
     }
 
     /**
      * ✅ Wrapper for Select Queries
      */
-    public static function select($query, $params = [])
+    public static function select(string $query, array $params = []): array
     {
         return self::safeQuery(function ($pdo) use ($query, $params) {
             $stmt = $pdo->prepare($query);
             $stmt->execute($params);
-            return $stmt->fetchAll();
-        });
+            $results = $stmt->fetchAll();
+            self::$logger->info("✅ Selected " . count($results) . " rows using query: " . $query);
+            return $results;
+        }, "Select Query");
     }
 }
 === App/Helpers/LoggingHelper.php ===
