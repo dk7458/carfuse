@@ -42,38 +42,58 @@ class DatabaseHelper
     private static function getDatabaseConfig(string $type = 'default'): array
     {
         $config = require __DIR__ . '/../../config/database.php';
+    
+        if (!isset($config['secure_database']) || !isset($config['app_database'])) {
+            throw new Exception("Database configuration is missing required keys.");
+        }
+    
         return $type === 'secure' ? $config['secure_database'] : $config['app_database'];
     }
-
+    
     public static function getInstance(): DatabaseHelper
     {
         if (self::$instance === null) {
             try {
-                self::$instance = new DatabaseHelper(self::getDatabaseConfig('default'));
+                $dbConfig = self::getDatabaseConfig('default');
+                self::$instance = new DatabaseHelper($dbConfig);
+    
+                if (isset(self::$logger)) {
+                    self::$logger->info("✅ Application database initialized successfully.");
+                }
             } catch (Exception $e) {
-                self::$logger->critical("❌ Database initialization failed: " . $e->getMessage());
-                die("Database initialization failed.");
+                if (isset(self::$logger)) {
+                    self::$logger->critical("❌ Application database initialization failed: " . $e->getMessage());
+                }
+                die("Application database initialization failed.");
             }
         }
-
+    
         return self::$instance;
     }
-
+    
     public static function getSecureInstance(): DatabaseHelper
     {
         if (self::$secureInstance === null) {
             try {
-                self::$secureInstance = new DatabaseHelper(self::getDatabaseConfig('secure'));
-                error_log("[DEBUG] Initializing Secure Database", 3, __DIR__ . "/debug.log"); // Ensure log file is writable
+                $dbConfig = self::getDatabaseConfig('secure');
+                self::$secureInstance = new DatabaseHelper($dbConfig);
+    
+                if (isset(self::$logger)) {
+                    self::$logger->info("✅ Secure database initialized successfully.");
+                }
+    
+                error_log("[DEBUG] Secure database initialized successfully", 3, __DIR__ . "/debug.log"); // Ensure log file is writable
             } catch (Exception $e) {
-                self::$logger->critical("❌ Secure database initialization failed: " . $e->getMessage());
+                if (isset(self::$logger)) {
+                    self::$logger->critical("❌ Secure database initialization failed: " . $e->getMessage());
+                }
                 die("Secure database initialization failed.");
             }
         }
-
+    
         return self::$secureInstance;
     }
-
+    
     public function getPdo(): PDO
     {
         return $this->pdo;
