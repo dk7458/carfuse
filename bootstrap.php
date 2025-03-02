@@ -86,7 +86,7 @@ try {
 // Step 6: Initialize AuditService early with audit logger
 try {
     $auditLogger = $loggingHelper->getLoggerByCategory('audit');
-    $auditService = new AuditService($auditLogger, $exceptionHandler, $securedatabase);
+    $auditService = new AuditService($auditLogger, $exceptionHandler, $secureDatabase);
     $auditService->logEvent(
         'system',
         'AuditService initialized during bootstrap',
