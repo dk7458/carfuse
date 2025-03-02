@@ -27,7 +27,7 @@ class PaymentController extends Controller
     private AuditService $auditService;
     private ResponseFactoryInterface $responseFactory;
     protected LoggerInterface $logger;
-    private ExceptionHandler $exceptionHandler;
+    protected ExceptionHandler $exceptionHandler;
 
     public function __construct(
         LoggerInterface $logger,

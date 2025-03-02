@@ -18,7 +18,7 @@ class AuthController extends Controller
     private TokenService $tokenService;
     private $pdo;
     private RateLimiter $rateLimiter;
-    private ExceptionHandler $exceptionHandler;
+    protected ExceptionHandler $exceptionHandler;
 
     public function __construct(
         LoggerInterface $logger,

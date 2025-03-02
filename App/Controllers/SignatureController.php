@@ -20,7 +20,7 @@ class SignatureController extends Controller
 {
     private SignatureService $signatureService;
     protected LoggerInterface $logger;
-    private ExceptionHandler $exceptionHandler;
+    protected ExceptionHandler $exceptionHandler;
     private AuditService $auditService;
 
     public function __construct(

@@ -23,7 +23,7 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 class NotificationController extends Controller
 {
     protected LoggerInterface $logger;
-    private ExceptionHandler $exceptionHandler;
+    protected ExceptionHandler $exceptionHandler;
     private AuditService $auditService;
 
     public function __construct(

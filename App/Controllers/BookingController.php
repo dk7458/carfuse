@@ -31,7 +31,7 @@ class BookingController extends Controller
     private ResponseFactoryInterface $responseFactory;
     protected LoggerInterface $logger;
     private TokenService $tokenService;
-    private ExceptionHandler $exceptionHandler;
+    protected ExceptionHandler $exceptionHandler;
 
     public function __construct(
         LoggerInterface $logger,

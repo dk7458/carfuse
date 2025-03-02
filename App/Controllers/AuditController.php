@@ -13,7 +13,7 @@ class AuditController extends Controller
 {
     protected LoggerInterface $logger;
     private AuditService $auditService;
-    private ExceptionHandler $exceptionHandler;
+    protected ExceptionHandler $exceptionHandler;
     
     /**
      * Constructor with dependency injection

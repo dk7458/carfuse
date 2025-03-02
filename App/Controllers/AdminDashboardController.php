@@ -15,7 +15,7 @@ require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 class AdminDashboardController extends Controller
 {
     protected LoggerInterface $logger;
-    private ExceptionHandler $exceptionHandler;
+    protected ExceptionHandler $exceptionHandler;
     private AuditService $auditService;
 
     public function __construct(

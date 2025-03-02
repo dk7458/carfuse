@@ -22,7 +22,7 @@ class UserController extends Controller
 {
     private Validator $validator;
     private TokenService $tokenService;
-    private ExceptionHandler $exceptionHandler;
+    protected ExceptionHandler $exceptionHandler;
     protected LoggerInterface $logger;
     private AuthService $authService;
     private AuditService $auditService;

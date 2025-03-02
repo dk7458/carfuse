@@ -19,7 +19,7 @@ class DocumentController extends Controller
     private Validator $validator;
     private AuditService $auditService;
     protected LoggerInterface $logger;
-    private ExceptionHandler $exceptionHandler;
+    protected ExceptionHandler $exceptionHandler;
 
     public function __construct(
         LoggerInterface $logger,

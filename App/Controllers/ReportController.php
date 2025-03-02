@@ -14,7 +14,7 @@ class ReportController extends Controller
     private ReportService $reportService;
     private NotificationService $notificationService;
     protected LoggerInterface $logger;
-    private ExceptionHandler $exceptionHandler;
+    protected ExceptionHandler $exceptionHandler;
     private AuditService $auditService;
 
     public function __construct(
