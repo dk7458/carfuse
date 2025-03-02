@@ -13,14 +13,9 @@ class DatabaseHelper
     private static ?DatabaseHelper $secureInstance = null;
     private PDO $pdo;
     private static LoggerInterface $logger;
-    private bool $useSecure = false;
 
-    private function __construct(bool $useSecure = false)
+    private function __construct(array $config)
     {
-        $this->useSecure = $useSecure;
-        $config = $useSecure
-            ? self::getDatabaseConfig('secure')
-            : self::getDatabaseConfig('default');
         try {
             $dsn = "mysql:host={$config['host']};dbname={$config['database']};charset={$config['charset']}";
             $this->pdo = new PDO($dsn, $config['username'], $config['password'], [
@@ -50,21 +45,33 @@ class DatabaseHelper
         return $type === 'secure' ? $config['secure_database'] : $config['app_database'];
     }
 
-    public static function getInstance(bool $useSecure = false): DatabaseHelper
+    public static function getInstance(): DatabaseHelper
     {
-        static $secureInstance = null;
-        static $standardInstance = null;
-        if ($useSecure) {
-            if ($secureInstance === null) {
-                $secureInstance = new DatabaseHelper(true);
+        if (self::$instance === null) {
+            try {
+                self::$instance = new DatabaseHelper(self::getDatabaseConfig('default'));
+            } catch (Exception $e) {
+                self::$logger->critical("❌ Database initialization failed: " . $e->getMessage());
+                die("Database initialization failed.");
             }
-            return $secureInstance;
-        } else {
-            if ($standardInstance === null) {
-                $standardInstance = new DatabaseHelper(false);
-            }
-            return $standardInstance;
         }
+
+        return self::$instance;
+    }
+
+    public static function getSecureInstance(): DatabaseHelper
+    {
+        if (self::$secureInstance === null) {
+            try {
+                self::$secureInstance = new DatabaseHelper(self::getDatabaseConfig('secure'));
+                error_log("[DEBUG] Initializing Secure Database", 3, __DIR__ . "/debug.log"); // Ensure log file is writable
+            } catch (Exception $e) {
+                self::$logger->critical("❌ Secure database initialization failed: " . $e->getMessage());
+                die("Secure database initialization failed.");
+            }
+        }
+
+        return self::$secureInstance;
     }
 
     public function getPdo(): PDO
@@ -87,15 +94,10 @@ class DatabaseHelper
     /**
      * ✅ Safe Query Execution with Exception Handling
      */
-    public static function safeQuery(
-        callable $queryCallback,
-        string $queryDescription = 'Database Query',
-        bool $useSecure = false
-    ) {
+    public static function safeQuery(callable $query, string $queryDescription = 'Database Query')
+    {
         try {
-            $db = self::getInstance($useSecure);
-            $pdo = $db->getPdo();
-            $result = $queryCallback($pdo);
+            $result = $query(self::getInstance()->getPdo());
             self::$logger->info("✅ {$queryDescription} executed successfully.");
             return $result;
         } catch (\PDOException $e) {
@@ -116,7 +118,7 @@ class DatabaseHelper
     public static function insert(string $table, array $data, bool $useSecureDb = false): string
     {
         return self::safeQuery(function ($pdo) use ($table, $data, $useSecureDb) {
-            $dbInstance = $useSecureDb ? self::getInstance(true) : self::getInstance(false);
+            $dbInstance = $useSecureDb ? self::getSecureInstance() : self::getInstance();
             $pdo = $dbInstance->getPdo();
             $columns = implode(", ", array_keys($data));
             $placeholders = implode(", ", array_fill(0, count($data), "?"));
@@ -126,7 +128,7 @@ class DatabaseHelper
             $lastInsertId = $pdo->lastInsertId();
             self::$logger->info("✅ Inserted into {$table} with ID {$lastInsertId}");
             return $lastInsertId;
-        }, "Insert into {$table}", $useSecureDb);
+        }, "Insert into {$table}");
     }
 
     /**
@@ -169,7 +171,7 @@ class DatabaseHelper
     /**
      * ✅ Wrapper for Select Queries
      */
-    public static function select(string $query, array $params = [], bool $useSecure = false): array
+    public static function select(string $query, array $params = []): array
     {
         return self::safeQuery(function ($pdo) use ($query, $params) {
             $stmt = $pdo->prepare($query);
@@ -177,6 +179,6 @@ class DatabaseHelper
             $results = $stmt->fetchAll();
             self::$logger->info("✅ Selected " . count($results) . " rows using query: " . $query);
             return $results;
-        }, "Select Query", $useSecure);
+        }, "Select Query");
     }
 }

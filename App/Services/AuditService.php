@@ -27,15 +27,16 @@ class AuditService
 
     public function __construct(
         LoggerInterface $logger,
-        ExceptionHandler $exceptionHandler
+        ExceptionHandler $exceptionHandler,
+        DatabaseHelper $db
     ) {
-        $this->db = DatabaseHelper::getInstance(true);
+        $this->db = $db;
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
 
         // Log the database instance being used
         $this->logger->info("AuditService initialized with database instance", [
-            'database' => $this->db === DatabaseHelper::getSecureInstance() ? 'secure_db' : 'db'
+            'database' => $db === DatabaseHelper::getSecureInstance() ? 'secure_db' : 'db'
         ]);
     }
 
@@ -80,7 +81,7 @@ class AuditService
             // Log the query being executed
             $this->logger->info("[Audit] Executing query: INSERT INTO audit_logs", $data);
             
-            // Use the injected DatabaseHelper instance
+            // Use DatabaseHelper::insert with secure database
             $insertId = DatabaseHelper::insert('audit_logs', $data, true);
             
             if (self::DEBUG_MODE) {
@@ -167,7 +168,7 @@ class AuditService
             // Get total count first (for pagination)
             $countSql = "SELECT COUNT(*) as total FROM audit_logs WHERE {$whereClause}";
             $this->logger->info("[Audit] Executing count query: {$countSql}", $params);
-            $countResult = DatabaseHelper::select($countSql, $params, true);
+            $countResult = DatabaseHelper::select($countSql, $params);
             $totalItems = isset($countResult[0]['total']) ? (int)$countResult[0]['total'] : 0;
             
             // Pagination parameters
@@ -184,7 +185,7 @@ class AuditService
             // Build and execute the main query
             $sql = "SELECT * FROM audit_logs WHERE {$whereClause} ORDER BY {$sortField} {$sortOrder} LIMIT {$perPage} OFFSET {$offset}";
             $this->logger->info("[Audit] Executing select query: {$sql}", $params);
-            $logs = DatabaseHelper::select($sql, $params, true);
+            $logs = DatabaseHelper::select($sql, $params);
             
             // Process the results - parse JSON details
             foreach ($logs as &$log) {
@@ -226,7 +227,7 @@ class AuditService
             // Use DatabaseHelper::select instead of $this->db->table()->where()->first()
             $sql = "SELECT * FROM audit_logs WHERE id = ? LIMIT 1";
             $this->logger->info("[Audit] Executing select query: {$sql}", [$logId]);
-            $logs = DatabaseHelper::select($sql, [$logId], true);
+            $logs = DatabaseHelper::select($sql, [$logId]);
             $log = !empty($logs) ? $logs[0] : null;
             
             if (!$log) {
@@ -298,7 +299,7 @@ class AuditService
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute($params);
                 return $stmt->rowCount();
-            }, "Delete audit logs", true);
+            });
             
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Audit] Deleted {$deleted} logs with filters: " . json_encode($filters));
@@ -358,7 +359,7 @@ class AuditService
             // Use DatabaseHelper::select instead of query builder get()
             $sql = "SELECT * FROM audit_logs WHERE {$whereClause} ORDER BY created_at DESC";
             $this->logger->info("[Audit] Executing select query for export: {$sql}", $params);
-            $logs = DatabaseHelper::select($sql, $params, true);
+            $logs = DatabaseHelper::select($sql, $params);
             
             // Create CSV file
             $filename = 'audit_logs_export_' . date('Y-m-d_His') . '.csv';
