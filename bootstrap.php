@@ -71,11 +71,11 @@ try {
     
     // Explicitly initialize both database instances
     $database = DatabaseHelper::getInstance();
-    $secureDatabase = DatabaseHelper::getSecureInstance();
+    $secure_database = DatabaseHelper::getSecureInstance();
     
     // Verify which databases are actually being used
     $logger->info("🔍 [Database Check] App database: " . $database->getPdo()->query("SELECT DATABASE()")->fetchColumn());
-    $logger->info("🔍 [Database Check] Secure database: " . $secureDatabase->getPdo()->query("SELECT DATABASE()")->fetchColumn());
+    $logger->info("🔍 [Database Check] Secure database: " . $secure_database->getPdo()->query("SELECT DATABASE()")->fetchColumn());
     
     $logger->info("🔄 Database instances loaded successfully.");
 } catch (Exception $e) {
@@ -86,7 +86,7 @@ try {
 // Step 6: Initialize AuditService early with audit logger
 try {
     $auditLogger = $loggingHelper->getLoggerByCategory('audit');
-    $auditService = new AuditService($auditLogger, $exceptionHandler, $secureDatabase);
+    $auditService = new AuditService($auditLogger, $exceptionHandler, $secure_database);
     $auditService->logEvent(
         'system',
         'AuditService initialized during bootstrap',
