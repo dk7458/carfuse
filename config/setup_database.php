@@ -1,14 +1,69 @@
 <?php
+// setup_database.php
+// Description: Initializes the main application database using Illuminate/Database,
+// creates required tables, and performs any necessary migrations.
+// Dependencies: Requires autoload.php, DatabaseHelper, and proper configuration.
+
+// Enable full error reporting for debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
 
 use Illuminate\Database\Capsule\Manager as Capsule;
 use App\Helpers\DatabaseHelper;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
 
-// Initialize the main database connection
-DatabaseHelper::getInstance();
+// Set up log file path 
+$logDir = __DIR__ . '/../logs';
+if (!is_dir($logDir)) {
+    mkdir($logDir, 0755, true);
+}
+$logFilePath = $logDir . '/database_setup.log';
 
-// Define all tables with a consistent schema
+// Initialize the logger early for DatabaseHelper
+try {
+    $logger = new Logger('db_setup');
+    $logger->pushHandler(new StreamHandler($logFilePath, Logger::DEBUG));
+    // Set the static logger on DatabaseHelper
+    DatabaseHelper::setLogger($logger);
+    $logger->info("🚀 Logger initialized successfully for DatabaseHelper");
+} catch (Exception $e) {
+    file_put_contents($logFilePath, "[" . date('Y-m-d H:i:s') . "] ❌ Failed to initialize logger: " . $e->getMessage() . "\n", FILE_APPEND);
+    echo "[❌] Failed to initialize logger. Check log for details.\n";
+    exit(1);
+}
+
+// Helper function to log messages with timestamps
+function logMessage($message) {
+    global $logFilePath, $logger;
+    if (isset($logger)) {
+        $logger->info($message);
+    } else {
+        file_put_contents($logFilePath, "[" . date('Y-m-d H:i:s') . "] " . $message . "\n", FILE_APPEND);
+    }
+    // Also output to the console for immediate feedback
+    echo "[" . date('Y-m-d H:i:s') . "] " . $message . "\n";
+}
+
+// Log the start of the setup
+logMessage("🚀 Main Database Setup Started");
+
+// Step 1: Initialize Database using DatabaseHelper
+try {
+    logMessage("Initializing main database instance...");
+    $dbHelper = DatabaseHelper::getInstance();
+    logMessage("✅ Main database connection established.");
+} catch (Exception $e) {
+    logMessage("❌ Failed to initialize main database: " . $e->getMessage());
+    echo "[❌] Main database initialization failed. Check log for details.\n";
+    exit(1);
+}
+
+// Step 2: Define Main Application Tables
+logMessage("Defining application tables...");
 $tables = [
     // FLEET TABLE
     "fleet" => "
@@ -164,19 +219,59 @@ $tables = [
     "
 ];
 
-// Log file for setup
-$logFilePath = __DIR__ . '/../logs/database_setup.log';
-file_put_contents($logFilePath, "🚀 Database Setup Started at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
-
-// Create each table in order
+// Step 3: Execute Table Creation
+logMessage("Creating application tables...");
+$allTablesCreated = true;
 foreach ($tables as $tableName => $sql) {
+    logMessage("Attempting to create table: {$tableName}");
     try {
         Capsule::statement($sql);
-        file_put_contents($logFilePath, "[✅] Table `{$tableName}` created successfully.\n", FILE_APPEND);
+        logMessage("✅ Table `{$tableName}` created successfully.");
     } catch (Exception $e) {
-        file_put_contents($logFilePath, "[❌] Error creating `{$tableName}`: " . $e->getMessage() . "\n", FILE_APPEND);
+        logMessage("❌ Error creating `{$tableName}`: " . $e->getMessage());
+        $allTablesCreated = false;
     }
 }
 
-file_put_contents($logFilePath, "✅ Database setup completed successfully.\n", FILE_APPEND);
-echo "[🚀] Application database setup completed. Check `logs/database_setup.log` for details.\n";
+// Step 4: Check for data seeding needs
+logMessage("Checking if data seeding is needed...");
+try {
+    // Check if admin user exists
+    $adminExists = Capsule::table('users')
+        ->where('role', 'admin')
+        ->exists();
+    
+    if (!$adminExists) {
+        logMessage("No admin user found. Creating default admin account...");
+        try {
+            Capsule::table('users')->insert([
+                'name' => 'Admin',
+                'surname' => 'User',
+                'email' => 'admin@carfuse.com',
+                'password_hash' => password_hash('admin123', PASSWORD_BCRYPT), // Change in production!
+                'role' => 'admin',
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
+                'active' => 1
+            ]);
+            logMessage("✅ Default admin user created successfully.");
+        } catch (Exception $e) {
+            logMessage("❌ Error creating admin user: " . $e->getMessage());
+        }
+    } else {
+        logMessage("ℹ️ Admin user already exists. Skipping creation.");
+    }
+} catch (Exception $e) {
+    logMessage("❌ Error checking for admin user: " . $e->getMessage());
+}
+
+// Step 5: Finalize Setup
+if ($allTablesCreated) {
+    logMessage("✅ Main Database Setup Completed Successfully at " . date('Y-m-d H:i:s'));
+    echo "[🚀] Application database setup completed successfully. Check '{$logFilePath}' for details.\n";
+    exit(0);
+} else {
+    logMessage("⚠️ Main Database Setup Completed with Warnings at " . date('Y-m-d H:i:s'));
+    echo "[⚠️] Application database setup completed with some issues. Check '{$logFilePath}' for details.\n";
+    exit(1);
+}

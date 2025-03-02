@@ -101,7 +101,7 @@ $tables = [
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ",
 
-    // Refresh tokens table
+    // Refresh tokens table - remove foreign key constraint that references users table
     "refresh_tokens" => "
         CREATE TABLE IF NOT EXISTS refresh_tokens (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -111,8 +111,7 @@ $tables = [
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             expires_at TIMESTAMP NOT NULL,
             revoked TINYINT(1) DEFAULT 0,
-            revoked_at TIMESTAMP NULL DEFAULT NULL,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            revoked_at TIMESTAMP NULL DEFAULT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     "
 ];
