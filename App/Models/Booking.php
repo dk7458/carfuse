@@ -41,9 +41,7 @@ class Booking extends BaseModel
             ORDER BY created_at DESC
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute();
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return $this->dbHelper->select($query);
     }
 
     /**
@@ -60,9 +58,7 @@ class Booking extends BaseModel
             ORDER BY created_at DESC
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return $this->dbHelper->select($query, [':user_id' => $userId]);
     }
 
     /**
@@ -79,9 +75,8 @@ class Booking extends BaseModel
             WHERE b.id = :booking_id AND b.deleted_at IS NULL
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':booking_id' => $bookingId]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+        return $result[0] ?? null;
     }
 
     /**
@@ -98,9 +93,8 @@ class Booking extends BaseModel
             WHERE b.id = :booking_id AND b.deleted_at IS NULL
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':booking_id' => $bookingId]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+        return $result[0] ?? null;
     }
 
     /**
@@ -111,11 +105,11 @@ class Booking extends BaseModel
      */
     public function getPayment(int $bookingId): ?array
     {
-        $stmt = $this->pdo->prepare("
+        $query = "
             SELECT p.* FROM payments p
             WHERE p.booking_id = :booking_id AND p.deleted_at IS NULL
-        ");
-        $stmt->execute([':booking_id' => $bookingId]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        ";
+        $result = $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+        return $result[0] ?? null;
     }
 }

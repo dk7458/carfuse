@@ -138,9 +138,7 @@ class Admin extends BaseModel
             return false;
         }
         
-        $query = "UPDATE {$this->table} SET deleted_at = NULL WHERE id = :id";
-        $stmt = $this->pdo->prepare($query);
-        $result = $stmt->execute([':id' => $id]);
+        $result = $this->dbHelper->update($this->table, ['deleted_at' => null], ['id' => $id]);
         
         if ($result && $this->auditService) {
             $this->auditService->logEvent('admin', 'admin_restored', [
@@ -165,8 +163,6 @@ class Admin extends BaseModel
             ORDER BY name ASC
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':admin_id' => $adminId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return $this->dbHelper->select($query, [':admin_id' => $adminId]);
     }
 }

@@ -21,6 +21,7 @@ class DatabaseHelper
             $this->pdo = new PDO($dsn, $config['username'], $config['password'], [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
             ]);
 
             // ✅ Log successful initialization
@@ -93,22 +94,20 @@ class DatabaseHelper
     /**
      * ✅ Safe Query Execution with Exception Handling
      */
-    public static function safeQuery(callable $query)
+    public static function safeQuery(callable $query, string $queryDescription = 'Database Query')
     {
         try {
-            return $query(self::getInstance()->getPdo());
+            $result = $query(self::getInstance()->getPdo());
+            self::$logger->info("✅ {$queryDescription} executed successfully.");
+            return $result;
         } catch (\PDOException $e) {
-            if (self::$logger) {
-                self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            }
+            self::$logger->error("❌ {$queryDescription} Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             if ($e->getCode() == "23000") {
                 return ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
             }
             return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         } catch (\Exception $e) {
-            if (self::$logger) {
-                self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            }
+            self::$logger->error("❌ {$queryDescription} Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         }
     }
@@ -116,55 +115,70 @@ class DatabaseHelper
     /**
      * ✅ Wrapper for Insert Queries
      */
-    public static function insert($table, $data, $useSecureDb = false)
+    public static function insert(string $table, array $data, bool $useSecureDb = false): string
     {
         return self::safeQuery(function ($pdo) use ($table, $data, $useSecureDb) {
             $dbInstance = $useSecureDb ? self::getSecureInstance() : self::getInstance();
             $pdo = $dbInstance->getPdo();
             $columns = implode(", ", array_keys($data));
             $placeholders = implode(", ", array_fill(0, count($data), "?"));
-            $stmt = $pdo->prepare("INSERT INTO {$table} ({$columns}) VALUES ({$placeholders})");
+            $sql = "INSERT INTO {$table} ({$columns}) VALUES ({$placeholders})";
+            $stmt = $pdo->prepare($sql);
             $stmt->execute(array_values($data));
-            return $pdo->lastInsertId();
-        });
+            $lastInsertId = $pdo->lastInsertId();
+            self::$logger->info("✅ Inserted into {$table} with ID {$lastInsertId}");
+            return $lastInsertId;
+        }, "Insert into {$table}");
     }
 
     /**
      * ✅ Wrapper for Update Queries
      */
-    public static function update($table, $data, $where)
+    public static function update(string $table, array $data, array $where): int
     {
         return self::safeQuery(function ($pdo) use ($table, $data, $where) {
             $set = implode(", ", array_map(fn($key) => "{$key} = ?", array_keys($data)));
             $whereClause = implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
-            $stmt = $pdo->prepare("UPDATE {$table} SET {$set} WHERE {$whereClause}");
-            $stmt->execute(array_merge(array_values($data), array_values($where)));
-            return $stmt->rowCount();
-        });
+            $sql = "UPDATE {$table} SET {$set} WHERE {$whereClause}";
+            $stmt = $pdo->prepare($sql);
+            $params = array_merge(array_values($data), array_values($where));
+            $stmt->execute($params);
+            $rowCount = $stmt->rowCount();
+            self::$logger->info("✅ Updated {$rowCount} rows in {$table}");
+            return $rowCount;
+        }, "Update {$table}");
     }
 
     /**
      * ✅ Wrapper for Delete Queries
      */
-    public static function delete($table, $where)
+    public static function delete(string $table, array $where, bool $softDelete = false): int
     {
-        return self::safeQuery(function ($pdo) use ($table, $where) {
-            $whereClause = implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
-            $stmt = $pdo->prepare("DELETE FROM {$table} WHERE {$whereClause}");
+        return self::safeQuery(function ($pdo) use ($table, $where, $softDelete) {
+            if ($softDelete) {
+                $sql = "UPDATE {$table} SET deleted_at = NOW() WHERE " . implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
+            } else {
+                $sql = "DELETE FROM {$table} WHERE " . implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
+            }
+            $stmt = $pdo->prepare($sql);
             $stmt->execute(array_values($where));
-            return $stmt->rowCount();
-        });
+            $rowCount = $stmt->rowCount();
+            self::$logger->info("✅ Deleted {$rowCount} rows from {$table}");
+            return $rowCount;
+        }, "Delete from {$table}");
     }
 
     /**
      * ✅ Wrapper for Select Queries
      */
-    public static function select($query, $params = [])
+    public static function select(string $query, array $params = []): array
     {
         return self::safeQuery(function ($pdo) use ($query, $params) {
             $stmt = $pdo->prepare($query);
             $stmt->execute($params);
-            return $stmt->fetchAll();
-        });
+            $results = $stmt->fetchAll();
+            self::$logger->info("✅ Selected " . count($results) . " rows using query: " . $query);
+            return $results;
+        }, "Select Query");
     }
 }

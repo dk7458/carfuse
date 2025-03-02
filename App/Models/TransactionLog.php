@@ -41,9 +41,7 @@ class TransactionLog extends BaseModel
     public function getByUserId(int $userId): array
     {
         $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id ORDER BY created_at DESC";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        $transactions = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $transactions = $this->dbHelper->select($query, [':user_id' => $userId]);
 
         // Decrypt transaction details
         foreach ($transactions as &$transaction) {
@@ -62,11 +60,10 @@ class TransactionLog extends BaseModel
     public function getById(int $id): ?array
     {
         $query = "SELECT * FROM {$this->table} WHERE id = :id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':id' => $id]);
-        $transaction = $stmt->fetch(\PDO::FETCH_ASSOC);
+        $transaction = $this->dbHelper->select($query, [':id' => $id]);
 
         if ($transaction) {
+            $transaction = $transaction[0] ?? null;
             // Decrypt transaction details
             $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
         }
@@ -105,9 +102,7 @@ class TransactionLog extends BaseModel
     public function getRecent(int $limit = 10): array
     {
         $query = "SELECT * FROM {$this->table} ORDER BY created_at DESC LIMIT :limit";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':limit' => $limit]);
-        $transactions = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $transactions = $this->dbHelper->select($query, [':limit' => $limit]);
 
         // Decrypt transaction details
         foreach ($transactions as &$transaction) {

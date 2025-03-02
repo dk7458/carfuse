@@ -32,9 +32,8 @@ class RefundLog extends BaseModel
         }
         
         $query = "SELECT * FROM users WHERE id = :user_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $refund['user_id']]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':user_id' => $refund['user_id']]);
+        return $result[0] ?? null;
     }
 
     /**
@@ -52,8 +51,7 @@ class RefundLog extends BaseModel
         }
         
         $query = "SELECT * FROM payments WHERE id = :payment_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':payment_id' => $refund['payment_id']]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':payment_id' => $refund['payment_id']]);
+        return $result[0] ?? null;
     }
 }

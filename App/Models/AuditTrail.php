@@ -61,9 +61,6 @@ class AuditTrail extends BaseModel
 
         $query .= " ORDER BY created_at DESC";
 
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        return $this->dbHelper->select($query, $params);
     }
 }

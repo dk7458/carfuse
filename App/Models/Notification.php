@@ -25,9 +25,7 @@ class Notification extends BaseModel
      */
     public function markAsRead(int $id): bool
     {
-        $query = "UPDATE {$this->table} SET is_read = 1 WHERE id = :id";
-        $stmt = $this->pdo->prepare($query);
-        $result = $stmt->execute([':id' => $id]);
+        $result = $this->dbHelper->update($this->table, ['is_read' => 1], ['id' => $id]);
         
         if ($result && $this->auditService) {
             $this->auditService->logEvent($this->resourceName, 'notification_read', [
@@ -73,9 +71,8 @@ class Notification extends BaseModel
             ORDER BY sent_at DESC
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $notifications = $this->dbHelper->select($query, [':user_id' => $userId]);
+        return $notifications ?: [];
     }
 
     /**
@@ -92,9 +89,8 @@ class Notification extends BaseModel
             ORDER BY sent_at DESC
         ";
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $userId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $notifications = $this->dbHelper->select($query, [':user_id' => $userId]);
+        return $notifications ?: [];
     }
 
     /**
@@ -105,9 +101,7 @@ class Notification extends BaseModel
      */
     public function markAllAsReadForUser(int $userId): bool
     {
-        $query = "UPDATE {$this->table} SET is_read = 1 WHERE user_id = :user_id AND is_read = 0";
-        $stmt = $this->pdo->prepare($query);
-        $result = $stmt->execute([':user_id' => $userId]);
+        $result = $this->dbHelper->update($this->table, ['is_read' => 1], ['user_id' => $userId, 'is_read' => 0]);
         
         if ($result && $this->auditService) {
             $this->auditService->logEvent($this->resourceName, 'all_notifications_read', [
@@ -133,8 +127,7 @@ class Notification extends BaseModel
         }
         
         $query = "SELECT * FROM users WHERE id = :user_id";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':user_id' => $notification['user_id']]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':user_id' => $notification['user_id']]);
+        return $result[0] ?? null;
     }
 }
