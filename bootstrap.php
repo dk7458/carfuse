@@ -68,8 +68,15 @@ $exceptionHandler = new ExceptionHandler(
 // Step 5: Initialize Database Connections (needed for AuditService)
 try {
     DatabaseHelper::setLogger($loggingHelper->getLoggerByCategory('db'));
-    $database = DatabaseHelper::getInstance();
-    $secure_database = DatabaseHelper::getSecureInstance();
+    
+    // Explicitly initialize both database instances
+    $appDatabase = DatabaseHelper::getInstance();
+    $secureDatabase = DatabaseHelper::getSecureInstance();
+    
+    // Verify which databases are actually being used
+    $logger->info("🔍 [Database Check] App database: " . $appDatabase->getPdo()->query("SELECT DATABASE()")->fetchColumn());
+    $logger->info("🔍 [Database Check] Secure database: " . $secureDatabase->getPdo()->query("SELECT DATABASE()")->fetchColumn());
+    
     $logger->info("🔄 Database instances loaded successfully.");
 } catch (Exception $e) {
     $logger->critical("❌ Failed to load database instances: " . $e->getMessage());

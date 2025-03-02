@@ -118,11 +118,19 @@ class DatabaseHelper
     {
         try {
             $dbInstance = $useSecureDb ? self::getSecureInstance() : self::getInstance();
+            
+            // Debug which database is being used
+            $databaseName = $dbInstance->getPdo()->query("SELECT DATABASE()")->fetchColumn();
+            self::$logger->info("Using database: {$databaseName} for {$queryDescription} (useSecureDb: " . ($useSecureDb ? "true" : "false") . ")");
+            
             $result = $query($dbInstance->getPdo());
             self::$logger->info("✅ {$queryDescription} executed successfully using " . ($useSecureDb ? "secure" : "application") . " database.");
             return $result;
         } catch (\PDOException $e) {
-            self::$logger->error("❌ {$queryDescription} Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            self::$logger->error("❌ {$queryDescription} Error: " . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'useSecureDb' => $useSecureDb ? "true" : "false"
+            ]);
             if ($e->getCode() == "23000") {
                 return ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
             }
@@ -180,6 +188,12 @@ class DatabaseHelper
 
     public static function select(string $query, array $params = [], bool $useSecureDb = false): array
     {
+        // Add debug log
+        self::$logger->debug("Select query called with useSecureDb = " . ($useSecureDb ? "true" : "false"), [
+            'query' => $query,
+            'params' => $params
+        ]);
+        
         return self::safeQuery(function ($pdo) use ($query, $params) {
             $stmt = $pdo->prepare($query);
             $stmt->execute($params);

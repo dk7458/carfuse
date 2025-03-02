@@ -127,13 +127,13 @@ class TokenService
     {
         try {
             // Store the token in the refresh_tokens table using secure db helper
-            $this->secureDb->insert('refresh_tokens', [
+            DatabaseHelper::insert('refresh_tokens', [
                 'user_id' => $userId,
                 'token' => hash('sha256', $refreshToken), // Store hashed token for security
                 'expires_at' => date('Y-m-d H:i:s', time() + 604800),
                 'created_at' => date('Y-m-d H:i:s'),
                 'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null
-            ]);
+            ], true); // Set useSecureDb to true
             
             if (self::DEBUG_MODE) {
                 $this->logger->info("[auth] Refresh token stored in secure database", ['user_id' => $userId]);
@@ -189,7 +189,7 @@ class TokenService
             // If not in cache, check secure database
             $hashedToken = hash('sha256', $refreshToken);
             $query = "SELECT 1 FROM refresh_tokens WHERE token = :token AND revoked = 1 LIMIT 1";
-            $revoked = $this->secureDb->select($query, [':token' => $hashedToken]);
+            $revoked = DatabaseHelper::select($query, [':token' => $hashedToken], true); // Set useSecureDb to true
                 
             // If revoked in database, store in cache for next time
             if ($revoked) {
@@ -239,14 +239,14 @@ class TokenService
             $hashedToken = hash('sha256', $token);
             
             // Update the token status in secure database using db helper
-            $this->secureDb->update('refresh_tokens', [
+            DatabaseHelper::update('refresh_tokens', [
                 'revoked' => 1,
                 'revoked_at' => date('Y-m-d H:i:s')
-            ], ['token' => $hashedToken]);
+            ], ['token' => $hashedToken], true); // Set useSecureDb to true
                 
             // Try to get the user ID for audit logging
             $query = "SELECT user_id FROM refresh_tokens WHERE token = :token LIMIT 1";
-            $tokenData = $this->secureDb->select($query, [':token' => $hashedToken]);
+            $tokenData = DatabaseHelper::select($query, [':token' => $hashedToken], true); // Set useSecureDb to true
             
             $userId = $tokenData[0]['user_id'] ?? null;
             
@@ -276,7 +276,7 @@ class TokenService
     {
         try {
             $query = "DELETE FROM refresh_tokens WHERE expires_at < :now";
-            $count = $this->secureDb->update($query, [':now' => date('Y-m-d H:i:s')]);
+            $count = DatabaseHelper::delete('refresh_tokens', ['expires_at < ' => date('Y-m-d H:i:s')], false, true); // Set useSecureDb to true
                 
             $this->logger->info("[TokenService] Purged {$count} expired tokens");
             return $count;
@@ -294,10 +294,10 @@ class TokenService
     {
         try {
             $query = "SELECT * FROM refresh_tokens WHERE user_id = :user_id AND revoked = 0 AND expires_at > :now";
-            $tokens = $this->secureDb->select($query, [
+            $tokens = DatabaseHelper::select($query, [
                 ':user_id' => $userId,
                 ':now' => date('Y-m-d H:i:s')
-            ]);
+            ], true); // Set useSecureDb to true
                 
             return $tokens ?: [];
         } catch (\Exception $e) {
