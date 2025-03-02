@@ -25,6 +25,7 @@ class TokenService
         string $jwtRefreshSecret,
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
+        DatabaseHelper $db,
         AuditService $auditService
     ) {
         $this->jwtSecret = $jwtSecret;
