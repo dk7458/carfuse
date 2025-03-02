@@ -13,7 +13,7 @@ use Psr\Http\Message\ResponseInterface as Response;
 class Controller
 {
     protected LoggerInterface $logger;
-    protected ?ExceptionHandler $exceptionHandler = null;
+    protected ExceptionHandler $exceptionHandler;
 
     public function __construct(LoggerInterface $logger, ?ExceptionHandler $exceptionHandler = null)
     {
