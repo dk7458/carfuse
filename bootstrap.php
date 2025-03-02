@@ -70,11 +70,11 @@ try {
     DatabaseHelper::setLogger($loggingHelper->getLoggerByCategory('db'));
     
     // Explicitly initialize both database instances
-    $appDatabase = DatabaseHelper::getInstance();
+    $database = DatabaseHelper::getInstance();
     $secureDatabase = DatabaseHelper::getSecureInstance();
     
     // Verify which databases are actually being used
-    $logger->info("🔍 [Database Check] App database: " . $appDatabase->getPdo()->query("SELECT DATABASE()")->fetchColumn());
+    $logger->info("🔍 [Database Check] App database: " . $database->getPdo()->query("SELECT DATABASE()")->fetchColumn());
     $logger->info("🔍 [Database Check] Secure database: " . $secureDatabase->getPdo()->query("SELECT DATABASE()")->fetchColumn());
     
     $logger->info("🔄 Database instances loaded successfully.");
