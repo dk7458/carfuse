@@ -117,26 +117,39 @@ foreach ($configFiles as $file) {
 try {
     // Set logger for DatabaseHelper
     DatabaseHelper::setLogger($container->get('db_logger'));
-    
+
+    // Ensure correct instance assignments before registering them in the DI container
+    if (DatabaseHelper::$instance === null) {
+        DatabaseHelper::$instance = DatabaseHelper::getInstance();
+    }
+
+    if (DatabaseHelper::$secureInstance === null) {
+        DatabaseHelper::$secureInstance = DatabaseHelper::getSecureInstance();
+    }
+
     // Register DatabaseHelper using its singleton pattern
-    $container->set(DatabaseHelper::class, function() {
-        return DatabaseHelper::getInstance();
+    $container->set(DatabaseHelper::class, function () {
+        return DatabaseHelper::$instance;
     });
-    
+
     // Register named instances for backward compatibility
-    $container->set('db', function() {
-        return DatabaseHelper::getInstance();
+    $container->set('db', function () {
+        return DatabaseHelper::$instance;
     });
-    
-    $container->set('secure_db', function() {
-        return DatabaseHelper::getSecureInstance();
+
+    $container->set('secure_db', function () {
+        return DatabaseHelper::$secureInstance;
     });
-    
-    $container->get('db_logger')->info("✅ DatabaseHelper registered successfully.");
+
+    // Debugging: Log which databases are assigned
+    $container->get('db_logger')->info("[BOOTSTRAP] ✅ App Database: " . DatabaseHelper::$instance->getPdo()->query("SELECT DATABASE()")->fetchColumn());
+    $container->get('db_logger')->info("[BOOTSTRAP] ✅ Secure Database: " . DatabaseHelper::$secureInstance->getPdo()->query("SELECT DATABASE()")->fetchColumn());
+
 } catch (Exception $e) {
-    $container->get('db_logger')->error("❌ Database initialization failed: " . $e->getMessage());
-    die("❌ Database initialization failed. Check logs for details.\n");
+    $container->get('db_logger')->critical("[BOOTSTRAP] ❌ Database initialization failed: " . $e->getMessage());
+    die("Database initialization failed.");
 }
+
 
 // Debug database connection before proceeding
 try {
