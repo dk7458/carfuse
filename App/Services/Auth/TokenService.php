@@ -25,7 +25,7 @@ class TokenService
         string $jwtRefreshSecret,
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
-        DatabaseHelper $db,
+        DatabaseHelper $secureDb,
         AuditService $auditService
     ) {
         $this->jwtSecret = $jwtSecret;
@@ -35,7 +35,7 @@ class TokenService
         }
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
-        $this->db = DatabaseHelper::getSecureInstance();
+        $this->db = $secureDb;
         $this->auditService = $auditService;
         
         if (self::DEBUG_MODE) {
