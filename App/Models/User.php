@@ -245,9 +245,9 @@ class User extends BaseModel
      * Create a new user
      * 
      * @param array $data
-     * @return string|int The ID of the created user
+     * @return int The ID of the created user (or UUID converted to integer if using UUID)
      */
-    public function create(array $data): string|int
+    public function create(array $data): int
     {
         if (isset($data['password'])) {
             $data['password_hash'] = self::hashPassword($data['password']);
@@ -274,7 +274,8 @@ class User extends BaseModel
             ]);
         }
 
-        return $id;
+        // Ensure we return an integer to match the parent class signature
+        return is_numeric($id) ? (int)$id : crc32($id);
     }
 
     /**
