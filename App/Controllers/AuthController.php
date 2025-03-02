@@ -77,7 +77,7 @@ class AuthController extends Controller
             
             // Set refresh token as a secure HttpOnly cookie with longer expiration
             setcookie('refresh_token', $result['refresh_token'], [
-                'expires'  => time() + 86400,
+                'expires'  => time() + 604800,
                 'path'     => '/',
                 'secure'   => true,
                 'httponly' => true,

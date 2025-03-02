@@ -61,7 +61,7 @@ class AuthMiddleware implements MiddlewareInterface
                 $userId = $decoded['sub'];
                 $this->logger->debug("Token verified successfully", ['userId' => $userId]);
                 
-                // Fetch user from database
+                // Fetch user from application database
                 $stmt = $this->pdo->prepare("
                     SELECT id, name, surname, email, phone, role, address, 
                            pesel_or_id, created_at, email_notifications, sms_notifications 

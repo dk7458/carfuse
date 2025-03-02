@@ -76,6 +76,9 @@ class AuthService
             $token = $this->tokenService->generateToken($userObject);
             $refreshToken = $this->tokenService->generateRefreshToken($userObject);
 
+            // Store access token in application database
+            $this->storeAccessToken($userObject->id, $token);
+
             // Log successful login with unified AuditService
             $this->auditService->logEvent(
                 'auth',
@@ -203,6 +206,9 @@ class AuthService
             $token = $this->tokenService->generateToken($userObject);
             $this->logger->info("Token refreshed successfully", ['user_id' => $user['id']]);
             
+            // Store new access token in application database
+            $this->storeAccessToken($decoded->sub, $token);
+
             // Log token refresh with unified AuditService - business logic event
             $this->auditService->logEvent(
                 'auth',
@@ -416,6 +422,26 @@ class AuthService
         } catch (Exception $e) {
             $this->logger->error("Password reset error: " . $e->getMessage());
             throw $e;
+        }
+    }
+
+    private function storeAccessToken(int $userId, string $accessToken): void
+    {
+        try {
+            // Store the token in the access_tokens table using app db helper
+            $appDb = DatabaseHelper::getInstance();
+            $appDb->insert('access_tokens', [
+                'user_id' => $userId,
+                'token' => hash('sha256', $accessToken), // Store hashed token for security
+                'expires_at' => date('Y-m-d H:i:s', time() + 3600),
+                'created_at' => date('Y-m-d H:i:s')
+            ]);
+            
+            $this->logger->info("[auth] Access token stored in application database", ['user_id' => $userId]);
+        } catch (\Exception $e) {
+            $this->logger->error("[auth] Failed to store access token: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            // Continue without failing - JWT will still work even if storage fails
         }
     }
 }
