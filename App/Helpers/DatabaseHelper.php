@@ -83,7 +83,9 @@ class DatabaseHelper
         try {
             return $this->pdo;
         } catch (Exception $e) {
-            self::$logger->error("❌ Failed to get database connection: " . $e->getMessage());
+            if (self::$logger) {
+                self::$logger->error("❌ Failed to get database connection: " . $e->getMessage());
+            }
             return null;
         }
     }
@@ -96,13 +98,17 @@ class DatabaseHelper
         try {
             return $query(self::getInstance()->getPdo());
         } catch (\PDOException $e) {
-            self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            if (self::$logger) {
+                self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            }
             if ($e->getCode() == "23000") {
                 return ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
             }
             return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         } catch (\Exception $e) {
-            self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            if (self::$logger) {
+                self::$logger->error("❌ Database Query Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            }
             return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
         }
     }
