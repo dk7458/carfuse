@@ -13,6 +13,26 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
 use Psr\Log\LoggerInterface;
 
+/**
+ * Create a fallback logger in case the main logging system fails
+ */
+if (!function_exists('getLogger')) {
+    function getLogger($name = 'system', $level = Logger::INFO) {
+        $logger = new Logger($name);
+        $handler = new StreamHandler('php://stderr', $level);
+        $formatter = new LineFormatter(
+            "[%datetime%] [%channel%] %level_name%: %message%\n",
+            "Y-m-d H:i:s"
+        );
+        $handler->setFormatter($formatter);
+        $logger->pushHandler($handler);
+        return $logger;
+    }
+}
+
+// Initialize a global logger for early bootstrap operations
+$logger = getLogger('bootstrap');
+
 // ✅ Define Log Directory
 $logDir = __DIR__ . '/../logs';
 if (!is_dir($logDir)) {

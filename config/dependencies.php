@@ -247,7 +247,7 @@ try {
 // Before returning the container, verify security-related services load successfully
 try {
     $container->get(AuthService::class);
-    return [
+    $result = [
         'db'                => $container->get(DatabaseHelper::class),
         'secure_db'         => $container->get('secure_db'),
         'logger'            => $container->get(LoggerInterface::class),
@@ -255,6 +255,7 @@ try {
         'encryptionService' => $container->get(EncryptionService::class),
         'container'         => $container,
     ];
+    return $result;
 } catch (Exception $e) {
     $container->get('dependencies_logger')->critical("❌ Security services failed to load: " . $e->getMessage());
     die("❌ Security services failed to load: " . $e->getMessage() . "\n");

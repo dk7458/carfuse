@@ -130,17 +130,25 @@ try {
 
 // Step 7: Initialize Dependency Injection Container
 try {
-    $container = new \DI\Container();
-    $diDependencies = require_once __DIR__ . '/config/dependencies.php';
+    // Load dependencies configuration and get the return value
+    $diDependencies = require __DIR__ . '/config/dependencies.php';
+    
+    // Check if the return value is valid
+    if (!is_array($diDependencies) || !isset($diDependencies['container'])) {
+        throw new Exception("Dependencies configuration did not return expected structure");
+    }
+    
+    // Get the container from the returned array
     $container = $diDependencies['container'];
     
-    // Register our pre-initialized AuditService in the container
-    if ($container instanceof \DI\Container) {
-        $container->set(AuditService::class, $auditService);
-        $logger->info("✅ Pre-initialized AuditService registered in DI container.");
-    } else {
-        throw new Exception("DI container initialization failed.");
+    // Verify container is valid
+    if (!$container instanceof \DI\Container) {
+        throw new Exception("Invalid container instance returned from dependencies.php");
     }
+    
+    // Register our pre-initialized AuditService in the container
+    $container->set(AuditService::class, $auditService);
+    $logger->info("✅ Pre-initialized AuditService registered in DI container.");
     
     $logger->info("🔄 Dependencies initialized successfully.");
 } catch (Exception $e) {
@@ -209,7 +217,7 @@ try {
     
     $logger->info("Application bootstrap completed successfully");
 } catch (Exception $e) {
-    $logger->critical("Bootstrap failed: " . $e->getMessage(), [
+    $logger->critical("Bootstrap failed: " . $e->getMessage()", [
         'exception' => get_class($e),
         'trace' => $e->getTraceAsString()
     ]);
