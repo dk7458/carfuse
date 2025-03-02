@@ -47,7 +47,7 @@ return function (Container $container, array $config) {
     $container->set(Validator::class, function($c) {
         return new Validator(
             $c->get('api_logger'),
-            $c->get(DatabaseHelper::class),
+            $c->get('db'), // Use main database
             $c->get(ExceptionHandler::class)
         );
     });
@@ -65,7 +65,7 @@ return function (Container $container, array $config) {
         return new AuditService(
             $c->get('audit_logger'),
             $c->get(ExceptionHandler::class),
-            DatabaseHelper::getSecureInstance() // Use secure database instance
+            $c->get('secure_db') // Use secure database instance
         );
     });
 
@@ -76,7 +76,7 @@ return function (Container $container, array $config) {
             $config['encryption']['jwt_refresh_secret'],
             $c->get('auth_logger'),
             $c->get(ExceptionHandler::class),
-            $c->get(DatabaseHelper::class),
+            $c->get('secure_db'), // Use secure database instance
             $c->get(AuditService::class) // Will use pre-initialized instance
         );
     });
@@ -84,7 +84,7 @@ return function (Container $container, array $config) {
     // Update AuthService registration with proper dependencies
     $container->set(AuthService::class, function($c) use ($config) {
         return new AuthService(
-            $c->get(DatabaseHelper::class),        // Use singleton instance
+            $c->get('db'),        // Use singleton instance
             $c->get(TokenService::class),          // TokenService
             $c->get(ExceptionHandler::class),      // ExceptionHandler
             $c->get('auth_logger'),                // AuthLogger
@@ -98,7 +98,7 @@ return function (Container $container, array $config) {
     $container->set(UserService::class, function($c) {
         return new UserService(
             $c->get('auth_logger'),
-            $c->get(DatabaseHelper::class),
+            $c->get('db'),
             $c->get(ExceptionHandler::class)
         );
     });
@@ -107,7 +107,7 @@ return function (Container $container, array $config) {
         return new NotificationService(
             $c->get('api_logger'),
             $c->get(ExceptionHandler::class),
-            $c->get(DatabaseHelper::class),
+            $c->get('db'),
             $config['notifications'] ?? []
         );
     });
@@ -115,7 +115,7 @@ return function (Container $container, array $config) {
     $container->set(PaymentService::class, function($c) {
         return new PaymentService(
             $c->get(LoggingHelper::class)->getLoggerByCategory('payment'),
-            $c->get(DatabaseHelper::class),
+            $c->get('db'),
             $c->get(ExceptionHandler::class)
         );
     });
@@ -124,7 +124,7 @@ return function (Container $container, array $config) {
         return new BookingService(
             $c->get(LoggingHelper::class)->getLoggerByCategory('booking'),
             $c->get(ExceptionHandler::class),
-            $c->get(DatabaseHelper::class),
+            $c->get('db'),
             $c->get('bookingModel')
         );
     });
@@ -133,14 +133,14 @@ return function (Container $container, array $config) {
         return new MetricsService(
             $c->get(LoggingHelper::class)->getLoggerByCategory('metrics'),
             $c->get(ExceptionHandler::class),
-            $c->get(DatabaseHelper::class)
+            $c->get('db')
         );
     });
 
     $container->set(ReportService::class, function($c) {
         return new ReportService(
             $c->get(LoggingHelper::class)->getLoggerByCategory('report'),
-            $c->get(DatabaseHelper::class),
+            $c->get('db'),
             $c->get(ExceptionHandler::class)
         );
     });
@@ -148,7 +148,7 @@ return function (Container $container, array $config) {
     $container->set(RevenueService::class, function($c) {
         return new RevenueService(
             $c->get(LoggingHelper::class)->getLoggerByCategory('revenue'),
-            $c->get(DatabaseHelper::class),
+            $c->get('db'),
             $c->get(ExceptionHandler::class)
         );
     });
@@ -156,7 +156,7 @@ return function (Container $container, array $config) {
     $container->set(SignatureService::class, function($c) use ($config) {
         return new SignatureService(
             $c->get('security_logger'),
-            $c->get(DatabaseHelper::class),
+            $c->get('db'),
             $config['signature'] ?? []
         );
     });
@@ -165,7 +165,7 @@ return function (Container $container, array $config) {
         return new DocumentService(
             $c->get('api_logger'),
             $c->get(ExceptionHandler::class),
-            $c->get(DatabaseHelper::class)
+            $c->get('db')
         );
     });
 
@@ -188,7 +188,7 @@ return function (Container $container, array $config) {
     $container->set(TransactionService::class, function($c) {
         return new TransactionService(
             $c->get(LoggingHelper::class)->getLoggerByCategory('booking'),
-            $c->get(DatabaseHelper::class),
+            $c->get('db'),
             $c->get(ExceptionHandler::class)
         );
     });
