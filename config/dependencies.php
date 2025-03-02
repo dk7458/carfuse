@@ -119,31 +119,26 @@ try {
     DatabaseHelper::setLogger($container->get('db_logger'));
 
     // Ensure correct instance assignments before registering them in the DI container
-    if (DatabaseHelper::$instance === null) {
-        DatabaseHelper::$instance = DatabaseHelper::getInstance();
-    }
-
-    if (DatabaseHelper::$secureInstance === null) {
-        DatabaseHelper::$secureInstance = DatabaseHelper::getSecureInstance();
-    }
+    DatabaseHelper::getInstance();
+    DatabaseHelper::getSecureInstance();
 
     // Register DatabaseHelper using its singleton pattern
     $container->set(DatabaseHelper::class, function () {
-        return DatabaseHelper::$instance;
+        return DatabaseHelper::getAppInstance();
     });
 
     // Register named instances for backward compatibility
     $container->set('db', function () {
-        return DatabaseHelper::$instance;
+        return DatabaseHelper::getAppInstance();
     });
 
     $container->set('secure_db', function () {
-        return DatabaseHelper::$secureInstance;
+        return DatabaseHelper::getSecureDbInstance();
     });
 
     // Debugging: Log which databases are assigned
-    $container->get('db_logger')->info("[BOOTSTRAP] ✅ App Database: " . DatabaseHelper::$instance->getPdo()->query("SELECT DATABASE()")->fetchColumn());
-    $container->get('db_logger')->info("[BOOTSTRAP] ✅ Secure Database: " . DatabaseHelper::$secureInstance->getPdo()->query("SELECT DATABASE()")->fetchColumn());
+    $container->get('db_logger')->info("[BOOTSTRAP] ✅ App Database: " . DatabaseHelper::getAppInstance()->getPdo()->query("SELECT DATABASE()")->fetchColumn());
+    $container->get('db_logger')->info("[BOOTSTRAP] ✅ Secure Database: " . DatabaseHelper::getSecureDbInstance()->getPdo()->query("SELECT DATABASE()")->fetchColumn());
 
 } catch (Exception $e) {
     $container->get('db_logger')->critical("[BOOTSTRAP] ❌ Database initialization failed: " . $e->getMessage());

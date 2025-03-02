@@ -9,8 +9,8 @@ use App\Helpers\ApiHelper;
 
 class DatabaseHelper
 {
-    private static ?DatabaseHelper $instance = null;
-    private static ?DatabaseHelper $secureInstance = null;
+    protected static ?DatabaseHelper $instance = null;
+    protected static ?DatabaseHelper $secureInstance = null;
     private PDO $pdo;
     private static LoggerInterface $logger;
 
@@ -84,6 +84,16 @@ class DatabaseHelper
             }
         }
     
+        return self::$secureInstance;
+    }
+
+    public static function getAppInstance(): ?DatabaseHelper
+    {
+        return self::$instance;
+    }
+
+    public static function getSecureDbInstance(): ?DatabaseHelper
+    {
         return self::$secureInstance;
     }
     
