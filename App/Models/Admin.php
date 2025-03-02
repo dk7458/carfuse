@@ -21,7 +21,7 @@ class Admin extends BaseModel
      * @param DatabaseHelper $dbHelper
      * @param AuditService|null $auditService
      */
-    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService = null)
+    public function __construct(DatabaseHelper $dbHelper = null, AuditService $auditService = null)
     {
         parent::__construct($dbHelper, $auditService);
     }
@@ -54,9 +54,9 @@ class Admin extends BaseModel
      * Override to handle password hashing.
      *
      * @param array $data
-     * @return int
+     * @return int|string
      */
-    public function create(array $data): int
+    public function create(array $data): int|string
     {
         if (isset($data['password'])) {
             $data['password'] = self::hashPassword($data['password']);
@@ -81,11 +81,11 @@ class Admin extends BaseModel
      * Update an admin.
      * Override to handle password hashing.
      *
-     * @param int $id
+     * @param int|string $id
      * @param array $data
      * @return bool
      */
-    public function update(int $id, array $data): bool
+    public function update(int|string $id, array $data): bool
     {
         if (isset($data['password'])) {
             $data['password'] = self::hashPassword($data['password']);
@@ -121,18 +121,17 @@ class Admin extends BaseModel
             $query .= " AND deleted_at IS NULL";
         }
         
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([':email' => $email]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $result = $this->dbHelper->select($query, [':email' => $email]);
+        return $result ? $result[0] : null;
     }
     
     /**
      * Restore a soft deleted admin.
      *
-     * @param int $id
+     * @param int|string $id
      * @return bool
      */
-    public function restore(int $id): bool
+    public function restore(int|string $id): bool
     {
         if (!$this->useSoftDeletes) {
             return false;
@@ -152,15 +151,37 @@ class Admin extends BaseModel
     /**
      * Get users managed by this admin.
      *
-     * @param int $adminId
+     * @param int|string $adminId
      * @return array
      */
-    public function getManagedUsers(int $adminId): array
+    public function getManagedUsers(int|string $adminId): array
     {
         $query = "
             SELECT * FROM users
             WHERE managed_by = :admin_id
-            ORDER BY name ASC
+        ";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $query .= " ORDER BY name ASC";
+        
+        return $this->dbHelper->select($query, [':admin_id' => $adminId]);
+    }
+    
+    /**
+     * Get admin permissions.
+     *
+     * @param int|string $adminId
+     * @return array
+     */
+    public function getPermissions(int|string $adminId): array
+    {
+        $query = "
+            SELECT p.* FROM permissions p
+            JOIN admin_permissions ap ON p.id = ap.permission_id
+            WHERE ap.admin_id = :admin_id
         ";
         
         return $this->dbHelper->select($query, [':admin_id' => $adminId]);

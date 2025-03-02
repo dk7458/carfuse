@@ -2,17 +2,9 @@
 
 namespace App\Models;
 
-use App\Models\BaseModel; // updated base model
-use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Helpers\DatabaseHelper;
 use Illuminate\Support\Facades\Hash;
 use Ramsey\Uuid\Uuid;
-use App\Models\Booking;
-use App\Models\Notification;
-use App\Models\Payment;
-use App\Models\AuditTrail;
-use App\Models\Log;
-use App\Models\Contract;
-use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
 
 /**
@@ -34,12 +26,8 @@ use App\Services\AuditService;
  */
 class User extends BaseModel
 {
-    use SoftDeletes;
-
     protected $table = 'users';
     protected $primaryKey = 'id';
-    public $incrementing = false;
-    protected $keyType = 'string';
     protected $resourceName = 'user';
     protected $useTimestamps = true;
     protected $useSoftDeletes = true;
@@ -61,13 +49,6 @@ class User extends BaseModel
         'deleted_at',
     ];
 
-    protected $dates = [
-        'created_at',
-        'updated_at',
-        'deleted_at',
-        'email_verified_at',
-    ];
-
     public static array $rules = [
         'name' => 'required|string|max:255',
         'surname' => 'required|string|max:255',
@@ -82,66 +63,143 @@ class User extends BaseModel
      * Relationships
      */
 
-    public function bookings()
+    /**
+     * Get user's bookings
+     * 
+     * @param string $userId
+     * @return array
+     */
+    public function getBookings(string $userId): array
     {
-        return $this->hasMany(Booking::class, 'user_id', 'id');
-    }
-
-    public function payments()
-    {
-        return $this->hasMany(Payment::class, 'user_id', 'id');
-    }
-
-    public function notifications()
-    {
-        return $this->hasMany(Notification::class, 'user_id', 'id');
-    }
-
-    public function logs()
-    {
-        return $this->hasMany(Log::class, 'user_reference', 'id');
-    }
-
-    public function auditTrails()
-    {
-        return $this->hasMany(AuditTrail::class, 'user_reference', 'id');
-    }
-
-    public function contracts()
-    {
-        return $this->hasMany(Contract::class, 'user_reference', 'id');
+        $query = "SELECT * FROM bookings WHERE user_id = :user_id";
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        $query .= " ORDER BY created_at DESC";
+        
+        return $this->dbHelper->select($query, [':user_id' => $userId]);
     }
 
     /**
-     * Accessors
+     * Get user's payments
+     * 
+     * @param string $userId
+     * @return array
      */
-    public function getFullNameAttribute(): string
+    public function getPayments(string $userId): array
     {
-        return "{$this->name} {$this->surname}";
+        $query = "SELECT * FROM payments WHERE user_id = :user_id";
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        $query .= " ORDER BY created_at DESC";
+        
+        return $this->dbHelper->select($query, [':user_id' => $userId]);
     }
 
     /**
-     * Mutators
+     * Get user's notifications
+     * 
+     * @param string $userId
+     * @return array
      */
-    public function setPasswordAttribute(string $value): void
+    public function getNotifications(string $userId): array
     {
-        $this->attributes['password_hash'] = Hash::make($value);
+        $query = "SELECT * FROM notifications WHERE user_id = :user_id";
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        $query .= " ORDER BY created_at DESC";
+        
+        return $this->dbHelper->select($query, [':user_id' => $userId]);
     }
 
     /**
-     * Helpers
+     * Get user's logs
+     * 
+     * @param string $userId
+     * @return array
      */
-    public function isAdmin(): bool
+    public function getLogs(string $userId): array
     {
-        return in_array($this->role, ['admin', 'super_admin']);
+        $query = "SELECT * FROM logs WHERE user_reference = :user_id";
+        return $this->dbHelper->select($query, [':user_id' => $userId]);
     }
 
-    public function isSuperAdmin(): bool
+    /**
+     * Get user's audit trails
+     * 
+     * @param string $userId
+     * @return array
+     */
+    public function getAuditTrails(string $userId): array
     {
-        return $this->role === 'super_admin';
+        $query = "SELECT * FROM audit_trails WHERE user_reference = :user_id";
+        return $this->dbHelper->select($query, [':user_id' => $userId]);
     }
 
-    public function hasPermission(string $permission): bool
+    /**
+     * Get user's contracts
+     * 
+     * @param string $userId
+     * @return array
+     */
+    public function getContracts(string $userId): array
+    {
+        $query = "SELECT * FROM contracts WHERE user_reference = :user_id";
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        $query .= " ORDER BY created_at DESC";
+        
+        return $this->dbHelper->select($query, [':user_id' => $userId]);
+    }
+
+    /**
+     * Accessors & Helpers
+     */
+    
+    /**
+     * Get full name by combining first and last name
+     * 
+     * @param array $user User data
+     * @return string
+     */
+    public static function getFullName(array $user): string
+    {
+        return "{$user['name']} {$user['surname']}";
+    }
+
+    /**
+     * Check if user is an admin
+     * 
+     * @param array $user User data
+     * @return bool
+     */
+    public static function isAdmin(array $user): bool
+    {
+        return in_array($user['role'], ['admin', 'super_admin']);
+    }
+
+    /**
+     * Check if user is a super admin
+     * 
+     * @param array $user User data
+     * @return bool
+     */
+    public static function isSuperAdmin(array $user): bool
+    {
+        return $user['role'] === 'super_admin';
+    }
+
+    /**
+     * Check if user has a specific permission
+     * 
+     * @param array $user User data
+     * @param string $permission
+     * @return bool
+     */
+    public static function hasPermission(array $user, string $permission): bool
     {
         $rolePermissions = [
             'user' => ['read_own'],
@@ -149,56 +207,50 @@ class User extends BaseModel
             'super_admin' => ['read_own', 'read_all', 'write_all', 'delete_all'],
         ];
 
-        return in_array($permission, $rolePermissions[$this->role] ?? []);
+        return in_array($permission, $rolePermissions[$user['role']] ?? []);
     }
 
     /**
-     * Scopes
+     * Password handling
      */
-    public function scopeActive($query)
-    {
-        return $query->whereNull('deleted_at');
-    }
-
-    public function scopeWithRole($query, string $role)
-    {
-        return $query->where('role', $role);
-    }
-
+    
     /**
-     * Events
+     * Hash a password
+     * 
+     * @param string $password
+     * @return string
      */
-    protected static function boot()
+    public static function hashPassword(string $password): string
     {
-        parent::boot();
-
-        static::creating(function ($user) {
-            if (empty($user->id)) {
-                $user->id = (string) Uuid::uuid4();
-            }
-        });
-
-        static::updating(function ($user) {
-            if ($user->isDirty('email')) {
-                error_log("[SECURITY] User {$user->id} updated email to {$user->email}");
-            }
-        });
-
-        static::deleting(function ($user) {
-            error_log("[SECURITY] User {$user->id} was deleted.");
-        });
+        return Hash::make($password);
+    }
+    
+    /**
+     * Verify a password
+     * 
+     * @param string $password
+     * @param string $hash
+     * @return bool
+     */
+    public static function verifyPassword(string $password, string $hash): bool
+    {
+        return Hash::check($password, $hash);
     }
 
     /**
-     * Create a new user.
-     *
+     * Database operations
+     */
+
+    /**
+     * Create a new user
+     * 
      * @param array $data
-     * @return int
+     * @return string|int The ID of the created user
      */
-    public function create(array $data): int
+    public function create(array $data): string|int
     {
         if (isset($data['password'])) {
-            $data['password_hash'] = Hash::make($data['password']);
+            $data['password_hash'] = self::hashPassword($data['password']);
             unset($data['password']);
         }
 
@@ -206,108 +258,104 @@ class User extends BaseModel
             $data['id'] = Uuid::uuid4()->toString();
         }
 
-        return DatabaseHelper::insert($this->table, $data);
+        if ($this->useTimestamps) {
+            $now = date('Y-m-d H:i:s');
+            $data['created_at'] = $now;
+            $data['updated_at'] = $now;
+        }
+
+        $id = $this->dbHelper->insert($this->table, $data);
+        
+        // Log the creation if audit service is available
+        if ($this->auditService) {
+            $this->auditService->logEvent('user', 'created', [
+                'id' => $id,
+                'email' => $data['email'] ?? 'unknown'
+            ]);
+        }
+
+        return $id;
     }
 
     /**
-     * Update a user.
-     *
-     * @param int $id
+     * Update user data
+     * 
+     * @param string|int $id
      * @param array $data
      * @return bool
      */
-    public function update(int $id, array $data): bool
+    public function update(string|int $id, array $data): bool
     {
         if (isset($data['password'])) {
-            $data['password_hash'] = Hash::make($data['password']);
+            $data['password_hash'] = self::hashPassword($data['password']);
             unset($data['password']);
         }
 
-        return DatabaseHelper::update($this->table, $data, ['id' => $id]);
+        if ($this->useTimestamps) {
+            $data['updated_at'] = date('Y-m-d H:i:s');
+        }
+
+        $conditions = ['id' => $id];
+        if ($this->useSoftDeletes) {
+            $conditions['deleted_at IS NULL'] = null;
+        }
+
+        $result = $this->dbHelper->update($this->table, $data, $conditions);
+        
+        // Log the update if audit service is available
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent('user', 'updated', [
+                'id' => $id,
+                'updated_fields' => array_keys($data)
+            ]);
+        }
+
+        return $result;
     }
 
     /**
-     * Get bookings for a user.
-     *
-     * @param int $userId
-     * @return array
-     */
-    public function getBookings(int $userId): array
-    {
-        $query = "SELECT * FROM bookings WHERE user_id = :user_id";
-        return DatabaseHelper::select($query, [':user_id' => $userId]);
-    }
-
-    /**
-     * Get payments for a user.
-     *
-     * @param int $userId
-     * @return array
-     */
-    public function getPayments(int $userId): array
-    {
-        $query = "SELECT * FROM payments WHERE user_id = :user_id";
-        return DatabaseHelper::select($query, [':user_id' => $userId]);
-    }
-
-    /**
-     * Get notifications for a user.
-     *
-     * @param int $userId
-     * @return array
-     */
-    public function getNotifications(int $userId): array
-    {
-        $query = "SELECT * FROM notifications WHERE user_id = :user_id";
-        return DatabaseHelper::select($query, [':user_id' => $userId]);
-    }
-
-    /**
-     * Get logs for a user.
-     *
-     * @param int $userId
-     * @return array
-     */
-    public function getLogs(int $userId): array
-    {
-        $query = "SELECT * FROM logs WHERE user_reference = :user_id";
-        return DatabaseHelper::select($query, [':user_id' => $userId]);
-    }
-
-    /**
-     * Get audit trails for a user.
-     *
-     * @param int $userId
-     * @return array
-     */
-    public function getAuditTrails(int $userId): array
-    {
-        $query = "SELECT * FROM audit_trails WHERE user_reference = :user_id";
-        return DatabaseHelper::select($query, [':user_id' => $userId]);
-    }
-
-    /**
-     * Get contracts for a user.
-     *
-     * @param int $userId
-     * @return array
-     */
-    public function getContracts(int $userId): array
-    {
-        $query = "SELECT * FROM contracts WHERE user_reference = :user_id";
-        return DatabaseHelper::select($query, [':user_id' => $userId]);
-    }
-
-    /**
-     * Find a user by email.
-     *
+     * Find a user by their email address
+     * 
      * @param string $email
      * @return array|null
      */
-    public static function findByEmail(string $email): ?array
+    public function findByEmail(string $email): ?array
     {
-        $query = "SELECT * FROM users WHERE email = :email AND deleted_at IS NULL";
-        $result = DatabaseHelper::select($query, [':email' => $email]);
+        $query = "SELECT * FROM {$this->table} WHERE email = :email";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $result = $this->dbHelper->select($query, [':email' => $email]);
         return $result ? $result[0] : null;
+    }
+
+    /**
+     * Get active users (not deleted)
+     * 
+     * @return array
+     */
+    public function getActive(): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE deleted_at IS NULL";
+        return $this->dbHelper->select($query);
+    }
+
+    /**
+     * Get users with a specific role
+     * 
+     * @param string $role
+     * @return array
+     */
+    public function getWithRole(string $role): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE role = :role";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        return $this->dbHelper->select($query, [':role' => $role]);
     }
 }

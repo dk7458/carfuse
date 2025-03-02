@@ -306,4 +306,150 @@ class TokenService
             return [];
         }
     }
+
+    /**
+     * Validate a token and return user data if valid.
+     * This replaces TokenValidator::validateToken
+     *
+     * @param string|null $tokenHeader The Authorization header value
+     * @return array|null User data if valid, null if invalid
+     */
+    public function validateTokenFromHeader(?string $tokenHeader): ?array
+    {
+        try {
+            if (!$tokenHeader) {
+                return null;
+            }
+
+            // Extract the token from the Authorization header
+            $token = preg_replace('/^Bearer\s+/', '', $tokenHeader);
+            if (empty($token)) {
+                return null;
+            }
+
+            // Decode and verify the token
+            $decoded = $this->verifyToken($token);
+            
+            // Get the user ID from the token
+            $userId = $decoded['sub'] ?? null;
+            if (!$userId) {
+                $this->logger->warning('Token missing user ID claim', ['token' => substr($token, 0, 10) . '...']);
+                return null;
+            }
+
+            // Fetch user data from the database
+            $user = $this->getUserById($userId);
+            if (!$user) {
+                $this->logger->warning('User from token not found in database', ['user_id' => $userId]);
+                return null;
+            }
+
+            if (self::DEBUG_MODE) {
+                $this->logger->info('Token validation successful', ['user_id' => $userId]);
+            }
+            
+            // Log token validation in audit trail
+            $this->auditService->logEvent(
+                'auth',
+                'token_validated',
+                ['user_id' => $userId],
+                $userId,
+                null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            return $user;
+        } catch (\Exception $e) {
+            $this->logger->warning('Token validation failed', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+    
+    /**
+     * Extract token from Authorization header or cookie
+     * 
+     * @param mixed $request The request object or authorization header
+     * @return string|null The token or null if not found
+     */
+    public function extractToken($request): ?string
+    {
+        // Handle different request formats
+        if (is_string($request)) {
+            // Assume $request is directly the Authorization header
+            $authHeader = $request;
+        } elseif (is_array($request) && isset($request['Authorization'])) {
+            // Handle array format (e.g. from getHeader)
+            $authHeader = $request['Authorization'];
+        } elseif (is_object($request) && method_exists($request, 'getHeaderLine')) {
+            // Handle PSR-7 request object
+            $authHeader = $request->getHeaderLine('Authorization');
+        } elseif (is_object($request) && method_exists($request, 'headers')) {
+            // Handle Laravel/Symfony style request
+            $authHeader = $request->headers->get('Authorization');
+        } else {
+            $authHeader = null;
+        }
+        
+        // Extract token from Bearer format
+        $token = null;
+        if ($authHeader && strpos($authHeader, 'Bearer ') === 0) {
+            $token = substr($authHeader, 7);
+        }
+        
+        // If not found in Authorization header, check cookies
+        if (!$token && isset($_COOKIE['jwt'])) {
+            $token = $_COOKIE['jwt'];
+        }
+        
+        return $token;
+    }
+    
+    /**
+     * Get user data by ID from the database
+     * 
+     * @param int $userId The user ID
+     * @return array|null User data or null if not found
+     */
+    private function getUserById(int $userId): ?array
+    {
+        try {
+            $sql = "SELECT * FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1";
+            $users = DatabaseHelper::select($sql, [$userId]);
+            
+            if (empty($users)) {
+                return null;
+            }
+            
+            // Remove sensitive data
+            unset($users[0]['password']);
+            
+            return $users[0];
+        } catch (\Exception $e) {
+            $this->logger->error("Error fetching user data: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            return null;
+        }
+    }
+    
+    /**
+     * Validate token and get user data in a single operation
+     * 
+     * @param mixed $request The request object or authorization header
+     * @return array|null User data if token valid, null otherwise
+     */
+    public function validateRequest($request): ?array
+    {
+        $token = $this->extractToken($request);
+        if (!$token) {
+            return null;
+        }
+        
+        try {
+            $decoded = $this->verifyToken($token);
+            return $this->getUserById($decoded['sub']);
+        } catch (\Exception $e) {
+            $this->logger->warning('Token validation failed during request', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
 }

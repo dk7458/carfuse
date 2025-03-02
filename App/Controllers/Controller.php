@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use Exception;
 use Psr\Log\LoggerInterface;
+use App\Helpers\ExceptionHandler;
 use Psr\Http\Message\ResponseInterface as Response;
 
 /**
@@ -12,10 +13,12 @@ use Psr\Http\Message\ResponseInterface as Response;
 class Controller
 {
     protected LoggerInterface $logger;
+    protected ?ExceptionHandler $exceptionHandler = null;
 
-    public function __construct(LoggerInterface $logger)
+    public function __construct(LoggerInterface $logger, ?ExceptionHandler $exceptionHandler = null)
     {
         $this->logger = $logger;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     /**
@@ -37,11 +40,17 @@ class Controller
 
     /**
      * ✅ Handle Exceptions & Log Errors
+     * This method is for backward compatibility, new controllers should use ExceptionHandler
      */
     protected function handleException(Exception $e, string $context = 'General Error'): void
     {
-        $this->logger->error("{$context}: " . $e->getMessage());
-        $this->jsonResponse(['status' => 'error', 'message' => 'An error occurred.'], 500);
+        if ($this->exceptionHandler) {
+            $this->exceptionHandler->handleException($e);
+        } else {
+            // Legacy fallback behavior
+            $this->logger->error("{$context}: " . $e->getMessage());
+            $this->jsonResponse(['status' => 'error', 'message' => 'An error occurred.'], 500);
+        }
     }
 
     /**
@@ -68,7 +77,12 @@ class Controller
         }
 
         if (!empty($errors)) {
-            $this->jsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $errors], 422);
+            if ($this->exceptionHandler) {
+                throw new \InvalidArgumentException(json_encode(['validation' => $errors]));
+            } else {
+                // Legacy fallback behavior
+                $this->jsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $errors], 422);
+            }
         }
 
         return $data;

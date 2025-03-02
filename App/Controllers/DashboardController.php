@@ -6,6 +6,8 @@ use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Notification;
 use App\Models\User;
+use App\Services\AuditService;
+use App\Helpers\ExceptionHandler;
 use Illuminate\Support\Facades\Cache;
 use Psr\Log\LoggerInterface;
 
@@ -17,7 +19,9 @@ class DashboardController extends Controller
     private StatisticsService $statisticsService;
     private NotificationService $notificationService;
     private UserService $userService;
+    private AuditService $auditService;
     protected LoggerInterface $logger;
+    private ExceptionHandler $exceptionHandler;
 
     public function __construct(
         LoggerInterface $logger,
@@ -25,12 +29,16 @@ class DashboardController extends Controller
         StatisticsService $statisticsService,
         NotificationService $notificationService,
         UserService $userService,
+        AuditService $auditService,
+        ExceptionHandler $exceptionHandler
     ) {
         parent::__construct($logger);
         $this->bookingService = $bookingService;
         $this->statisticsService = $statisticsService;
         $this->notificationService = $notificationService;
         $this->userService = $userService;
+        $this->auditService = $auditService;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     /**
@@ -49,10 +57,20 @@ class DashboardController extends Controller
                     'total_payments'     => Payment::where('user_id', $user->id)->sum('amount'),
                 ];
             });
+            
+            // Log dashboard access
+            $this->auditService->logEvent(
+                'dashboard_accessed',
+                "User accessed their dashboard",
+                ['user_id' => $user->id],
+                $user->id,
+                null,
+                'user'
+            );
+            
             view('dashboard/user_dashboard', ['user' => $user, 'statistics' => $statistics]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to load user dashboard: ' . $e->getMessage());
-            abort(500, 'Error loading dashboard');
+            $this->exceptionHandler->handleException($e);
         }
     }
 
@@ -62,7 +80,19 @@ class DashboardController extends Controller
     public function getUserBookings(): void
     {
         try {
-            $bookings = Booking::where('user_id', $_SESSION['user_id'] ?? null)->get();
+            $userId = $_SESSION['user_id'] ?? null;
+            $bookings = Booking::where('user_id', $userId)->get();
+            
+            // Log bookings fetch
+            $this->auditService->logEvent(
+                'bookings_fetched',
+                "User fetched their bookings",
+                ['user_id' => $userId],
+                $userId,
+                null,
+                'booking'
+            );
+            
             http_response_code(200);
             echo json_encode([
                 'status'  => 'success',
@@ -70,8 +100,7 @@ class DashboardController extends Controller
                 'data'    => ['bookings' => $bookings]
             ]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch bookings: ' . $e->getMessage());
-            abort(500, 'Failed to fetch bookings');
+            $this->exceptionHandler->handleException($e);
         }
     }
 
@@ -81,6 +110,8 @@ class DashboardController extends Controller
     public function fetchStatistics(): void
     {
         try {
+            $userId = $_SESSION['user_id'] ?? null;
+            
             $stats = Cache::remember('dashboard_statistics', 60, function () {
                 return [
                     'total_bookings'     => Booking::count(),
@@ -88,6 +119,17 @@ class DashboardController extends Controller
                     'total_revenue'      => Payment::sum('amount')
                 ];
             });
+            
+            // Log statistics fetch
+            $this->auditService->logEvent(
+                'statistics_fetched',
+                "User fetched dashboard statistics",
+                ['user_id' => $userId],
+                $userId,
+                null,
+                'user'
+            );
+            
             http_response_code(200);
             echo json_encode([
                 'status'  => 'success',
@@ -95,8 +137,7 @@ class DashboardController extends Controller
                 'data'    => $stats
             ]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch statistics: ' . $e->getMessage());
-            abort(500, 'Failed to fetch statistics');
+            $this->exceptionHandler->handleException($e);
         }
     }
 
@@ -106,9 +147,22 @@ class DashboardController extends Controller
     public function fetchNotifications(): void
     {
         try {
-            $notifications = Notification::where('user_id', $_SESSION['user_id'] ?? null)
+            $userId = $_SESSION['user_id'] ?? null;
+            
+            $notifications = Notification::where('user_id', $userId)
                 ->latest()
                 ->get();
+                
+            // Log notifications fetch
+            $this->auditService->logEvent(
+                'notifications_fetched',
+                "User fetched their notifications",
+                ['user_id' => $userId],
+                $userId,
+                null,
+                'notification'
+            );
+            
             http_response_code(200);
             echo json_encode([
                 'status'  => 'success',
@@ -116,8 +170,7 @@ class DashboardController extends Controller
                 'data'    => ['notifications' => $notifications]
             ]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch notifications: ' . $e->getMessage());
-            abort(500, 'Failed to fetch notifications');
+            $this->exceptionHandler->handleException($e);
         }
     }
 
@@ -127,7 +180,19 @@ class DashboardController extends Controller
     public function fetchUserProfile(): void
     {
         try {
-            $profile = User::findOrFail($_SESSION['user_id'] ?? null);
+            $userId = $_SESSION['user_id'] ?? null;
+            $profile = User::findOrFail($userId);
+            
+            // Log profile fetch
+            $this->auditService->logEvent(
+                'profile_fetched',
+                "User fetched their profile",
+                ['user_id' => $userId],
+                $userId,
+                null,
+                'user'
+            );
+            
             http_response_code(200);
             echo json_encode([
                 'status'  => 'success',
@@ -135,8 +200,7 @@ class DashboardController extends Controller
                 'data'    => ['profile' => $profile]
             ]);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to fetch user profile: ' . $e->getMessage());
-            abort(500, 'Failed to fetch user profile');
+            $this->exceptionHandler->handleException($e);
         }
     }
 }

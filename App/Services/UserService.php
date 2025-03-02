@@ -4,7 +4,6 @@ namespace App\Services;
 
 use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Exception;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ApiHelper;

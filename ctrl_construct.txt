@@ -19,12 +19,14 @@ File: /home/dorian/carfuse/App/Controllers/BookingController.php
         $this->validator = $validator;
 
 File: /home/dorian/carfuse/App/Controllers/NotificationController.php
-    public function __construct(LoggerInterface $logger)
-    {
+    public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        AuditService $auditService
         parent::__construct($logger);
+        $this->exceptionHandler = $exceptionHandler;
+        $this->auditService = $auditService;
     }
-
-    /**
 
 File: /home/dorian/carfuse/App/Controllers/AdminController.php
     public function __construct(
@@ -34,7 +36,7 @@ File: /home/dorian/carfuse/App/Controllers/AdminController.php
         parent::__construct($logger);
         $this->auditService = $auditService;
         $this->responseFactory = $responseFactory;
-    }
+        $this->tokenService = $tokenService;
 
 File: /home/dorian/carfuse/App/Controllers/AuthController.php
     public function __construct(
@@ -50,10 +52,11 @@ File: /home/dorian/carfuse/App/Controllers/SignatureController.php
     public function __construct(
         LoggerInterface $logger,
         SignatureService $signatureService,
-    ) {
+        ExceptionHandler $exceptionHandler,
         parent::__construct($logger);
         $this->signatureService = $signatureService;
-    }
+        $this->exceptionHandler = $exceptionHandler;
+        $this->auditService = $auditService;
 
 File: /home/dorian/carfuse/App/Controllers/DashboardController.php
     public function __construct(
@@ -66,12 +69,14 @@ File: /home/dorian/carfuse/App/Controllers/DashboardController.php
         $this->notificationService = $notificationService;
 
 File: /home/dorian/carfuse/App/Controllers/AdminDashboardController.php
-    public function __construct(LoggerInterface $logger)
-    {
+    public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler,
+        AuditService $auditService
         parent::__construct($logger);
+        $this->exceptionHandler = $exceptionHandler;
+        $this->auditService = $auditService;
     }
-
-    public function index(): void
 
 File: /home/dorian/carfuse/App/Controllers/PaymentController.php
     public function __construct(
@@ -84,10 +89,10 @@ File: /home/dorian/carfuse/App/Controllers/PaymentController.php
         $this->notificationService = $notificationService;
 
 File: /home/dorian/carfuse/App/Controllers/Controller.php
-    public function __construct(LoggerInterface $logger)
+    public function __construct(LoggerInterface $logger, ?ExceptionHandler $exceptionHandler = null)
     {
         $this->logger = $logger;
-    }
+        $this->exceptionHandler = $exceptionHandler;
 
 File: /home/dorian/carfuse/App/Controllers/DocumentController.php
     public function __construct(
@@ -107,13 +112,25 @@ File: /home/dorian/carfuse/App/Controllers/ReportController.php
         parent::__construct($logger);
         $this->reportService = $reportService;
         $this->notificationService = $notificationService;
-    }
+        $this->exceptionHandler = $exceptionHandler;
+
+File: /home/dorian/carfuse/App/Controllers/ApiController.php
+    public function __construct(
+        LoggerInterface $logger,
+        ResponseFactoryInterface $responseFactory,
+        ExceptionHandler $exceptionHandler,
+        parent::__construct($logger, $exceptionHandler);
+        $this->responseFactory = $responseFactory;
+        $this->exceptionHandler = $exceptionHandler;
+        $this->auditService = $auditService;
 
 File: /home/dorian/carfuse/App/Controllers/AuditController.php
-    public function __construct(LoggerInterface $logger, AuditService $auditService)
-    {
+    public function __construct(
+        LoggerInterface $logger, 
+        AuditService $auditService,
+        ExceptionHandler $exceptionHandler
         parent::__construct($logger);
         $this->auditService = $auditService;
+        $this->exceptionHandler = $exceptionHandler;
     }
-    
 

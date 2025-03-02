@@ -3,17 +3,15 @@
 
 namespace App\Controllers;
 
-use App\Models\User;
 use App\Helpers\ApiHelper;
+use App\Helpers\DatabaseHelper;
 use App\Services\Validator;
 use App\Services\Auth\TokenService;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use App\Services\Auth\AuthService;
-use Exception;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
-use App\Helpers\LoggingHelper;
 
 /**
  * User Management Controller
@@ -47,24 +45,67 @@ class UserController extends Controller
      */
     public function registerUser(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
-
-        $rules = [
-            'email'    => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
-            'name'     => 'required|string',
-        ];
-
         try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            $this->logger->info("Processing user registration", ['email' => $data['email'] ?? 'not provided']);
+            
+            // Validate input data
+            $rules = [
+                'email'    => 'required|email',
+                'password' => 'required|min:6',
+                'name'     => 'required|string',
+            ];
+            
             $this->validator->validate($data, $rules);
-            $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
-            $user = User::create($data);
-            $this->logger->info("User registered successfully", ['email' => $data['email']]);
-            return ApiHelper::sendJsonResponse('success', 'User registered successfully', ['user_id' => $user->id], 201);
+            
+            // Check if email is already in use
+            $existingUser = DatabaseHelper::select(
+                "SELECT id FROM users WHERE email = ?",
+                [$data['email']]
+            );
+            
+            if (!empty($existingUser)) {
+                return ApiHelper::sendJsonResponse('error', 'Email already in use', [], 400);
+            }
+            
+            // Hash password and prepare user data
+            $userData = [
+                'email' => $data['email'],
+                'name' => $data['name'],
+                'password' => password_hash($data['password'], PASSWORD_BCRYPT),
+                'created_at' => date('Y-m-d H:i:s'),
+                'role' => 'user',
+                'status' => 'active'
+            ];
+            
+            // Insert new user using application database
+            $userId = DatabaseHelper::insert(
+                'users',
+                $userData,
+                false, // Use application database
+                ['operation' => 'user_registration']
+            );
+            
+            $this->logger->info("User registered successfully", [
+                'user_id' => $userId,
+                'email' => $data['email']
+            ]);
+            
+            return ApiHelper::sendJsonResponse('success', 'User registered successfully', ['user_id' => $userId], 201);
+            
         } catch (\InvalidArgumentException $e) {
+            $this->logger->warning("Validation failed during user registration", [
+                'error' => $e->getMessage()
+            ]);
             return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
+            
         } catch (\Exception $e) {
+            $this->logger->error("Failed to register user", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             $this->exceptionHandler->handleException($e);
+            return ApiHelper::sendJsonResponse('error', 'Failed to register user', [], 500);
         }
     }
 
@@ -73,8 +114,39 @@ class UserController extends Controller
      */
     public function getUserProfile(Request $request, Response $response)
     {
-        $user = $request->getAttribute('user');
-        return $this->jsonResponse($response, $user);
+        try {
+            $userId = $request->getAttribute('user_id');
+            
+            if (!$userId) {
+                return ApiHelper::sendJsonResponse('error', 'User not authenticated', [], 401);
+            }
+            
+            $this->logger->info("Fetching user profile", ['user_id' => $userId]);
+            
+            // Fetch user data with a single optimized query
+            $userData = DatabaseHelper::select(
+                "SELECT u.id, u.name, u.email, u.created_at, u.role, 
+                        u.status, u.last_login, p.bio, p.avatar_url, p.location
+                 FROM users u
+                 LEFT JOIN user_profiles p ON u.id = p.user_id
+                 WHERE u.id = ? AND u.deleted_at IS NULL",
+                [$userId]
+            );
+            
+            if (empty($userData)) {
+                return ApiHelper::sendJsonResponse('error', 'User not found', [], 404);
+            }
+            
+            return ApiHelper::sendJsonResponse('success', 'User profile retrieved', $userData[0], 200);
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to get user profile", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $request->getAttribute('user_id') ?? 'unknown'
+            ]);
+            return ApiHelper::sendJsonResponse('error', 'Failed to retrieve user profile', [], 500);
+        }
     }
 
     /**
@@ -82,10 +154,109 @@ class UserController extends Controller
      */
     public function updateProfile(Request $request, Response $response)
     {
-        $user = $request->getAttribute('user');
-        $data = json_decode($request->getBody()->getContents(), true);
-        $result = $this->authService->updateProfile($user, $data);
-        return $this->jsonResponse($response, $result);
+        try {
+            $userId = $request->getAttribute('user_id');
+            
+            if (!$userId) {
+                return ApiHelper::sendJsonResponse('error', 'User not authenticated', [], 401);
+            }
+            
+            $data = json_decode($request->getBody()->getContents(), true);
+            $this->logger->info("Updating user profile", ['user_id' => $userId]);
+            
+            // Validate input data
+            $rules = [
+                'name'     => 'string|max:100',
+                'bio'      => 'string|max:500',
+                'location' => 'string|max:100',
+                'avatar_url' => 'url|max:255'
+            ];
+            
+            $this->validator->validate($data, $rules);
+            
+            // Separate user table fields from profile fields
+            $userData = array_intersect_key($data, array_flip(['name']));
+            $profileData = array_intersect_key($data, array_flip(['bio', 'location', 'avatar_url']));
+            
+            // Start transaction for updating both tables
+            DatabaseHelper::rawQuery(
+                "START TRANSACTION"
+            );
+            
+            // Update user main data if needed
+            if (!empty($userData)) {
+                DatabaseHelper::update(
+                    'users',
+                    $userData,
+                    ['id' => $userId],
+                    false,
+                    ['operation' => 'profile_update', 'user_id' => $userId]
+                );
+            }
+            
+            // Update or insert profile data if needed
+            if (!empty($profileData)) {
+                // Check if profile exists
+                $existingProfile = DatabaseHelper::select(
+                    "SELECT user_id FROM user_profiles WHERE user_id = ?",
+                    [$userId]
+                );
+                
+                if (empty($existingProfile)) {
+                    // Create new profile entry
+                    $profileData['user_id'] = $userId;
+                    $profileData['created_at'] = date('Y-m-d H:i:s');
+                    
+                    DatabaseHelper::insert(
+                        'user_profiles',
+                        $profileData,
+                        false,
+                        ['operation' => 'profile_create', 'user_id' => $userId]
+                    );
+                } else {
+                    // Update existing profile
+                    $profileData['updated_at'] = date('Y-m-d H:i:s');
+                    
+                    DatabaseHelper::update(
+                        'user_profiles',
+                        $profileData,
+                        ['user_id' => $userId],
+                        false,
+                        ['operation' => 'profile_update', 'user_id' => $userId]
+                    );
+                }
+            }
+            
+            // Commit the transaction
+            DatabaseHelper::rawQuery(
+                "COMMIT"
+            );
+            
+            // Get updated profile
+            $updatedProfile = DatabaseHelper::select(
+                "SELECT u.id, u.name, u.email, u.role, u.created_at, 
+                        p.bio, p.location, p.avatar_url
+                 FROM users u
+                 LEFT JOIN user_profiles p ON u.id = p.user_id
+                 WHERE u.id = ?",
+                [$userId]
+            );
+            
+            return ApiHelper::sendJsonResponse('success', 'Profile updated successfully', $updatedProfile[0], 200);
+            
+        } catch (\InvalidArgumentException $e) {
+            DatabaseHelper::rawQuery("ROLLBACK");
+            return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
+            
+        } catch (\Exception $e) {
+            DatabaseHelper::rawQuery("ROLLBACK");
+            $this->logger->error("Failed to update user profile", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $request->getAttribute('user_id') ?? 'unknown'
+            ]);
+            return ApiHelper::sendJsonResponse('error', 'Failed to update profile', [], 500);
+        }
     }
 
     /**
@@ -93,22 +264,143 @@ class UserController extends Controller
      */
     public function requestPasswordReset(Request $request, Response $response)
     {
-        $data = json_decode($request->getBody()->getContents(), true);
-
-        if (!isset($data['email'])) {
-            return ApiHelper::sendJsonResponse('error', 'Email is required', null, 400);
-        }
-
         try {
-            $token = Str::random(60);
-            \App\Models\PasswordReset::create([
-                'email'      => $data['email'],
-                'token'      => $token,
-                'expires_at' => now()->addHour(),
+            $data = json_decode($request->getBody()->getContents(), true);
+            
+            if (!isset($data['email']) || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+                return ApiHelper::sendJsonResponse('error', 'Valid email is required', [], 400);
+            }
+            
+            $this->logger->info("Processing password reset request", ['email' => $data['email']]);
+            
+            // Check if user exists
+            $user = DatabaseHelper::select(
+                "SELECT id, email FROM users WHERE email = ? AND deleted_at IS NULL",
+                [$data['email']]
+            );
+            
+            if (empty($user)) {
+                // Don't reveal that the email doesn't exist, but log it
+                $this->logger->info("Password reset requested for non-existent email", [
+                    'email' => $data['email']
+                ]);
+                return ApiHelper::sendJsonResponse('success', 'If your email is in our system, you will receive reset instructions shortly', [], 200);
+            }
+            
+            // Generate a secure token
+            $token = bin2hex(random_bytes(30));
+            $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
+            
+            // Store token in secure database
+            DatabaseHelper::insert(
+                'password_resets',
+                [
+                    'email' => $data['email'],
+                    'token' => $token,
+                    'expires_at' => $expiresAt,
+                    'created_at' => date('Y-m-d H:i:s')
+                ],
+                true, // Use secure database
+                ['operation' => 'password_reset_request', 'user_id' => $user[0]['id']]
+            );
+            
+            // Log successful reset request (token would be sent via email in a real system)
+            $this->logger->info("Password reset token generated", [
+                'user_id' => $user[0]['id'],
+                'email' => $data['email'],
+                'expires_at' => $expiresAt
             ]);
-            return ApiHelper::sendJsonResponse('success', 'Password reset requested', null, 200);
+            
+            return ApiHelper::sendJsonResponse('success', 'Password reset instructions sent to your email', [], 200);
+            
         } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
+            $this->logger->error("Failed to process password reset", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'email' => $data['email'] ?? 'not provided'
+            ]);
+            return ApiHelper::sendJsonResponse('error', 'Failed to process password reset request', [], 500);
+        }
+    }
+
+    /**
+     * Reset password with token.
+     */
+    public function resetPassword(Request $request, Response $response)
+    {
+        try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            
+            // Validate input
+            if (!isset($data['token']) || !isset($data['password']) || strlen($data['password']) < 6) {
+                return ApiHelper::sendJsonResponse('error', 'Token and password (min 6 chars) required', [], 400);
+            }
+            
+            $this->logger->info("Processing password reset with token");
+            
+            // Check if token is valid and not expired using secure database
+            $resetRequest = DatabaseHelper::select(
+                "SELECT email, token, expires_at FROM password_resets 
+                 WHERE token = ? AND expires_at > NOW()",
+                [$data['token']],
+                true // Use secure database
+            );
+            
+            if (empty($resetRequest)) {
+                $this->logger->warning("Invalid or expired password reset token used");
+                return ApiHelper::sendJsonResponse('error', 'Invalid or expired token', [], 400);
+            }
+            
+            $email = $resetRequest[0]['email'];
+            
+            // Get user ID
+            $user = DatabaseHelper::select(
+                "SELECT id FROM users WHERE email = ?",
+                [$email]
+            );
+            
+            if (empty($user)) {
+                $this->logger->warning("User not found for password reset", ['email' => $email]);
+                return ApiHelper::sendJsonResponse('error', 'User not found', [], 404);
+            }
+            
+            $userId = $user[0]['id'];
+            
+            // Update the password
+            $hashedPassword = password_hash($data['password'], PASSWORD_BCRYPT);
+            
+            DatabaseHelper::update(
+                'users',
+                [
+                    'password' => $hashedPassword,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ],
+                ['id' => $userId],
+                false,
+                ['operation' => 'password_reset', 'user_id' => $userId]
+            );
+            
+            // Delete the used token using secure database
+            DatabaseHelper::delete(
+                'password_resets',
+                ['token' => $data['token']],
+                false,
+                true // Use secure database
+            );
+            
+            $this->logger->info("Password reset successful", [
+                'user_id' => $userId,
+                'email' => $email
+            ]);
+            
+            return ApiHelper::sendJsonResponse('success', 'Password has been reset successfully', [], 200);
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to reset password", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return ApiHelper::sendJsonResponse('error', 'Failed to reset password', [], 500);
         }
     }
 
@@ -117,9 +409,82 @@ class UserController extends Controller
      */
     public function userDashboard(Request $request, Response $response)
     {
-        // Rendering HTML for dashboard via ApiHelper response
-        $html = "<html><body><h1>User Dashboard</h1><!-- ...existing dashboard HTML... --></body></html>";
-        return ApiHelper::sendJsonResponse('success', 'User Dashboard', $html, 200);
+        try {
+            $userId = $request->getAttribute('user_id');
+            
+            if (!$userId) {
+                return ApiHelper::sendJsonResponse('error', 'User not authenticated', [], 401);
+            }
+            
+            $this->logger->info("User accessing dashboard", ['user_id' => $userId]);
+            
+            // Get user data
+            $user = DatabaseHelper::select(
+                "SELECT id, name, email, role FROM users WHERE id = ? AND deleted_at IS NULL",
+                [$userId]
+            );
+            
+            if (empty($user)) {
+                return ApiHelper::sendJsonResponse('error', 'User not found', [], 404);
+            }
+            
+            // Get user's recent activity in a single query
+            $userActivity = DatabaseHelper::select(
+                "SELECT activity_type, description, created_at 
+                 FROM user_activities 
+                 WHERE user_id = ? 
+                 ORDER BY created_at DESC LIMIT 5",
+                [$userId]
+            );
+            
+            // Build dashboard data
+            $dashboardData = [
+                'user' => $user[0],
+                'recent_activity' => $userActivity,
+                'account_age_days' => $this->calculateAccountAge($userId)
+            ];
+            
+            // Log dashboard access
+            DatabaseHelper::insert(
+                'user_activities',
+                [
+                    'user_id' => $userId,
+                    'activity_type' => 'dashboard_access',
+                    'description' => 'User accessed their dashboard',
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null
+                ]
+            );
+            
+            return ApiHelper::sendJsonResponse('success', 'User Dashboard', $dashboardData, 200);
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to load user dashboard", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $request->getAttribute('user_id') ?? 'unknown'
+            ]);
+            return ApiHelper::sendJsonResponse('error', 'Failed to load dashboard', [], 500);
+        }
+    }
+    
+    /**
+     * Calculate user account age in days
+     */
+    private function calculateAccountAge(int $userId): int
+    {
+        $creationDate = DatabaseHelper::select(
+            "SELECT created_at FROM users WHERE id = ?",
+            [$userId]
+        );
+        
+        if (empty($creationDate)) {
+            return 0;
+        }
+        
+        $createdTimestamp = strtotime($creationDate[0]['created_at']);
+        $currentTimestamp = time();
+        return floor(($currentTimestamp - $createdTimestamp) / (60 * 60 * 24));
     }
 }
 === App/Controllers/BookingController.php ===
@@ -660,15 +1025,8 @@ class NotificationController extends Controller
 
 namespace App\Controllers;
 
-use App\Models\User;
-use App\Models\Admin;
-use App\Models\Booking;
-use App\Models\Payment;
-use App\Models\TransactionLog;
-use Illuminate\Http\Request;
+use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
-use Illuminate\Support\Facades\Hash;
-use App\Services\AuthService;
 use App\Helpers\JsonResponse;
 use App\Helpers\TokenValidator;
 use Psr\Http\Message\ResponseInterface;
@@ -703,27 +1061,80 @@ class AdminController extends Controller
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json');
     }
+    
+    /**
+     * Validate admin token and return admin data
+     */
+    protected function validateAdmin(): ?array
+    {
+        $this->logger->debug("Validating admin token using secure database");
+        $authHeader = $this->request->getHeader('Authorization')[0] ?? '';
+        $token = preg_replace('/^Bearer\s+/', '', $authHeader);
+        
+        if (empty($token)) {
+            $this->logger->info("No authorization token provided");
+            return null;
+        }
+        
+        // Validate token and fetch admin details - using secure database
+        $adminData = DatabaseHelper::select(
+            "SELECT id, email, role FROM admins WHERE token = ? AND token_expiry > NOW()", 
+            [$token],
+            true // Explicitly using secure database
+        );
+            
+        if (empty($adminData) || $adminData[0]['role'] !== 'admin') {
+            $this->logger->info("Invalid admin token or insufficient permissions");
+            return null;
+        }
+        
+        $this->logger->info("Admin validated successfully", ['admin_id' => $adminData[0]['id']]);
+        return $adminData[0];
+    }
 
     /**
      * ✅ Get a paginated list of all users with their roles.
      */
     public function getAllUsers(): ResponseInterface
     {
-        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
-        if (!$admin || !$admin->isAdmin()) {
+        $admin = $this->validateAdmin();
+        if (!$admin) {
             return $this->jsonResponse([
                 'status' => 'error',
                 'message' => 'Invalid token or insufficient permissions'
             ], 401);
         }
 
-        $users = User::with('roles')->latest()->paginate(10);
+        $this->logger->debug("Fetching users with pagination using application database");
+        
+        // Get pagination parameters
+        $page = (int) ($this->request->getQueryParams()['page'] ?? 1);
+        $perPage = 10;
+        $offset = ($page - 1) * $perPage;
+        
+        // Get users with pagination - using application database
+        $users = DatabaseHelper::select(
+            "SELECT u.*, r.name as role_name 
+             FROM users u 
+             LEFT JOIN roles r ON u.role_id = r.id 
+             ORDER BY u.created_at DESC 
+             LIMIT ? OFFSET ?",
+            [$perPage, $offset],
+            false // Explicitly using application database
+        );
+        
+        // Get total count for pagination
+        $totalUsers = DatabaseHelper::select(
+            "SELECT COUNT(*) as count FROM users", 
+            [],
+            false // Explicitly using application database
+        )[0]['count'];
         
         $this->auditService->logEvent(
             'user_list_viewed',
             'Admin viewed user list',
-            ['admin_id' => $admin->id, 'page' => $users->currentPage()],
-            $admin->id,
+            ['admin_id' => $admin['id'], 'page' => $page],
+            $admin['id'],
             null,
             'admin'
         );
@@ -731,7 +1142,15 @@ class AdminController extends Controller
         return $this->jsonResponse([
             'status' => 'success', 
             'message' => 'User list retrieved successfully', 
-            'data' => $users
+            'data' => [
+                'users' => $users,
+                'pagination' => [
+                    'total' => $totalUsers,
+                    'per_page' => $perPage,
+                    'current_page' => $page,
+                    'last_page' => ceil($totalUsers / $perPage)
+                ]
+            ]
         ]);
     }
 
@@ -740,16 +1159,16 @@ class AdminController extends Controller
      */
     public function updateUserRole($userId): ResponseInterface
     {
-        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
-        if (!$admin || !$admin->isAdmin()) {
+        $admin = $this->validateAdmin();
+        if (!$admin) {
             return $this->jsonResponse([
                 'status' => 'error',
                 'message' => 'Invalid token or insufficient permissions'
             ], 401);
         }
 
-        // Replace Laravel validation with native checks.
-        $role = $_POST['role'] ?? '';
+        $data = $this->request->getParsedBody();
+        $role = $data['role'] ?? '';
         $allowedRoles = ['user', 'admin', 'manager'];
         if (!$role || !in_array($role, $allowedRoles)) {
             return $this->jsonResponse([
@@ -758,9 +1177,39 @@ class AdminController extends Controller
             ], 400);
         }
         
-        $user = User::findOrFail($userId);
-        $oldRole = $user->role;
-        $user->update(['role' => $role]);
+        $this->logger->debug("Fetching user data for role update using application database", [
+            'user_id' => $userId
+        ]);
+        
+        // Get user and their current role - using application database
+        $user = DatabaseHelper::select(
+            "SELECT id, role FROM users WHERE id = ?", 
+            [(int)$userId],
+            false // Explicitly using application database
+        );
+        
+        if (empty($user)) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'User not found'
+            ], 404);
+        }
+        
+        $oldRole = $user[0]['role'];
+        
+        $this->logger->debug("Updating user role using application database", [
+            'user_id' => $userId,
+            'old_role' => $oldRole,
+            'new_role' => $role
+        ]);
+        
+        // Update role - using application database
+        DatabaseHelper::update(
+            "users", 
+            ["role" => $role], 
+            ["id" => (int)$userId],
+            false // Explicitly using application database
+        );
         
         $this->auditService->logEvent(
             'user_role_updated',
@@ -769,9 +1218,9 @@ class AdminController extends Controller
                 'user_id' => $userId,
                 'old_role' => $oldRole,
                 'new_role' => $role,
-                'admin_id' => $admin->id
+                'admin_id' => $admin['id']
             ],
-            $admin->id,
+            $admin['id'],
             null,
             'admin'
         );
@@ -787,17 +1236,59 @@ class AdminController extends Controller
      */
     public function deleteUser($userId): ResponseInterface
     {
-        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
-        if (!$admin || !$admin->isAdmin()) {
+        $admin = $this->validateAdmin();
+        if (!$admin) {
             return $this->jsonResponse([
                 'status' => 'error',
                 'message' => 'Invalid token or insufficient permissions'
             ], 401);
         }
 
-        $user = User::findOrFail($userId);
-        $userEmail = $user->email; // Save for audit log
-        $user->delete();
+        $this->logger->debug("Fetching user data for deletion using application database", [
+            'user_id' => $userId
+        ]);
+        
+        // Get user data for audit log - using application database
+        $user = DatabaseHelper::select(
+            "SELECT id, email, role FROM users WHERE id = ?", 
+            [(int)$userId],
+            false // Explicitly using application database
+        );
+        
+        if (empty($user)) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'User not found'
+            ], 404);
+        }
+        
+        $userEmail = $user[0]['email'];
+        $userRole = $user[0]['role'];
+        
+        // Check if user is a super admin
+        if ($userRole === 'super_admin') {
+            $this->logger->info("Attempted to delete a super_admin account", [
+                'user_id' => $userId,
+                'admin_id' => $admin['id']
+            ]);
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Super admins cannot be deleted'
+            ], 403);
+        }
+        
+        $this->logger->debug("Soft deleting user using application database", [
+            'user_id' => $userId,
+            'user_email' => $userEmail
+        ]);
+        
+        // Soft delete by setting deleted_at timestamp - using application database
+        DatabaseHelper::update(
+            "users", 
+            ["deleted_at" => date('Y-m-d H:i:s')], 
+            ["id" => (int)$userId],
+            false // Explicitly using application database
+        );
         
         $this->auditService->logEvent(
             'user_deleted',
@@ -805,9 +1296,9 @@ class AdminController extends Controller
             [
                 'user_id' => $userId,
                 'user_email' => $userEmail,
-                'admin_id' => $admin->id
+                'admin_id' => $admin['id']
             ],
-            $admin->id,
+            $admin['id'],
             null,
             'admin'
         );
@@ -823,27 +1314,69 @@ class AdminController extends Controller
      */
     public function getDashboardData(): ResponseInterface
     {
-        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
-        if (!$admin || !$admin->isAdmin()) {
+        $admin = $this->validateAdmin();
+        if (!$admin) {
             return $this->jsonResponse([
                 'status' => 'error',
                 'message' => 'Invalid token or insufficient permissions'
             ], 401);
         }
 
+        $this->logger->debug("Fetching dashboard statistics using application database");
+        
+        // Get total users count - using application database
+        $totalUsers = DatabaseHelper::select(
+            "SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL", 
+            [],
+            false // Explicitly using application database
+        )[0]['count'];
+        
+        // Get total bookings count - using application database
+        $totalBookings = DatabaseHelper::select(
+            "SELECT COUNT(*) as count FROM bookings", 
+            [],
+            false // Explicitly using application database
+        )[0]['count'];
+        
+        // Get total revenue - using application database
+        $totalRevenue = DatabaseHelper::select(
+            "SELECT SUM(amount) as total FROM payments WHERE status = 'completed'", 
+            [],
+            false // Explicitly using application database
+        )[0]['total'] ?? 0;
+        
+        // Get latest 5 users - using application database
+        $latestUsers = DatabaseHelper::select(
+            "SELECT u.*, r.name as role_name 
+             FROM users u 
+             LEFT JOIN roles r ON u.role_id = r.id 
+             WHERE u.deleted_at IS NULL 
+             ORDER BY u.created_at DESC 
+             LIMIT 5",
+            [],
+            false // Explicitly using application database
+        );
+        
+        // Get latest 5 transactions - using application database
+        $latestTransactions = DatabaseHelper::select(
+            "SELECT * FROM transaction_logs ORDER BY created_at DESC LIMIT 5",
+            [],
+            false // Explicitly using application database
+        );
+        
         $dashboardData = [
-            'total_users' => User::count(),
-            'total_bookings' => Booking::count(),
-            'total_revenue' => Payment::sum('amount'),
-            'latest_users' => User::with('roles')->latest()->limit(5)->get(),
-            'latest_transactions' => TransactionLog::latest()->limit(5)->get(),
+            'total_users' => $totalUsers,
+            'total_bookings' => $totalBookings,
+            'total_revenue' => $totalRevenue,
+            'latest_users' => $latestUsers,
+            'latest_transactions' => $latestTransactions,
         ];
         
         $this->auditService->logEvent(
             'dashboard_viewed',
             'Admin viewed dashboard',
-            ['admin_id' => $admin->id],
-            $admin->id,
+            ['admin_id' => $admin['id']],
+            $admin['id'],
             null,
             'admin'
         );
@@ -860,43 +1393,90 @@ class AdminController extends Controller
      */
     public function createAdmin(): ResponseInterface
     {
-        $admin = TokenValidator::validateToken($this->request->getHeader('Authorization'));
-        if (!$admin || !$admin->isAdmin()) {
+        $admin = $this->validateAdmin();
+        if (!$admin) {
             return $this->jsonResponse([
                 'status' => 'error',
                 'message' => 'Invalid token or insufficient permissions'
             ], 401);
         }
 
-        // Use native PHP POST handling.
-        $data = $_POST;
-        // Basic native validation.
+        $data = $this->request->getParsedBody();
+        
+        // Validate input
         if (!isset($data['name'], $data['email'], $data['password']) ||
             !filter_var($data['email'], FILTER_VALIDATE_EMAIL) ||
             strlen($data['password']) < 8
         ) {
             return $this->jsonResponse([
                 'status' => 'error',
-                'message' => 'Invalid input'
+                'message' => 'Invalid input. Email must be valid and password must be at least 8 characters'
             ], 400);
         }
-
-        $newAdmin = Admin::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'role' => 'admin'
+        
+        $this->logger->debug("Checking for existing admin email using secure database", [
+            'email' => $data['email']
         ]);
+        
+        // Check if email already exists - using secure database
+        $existingAdmin = DatabaseHelper::select(
+            "SELECT id FROM admins WHERE email = ?", 
+            [$data['email']],
+            true // Explicitly using secure database
+        );
+        
+        if (!empty($existingAdmin)) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Email already in use'
+            ], 400);
+        }
+        
+        // Create new admin - using secure database
+        $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
+        
+        $this->logger->debug("Creating new admin user in secure database");
+        
+        // Insert new admin record - using secure database
+        $newAdminId = DatabaseHelper::insert(
+            "admins", 
+            [
+                "name" => $data['name'],
+                "email" => $data['email'],
+                "password" => $hashedPassword,
+                "role" => 'admin',
+                "created_at" => date('Y-m-d H:i:s')
+            ],
+            true // Explicitly using secure database
+        );
+        
+        if (!$newAdminId) {
+            return $this->jsonResponse([
+                'status' => 'error',
+                'message' => 'Failed to create admin user'
+            ], 500);
+        }
+        
+        $this->logger->debug("Fetching created admin details from secure database", [
+            'new_admin_id' => $newAdminId
+        ]);
+        
+        // Get created admin details for response - using secure database
+        $newAdmin = DatabaseHelper::select(
+            "SELECT id, name, email, role, created_at FROM admins WHERE id = ?", 
+            [$newAdminId],
+            true // Explicitly using secure database
+        )[0];
         
         $this->auditService->logEvent(
             'admin_created',
-            "New admin user created: {$newAdmin->email}",
+            "New admin user created: {$data['email']}",
             [
-                'created_by' => $admin->id,
-                'new_admin_id' => $newAdmin->id,
-                'new_admin_email' => $newAdmin->email
+                'created_by' => $admin['id'],
+                'new_admin_id' => $newAdminId,
+                'new_admin_email' => $data['email']
             ],
-            $admin->id,
+            $admin['id'],
             null,
             'admin'
         );
@@ -5676,6 +6256,7 @@ class TokenService
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
     private DatabaseHelper $db;
+    private DatabaseHelper $secureDb;
     private AuditService $auditService;
 
     public function __construct(
@@ -5683,7 +6264,8 @@ class TokenService
         string $jwtRefreshSecret,
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
-        DatabaseHelper $db,
+        DatabaseHelper $appDb,
+        DatabaseHelper $secureDb,
         AuditService $auditService
     ) {
         $this->jwtSecret = $jwtSecret;
@@ -5693,7 +6275,8 @@ class TokenService
         }
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
-        $this->db = $db;
+        $this->db = $appDb;
+        $this->secureDb = $secureDb;
         $this->auditService = $auditService;
         
         if (self::DEBUG_MODE) {
@@ -5782,14 +6365,13 @@ class TokenService
     {
         try {
             // Store the token in the refresh_tokens table using secure db helper
-            $secureDb = DatabaseHelper::getSecureInstance();
-            $secureDb->insert('refresh_tokens', [
+            DatabaseHelper::insert('refresh_tokens', [
                 'user_id' => $userId,
                 'token' => hash('sha256', $refreshToken), // Store hashed token for security
                 'expires_at' => date('Y-m-d H:i:s', time() + 604800),
                 'created_at' => date('Y-m-d H:i:s'),
                 'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null
-            ]);
+            ], true); // Set useSecureDb to true
             
             if (self::DEBUG_MODE) {
                 $this->logger->info("[auth] Refresh token stored in secure database", ['user_id' => $userId]);
@@ -5843,10 +6425,9 @@ class TokenService
             }
             
             // If not in cache, check secure database
-            $secureDb = DatabaseHelper::getSecureInstance();
             $hashedToken = hash('sha256', $refreshToken);
             $query = "SELECT 1 FROM refresh_tokens WHERE token = :token AND revoked = 1 LIMIT 1";
-            $revoked = $secureDb->select($query, [':token' => $hashedToken]);
+            $revoked = DatabaseHelper::select($query, [':token' => $hashedToken], true); // Set useSecureDb to true
                 
             // If revoked in database, store in cache for next time
             if ($revoked) {
@@ -5893,18 +6474,17 @@ class TokenService
             apcu_store("revoked_refresh_token_$token", true, 604800);
             
             // Store in secure database for persistence
-            $secureDb = DatabaseHelper::getSecureInstance();
             $hashedToken = hash('sha256', $token);
             
             // Update the token status in secure database using db helper
-            $secureDb->update('refresh_tokens', [
+            DatabaseHelper::update('refresh_tokens', [
                 'revoked' => 1,
                 'revoked_at' => date('Y-m-d H:i:s')
-            ], ['token' => $hashedToken]);
+            ], ['token' => $hashedToken], true); // Set useSecureDb to true
                 
             // Try to get the user ID for audit logging
             $query = "SELECT user_id FROM refresh_tokens WHERE token = :token LIMIT 1";
-            $tokenData = $secureDb->select($query, [':token' => $hashedToken]);
+            $tokenData = DatabaseHelper::select($query, [':token' => $hashedToken], true); // Set useSecureDb to true
             
             $userId = $tokenData[0]['user_id'] ?? null;
             
@@ -5933,9 +6513,8 @@ class TokenService
     public function purgeExpiredTokens(): int
     {
         try {
-            $secureDb = DatabaseHelper::getSecureInstance();
             $query = "DELETE FROM refresh_tokens WHERE expires_at < :now";
-            $count = $secureDb->update($query, [':now' => date('Y-m-d H:i:s')]);
+            $count = DatabaseHelper::delete('refresh_tokens', ['expires_at < ' => date('Y-m-d H:i:s')], false, true); // Set useSecureDb to true
                 
             $this->logger->info("[TokenService] Purged {$count} expired tokens");
             return $count;
@@ -5952,12 +6531,11 @@ class TokenService
     public function getActiveTokensForUser(int $userId): array
     {
         try {
-            $secureDb = DatabaseHelper::getSecureInstance();
             $query = "SELECT * FROM refresh_tokens WHERE user_id = :user_id AND revoked = 0 AND expires_at > :now";
-            $tokens = $secureDb->select($query, [
+            $tokens = DatabaseHelper::select($query, [
                 ':user_id' => $userId,
                 ':now' => date('Y-m-d H:i:s')
-            ]);
+            ], true); // Set useSecureDb to true
                 
             return $tokens ?: [];
         } catch (\Exception $e) {
@@ -9598,8 +10176,8 @@ use App\Helpers\ApiHelper;
 
 class DatabaseHelper
 {
-    private static ?DatabaseHelper $instance = null;
-    private static ?DatabaseHelper $secureInstance = null;
+    protected static ?DatabaseHelper $instance = null;
+    protected static ?DatabaseHelper $secureInstance = null;
     private PDO $pdo;
     private static LoggerInterface $logger;
 
@@ -9613,7 +10191,6 @@ class DatabaseHelper
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]);
 
-            // ✅ Log successful initialization
             self::$logger->info("✅ Database connection initialized successfully.");
         } catch (Exception $e) {
             self::$logger->critical("❌ Database connection failed: " . $e->getMessage());
@@ -9631,38 +10208,62 @@ class DatabaseHelper
     private static function getDatabaseConfig(string $type = 'default'): array
     {
         $config = require __DIR__ . '/../../config/database.php';
+    
+        if (!isset($config['secure_database']) || !isset($config['app_database'])) {
+            throw new Exception("Database configuration is missing required keys.");
+        }
+    
         return $type === 'secure' ? $config['secure_database'] : $config['app_database'];
     }
-
+    
     public static function getInstance(): DatabaseHelper
     {
         if (self::$instance === null) {
+            if (!isset(self::$logger)) {
+                throw new Exception("Logger must be set before initializing the database.");
+            }
             try {
-                self::$instance = new DatabaseHelper(self::getDatabaseConfig('default'));
+                $dbConfig = self::getDatabaseConfig('default');
+                self::$instance = new DatabaseHelper($dbConfig);
+                self::$logger->info("✅ Application database initialized successfully.");
             } catch (Exception $e) {
-                self::$logger->critical("❌ Database initialization failed: " . $e->getMessage());
-                die("Database initialization failed.");
+                self::$logger->critical("❌ Application database initialization failed: " . $e->getMessage());
+                die("Application database initialization failed.");
             }
         }
-
+    
         return self::$instance;
     }
-
+    
     public static function getSecureInstance(): DatabaseHelper
     {
         if (self::$secureInstance === null) {
+            if (!isset(self::$logger)) {
+                throw new Exception("Logger must be set before initializing the database.");
+            }
             try {
-                self::$secureInstance = new DatabaseHelper(self::getDatabaseConfig('secure'));
-                error_log("[DEBUG] Initializing Secure Database", 3, __DIR__ . "/debug.log"); // Ensure log file is writable
+                $dbConfig = self::getDatabaseConfig('secure');
+                self::$secureInstance = new DatabaseHelper($dbConfig);
+                self::$logger->info("✅ Secure database initialized successfully.");
             } catch (Exception $e) {
                 self::$logger->critical("❌ Secure database initialization failed: " . $e->getMessage());
                 die("Secure database initialization failed.");
             }
         }
-
+    
         return self::$secureInstance;
     }
 
+    public static function getAppInstance(): ?DatabaseHelper
+    {
+        return self::$instance;
+    }
+
+    public static function getSecureDbInstance(): ?DatabaseHelper
+    {
+        return self::$secureInstance;
+    }
+    
     public function getPdo(): PDO
     {
         return $this->pdo;
@@ -9681,94 +10282,325 @@ class DatabaseHelper
     }
 
     /**
-     * ✅ Safe Query Execution with Exception Handling
+     * Execute a database query safely with comprehensive logging and error handling
+     * 
+     * @param callable $query Function containing the query to execute
+     * @param string $queryDescription Description of the query for logging
+     * @param bool $useSecureDb Whether to use the secure database
+     * @param array $context Additional context information for logging
+     * @return mixed Query result or error response
      */
-    public static function safeQuery(callable $query, string $queryDescription = 'Database Query')
-    {
+    public static function safeQuery(
+        callable $query, 
+        string $queryDescription = 'Database Query', 
+        bool $useSecureDb = false,
+        array $context = []
+    ) {
+        $startTime = microtime(true);
+        $dbInstance = $useSecureDb ? self::getSecureInstance() : self::getInstance();
+        $dbType = $useSecureDb ? "secure" : "application";
+        
         try {
-            $result = $query(self::getInstance()->getPdo());
-            self::$logger->info("✅ {$queryDescription} executed successfully.");
+            // Get database name for logging
+            $databaseName = $dbInstance->getPdo()->query("SELECT DATABASE()")->fetchColumn();
+            
+            // Log query execution start with sanitized parameters
+            $logContext = array_merge($context, [
+                'database' => $databaseName,
+                'database_type' => $dbType,
+                'timestamp_start' => date('Y-m-d H:i:s.u'),
+            ]);
+            
+            // Sanitize any sensitive data in context
+            $sanitizedContext = self::sanitizeLogContext($logContext);
+            self::$logger->info("🔍 Executing {$queryDescription} on {$dbType} database: {$databaseName}", $sanitizedContext);
+            
+            // Execute the query
+            $result = $query($dbInstance->getPdo());
+            
+            // Calculate execution time
+            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
+            
+            // Log successful query completion
+            self::$logger->info("✅ {$queryDescription} completed successfully", [
+                'database' => $databaseName,
+                'execution_time_ms' => $executionTime,
+                'database_type' => $dbType,
+                'timestamp_end' => date('Y-m-d H:i:s.u'),
+            ]);
+            
             return $result;
+            
         } catch (\PDOException $e) {
-            self::$logger->error("❌ {$queryDescription} Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            if ($e->getCode() == "23000") {
-                return ApiHelper::sendJsonResponse('error', 'Duplicate entry error', [], 400);
+            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
+            $errorCode = $e->getCode();
+            
+            // Log detailed error information
+            self::$logger->error("❌ {$queryDescription} failed with PDO error {$errorCode}", [
+                'error_message' => $e->getMessage(),
+                'database_type' => $dbType,
+                'execution_time_ms' => $executionTime,
+                'error_code' => $errorCode,
+                'trace' => $e->getTraceAsString(),
+                'context' => $sanitizedContext ?? [],
+            ]);
+            
+            // Return appropriate error responses based on error type
+            if ($errorCode == "23000") {
+                return ApiHelper::sendJsonResponse('error', 'Database constraint violation: Duplicate or invalid data', [], 400);
+            } elseif ($errorCode == "42S02") {
+                return ApiHelper::sendJsonResponse('error', 'Table not found error', [], 500);
+            } elseif ($errorCode == "42000") {
+                return ApiHelper::sendJsonResponse('error', 'SQL syntax error', [], 500);
+            } else {
+                return ApiHelper::sendJsonResponse('error', 'Database query failed: ' . self::getSafeErrorMessage($e->getMessage()), [], 500);
             }
-            return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
+            
         } catch (\Exception $e) {
-            self::$logger->error("❌ {$queryDescription} Error: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            return ApiHelper::sendJsonResponse('error', 'Database query error', [], 500);
+            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
+            
+            // Log general exceptions
+            self::$logger->error("❌ {$queryDescription} failed with exception", [
+                'error_message' => $e->getMessage(),
+                'database_type' => $dbType,
+                'execution_time_ms' => $executionTime,
+                'trace' => $e->getTraceAsString(),
+                'context' => $sanitizedContext ?? [],
+            ]);
+            
+            return ApiHelper::sendJsonResponse('error', 'Database operation failed: ' . self::getSafeErrorMessage($e->getMessage()), [], 500);
         }
     }
 
     /**
-     * ✅ Wrapper for Insert Queries
+     * Sanitize log context to remove sensitive data
      */
-    public static function insert(string $table, array $data, bool $useSecureDb = false): string
+    private static function sanitizeLogContext(array $context): array
     {
-        return self::safeQuery(function ($pdo) use ($table, $data, $useSecureDb) {
-            $dbInstance = $useSecureDb ? self::getSecureInstance() : self::getInstance();
-            $pdo = $dbInstance->getPdo();
-            $columns = implode(", ", array_keys($data));
-            $placeholders = implode(", ", array_fill(0, count($data), "?"));
-            $sql = "INSERT INTO {$table} ({$columns}) VALUES ({$placeholders})";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute(array_values($data));
-            $lastInsertId = $pdo->lastInsertId();
-            self::$logger->info("✅ Inserted into {$table} with ID {$lastInsertId}");
-            return $lastInsertId;
-        }, "Insert into {$table}");
+        $sensitiveKeys = ['password', 'token', 'secret', 'credit_card', 'card_number', 'cvv'];
+        
+        foreach ($context as $key => $value) {
+            if (is_array($value)) {
+                $context[$key] = self::sanitizeLogContext($value);
+            } elseif (is_string($value) && self::containsSensitiveData($key, $sensitiveKeys)) {
+                $context[$key] = '***REDACTED***';
+            }
+        }
+        
+        return $context;
+    }
+    
+    /**
+     * Check if a key contains sensitive data
+     */
+    private static function containsSensitiveData(string $key, array $sensitiveKeys): bool
+    {
+        $key = strtolower($key);
+        foreach ($sensitiveKeys as $sensitiveKey) {
+            if (strpos($key, $sensitiveKey) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Get a safe error message that doesn't expose sensitive information
+     */
+    private static function getSafeErrorMessage(string $originalMessage): string
+    {
+        // Remove potentially sensitive details from error messages
+        $safeMessage = preg_replace('/SQLSTATE\[\w+\]: .+?: /', '', $originalMessage);
+        $safeMessage = preg_replace('/near \'(.+?)\'/', 'near [SQL]', $safeMessage);
+        
+        return $safeMessage;
     }
 
     /**
-     * ✅ Wrapper for Update Queries
+     * Insert data into a table
+     * 
+     * @param string $table Table name
+     * @param array $data Data to insert (column => value)
+     * @param bool $useSecureDb Whether to use the secure database
+     * @param array $context Additional context information for logging
+     * @return string|mixed Last insert ID or error response
      */
-    public static function update(string $table, array $data, array $where): int
-    {
+    public static function insert(
+        string $table, 
+        array $data, 
+        bool $useSecureDb = false,
+        array $context = []
+    ): string {
+        $queryContext = array_merge($context, [
+            'operation' => 'INSERT',
+            'table' => $table,
+            'field_count' => count($data),
+        ]);
+        
+        return self::safeQuery(function ($pdo) use ($table, $data) {
+            $columns = implode(", ", array_keys($data));
+            $placeholders = implode(", ", array_fill(0, count($data), "?"));
+            $sql = "INSERT INTO {$table} ({$columns}) VALUES ({$placeholders})";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute(array_values($data));
+            $lastInsertId = $pdo->lastInsertId();
+            
+            return $lastInsertId;
+        }, "Insert into {$table}", $useSecureDb, $queryContext);
+    }
+
+    /**
+     * Update data in a table
+     * 
+     * @param string $table Table name
+     * @param array $data Data to update (column => value)
+     * @param array $where Where conditions (column => value)
+     * @param bool $useSecureDb Whether to use the secure database 
+     * @param array $context Additional context information for logging
+     * @return int|mixed Number of affected rows or error response
+     */
+    public static function update(
+        string $table, 
+        array $data, 
+        array $where, 
+        bool $useSecureDb = false,
+        array $context = []
+    ): int {
+        $queryContext = array_merge($context, [
+            'operation' => 'UPDATE',
+            'table' => $table,
+            'field_count' => count($data),
+            'condition_count' => count($where),
+        ]);
+        
         return self::safeQuery(function ($pdo) use ($table, $data, $where) {
             $set = implode(", ", array_map(fn($key) => "{$key} = ?", array_keys($data)));
             $whereClause = implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
             $sql = "UPDATE {$table} SET {$set} WHERE {$whereClause}";
+            
             $stmt = $pdo->prepare($sql);
             $params = array_merge(array_values($data), array_values($where));
             $stmt->execute($params);
             $rowCount = $stmt->rowCount();
-            self::$logger->info("✅ Updated {$rowCount} rows in {$table}");
+            
+            // Log affected rows count
+            self::$logger->info("Updated {$rowCount} rows in table {$table}");
+            
             return $rowCount;
-        }, "Update {$table}");
+        }, "Update {$table}", $useSecureDb, $queryContext);
     }
 
     /**
-     * ✅ Wrapper for Delete Queries
+     * Delete data from a table
+     * 
+     * @param string $table Table name
+     * @param array $where Where conditions (column => value)
+     * @param bool $softDelete Whether to perform a soft delete
+     * @param bool $useSecureDb Whether to use the secure database
+     * @param array $context Additional context information for logging
+     * @return int|mixed Number of affected rows or error response
      */
-    public static function delete(string $table, array $where, bool $softDelete = false): int
-    {
+    public static function delete(
+        string $table, 
+        array $where, 
+        bool $softDelete = false, 
+        bool $useSecureDb = false,
+        array $context = []
+    ): int {
+        $operation = $softDelete ? 'SOFT_DELETE' : 'DELETE';
+        $queryContext = array_merge($context, [
+            'operation' => $operation,
+            'table' => $table,
+            'condition_count' => count($where),
+        ]);
+        
         return self::safeQuery(function ($pdo) use ($table, $where, $softDelete) {
             if ($softDelete) {
                 $sql = "UPDATE {$table} SET deleted_at = NOW() WHERE " . implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
             } else {
                 $sql = "DELETE FROM {$table} WHERE " . implode(" AND ", array_map(fn($key) => "{$key} = ?", array_keys($where)));
             }
+            
             $stmt = $pdo->prepare($sql);
             $stmt->execute(array_values($where));
             $rowCount = $stmt->rowCount();
-            self::$logger->info("✅ Deleted {$rowCount} rows from {$table}");
+            
+            // Log affected rows count
+            self::$logger->info(($softDelete ? "Soft deleted" : "Deleted") . " {$rowCount} rows from table {$table}");
+            
             return $rowCount;
-        }, "Delete from {$table}");
+        }, ($softDelete ? "Soft delete from" : "Delete from") . " {$table}", $useSecureDb, $queryContext);
     }
 
     /**
-     * ✅ Wrapper for Select Queries
+     * Select data from the database
+     * 
+     * @param string $query SQL query
+     * @param array $params Query parameters
+     * @param bool $useSecureDb Whether to use the secure database
+     * @param array $context Additional context information for logging
+     * @return array|mixed Query results or error response
      */
-    public static function select(string $query, array $params = []): array
-    {
+    public static function select(
+        string $query, 
+        array $params = [], 
+        bool $useSecureDb = false,
+        array $context = []
+    ): array {
+        $queryContext = array_merge($context, [
+            'operation' => 'SELECT',
+            'param_count' => count($params),
+            'query_hash' => md5($query), // For tracking unique queries
+        ]);
+        
         return self::safeQuery(function ($pdo) use ($query, $params) {
             $stmt = $pdo->prepare($query);
             $stmt->execute($params);
             $results = $stmt->fetchAll();
-            self::$logger->info("✅ Selected " . count($results) . " rows using query: " . $query);
+            
+            // Log result count
+            self::$logger->debug("Query returned " . count($results) . " rows");
+            
             return $results;
-        }, "Select Query");
+        }, "Select query", $useSecureDb, $queryContext);
+    }
+    
+    /**
+     * Execute a raw query with enhanced logging
+     * 
+     * @param string $query SQL query
+     * @param array $params Query parameters
+     * @param bool $useSecureDb Whether to use the secure database
+     * @param array $context Additional context information for logging
+     * @return mixed Query result or error response
+     */
+    public static function rawQuery(
+        string $query, 
+        array $params = [], 
+        bool $useSecureDb = false,
+        array $context = []
+    ) {
+        $operation = strtoupper(trim(explode(' ', $query)[0]));
+        $queryContext = array_merge($context, [
+            'operation' => $operation,
+            'param_count' => count($params),
+            'query_hash' => md5($query),
+        ]);
+        
+        return self::safeQuery(function ($pdo) use ($query, $params, $operation) {
+            $stmt = $pdo->prepare($query);
+            $stmt->execute($params);
+            
+            if ($operation === 'SELECT') {
+                $results = $stmt->fetchAll();
+                return $results;
+            } else {
+                $rowCount = $stmt->rowCount();
+                self::$logger->debug("{$operation} affected {$rowCount} rows");
+                return $rowCount;
+            }
+        }, "{$operation} raw query", $useSecureDb, $queryContext);
     }
 }
 === App/Helpers/LoggingHelper.php ===

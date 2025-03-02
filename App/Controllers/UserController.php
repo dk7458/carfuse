@@ -6,8 +6,9 @@ use App\Helpers\ApiHelper;
 use App\Helpers\DatabaseHelper;
 use App\Services\Validator;
 use App\Services\Auth\TokenService;
-use Psr\Log\LoggerInterface;
+use App\Services\AuditService;
 use App\Helpers\ExceptionHandler;
+use Psr\Log\LoggerInterface;
 use App\Services\Auth\AuthService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -24,6 +25,7 @@ class UserController extends Controller
     private ExceptionHandler $exceptionHandler;
     protected LoggerInterface $logger;
     private AuthService $authService;
+    private AuditService $auditService;
 
     public function __construct(
         LoggerInterface $logger,
@@ -31,12 +33,14 @@ class UserController extends Controller
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler,
         AuthService $authService,
+        AuditService $auditService
     ) {
         parent::__construct($logger);
         $this->validator = $validator;
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
         $this->authService = $authService;
+        $this->auditService = $auditService;
     }
 
     /**
@@ -60,7 +64,8 @@ class UserController extends Controller
             // Check if email is already in use
             $existingUser = DatabaseHelper::select(
                 "SELECT id FROM users WHERE email = ?",
-                [$data['email']]
+                [$data['email']],
+                false // Using application database
             );
             
             if (!empty($existingUser)) {
@@ -85,6 +90,16 @@ class UserController extends Controller
                 ['operation' => 'user_registration']
             );
             
+            // Log the registration in audit logs
+            $this->auditService->logEvent(
+                'user_registered',
+                'User registered successfully',
+                ['email' => $data['email']],
+                $userId,
+                null,
+                'user'
+            );
+            
             $this->logger->info("User registered successfully", [
                 'user_id' => $userId,
                 'email' => $data['email']
@@ -92,19 +107,10 @@ class UserController extends Controller
             
             return ApiHelper::sendJsonResponse('success', 'User registered successfully', ['user_id' => $userId], 201);
             
-        } catch (\InvalidArgumentException $e) {
-            $this->logger->warning("Validation failed during user registration", [
-                'error' => $e->getMessage()
-            ]);
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
-            
         } catch (\Exception $e) {
-            $this->logger->error("Failed to register user", [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
             $this->exceptionHandler->handleException($e);
-            return ApiHelper::sendJsonResponse('error', 'Failed to register user', [], 500);
+            // The following won't execute if handleException exits as expected
+            return ApiHelper::sendJsonResponse('error', 'Registration failed', [], 500);
         }
     }
 
@@ -114,12 +120,13 @@ class UserController extends Controller
     public function getUserProfile(Request $request, Response $response)
     {
         try {
-            $userId = $request->getAttribute('user_id');
-            
-            if (!$userId) {
+            // Get user from TokenService validation
+            $user = $this->tokenService->validateRequest($request);
+            if (!$user) {
                 return ApiHelper::sendJsonResponse('error', 'User not authenticated', [], 401);
             }
             
+            $userId = $user['id'];
             $this->logger->info("Fetching user profile", ['user_id' => $userId]);
             
             // Fetch user data with a single optimized query
@@ -129,22 +136,30 @@ class UserController extends Controller
                  FROM users u
                  LEFT JOIN user_profiles p ON u.id = p.user_id
                  WHERE u.id = ? AND u.deleted_at IS NULL",
-                [$userId]
+                [$userId],
+                false // Using application database
             );
             
             if (empty($userData)) {
                 return ApiHelper::sendJsonResponse('error', 'User not found', [], 404);
             }
             
+            // Log profile view in audit logs
+            $this->auditService->logEvent(
+                'profile_viewed',
+                'User viewed their profile',
+                ['user_id' => $userId],
+                $userId,
+                null,
+                'user'
+            );
+            
             return ApiHelper::sendJsonResponse('success', 'User profile retrieved', $userData[0], 200);
             
         } catch (\Exception $e) {
-            $this->logger->error("Failed to get user profile", [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'user_id' => $request->getAttribute('user_id') ?? 'unknown'
-            ]);
-            return ApiHelper::sendJsonResponse('error', 'Failed to retrieve user profile', [], 500);
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
+            return ApiHelper::sendJsonResponse('error', 'Failed to retrieve profile', [], 500);
         }
     }
 
@@ -154,11 +169,13 @@ class UserController extends Controller
     public function updateProfile(Request $request, Response $response)
     {
         try {
-            $userId = $request->getAttribute('user_id');
-            
-            if (!$userId) {
+            // Get user from TokenService validation
+            $user = $this->tokenService->validateRequest($request);
+            if (!$user) {
                 return ApiHelper::sendJsonResponse('error', 'User not authenticated', [], 401);
             }
+            
+            $userId = $user['id'];
             
             $data = json_decode($request->getBody()->getContents(), true);
             $this->logger->info("Updating user profile", ['user_id' => $userId]);
@@ -179,7 +196,9 @@ class UserController extends Controller
             
             // Start transaction for updating both tables
             DatabaseHelper::rawQuery(
-                "START TRANSACTION"
+                "START TRANSACTION",
+                [],
+                false // Using application database
             );
             
             // Update user main data if needed
@@ -188,7 +207,7 @@ class UserController extends Controller
                     'users',
                     $userData,
                     ['id' => $userId],
-                    false,
+                    false, // Using application database
                     ['operation' => 'profile_update', 'user_id' => $userId]
                 );
             }
@@ -198,7 +217,8 @@ class UserController extends Controller
                 // Check if profile exists
                 $existingProfile = DatabaseHelper::select(
                     "SELECT user_id FROM user_profiles WHERE user_id = ?",
-                    [$userId]
+                    [$userId],
+                    false // Using application database
                 );
                 
                 if (empty($existingProfile)) {
@@ -209,7 +229,7 @@ class UserController extends Controller
                     DatabaseHelper::insert(
                         'user_profiles',
                         $profileData,
-                        false,
+                        false, // Using application database
                         ['operation' => 'profile_create', 'user_id' => $userId]
                     );
                 } else {
@@ -220,7 +240,7 @@ class UserController extends Controller
                         'user_profiles',
                         $profileData,
                         ['user_id' => $userId],
-                        false,
+                        false, // Using application database
                         ['operation' => 'profile_update', 'user_id' => $userId]
                     );
                 }
@@ -228,7 +248,22 @@ class UserController extends Controller
             
             // Commit the transaction
             DatabaseHelper::rawQuery(
-                "COMMIT"
+                "COMMIT",
+                [],
+                false // Using application database
+            );
+            
+            // Log profile update in audit logs
+            $this->auditService->logEvent(
+                'profile_updated',
+                'User updated their profile',
+                [
+                    'user_id' => $userId, 
+                    'fields_updated' => array_merge(array_keys($userData), array_keys($profileData))
+                ],
+                $userId,
+                null,
+                'user'
             );
             
             // Get updated profile
@@ -238,22 +273,22 @@ class UserController extends Controller
                  FROM users u
                  LEFT JOIN user_profiles p ON u.id = p.user_id
                  WHERE u.id = ?",
-                [$userId]
+                [$userId],
+                false // Using application database
             );
             
             return ApiHelper::sendJsonResponse('success', 'Profile updated successfully', $updatedProfile[0], 200);
             
-        } catch (\InvalidArgumentException $e) {
-            DatabaseHelper::rawQuery("ROLLBACK");
-            return ApiHelper::sendJsonResponse('error', 'Validation failed', json_decode($e->getMessage(), true), 400);
-            
         } catch (\Exception $e) {
-            DatabaseHelper::rawQuery("ROLLBACK");
-            $this->logger->error("Failed to update user profile", [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'user_id' => $request->getAttribute('user_id') ?? 'unknown'
-            ]);
+            // Rollback transaction on error
+            DatabaseHelper::rawQuery(
+                "ROLLBACK",
+                [],
+                false // Using application database
+            );
+            
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return ApiHelper::sendJsonResponse('error', 'Failed to update profile', [], 500);
         }
     }
@@ -275,7 +310,8 @@ class UserController extends Controller
             // Check if user exists
             $user = DatabaseHelper::select(
                 "SELECT id, email FROM users WHERE email = ? AND deleted_at IS NULL",
-                [$data['email']]
+                [$data['email']],
+                false // Using application database
             );
             
             if (empty($user)) {
@@ -303,21 +339,21 @@ class UserController extends Controller
                 ['operation' => 'password_reset_request', 'user_id' => $user[0]['id']]
             );
             
-            // Log successful reset request (token would be sent via email in a real system)
-            $this->logger->info("Password reset token generated", [
-                'user_id' => $user[0]['id'],
-                'email' => $data['email'],
-                'expires_at' => $expiresAt
-            ]);
+            // Log password reset request in audit logs
+            $this->auditService->logEvent(
+                'password_reset_requested',
+                'Password reset requested',
+                ['email' => $data['email'], 'expires_at' => $expiresAt],
+                $user[0]['id'],
+                null,
+                'user'
+            );
             
             return ApiHelper::sendJsonResponse('success', 'Password reset instructions sent to your email', [], 200);
             
         } catch (\Exception $e) {
-            $this->logger->error("Failed to process password reset", [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'email' => $data['email'] ?? 'not provided'
-            ]);
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return ApiHelper::sendJsonResponse('error', 'Failed to process password reset request', [], 500);
         }
     }
@@ -409,11 +445,13 @@ class UserController extends Controller
     public function userDashboard(Request $request, Response $response)
     {
         try {
-            $userId = $request->getAttribute('user_id');
-            
-            if (!$userId) {
+            // Get user from TokenService validation
+            $user = $this->tokenService->validateRequest($request);
+            if (!$user) {
                 return ApiHelper::sendJsonResponse('error', 'User not authenticated', [], 401);
             }
+            
+            $userId = $user['id'];
             
             $this->logger->info("User accessing dashboard", ['user_id' => $userId]);
             

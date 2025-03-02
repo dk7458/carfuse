@@ -12,6 +12,7 @@ use App\Controllers\PaymentController;
 use App\Controllers\DocumentController;
 use App\Controllers\ReportController;
 use App\Controllers\AuditController;
+use App\Controllers\ApiController;
 use Psr\Http\Message\ResponseFactoryInterface;
 use DI\Container;
 use Psr\Log\LoggerInterface;
@@ -26,6 +27,7 @@ use App\Services\NotificationService;
 use App\Services\SignatureService;
 use App\Services\DocumentService;
 use App\Services\AuditService;
+use App\Services\ReportService;
 use App\Helpers\DatabaseHelper;
 use App\Services\RateLimiter;
 
@@ -37,7 +39,7 @@ return function (Container $container) {
             $c->get(Validator::class),
             $c->get(TokenService::class),
             $c->get(ExceptionHandler::class),
-            $c->get(AuthService::class),
+            $c->get(AuthService::class)
         );
     });
 
@@ -62,7 +64,9 @@ return function (Container $container) {
 
     $container->set(NotificationController::class, function($c) {
         return new NotificationController(
-            $c->get(LoggerInterface::class)
+            $c->get(LoggerInterface::class),
+            $c->get(ExceptionHandler::class),
+            $c->get(AuditService::class)
         );
     });
 
@@ -70,14 +74,17 @@ return function (Container $container) {
         return new AdminController(
             $c->get(LoggerInterface::class),
             $c->get(AuditService::class),
-            $c->get(ResponseFactoryInterface::class)
+            $c->get(ResponseFactoryInterface::class),
+            $c->get(TokenService::class)
         );
     });
 
     $container->set(SignatureController::class, function($c) {
         return new SignatureController(
             $c->get(LoggerInterface::class),
-            $c->get(SignatureService::class)
+            $c->get(SignatureService::class),
+            $c->get(ExceptionHandler::class),
+            $c->get(AuditService::class)
         );
     });
 
@@ -92,7 +99,9 @@ return function (Container $container) {
 
     $container->set(AdminDashboardController::class, function($c) {
         return new AdminDashboardController(
-            $c->get(LoggerInterface::class)
+            $c->get(LoggerInterface::class),
+            $c->get(ExceptionHandler::class),
+            $c->get(AuditService::class)
         );
     });
 
@@ -118,13 +127,24 @@ return function (Container $container) {
         return new ReportController(
             $c->get(LoggerInterface::class),
             $c->get(ReportService::class),
-            $c->get(NotificationService::class)
+            $c->get(NotificationService::class),
+            $c->get(ExceptionHandler::class)
         );
     });
 
     $container->set(AuditController::class, function($c) {
         return new AuditController(
             $c->get(LoggerInterface::class),
+            $c->get(AuditService::class),
+            $c->get(ExceptionHandler::class)
+        );
+    });
+    
+    $container->set(ApiController::class, function($c) {
+        return new ApiController(
+            $c->get(LoggerInterface::class),
+            $c->get(ResponseFactoryInterface::class),
+            $c->get(ExceptionHandler::class),
             $c->get(AuditService::class)
         );
     });

@@ -403,4 +403,178 @@ class AuditService
             throw new Exception('Failed to export logs: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Log a user authentication event.
+     * 
+     * @param int $userId User ID
+     * @param string $action Login/Logout/Failed login
+     * @param array $context Additional context (device, browser, etc)
+     * @param string|null $ipAddress User's IP address
+     * @return void
+     */
+    public function logAuthEvent(int $userId, string $action, array $context = [], ?string $ipAddress = null): void
+    {
+        $message = "User authentication: {$action}";
+        $this->logEvent(
+            self::CATEGORY_AUTH,
+            $message,
+            $context,
+            $userId,
+            null,
+            $ipAddress ?? $_SERVER['REMOTE_ADDR'] ?? null
+        );
+    }
+
+    /**
+     * Log a user action (CRUD operation on resources).
+     * 
+     * @param int|null $userId User ID
+     * @param string $action The action performed (create, update, delete)
+     * @param string $resource The resource type (user, booking, document)
+     * @param int|null $resourceId The ID of the resource
+     * @param array $changes The changes made (before/after)
+     * @return void
+     */
+    public function logUserAction(?int $userId, string $action, string $resource, ?int $resourceId = null, array $changes = []): void
+    {
+        $message = "User {$action} {$resource}" . ($resourceId ? " #{$resourceId}" : "");
+        
+        $context = [
+            'resource_type' => $resource,
+            'resource_id' => $resourceId,
+            'changes' => $changes
+        ];
+        
+        $this->logEvent(
+            self::CATEGORY_USER,
+            $message,
+            $context,
+            $userId,
+            null,
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
+    }
+
+    /**
+     * Log a booking-related event.
+     * 
+     * @param int $bookingId Booking ID
+     * @param string $action The action performed
+     * @param int|null $userId User who performed the action
+     * @param array $context Additional context
+     * @return void
+     */
+    public function logBookingEvent(int $bookingId, string $action, ?int $userId = null, array $context = []): void
+    {
+        $message = "Booking #{$bookingId}: {$action}";
+        
+        $this->logEvent(
+            self::CATEGORY_BOOKING,
+            $message,
+            $context,
+            $userId,
+            $bookingId,
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
+    }
+
+    /**
+     * Log an API request/response.
+     * 
+     * @param string $endpoint API endpoint
+     * @param string $method HTTP method
+     * @param array $requestData Request data
+     * @param array $responseData Response data
+     * @param int $statusCode HTTP status code
+     * @param int|null $userId User ID if authenticated
+     * @return void
+     */
+    public function logApiRequest(
+        string $endpoint,
+        string $method,
+        array $requestData = [],
+        array $responseData = [],
+        int $statusCode = 200,
+        ?int $userId = null
+    ): void {
+        // Remove sensitive information
+        unset($requestData['password'], $requestData['token']);
+        
+        $message = "{$method} {$endpoint} - Status: {$statusCode}";
+        
+        $context = [
+            'method' => $method,
+            'endpoint' => $endpoint,
+            'request' => $requestData,
+            'response' => $responseData,
+            'status_code' => $statusCode
+        ];
+        
+        $this->logEvent(
+            self::CATEGORY_API,
+            $message,
+            $context,
+            $userId,
+            null,
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
+    }
+
+    /**
+     * Log a system event (startup, shutdown, error).
+     * 
+     * @param string $eventType Type of system event
+     * @param string $message Event message
+     * @param array $context Additional context
+     * @return void
+     */
+    public function logSystemEvent(string $eventType, string $message, array $context = []): void
+    {
+        $this->logEvent(
+            self::CATEGORY_SYSTEM,
+            "{$eventType}: {$message}",
+            $context,
+            null,
+            null,
+            null
+        );
+    }
+
+    /**
+     * Log a security-related event.
+     * 
+     * @param string $eventType Security event type
+     * @param string $message Event details
+     * @param array $context Additional context
+     * @param int|null $userId Associated user ID
+     * @return void
+     */
+    public function logSecurityEvent(string $eventType, string $message, array $context = [], ?int $userId = null): void
+    {
+        $this->logEvent(
+            self::CATEGORY_SECURITY,
+            "{$eventType}: {$message}",
+            $context,
+            $userId,
+            null,
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
+    }
+
+    /**
+     * Get current request information for audit logs.
+     * 
+     * @return array Request information
+     */
+    public static function getRequestInfo(): array
+    {
+        return [
+            'method' => $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN',
+            'uri' => $_SERVER['REQUEST_URI'] ?? 'UNKNOWN',
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'UNKNOWN',
+            'referer' => $_SERVER['HTTP_REFERER'] ?? null,
+            'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN',
+        ];
+    }
 }

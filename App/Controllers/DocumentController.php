@@ -7,6 +7,7 @@ use App\Services\EncryptionService;
 use App\Services\FileStorage;
 use App\Services\Validator;
 use App\Services\AuditService;
+use App\Helpers\ExceptionHandler;
 use Psr\Log\LoggerInterface;
 use App\Models\DocumentTemplate;
 
@@ -18,17 +19,20 @@ class DocumentController extends Controller
     private Validator $validator;
     private AuditService $auditService;
     protected LoggerInterface $logger;
+    private ExceptionHandler $exceptionHandler;
 
     public function __construct(
         LoggerInterface $logger,
         DocumentService $documentService,
         Validator $validator,
         AuditService $auditService,
+        ExceptionHandler $exceptionHandler
     ) {
         parent::__construct($logger);
         $this->documentService = $documentService;
         $this->validator = $validator;
         $this->auditService = $auditService;
+        $this->exceptionHandler = $exceptionHandler;
     }
     
     /**
@@ -36,16 +40,16 @@ class DocumentController extends Controller
      */
     public function uploadTemplate(array $data): array
     {
-        $rules = [
-            'name' => 'required|string|max:255',
-            'file' => 'required|file|mimes:pdf,docx|max:10240', // Max 10MB
-        ];
-
-        if (!$this->validator->validate($data, $rules)) {
-            return $this->jsonResponse('error', ['message' => 'Validation failed', 'errors' => $this->validator->errors()], 400);
-        }
-
         try {
+            $rules = [
+                'name' => 'required|string|max:255',
+                'file' => 'required|file|mimes:pdf,docx|max:10240', // Max 10MB
+            ];
+
+            if (!$this->validator->validate($data, $rules)) {
+                return $this->jsonResponse('error', ['message' => 'Validation failed', 'errors' => $this->validator->errors()], 400);
+            }
+
             // Store file using FileStorage service
             $filePath = FileStorage::store($data['file']);
             // Create a new template using Eloquent ORM
@@ -56,17 +60,18 @@ class DocumentController extends Controller
             
             // Log document creation using unified audit service
             $this->auditService->logEvent(
-                'document', 
-                'Template uploaded successfully', 
+                'document_template_uploaded', 
+                "Template uploaded successfully", 
                 ['template_id' => $template->id, 'template_name' => $data['name']],
                 $_SESSION['user_id'] ?? null,
                 null,
-                $_SERVER['REMOTE_ADDR'] ?? null
+                'document'
             );
             
             return $this->jsonResponse('success', ['message' => 'Template uploaded successfully', 'template_id' => $template->id], 201);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to upload template: ' . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', ['message' => 'Failed to upload template'], 500);
         }
     }
@@ -82,17 +87,18 @@ class DocumentController extends Controller
             
             // Log the contract generation using unified audit service
             $this->auditService->logEvent(
-                'document',
-                'Contract generated successfully',
-                ['contract_type' => 'booking'], 
+                'contract_generated',
+                "Contract generated successfully",
+                ['contract_type' => 'booking', 'booking_id' => $bookingId], 
                 $userId,
                 $bookingId,
-                $_SERVER['REMOTE_ADDR'] ?? null
+                'document'
             );
             
             return $this->jsonResponse('success', ['message' => 'Contract generated successfully', 'contract_path' => $contractPath], 200);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to generate contract: ' . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', ['message' => 'Failed to generate contract'], 500);
         }
     }
@@ -102,30 +108,31 @@ class DocumentController extends Controller
      */
     public function uploadTerms(array $data): array
     {
-        $rules = [
-            'file' => 'required|file|mimes:pdf|max:5120', // Max 5MB
-        ];
-
-        if (!$this->validator->validate($data, $rules)) {
-            return $this->jsonResponse('error', ['message' => 'Validation failed', 'errors' => $this->validator->errors()], 400);
-        }
-
         try {
+            $rules = [
+                'file' => 'required|file|mimes:pdf|max:5120', // Max 5MB
+            ];
+
+            if (!$this->validator->validate($data, $rules)) {
+                return $this->jsonResponse('error', ['message' => 'Validation failed', 'errors' => $this->validator->errors()], 400);
+            }
+
             $path = $this->documentService->uploadTerms($data['file']);
             
             // Log using the unified audit service
             $this->auditService->logEvent(
-                'document',
-                'Terms and Conditions document uploaded',
+                'terms_uploaded',
+                "Terms and Conditions document uploaded",
                 ['document_type' => 'terms_conditions', 'path' => $path],
                 $_SESSION['user_id'] ?? null,
                 null,
-                $_SERVER['REMOTE_ADDR'] ?? null
+                'document'
             );
 
             return $this->jsonResponse('success', ['message' => 'T&C document uploaded successfully'], 201);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to upload T&C document: ' . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', ['message' => 'Failed to upload T&C document'], 500);
         }
     }
@@ -140,17 +147,18 @@ class DocumentController extends Controller
             
             // Log using the unified audit service
             $this->auditService->logEvent(
-                'document',
-                'Invoice generated successfully',
-                ['document_type' => 'invoice'],
+                'invoice_generated',
+                "Invoice generated successfully",
+                ['document_type' => 'invoice', 'booking_id' => $bookingId],
                 $_SESSION['user_id'] ?? null,
                 $bookingId,
-                $_SERVER['REMOTE_ADDR'] ?? null
+                'document'
             );
 
             return $this->jsonResponse('success', ['message' => 'Invoice generated successfully', 'invoice_path' => $invoicePath], 200);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to generate invoice: ' . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', ['message' => 'Failed to generate invoice'], 500);
         }
     }
@@ -165,17 +173,18 @@ class DocumentController extends Controller
             
             // Log using the unified audit service
             $this->auditService->logEvent(
-                'document',
-                'Document deleted successfully',
+                'document_deleted',
+                "Document deleted successfully",
                 ['document_id' => $documentId],
                 $_SESSION['user_id'] ?? null,
                 null,
-                $_SERVER['REMOTE_ADDR'] ?? null
+                'document'
             );
 
             return $this->jsonResponse('success', ['message' => 'Document deleted successfully'], 200);
         } catch (\Exception $e) {
-            $this->logger->error('Failed to delete document: ' . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', ['message' => 'Failed to delete document'], 500);
         }
     }

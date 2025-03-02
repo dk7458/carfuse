@@ -4,58 +4,75 @@ namespace App\Models;
 
 use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
+use PDO;
 
 /**
- * Base Model
- *
- * Provides common functionality for all models.
+ * BaseModel
+ * 
+ * Base class for all models that use the DatabaseHelper instead of Eloquent
  */
 abstract class BaseModel
 {
-    protected $dbHelper;
-    protected $auditService;
-    
-    // The table associated with the model
+    /**
+     * @var string The table associated with the model
+     */
     protected $table;
     
-    // Whether to use timestamps (created_at, updated_at)
-    protected $useTimestamps = true;
-    
-    // Whether to use soft deletes (deleted_at)
-    protected $useSoftDeletes = true;
-    
-    // The model's resource name for auditing
+    /**
+     * @var string The name of the resource for audit logging
+     */
     protected $resourceName;
     
     /**
-     * Constructor
-     *
-     * @param DatabaseHelper $dbHelper
-     * @param AuditService|null $auditService
+     * @var bool Whether the model uses timestamps
      */
-    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService = null)
-    {
-        $this->dbHelper = $dbHelper;
-        $this->auditService = $auditService;
-        
-        if (!$this->table) {
-            throw new \Exception("No table defined for " . get_class($this));
-        }
-        
-        if (!$this->resourceName) {
-            // Default resource name from class name
-            $className = (new \ReflectionClass($this))->getShortName();
-            $this->resourceName = strtolower($className);
-        }
-    }
+    protected $useTimestamps = true;
     
     /**
-     * Find a record by ID.
+     * @var bool Whether the model uses soft deletes
+     */
+    protected $useSoftDeletes = false;
+    
+    /**
+     * @var bool Whether the model uses UUID as primary key
+     */
+    protected $useUuid = false;
+    
+    /**
+     * @var DatabaseHelper Database helper instance
+     */
+    protected $dbHelper;
+    
+    /**
+     * @var AuditService|null Audit service instance
+     */
+    protected $auditService;
+    
+    /**
+     * @var PDO PDO instance
+     */
+    protected $pdo;
+
+    /**
+     * Constructor
+     *
+     * @param DatabaseHelper|null $dbHelper
+     * @param AuditService|null $auditService
+     */
+    public function __construct(DatabaseHelper $dbHelper = null, AuditService $auditService = null)
+    {
+        $this->dbHelper = $dbHelper ?? new DatabaseHelper();
+        $this->auditService = $auditService;
+        $this->pdo = $this->dbHelper->getPdo();
+    }
+
+    /**
+     * Find a record by ID
      *
      * @param int $id
      * @return array|null
      */
-    public function find(int $id): ?array
+    public function find(int|string $id): ?array
     {
         $query = "SELECT * FROM {$this->table} WHERE id = :id";
         
@@ -64,11 +81,11 @@ abstract class BaseModel
         }
         
         $result = $this->dbHelper->select($query, [':id' => $id]);
-        return $result[0] ?? null; // Return first result or null
+        return $result ? $result[0] : null;
     }
-    
+
     /**
-     * Get all records.
+     * Get all records from the table
      *
      * @return array
      */
@@ -80,77 +97,93 @@ abstract class BaseModel
             $query .= " WHERE deleted_at IS NULL";
         }
         
-        $query .= " ORDER BY created_at DESC";
-        
         return $this->dbHelper->select($query);
     }
-    
+
     /**
-     * Create a new record.
+     * Create a new record
      *
      * @param array $data
-     * @return int ID of the created record
+     * @return int The ID of the created record
      */
     public function create(array $data): int
     {
-        if ($this->useTimestamps) {
-            $data['created_at'] = $data['updated_at'] = date('Y-m-d H:i:s');
+        if ($this->useTimestamps && !isset($data['created_at'])) {
+            $data['created_at'] = date('Y-m-d H:i:s');
+        }
+        
+        if ($this->useTimestamps && !isset($data['updated_at'])) {
+            $data['updated_at'] = date('Y-m-d H:i:s');
+        }
+        
+        if ($this->useUuid && !isset($data['id'])) {
+            $data['id'] = \Ramsey\Uuid\Uuid::uuid4()->toString();
         }
         
         $id = $this->dbHelper->insert($this->table, $data);
         
-        // Log audit if service is available
-        if ($this->auditService) {
-            $this->auditService->logEvent($this->resourceName, "Created {$this->resourceName}", [
-                "{$this->resourceName}_id" => $id,
+        // Log audit event if service is available
+        if ($this->auditService && $this->resourceName) {
+            $this->auditService->logEvent($this->resourceName, 'create', [
+                'id' => $id,
                 'data' => $data
             ]);
         }
         
         return $id;
     }
-    
+
     /**
-     * Update a record.
+     * Update a record
      *
      * @param int $id
      * @param array $data
      * @return bool
      */
-    public function update(int $id, array $data): bool
+    public function update(int|string $id, array $data): bool
     {
         if ($this->useTimestamps) {
             $data['updated_at'] = date('Y-m-d H:i:s');
         }
         
-        $result = $this->dbHelper->update($this->table, $data, ['id' => $id, 'deleted_at IS NULL']);
+        $conditions = ['id' => $id];
         
-        // Log audit if service is available and update was successful
-        if ($result && $this->auditService) {
-            $this->auditService->logEvent($this->resourceName, "Updated {$this->resourceName}", [
-                "{$this->resourceName}_id" => $id,
+        if ($this->useSoftDeletes) {
+            $conditions['deleted_at IS NULL'] = null;
+        }
+        
+        $result = $this->dbHelper->update($this->table, $data, $conditions);
+        
+        // Log audit event if service is available
+        if ($result && $this->auditService && $this->resourceName) {
+            $this->auditService->logEvent($this->resourceName, 'update', [
+                'id' => $id,
                 'updated_fields' => array_keys($data)
             ]);
         }
         
         return $result;
     }
-    
+
     /**
-     * Soft delete a record.
+     * Delete a record (soft delete if enabled)
      *
      * @param int $id
      * @return bool
      */
-    public function delete(int $id): bool
+    public function delete(int|string $id): bool
     {
-        $data = $this->useSoftDeletes ? ['deleted_at' => date('Y-m-d H:i:s')] : [];
-        $result = $this->dbHelper->update($this->table, $data, ['id' => $id]);
+        if ($this->useSoftDeletes) {
+            $data = ['deleted_at' => date('Y-m-d H:i:s')];
+            $result = $this->dbHelper->update($this->table, $data, ['id' => $id]);
+        } else {
+            $result = $this->dbHelper->delete($this->table, ['id' => $id]);
+        }
         
-        // Log audit if service is available and delete was successful
-        if ($result && $this->auditService) {
-            $this->auditService->logEvent($this->resourceName, "Deleted {$this->resourceName}", [
-                "{$this->resourceName}_id" => $id
+        // Log audit event if service is available
+        if ($result && $this->auditService && $this->resourceName) {
+            $this->auditService->logEvent($this->resourceName, 'delete', [
+                'id' => $id
             ]);
         }
         

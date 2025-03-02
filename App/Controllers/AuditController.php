@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
+use App\Helpers\ExceptionHandler;
 
 /**
  * AuditController - Handles viewing and retrieving audit logs.
@@ -12,14 +13,19 @@ class AuditController extends Controller
 {
     protected LoggerInterface $logger;
     private AuditService $auditService;
+    private ExceptionHandler $exceptionHandler;
     
     /**
      * Constructor with dependency injection
      */
-    public function __construct(LoggerInterface $logger, AuditService $auditService)
-    {
+    public function __construct(
+        LoggerInterface $logger, 
+        AuditService $auditService,
+        ExceptionHandler $exceptionHandler
+    ) {
         parent::__construct($logger);
         $this->auditService = $auditService;
+        $this->exceptionHandler = $exceptionHandler;
     }
     
     /**
@@ -41,7 +47,9 @@ class AuditController extends Controller
             
             return $this->jsonResponse('success', ['logs' => $logs], 200);
         } catch (\Exception $e) {
-            return $this->handleException($e);
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
+            return $this->jsonResponse('error', 'Failed to retrieve audit logs', 500);
         }
     }
 
@@ -64,7 +72,9 @@ class AuditController extends Controller
             
             return $this->jsonResponse('success', ['logs' => $logs], 200);
         } catch (\Exception $e) {
-            return $this->handleException($e);
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
+            return $this->jsonResponse('error', 'Failed to fetch logs', 500);
         }
     }
     
@@ -83,7 +93,9 @@ class AuditController extends Controller
             
             return $this->jsonResponse('success', ['log' => $log], 200);
         } catch (\Exception $e) {
-            return $this->handleException($e);
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
+            return $this->jsonResponse('error', 'Failed to retrieve log', 500);
         }
     }
     
@@ -133,15 +145,5 @@ class AuditController extends Controller
     {
         // Replace with your actual authentication logic
         return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
-    }
-    
-    /**
-     * Handle exceptions in a consistent way
-     */
-    private function handleException(\Exception $e)
-    {
-        // Log the exception
-        error_log($e->getMessage());
-        return $this->jsonResponse('error', 'An error occurred: ' . $e->getMessage(), 500);
     }
 }

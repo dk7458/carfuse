@@ -6,8 +6,9 @@ use App\Models\Booking;
 use App\Models\RefundLog;
 use App\Services\AuthService;
 use App\Services\AuditService;
+use App\Services\Auth\TokenService;
 use App\Helpers\DatabaseHelper;
-use App\Helpers\TokenValidator;
+use App\Helpers\ExceptionHandler;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Log\LoggerInterface;
@@ -29,6 +30,8 @@ class BookingController extends Controller
     private NotificationService $notificationService;
     private ResponseFactoryInterface $responseFactory;
     protected LoggerInterface $logger;
+    private TokenService $tokenService;
+    private ExceptionHandler $exceptionHandler;
 
     public function __construct(
         LoggerInterface $logger,
@@ -38,6 +41,8 @@ class BookingController extends Controller
         AuditService $auditService,
         NotificationService $notificationService,
         ResponseFactoryInterface $responseFactory,
+        TokenService $tokenService,
+        ExceptionHandler $exceptionHandler
     ) {
         parent::__construct($logger);
         $this->bookingService = $bookingService;
@@ -46,6 +51,8 @@ class BookingController extends Controller
         $this->auditService = $auditService;
         $this->notificationService = $notificationService;
         $this->responseFactory = $responseFactory;
+        $this->tokenService = $tokenService;
+        $this->exceptionHandler = $exceptionHandler;
     }
 
     /**
@@ -64,15 +71,22 @@ class BookingController extends Controller
     public function viewBooking(int $id): ResponseInterface
     {
         try {
-            $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+            $user = $this->tokenService->validateTokenFromHeader($this->request->getHeader('Authorization')[0] ?? null);
+            if (!$user) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'Unauthorized access'
+                ], 401);
+            }
+            
             $booking = Booking::with('logs')->findOrFail($id);
             
             // Audit log for viewing booking
             $this->auditService->logEvent(
                 'booking_viewed',
                 "Booking #{$id} details viewed",
-                ['booking_id' => $id, 'user_id' => $user->id],
-                $user->id,
+                ['booking_id' => $id, 'user_id' => $user['id']],
+                $user['id'],
                 $id,
                 'booking'
             );
@@ -83,11 +97,12 @@ class BookingController extends Controller
                 'data' => ['booking' => $booking]
             ]);
         } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
-                'message' => 'Booking not found',
-                'error' => $e->getMessage()
-            ], 404);
+                'message' => 'Failed to fetch booking details'
+            ], 500);
         }
     }
 
@@ -96,10 +111,17 @@ class BookingController extends Controller
      */
     public function rescheduleBooking(int $id): ResponseInterface
     {
-        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
-        $data = $_POST; // minimal custom validation assumed
-        
         try {
+            $user = $this->tokenService->validateTokenFromHeader($this->request->getHeader('Authorization')[0] ?? null);
+            if (!$user) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'Unauthorized access'
+                ], 401);
+            }
+            
+            $data = $_POST; // minimal custom validation assumed
+            
             $booking = Booking::findOrFail($id);
             $oldPickup = $booking->pickup_date;
             $oldDropoff = $booking->dropoff_date;
@@ -115,13 +137,13 @@ class BookingController extends Controller
                 "Booking #{$id} rescheduled",
                 [
                     'booking_id' => $id,
-                    'user_id' => $user->id,
+                    'user_id' => $user['id'],
                     'old_pickup' => $oldPickup,
                     'new_pickup' => $data['pickup_date'],
                     'old_dropoff' => $oldDropoff,
                     'new_dropoff' => $data['dropoff_date']
                 ],
-                $user->id,
+                $user['id'],
                 $id,
                 'booking'
             );
@@ -131,10 +153,11 @@ class BookingController extends Controller
                 'message' => 'Booking rescheduled successfully'
             ]);
         } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
-                'message' => 'Failed to reschedule booking',
-                'error' => $e->getMessage()
+                'message' => 'Failed to reschedule booking'
             ], 500);
         }
     }
@@ -144,9 +167,15 @@ class BookingController extends Controller
      */
     public function cancelBooking(int $id): ResponseInterface
     {
-        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
-        
         try {
+            $user = $this->tokenService->validateTokenFromHeader($this->request->getHeader('Authorization')[0] ?? null);
+            if (!$user) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'Unauthorized access'
+                ], 401);
+            }
+            
             $booking = Booking::findOrFail($id);
             $oldStatus = $booking->status;
             $booking->update(['status' => 'canceled']);
@@ -166,11 +195,11 @@ class BookingController extends Controller
                     "Refund processed for booking #{$id}",
                     [
                         'booking_id' => $id,
-                        'user_id' => $user->id,
+                        'user_id' => $user['id'],
                         'refund_amount' => $refundAmount,
                         'refund_id' => $refund->id
                     ],
-                    $user->id,
+                    $user['id'],
                     $id,
                     'payment'
                 );
@@ -182,11 +211,11 @@ class BookingController extends Controller
                 "Booking #{$id} canceled",
                 [
                     'booking_id' => $id,
-                    'user_id' => $user->id,
+                    'user_id' => $user['id'],
                     'old_status' => $oldStatus,
                     'refund_amount' => $refundAmount ?? 0
                 ],
-                $user->id,
+                $user['id'],
                 $id,
                 'booking'
             );
@@ -196,10 +225,11 @@ class BookingController extends Controller
                 'message' => 'Booking canceled successfully'
             ]);
         } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
-                'message' => 'Failed to cancel booking',
-                'error' => $e->getMessage()
+                'message' => 'Failed to cancel booking'
             ], 500);
         }
     }
@@ -209,15 +239,15 @@ class BookingController extends Controller
      */
     public function getBookingLogs(int $bookingId): ResponseInterface
     {
-        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
-        if (!$user) {
-            return $this->jsonResponse([
-                'status' => 'error',
-                'message' => 'Unauthorized access'
-            ], 401);
-        }
-        
         try {
+            $user = $this->tokenService->validateTokenFromHeader($this->request->getHeader('Authorization')[0] ?? null);
+            if (!$user) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'Unauthorized access'
+                ], 401);
+            }
+            
             // Instead of getting booking logs directly from a logs table,
             // fetch audit events related to this booking from the audit service
             $logs = $this->auditService->getEventsByReference('booking_reference', $bookingId);
@@ -228,9 +258,9 @@ class BookingController extends Controller
                 "Booking #{$bookingId} logs accessed",
                 [
                     'booking_id' => $bookingId,
-                    'user_id' => $user->id
+                    'user_id' => $user['id']
                 ],
-                $user->id,
+                $user['id'],
                 $bookingId,
                 'booking'
             );
@@ -241,10 +271,11 @@ class BookingController extends Controller
                 'data' => ['logs' => $logs]
             ]);
         } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
-                'message' => 'Failed to fetch booking logs',
-                'error' => $e->getMessage()
+                'message' => 'Failed to fetch booking logs'
             ], 500);
         }
     }
@@ -255,7 +286,7 @@ class BookingController extends Controller
     public function getUserBookings(): ResponseInterface
     {
         try {
-            $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+            $user = $this->tokenService->validateTokenFromHeader($this->request->getHeader('Authorization')[0] ?? null);
             if (!$user) {
                 return $this->jsonResponse([
                     'status' => 'error',
@@ -263,14 +294,14 @@ class BookingController extends Controller
                 ], 401);
             }
             
-            $bookings = Booking::where('user_id', $user->id)->latest()->get();
+            $bookings = Booking::where('user_id', $user['id'])->latest()->get();
             
             // Log the fetch operation
             $this->auditService->logEvent(
                 'user_bookings_listed',
                 "User retrieved their booking list",
-                ['user_id' => $user->id],
-                $user->id,
+                ['user_id' => $user['id']],
+                $user['id'],
                 null,
                 'booking'
             );
@@ -281,10 +312,11 @@ class BookingController extends Controller
                 'data' => ['bookings' => $bookings]
             ]);
         } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
-                'message' => 'Failed to fetch user bookings',
-                'error' => $e->getMessage()
+                'message' => 'Failed to fetch user bookings'
             ], 500);
         }
     }
@@ -294,17 +326,17 @@ class BookingController extends Controller
      */
     public function createBooking(): ResponseInterface
     {
-        $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
-        if (!$user) {
-            return $this->jsonResponse([
-                'status' => 'error',
-                'message' => 'Invalid token'
-            ], 401);
-        }
-
-        $data = $_POST; // assuming custom validation is performed elsewhere
-        
         try {
+            $user = $this->tokenService->validateTokenFromHeader($this->request->getHeader('Authorization')[0] ?? null);
+            if (!$user) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'Invalid token'
+                ], 401);
+            }
+
+            $data = $_POST; // assuming custom validation is performed elsewhere
+            
             // Check vehicle availability using an assumed Booking::isAvailable() scope.
             if (!Booking::isAvailable($data['vehicle_id'], $data['pickup_date'], $data['dropoff_date'])) {
                 return $this->jsonResponse([
@@ -321,12 +353,12 @@ class BookingController extends Controller
                 "New booking #{$booking->id} created",
                 [
                     'booking_id' => $booking->id,
-                    'user_id' => $user->id,
+                    'user_id' => $user['id'],
                     'vehicle_id' => $data['vehicle_id'],
                     'pickup_date' => $data['pickup_date'], 
                     'dropoff_date' => $data['dropoff_date']
                 ],
-                $user->id,
+                $user['id'],
                 $booking->id,
                 'booking'
             );
@@ -337,10 +369,11 @@ class BookingController extends Controller
                 'data' => ['booking_id' => $booking->id]
             ], 201);
         } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
-                'message' => 'Failed to create booking',
-                'error' => $e->getMessage()
+                'message' => 'Failed to create booking'
             ], 500);
         }
     }

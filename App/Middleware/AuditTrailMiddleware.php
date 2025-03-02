@@ -2,10 +2,13 @@
 
 namespace App\Middleware;
 
-use AuditManager\Services\AuditService;
+use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
 
 /**
+ * @deprecated This middleware is deprecated and will be removed in a future version. 
+ * Use AuditService methods directly in your controllers instead.
+ * 
  * AuditTrailMiddleware - Logs user actions for audit tracking.
  */
 class AuditTrailMiddleware
@@ -17,6 +20,12 @@ class AuditTrailMiddleware
     {
         $this->auditService = $auditService;
         $this->logger = $logger;
+        
+        // Log a warning about using deprecated middleware
+        $this->logger->warning(
+            'AuditTrailMiddleware is deprecated. Use AuditService methods directly in controllers instead.',
+            ['trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2)]
+        );
     }
 
     /**
@@ -24,18 +33,24 @@ class AuditTrailMiddleware
      *
      * @param array $request The request data.
      * @param callable $next The next middleware function.
+     * @deprecated Use AuditService methods directly in your controllers instead
      */
     public function handle(array $request, callable $next)
     {
         try {
             // Extract request details
-            $action = $this->determineAction();
-            $details = json_encode($this->sanitizeRequestData($request));
+            $requestInfo = AuditService::getRequestInfo();
             $userId = $_SESSION['user_id'] ?? null;
-            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-
-            // Log the action
-            $this->auditService->log($action, $details, $userId, $ipAddress);
+            
+            // Use the new API logging method
+            $this->auditService->logApiRequest(
+                $requestInfo['uri'],
+                $requestInfo['method'],
+                $this->sanitizeRequestData($request),
+                [], // Response not available here
+                200, // Status code not available yet
+                $userId
+            );
 
             // Continue to the next middleware/controller
             return $next($request);
@@ -46,16 +61,6 @@ class AuditTrailMiddleware
     }
 
     /**
-     * Determine the action performed based on the request.
-     *
-     * @return string
-     */
-    private function determineAction(): string
-    {
-        return $_SERVER['REQUEST_METHOD'] . ' ' . ($_SERVER['REQUEST_URI'] ?? 'unknown');
-    }
-
-    /**
      * Sanitize request data before logging.
      *
      * @param array $request The raw request data.
@@ -63,7 +68,7 @@ class AuditTrailMiddleware
      */
     private function sanitizeRequestData(array $request): array
     {
-        unset($request['password'], $request['token']); // Remove sensitive fields
+        unset($request['password'], $request['token'], $request['credit_card'], $request['cvv']);
         return $request;
     }
 }
