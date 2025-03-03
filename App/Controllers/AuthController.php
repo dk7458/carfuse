@@ -28,7 +28,7 @@ class AuthController extends Controller
         RateLimiter $rateLimiter,
         ExceptionHandler $exceptionHandler
     ) {
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->authService = $authService;
         $this->tokenService = $tokenService;
         $this->pdo = $dbHelper->getPdo();

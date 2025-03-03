@@ -15,7 +15,7 @@ class Controller
     protected LoggerInterface $logger;
     protected ExceptionHandler $exceptionHandler;
 
-    public function __construct(LoggerInterface $logger, ?ExceptionHandler $exceptionHandler = null)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler)
     {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
