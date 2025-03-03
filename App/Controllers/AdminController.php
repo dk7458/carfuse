@@ -29,7 +29,7 @@ class AdminController extends Controller
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler
     ) {
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->auditService = $auditService;
         $this->responseFactory = $responseFactory;
         $this->tokenService = $tokenService;

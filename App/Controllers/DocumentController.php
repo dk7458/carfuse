@@ -28,7 +28,7 @@ class DocumentController extends Controller
         AuditService $auditService,
         ExceptionHandler $exceptionHandler
     ) {
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->documentService = $documentService;
         $this->validator = $validator;
         $this->auditService = $auditService;

@@ -16,6 +16,7 @@ use App\Controllers\ApiController;
 use Psr\Http\Message\ResponseFactoryInterface;
 use DI\Container;
 use Psr\Log\LoggerInterface;
+use App\Services\AuditService;
 use App\Services\Validator;
 use App\Services\Auth\TokenService;
 use App\Helpers\ExceptionHandler;
@@ -26,7 +27,6 @@ use App\Services\StatisticsService;
 use App\Services\NotificationService;
 use App\Services\SignatureService;
 use App\Services\DocumentService;
-use App\Services\AuditService;
 use App\Services\ReportService;
 use App\Helpers\DatabaseHelper;
 use App\Services\RateLimiter;
@@ -39,7 +39,8 @@ return function (Container $container) {
             $c->get(Validator::class),
             $c->get(TokenService::class),
             $c->get(ExceptionHandler::class),
-            $c->get(AuthService::class)
+            $c->get(AuthService::class),
+            $c->get(AuditService::class)
         );
     });
 

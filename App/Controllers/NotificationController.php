@@ -31,7 +31,7 @@ class NotificationController extends Controller
         ExceptionHandler $exceptionHandler,
         AuditService $auditService
     ) {
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->exceptionHandler = $exceptionHandler;
         $this->auditService = $auditService;
     }

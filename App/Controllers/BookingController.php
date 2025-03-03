@@ -44,7 +44,7 @@ class BookingController extends Controller
         TokenService $tokenService,
         ExceptionHandler $exceptionHandler
     ) {
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->bookingService = $bookingService;
         $this->paymentService = $paymentService;
         $this->validator = $validator;

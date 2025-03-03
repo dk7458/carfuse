@@ -24,7 +24,7 @@ class ReportController extends Controller
         ExceptionHandler $exceptionHandler,
         AuditService $auditService
     ) {
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->reportService = $reportService;
         $this->notificationService = $notificationService;
         $this->exceptionHandler = $exceptionHandler;

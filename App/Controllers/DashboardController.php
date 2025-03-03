@@ -32,7 +32,7 @@ class DashboardController extends Controller
         AuditService $auditService,
         ExceptionHandler $exceptionHandler
     ) {
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->bookingService = $bookingService;
         $this->statisticsService = $statisticsService;
         $this->notificationService = $notificationService;

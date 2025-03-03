@@ -29,7 +29,7 @@ class SignatureController extends Controller
         ExceptionHandler $exceptionHandler,
         AuditService $auditService
     ) {
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->signatureService = $signatureService;
         $this->exceptionHandler = $exceptionHandler;
         $this->auditService = $auditService;

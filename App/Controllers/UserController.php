@@ -35,7 +35,7 @@ class UserController extends Controller
         AuthService $authService,
         AuditService $auditService
     ) {
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->validator = $validator;
         $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;

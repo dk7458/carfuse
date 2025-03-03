@@ -38,7 +38,7 @@ class PaymentController extends Controller
         ResponseFactoryInterface $responseFactory,
         ExceptionHandler $exceptionHandler
     ) {
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->paymentService = $paymentService;
         $this->validator = $validator;
         $this->notificationService = $notificationService;
