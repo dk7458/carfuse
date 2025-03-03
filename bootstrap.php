@@ -3,26 +3,98 @@ require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/App/Helpers/ExceptionHandler.php';
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/App/Helpers/DatabaseHelper.php';
-require_once __DIR__ . '/App/Helpers/LoggingHelper.php'; // Ensure LoggingHelper is included
 require_once __DIR__ . '/logger.php'; // Ensure the global getLogger function is included
 $logger->info("🔄 Security helper and other critical services loaded.");
 
 use Dotenv\Dotenv;
 use App\Helpers\DatabaseHelper;
-use App\Helpers\LoggingHelper;
 use App\Helpers\SetupHelper;
 use App\Helpers\ExceptionHandler;
 use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
+use Monolog\Handler\RotatingFileHandler;
+use Monolog\Formatter\LineFormatter;
+use Monolog\Processor\IntrospectionProcessor;
+use Monolog\Processor\WebProcessor;
 
-// Step 1: Initialize Logger First
-$loggingHelper = new LoggingHelper();
-$logger = $loggingHelper->getDefaultLogger();
-if (!$logger instanceof Monolog\Logger) {
-    error_log("❌ [BOOTSTRAP] Logger initialization failed. Using fallback logger.");
-    $logger = new Monolog\Logger('fallback');
+// Step 1: Initialize Default Logger
+$logDir = __DIR__ . '/logs';
+if (!is_dir($logDir)) {
+    mkdir($logDir, 0755, true);
 }
-$logger->info("🔄 Logger initialized successfully.");
+
+// Create default logger
+try {
+    $logger = new Logger('app');
+    $formatter = new LineFormatter(
+        "[%datetime%] %channel%.%level_name%: %message% %context% %extra%\n",
+        "Y-m-d H:i:s.u",
+        true,
+        true
+    );
+    
+    // Add handlers with the formatter
+    $streamHandler = new StreamHandler('php://stderr', Logger::DEBUG);
+    $streamHandler->setFormatter($formatter);
+    $logger->pushHandler($streamHandler);
+    
+    $fileHandler = new RotatingFileHandler($logDir . '/app.log', 14, Logger::INFO);
+    $fileHandler->setFormatter($formatter);
+    $logger->pushHandler($fileHandler);
+    
+    // Add processors
+    $logger->pushProcessor(new WebProcessor());
+    $logger->pushProcessor(new IntrospectionProcessor());
+    
+    $logger->info("🔄 Logger initialized successfully.");
+} catch (Exception $e) {
+    error_log("❌ [BOOTSTRAP] Logger initialization failed: " . $e->getMessage());
+    // Create a minimal fallback logger
+    $logger = new Logger('fallback');
+    $logger->pushHandler(new StreamHandler('php://stderr', Logger::DEBUG));
+}
+
+// Create category-specific loggers
+$loggers = [
+    'db' => null,
+    'auth' => null,
+    'api' => null,
+    'audit' => null,
+    'security' => null,
+    'payment' => null,
+    'booking' => null,
+    'metrics' => null,
+    'report' => null,
+    'revenue' => null,
+    'dependencies' => null
+];
+
+// Initialize each category logger
+foreach ($loggers as $category => &$categoryLogger) {
+    try {
+        $categoryLogger = new Logger($category);
+        
+        // Add handlers with the formatter
+        $streamHandler = new StreamHandler('php://stderr', Logger::DEBUG);
+        $streamHandler->setFormatter($formatter);
+        $categoryLogger->pushHandler($streamHandler);
+        
+        $fileHandler = new RotatingFileHandler($logDir . "/{$category}.log", 14, Logger::INFO);
+        $fileHandler->setFormatter($formatter);
+        $categoryLogger->pushHandler($fileHandler);
+        
+        // Add processors
+        $categoryLogger->pushProcessor(new WebProcessor());
+        $categoryLogger->pushProcessor(new IntrospectionProcessor());
+    } catch (Exception $e) {
+        error_log("❌ [BOOTSTRAP] {$category} logger initialization failed: " . $e->getMessage());
+        // Create a minimal fallback logger for this category
+        $categoryLogger = new Logger($category . '_fallback');
+        $categoryLogger->pushHandler(new StreamHandler('php://stderr', Logger::DEBUG));
+    }
+}
 
 // Step 2: Load Environment Variables
 $dotenvPath = __DIR__;
@@ -90,14 +162,14 @@ $logger->info("✅ All configuration files loaded successfully.");
 
 // Step 4: Initialize Exception Handler (needed for AuditService)
 $exceptionHandler = new ExceptionHandler(
-    $loggingHelper->getLoggerByCategory('db'),
-    $loggingHelper->getLoggerByCategory('auth'),
+    $loggers['db'],
+    $loggers['auth'],
     $logger
 );
 
 // Step 5: Initialize Database Connections (needed for AuditService)
 try {
-    DatabaseHelper::setLogger($loggingHelper->getLoggerByCategory('db'));
+    DatabaseHelper::setLogger($loggers['db']);
     
     // Explicitly initialize both database instances
     $database = DatabaseHelper::getInstance();
@@ -115,8 +187,7 @@ try {
 
 // Step 6: Initialize AuditService early with audit logger
 try {
-    $auditLogger = $loggingHelper->getLoggerByCategory('audit');
-    $auditService = new AuditService($auditLogger, $exceptionHandler, $secure_database);
+    $auditService = new AuditService($loggers['audit'], $exceptionHandler, $secure_database);
     $auditService->logEvent(
         'system',
         'AuditService initialized during bootstrap',
@@ -150,14 +221,20 @@ try {
     $container->set(AuditService::class, $auditService);
     $logger->info("✅ Pre-initialized AuditService registered in DI container.");
     
+    // Register all loggers in the container
+    $container->set(LoggerInterface::class, $logger);
+    $container->set('logger', $logger);
+    
+    // Register category-specific loggers
+    foreach ($loggers as $category => $categoryLogger) {
+        $container->set("{$category}_logger", $categoryLogger);
+    }
+    
     $logger->info("🔄 Dependencies initialized successfully.");
 } catch (Exception $e) {
     $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());
     exit("❌ DI container initialization failed: " . $e->getMessage() . "\n");
 }
-
-// Step 8: Register Logger in DI Container
-$container->set(LoggerInterface::class, fn() => $loggingHelper->getDefaultLogger());
 
 // Step 9: Verify Database Connection
 try {
@@ -165,9 +242,9 @@ try {
     if (!$pdo) {
         throw new Exception("❌ Database connection failed.");
     }
-    $container->get(LoggingHelper::class)->getLoggerByCategory('db')->info("✅ Database connection verified successfully.");
+    $loggers['db']->info("✅ Database connection verified successfully.");
 } catch (Exception $e) {
-    $container->get(LoggingHelper::class)->getLoggerByCategory('db')->critical("❌ Database connection verification failed: " . $e->getMessage());
+    $loggers['db']->critical("❌ Database connection verification failed: " . $e->getMessage());
     exit("❌ Database connection issue: " . $e->getMessage() . "\n");
 }
 
@@ -230,6 +307,7 @@ return [
     'db'                => $database,
     'secure_db'         => $secure_database,
     'logger'            => $logger,
+    'loggers'           => $loggers,
     'container'         => $container,
     'auditService'      => $auditService, // Return the pre-initialized audit service
     'encryptionService' => $container->get(\App\Services\EncryptionService::class),

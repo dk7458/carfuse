@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Booking;
 use Exception;
 use App\Helpers\DatabaseHelper;
-use App\Helpers\LoggingHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 

@@ -4,7 +4,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../App/Helpers/ExceptionHandler.php';
 require_once __DIR__ . '/../App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/../App/Helpers/DatabaseHelper.php';
-require_once __DIR__ . '/../App/Helpers/LoggingHelper.php';
+require_once __DIR__ . '/../logger.php'; // Direct inclusion of logger
 
 use DI\Container;
 use Psr\Log\LoggerInterface;
@@ -14,7 +14,6 @@ use App\Helpers\DatabaseHelper;
 use App\Helpers\ExceptionHandler;
 use App\Helpers\SetupHelper;
 use App\Helpers\SecurityHelper;
-use App\Helpers\LoggingHelper;
 use App\Middleware\RequireAuthMiddleware;
 use App\Services\Validator;
 use App\Services\RateLimiter;
@@ -57,25 +56,22 @@ use App\Controllers\ReportController;
 use App\Controllers\AuditController;
 use Psr\Http\Message\ResponseFactoryInterface;
 
-// Step 1: Initialize DI Container and LoggingHelper
+// Step 1: Initialize DI Container and Loggers
 try {
     // Create container
     $container = new Container();
-    
-    // First register LoggingHelper for centralized logging management
-    $container->set(LoggingHelper::class, function() {
-        return new LoggingHelper();
+    $container->set(ExceptionHandler::class, function () {
+        return new ExceptionHandler();
     });
     
-    // Now register categorized loggers using LoggingHelper
-    $loggingHelper = $container->get(LoggingHelper::class);
-    $container->set(LoggerInterface::class, fn() => $loggingHelper->getLoggerByCategory('system'));
-    $container->set('auth_logger', fn() => $loggingHelper->getLoggerByCategory('auth'));
-    $container->set('db_logger', fn() => $loggingHelper->getLoggerByCategory('db'));
-    $container->set('api_logger', fn() => $loggingHelper->getLoggerByCategory('api'));
-    $container->set('security_logger', fn() => $loggingHelper->getLoggerByCategory('security'));
-    $container->set('audit_logger', fn() => $loggingHelper->getLoggerByCategory('audit')); 
-    $container->set('dependencies_logger', fn() => $loggingHelper->getLoggerByCategory('dependencies'));
+    // Register categorized loggers using global functions from logger.php
+    $container->set(LoggerInterface::class, fn() => getLogger('system'));
+    $container->set('auth_logger', fn() => getLogger('auth'));
+    $container->set('db_logger', fn() => getLogger('db'));
+    $container->set('api_logger', fn() => getLogger('api'));
+    $container->set('security_logger', fn() => getLogger('security'));
+    $container->set('audit_logger', fn() => getLogger('audit')); 
+    $container->set('dependencies_logger', fn() => getLogger('dependencies'));
     
     $container->get('dependencies_logger')->info("🔄 Step 1: Starting Dependency Injection.");
     $container->get(LoggerInterface::class)->info("Step 1: DI Container created and loggers registered.");
@@ -205,7 +201,6 @@ $container->get(LoggerInterface::class)->info("Step 8: Service and Controller re
 
 // Step 9: Final check for required service registrations and circular dependency detection
 $requiredServices = [
-    LoggingHelper::class,
     DatabaseHelper::class,
     TokenService::class,
     AuthService::class,

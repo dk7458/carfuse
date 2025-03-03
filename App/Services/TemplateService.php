@@ -5,7 +5,6 @@ namespace App\Services;
 use Exception;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
-use App\Helpers\LoggingHelper;
 use App\Models\DocumentTemplate;
 use App\Services\AuditService;
 

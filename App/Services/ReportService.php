@@ -7,7 +7,6 @@ use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\User;
 use Dompdf\Dompdf;
-use App\Helpers\LoggingHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 

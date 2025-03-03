@@ -115,7 +115,7 @@ return function (Container $container, array $config) {
 
     $container->set(PaymentService::class, function($c) {
         return new PaymentService(
-            $c->get(LoggingHelper::class)->getLoggerByCategory('payment'),
+            $c->get('payment_logger'),
             $c->get('db'),
             $c->get(ExceptionHandler::class)
         );
@@ -123,7 +123,7 @@ return function (Container $container, array $config) {
 
     $container->set(BookingService::class, function($c) {
         return new BookingService(
-            $c->get(LoggingHelper::class)->getLoggerByCategory('booking'),
+            $c->get('booking_logger'),
             $c->get(ExceptionHandler::class),
             $c->get('db'),
             $c->get('bookingModel')
@@ -132,7 +132,7 @@ return function (Container $container, array $config) {
 
     $container->set(MetricsService::class, function($c) {
         return new MetricsService(
-            $c->get(LoggingHelper::class)->getLoggerByCategory('metrics'),
+            $c->get('metrics_logger'),
             $c->get(ExceptionHandler::class),
             $c->get('db')
         );
@@ -140,7 +140,7 @@ return function (Container $container, array $config) {
 
     $container->set(ReportService::class, function($c) {
         return new ReportService(
-            $c->get(LoggingHelper::class)->getLoggerByCategory('report'),
+            $c->get('report_logger'),
             $c->get('db'),
             $c->get(ExceptionHandler::class)
         );
@@ -148,7 +148,7 @@ return function (Container $container, array $config) {
 
     $container->set(RevenueService::class, function($c) {
         return new RevenueService(
-            $c->get(LoggingHelper::class)->getLoggerByCategory('revenue'),
+            $c->get('revenue_logger'),
             $c->get('db'),
             $c->get(ExceptionHandler::class)
         );
@@ -188,7 +188,7 @@ return function (Container $container, array $config) {
 
     $container->set(TransactionService::class, function($c) {
         return new TransactionService(
-            $c->get(LoggingHelper::class)->getLoggerByCategory('booking'),
+            $c->get('booking_logger'),
             $c->get('db'),
             $c->get(ExceptionHandler::class)
         );

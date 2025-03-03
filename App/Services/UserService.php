@@ -8,7 +8,6 @@ use Exception;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ApiHelper;
 use App\Helpers\ExceptionHandler;
-use App\Helpers\LoggingHelper;
 
 class UserService
 {

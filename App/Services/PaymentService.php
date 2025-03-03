@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ExceptionHandler;
-use App\Helpers\LoggingHelper;
 use App\Models\Payment;
 use App\Models\Booking;
 use Psr\Log\LoggerInterface;

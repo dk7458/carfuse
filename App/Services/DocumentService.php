@@ -10,7 +10,6 @@ use DocumentManager\Services\TemplateService;
 use App\Services\EncryptionService;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
-use App\Helpers\LoggingHelper;
 use App\Models\Document;
 use App\Models\DocumentTemplate;
 use App\Models\Contract;

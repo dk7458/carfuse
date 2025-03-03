@@ -18,6 +18,6 @@ return [
     'debug'       => getenv('APP_DEBUG') === 'true',
 
     'providers' => [
-        App\Helpers\LoggingHelper::class,
+        // LoggingHelper has been removed as it's now deprecated
     ],
 ];

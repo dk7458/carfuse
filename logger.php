@@ -88,7 +88,7 @@ foreach ($logFiles as $category => $fileName) {
     }
 }
 
-// ✅ Function to Retrieve Logger by Category (Replaces LoggingHelper)
+// ✅ Function to Retrieve Logger by Category
 function getLogger(string $category = 'application'): LoggerInterface
 {
     global $loggers;
@@ -107,3 +107,4 @@ function getDefaultLogger(): LoggerInterface
 
 // ✅ Return Default Logger (Ensuring Availability)
 return getDefaultLogger();
+

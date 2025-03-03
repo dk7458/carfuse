@@ -8,7 +8,6 @@ use Psr\Log\LoggerInterface;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 use App\Helpers\ExceptionHandler;
-use App\Helpers\LoggingHelper;
 
 /**
  * NotificationService
