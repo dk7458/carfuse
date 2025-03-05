@@ -40,6 +40,11 @@ use App\Services\Audit\UserAuditService;
 use App\Services\Audit\TransactionAuditService;
 
 return function (Container $container, array $config) {
+    // Service definitions here, using $container and $config
+    // Example:
+    // $container->set(\App\Services\MyService::class, function() use ($config) {
+    //     return new \App\Services\MyService($config['my_config']);
+    // });
 
     // Register Models
     $container->set(User::class, function($c) {

@@ -181,11 +181,21 @@ if (!is_dir($templateDirectory)) {
 $container->get(LoggerInterface::class)->info("Step 7: Required directories verified.");
 
 // Include service and controller definitions
-$svc_dep = require_once __DIR__ . '/svc_dep.php';
-$svc_dep($container, $config);
+$svc_dep = require __DIR__ . '/svc_dep.php';
+if (is_callable($svc_dep)) {
+    $svc_dep($container, $config);
+} else {
+    error_log("svc_dep.php did not return a callable value.");
+    die("❌ svc_dep.php is not callable.\n");
+}
 
-$ctrl_dep = require_once __DIR__ . '/ctrl_dep.php';
-$ctrl_dep($container);
+$ctrl_dep = require __DIR__ . '/ctrl_dep.php';
+if (is_callable($ctrl_dep)) {
+    $ctrl_dep($container);
+} else {
+    error_log("ctrl_dep.php did not return a callable value.");
+    die("❌ ctrl_dep.php is not callable.\n");
+}
 
 $container->get(LoggerInterface::class)->info("Step 8: Service and Controller registration completed.");
 
