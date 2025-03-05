@@ -40,6 +40,9 @@ try {
         'jwt_refresh_secret' => $jwtRefreshSecret,
         'encryption_key' => $encryptionKey,
         'cipher' => 'AES-256-CBC',
+        'issuer' => $env['JWT_ISSUER'] ?? getenv('JWT_ISSUER') ?: 'carfuse-api',
+        'audience' => $env['JWT_AUDIENCE'] ?? getenv('JWT_AUDIENCE') ?: 'carfuse-clients',
+        'key' => $encryptionKey, // Added key alias for consistency with EncryptionService
     ];
 } catch (Exception $e) {
     $timestamp = date('Y-m-d H:i:s');
