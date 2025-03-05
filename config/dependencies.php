@@ -56,6 +56,9 @@ use App\Controllers\ReportController;
 use App\Controllers\AuditController;
 use Psr\Http\Message\ResponseFactoryInterface;
 
+// Make $config available to the container
+global $config;
+
 // Step 1: Initialize DI Container and Loggers
 try {
     // Create container
@@ -94,20 +97,8 @@ $container->set(ExceptionHandler::class, function($c) {
 // Add helper registrations
 $container->set(SecurityHelper::class, fn() => new SecurityHelper());
 
-// Step 2: Load configuration files
-$container->get(LoggerInterface::class)->info("Step 2: Loading configuration files.");
-$configDirectory = __DIR__;
-$config = [];
-$configFiles = ['database', 'encryption', 'app', 'filestorage'];
-foreach ($configFiles as $file) {
-    $path = "{$configDirectory}/{$file}.php";
-    if (!file_exists($path)) {
-        $container->get(LoggerInterface::class)->critical("❌ Missing configuration file: {$file}.php");
-        die("❌ Missing configuration file: {$file}.php\n");
-    }
-    $config[$file] = require $path;
-    $container->get(LoggerInterface::class)->info("Configuration file loaded: {$file}.php");
-}
+// Step 2: Configuration loading is now handled in bootstrap.php
+// $config is expected to be available globally
 
 // Step 3: Initialize DatabaseHelper - CENTRALIZED
 try {
@@ -179,8 +170,7 @@ $container->set(FileStorage::class, function($c) use ($config) {
 });
 $container->get(LoggerInterface::class)->info("Step 5: FileStorage registered.");
 
-// Step 6: Load key manager configuration
-$config['keymanager'] = require __DIR__ . '/keymanager.php';
+// Step 6: Load key manager configuration - Handled in bootstrap
 $container->get(LoggerInterface::class)->info("Step 6: Key Manager configuration loaded.");
 
 // Step 7: Ensure required directories exist
@@ -191,10 +181,10 @@ if (!is_dir($templateDirectory)) {
 $container->get(LoggerInterface::class)->info("Step 7: Required directories verified.");
 
 // Include service and controller definitions
-$svc_dep = require __DIR__ . '/svc_dep.php';
+$svc_dep = require_once __DIR__ . '/svc_dep.php';
 $svc_dep($container, $config);
 
-$ctrl_dep = require __DIR__ . '/ctrl_dep.php';
+$ctrl_dep = require_once __DIR__ . '/ctrl_dep.php';
 $ctrl_dep($container);
 
 $container->get(LoggerInterface::class)->info("Step 8: Service and Controller registration completed.");

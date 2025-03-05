@@ -120,7 +120,7 @@ $logger->info("🔄 Environment variables loaded from {$dotenvPath}");
 // Step 3: Load Configuration Files Dynamically
 $config = [];
 $configDir = __DIR__ . '/config';
-$requiredConfigs = ['database', 'encryption', 'app', 'filestorage'];
+$requiredConfigs = ['database', 'encryption', 'app', 'filestorage', 'keymanager'];
 
 // First, load required configuration files
 foreach ($requiredConfigs as $file) {
@@ -130,7 +130,7 @@ foreach ($requiredConfigs as $file) {
         exit("❌ Missing required configuration file: {$file}.php\n");
     }
     try {
-        $config[$file] = require $path;
+        $config[$file] = require_once $path;
         $logger->info("🔄 Required configuration file loaded: {$file}.php");
     } catch (Exception $e) {
         $logger->critical("❌ Error loading required configuration file {$file}.php: " . $e->getMessage());
@@ -159,6 +159,9 @@ foreach ($additionalFiles as $file) {
 }
 
 $logger->info("✅ All configuration files loaded successfully.");
+
+// Make $config available globally
+global $config;
 
 // Step 4: Initialize Exception Handler (needed for AuditService)
 $exceptionHandler = new ExceptionHandler(
@@ -202,7 +205,7 @@ try {
 // Step 7: Initialize Dependency Injection Container
 try {
     // Load dependencies configuration and get the return value
-    $diDependencies = require __DIR__ . '/config/dependencies.php';
+    $diDependencies = require_once __DIR__ . '/config/dependencies.php';
     
     // Check if the return value is valid
     if (!is_array($diDependencies) || !isset($diDependencies['container'])) {
