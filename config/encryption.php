@@ -19,11 +19,11 @@ try {
     }
 
     // ✅ Create a function to retrieve env values with validation
-    function getRequiredEnv(array $env, string $key, string $fallback) {
+    function getRequiredEnv(array $env, string $key, string $fallback, bool $validateLength = false) {
         $value = $env[$key] ?? getenv($key) ?: $fallback;
         
-        // Ensure key is at least 32 characters for security keys
-        if ((strpos($key, 'JWT_') === 0 || $key === 'ENCRYPTION_KEY') && strlen($value) < 32) {
+        // Only validate length for security keys when specifically requested
+        if ($validateLength && strlen($value) < 32) {
             throw new Exception("$key must be at least 32 characters long.");
         }
         
@@ -33,11 +33,17 @@ try {
     // ✅ Build full configuration array with all required values
     $config = [
         // Security keys - all guaranteed to be at least 32 chars
-        'jwt_secret' => getRequiredEnv($env, 'JWT_SECRET', 'e4uererje46ye575e7k5jkEAEAGRHSTEHJaet55utaeeHWHU%HJETEUUTEEuzjhrywstrrsaga'),
-        'jwt_refresh_secret' => getRequiredEnv($env, 'JWT_REFRESH_SECRET', '347378%^%R#V#B#RT&I#BR^&BR^#B^#R$RBGBB##GT#GT&#GN#G'),
-        'encryption_key' => getRequiredEnv($env, 'ENCRYPTION_KEY', 'bt3rb32t9b7t8B^&b78Rv566cv7ec5D7dc6Vd&^vdrb67v76^58bt*&6bt89n8N8N*7n'),
+        'jwt_secret' => getRequiredEnv($env, 'JWT_SECRET', 
+            'e4uererje46ye575e7k5jkEAEAGRHSTEHJaet55utaeeHWHU%HJETEUUTEEuzjhrywstrrsaga', 
+            true),  // Apply length validation
+        'jwt_refresh_secret' => getRequiredEnv($env, 'JWT_REFRESH_SECRET', 
+            '347378%^%R#V#B#RT&I#BR^&BR^#B^#R$RBGBB##GT#GT&#GN#G', 
+            true),  // Apply length validation
+        'encryption_key' => getRequiredEnv($env, 'ENCRYPTION_KEY', 
+            'bt3rb32t9b7t8B^&b78Rv566cv7ec5D7dc6Vd&^vdrb67v76^58bt*&6bt89n8N8N*7n', 
+            true),  // Apply length validation
         
-        // JWT configuration
+        // JWT configuration - NO length validation for these values
         'issuer' => getRequiredEnv($env, 'JWT_ISSUER', 'carfuse-api'),
         'audience' => getRequiredEnv($env, 'JWT_AUDIENCE', 'carfuse-clients'),
         
@@ -45,7 +51,9 @@ try {
         'cipher' => 'AES-256-CBC',
         
         // Key alias for backwards compatibility
-        'key' => getRequiredEnv($env, 'ENCRYPTION_KEY', 'bt3rb32t9b7t8B^&b78Rv566cv7ec5D7dc6Vd&^vdrb67v76^58bt*&6bt89n8N8N*7n'),
+        'key' => getRequiredEnv($env, 'ENCRYPTION_KEY', 
+            'bt3rb32t9b7t8B^&b78Rv566cv7ec5D7dc6Vd&^vdrb67v76^58bt*&6bt89n8N8N*7n', 
+            true),  // Apply length validation
         
         // Token expiration settings (in seconds)
         'access_token_ttl' => (int)($env['ACCESS_TOKEN_TTL'] ?? getenv('ACCESS_TOKEN_TTL') ?: 3600),
