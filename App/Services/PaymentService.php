@@ -2,187 +2,122 @@
 
 namespace App\Services;
 
-use App\Helpers\DatabaseHelper;
-use App\Helpers\ExceptionHandler;
-use App\Models\Payment;
-use App\Models\Booking;
-use Psr\Log\LoggerInterface;
+use App\Services\Payment\PaymentProcessingService;
+use App\Services\Payment\RefundService;
+use App\Services\Payment\PaymentGatewayService;
+use App\Services\Payment\TransactionService;
 
 class PaymentService
 {
-    public const DEBUG_MODE = true;
-    private LoggerInterface $logger;
-    private DatabaseHelper $db;
-    private ExceptionHandler $exceptionHandler;
-    private Payment $paymentModel;
-    private Booking $bookingModel;
+    /**
+     * PaymentService acts as a facade:
+     *  - Delegates payment processing to PaymentProcessingService
+     *  - Delegates refund handling to RefundService
+     *  - Delegates external gateway calls to PaymentGatewayService
+     *  - Delegates transaction logging/history to TransactionService
+     *
+     * Controllers (and other parts of your codebase) continue to call PaymentService
+     * without knowing about the underlying subservices, avoiding any breaking changes.
+     */
 
+    private PaymentProcessingService $paymentProcessingService;
+    private RefundService $refundService;
+    private PaymentGatewayService $paymentGatewayService;
+    private TransactionService $transactionService;
+
+    /**
+     * Constructor injects the four subservices, which are then used to delegate
+     * the responsibilities away from this facade class.
+     */
     public function __construct(
-        LoggerInterface $logger, 
-        DatabaseHelper $db, 
-        ExceptionHandler $exceptionHandler,
-        Payment $paymentModel,
-        Booking $bookingModel
+        PaymentProcessingService $paymentProcessingService,
+        RefundService $refundService,
+        PaymentGatewayService $paymentGatewayService,
+        TransactionService $transactionService
     ) {
-        $this->logger = $logger;
-        $this->db = $db;
-        $this->exceptionHandler = $exceptionHandler;
-        $this->paymentModel = $paymentModel;
-        $this->bookingModel = $bookingModel;
+        $this->paymentProcessingService = $paymentProcessingService;
+        $this->refundService = $refundService;
+        $this->paymentGatewayService = $paymentGatewayService;
+        $this->transactionService = $transactionService;
     }
 
-    public function processPayment($user, array $paymentData)
-    {
-        if (empty($user) || empty($user['authenticated']) || !$user['authenticated']) {
-            $this->logger->error("[PaymentService] Unauthenticated payment attempt", ['category' => 'auth']);
-            return ['status' => 'error', 'message' => 'User not authenticated'];
-        }
-
-        if (!empty($paymentData['adminOnly']) && $paymentData['adminOnly'] === true && $user['role'] !== 'admin') {
-            $this->logger->error("[PaymentService] Unauthorized admin transaction", ['category' => 'auth']);
-            return ['status' => 'error', 'message' => 'Admin privileges required'];
-        }
-
-        try {
-            // Start a transaction (will use the payment model's transaction handling)
-            $this->paymentModel->beginTransaction();
-
-            // Insert payment record using the model
-            $paymentId = $this->paymentModel->create([
-                'booking_id'     => $paymentData['bookingId'],
-                'amount'         => $paymentData['amount'],
-                'payment_method' => $paymentData['paymentMethod'],
-                'status'         => 'completed',
-                'created_at'     => date('Y-m-d H:i:s')
-            ]);
-
-            // Check if booking exists
-            $booking = $this->bookingModel->find($paymentData['bookingId']);
-            if (!$booking) {
-                $this->paymentModel->rollBack();
-                throw new \Exception("Booking not found");
-            }
-
-            // Update booking status
-            $this->bookingModel->update($paymentData['bookingId'], [
-                'status' => 'paid'
-            ]);
-
-            // Log transaction (business level logging)
-            $this->paymentModel->logTransaction($paymentData['bookingId'], $paymentData['amount'], 'payment', 'completed');
-            
-            // Commit the transaction
-            $this->paymentModel->commit();
-            
-            // Business-level logging
-            if (self::DEBUG_MODE) {
-                $this->logger->info("[payment] Payment processed for booking {$paymentData['bookingId']}", ['category' => 'system']);
-            }
-            return ['status' => 'success', 'message' => 'Payment processed successfully'];
-        } catch (\Exception $e) {
-            // Ensure we rollback if any exception occurs
-            $this->paymentModel->rollBack();
-            
-            $this->logger->error("[db] Database error: " . $e->getMessage(), ['category' => 'db']);
-            $this->exceptionHandler->handleException($e);
-            return ['status' => 'error', 'message' => 'Payment processing failed'];
-        }
-    }
-
-    public function processRefund(int $bookingId, float $amount): bool
-    {
-        try {
-            // Start a transaction
-            $this->paymentModel->beginTransaction();
-
-            // Log the refund
-            $this->paymentModel->logRefund($bookingId, $amount, 'processed');
-
-            // Get booking
-            $booking = $this->bookingModel->find($bookingId);
-            if (!$booking) {
-                $this->paymentModel->rollBack();
-                throw new \Exception("Booking not found");
-            }
-            
-            // Update booking refund status
-            $this->bookingModel->update($bookingId, [
-                'refund_status' => 'processed'
-            ]);
-
-            // Log transaction (business level logging)
-            $this->paymentModel->logTransaction($bookingId, $amount, 'refund', 'completed');
-            
-            // Commit the transaction
-            $this->paymentModel->commit();
-            
-            // Business-level logging
-            if (self::DEBUG_MODE) {
-                $this->logger->info("[payment] Refund processed for booking {$bookingId}", ['category' => 'system']);
-            }
-            return true;
-        } catch (\Exception $e) {
-            // Ensure we rollback if any exception occurs
-            $this->paymentModel->rollBack();
-            
-            $this->logger->error("[db] Database error: " . $e->getMessage(), ['category' => 'db']);
-            $this->exceptionHandler->handleException($e);
-            return false;
-        }
-    }
-
-    public function getMonthlyRevenueTrends(): array
-    {
-        try {
-            $data = $this->paymentModel->getMonthlyRevenueTrends();
-            $this->logger->info("[PaymentService] Retrieved monthly revenue trends");
-            return $data;
-        } catch (\Exception $e) {
-            $this->logger->error("[PaymentService] Database error: " . $e->getMessage());
-            throw $e;
-        }
-    }
-    
     /**
-     * Get payment by ID
+     * Wrapper for handling a payment. Delegates the core logic to PaymentProcessingService.
+     *
+     * @param array $paymentData
+     * @return array
      */
-    public function getPaymentById(int $id): ?array
+    public function processPayment(array $paymentData): array
     {
-        try {
-            $payment = $this->paymentModel->find($id);
-            if (!$payment) {
-                return null;
-            }
-            return $payment;
-        } catch (\Exception $e) {
-            $this->logger->error("[PaymentService] Error getting payment: " . $e->getMessage());
-            throw $e;
-        }
+        return $this->paymentProcessingService->processPayment($paymentData);
     }
-    
+
     /**
-     * Get all payments for a specific booking
+     * Wrapper for handling a refund. Delegates the core logic to RefundService.
+     *
+     * @param array $refundData
+     * @return array
      */
-    public function getPaymentsByBooking(int $bookingId): array
+    public function refundPayment(array $refundData): array
     {
-        try {
-            return $this->paymentModel->getByBookingId($bookingId);
-        } catch (\Exception $e) {
-            $this->logger->error("[PaymentService] Error getting payments by booking: " . $e->getMessage());
-            throw $e;
-        }
+        return $this->refundService->refund($refundData);
     }
-    
+
     /**
-     * Get all payments for a specific user
+     * For direct interactions with external gateways (e.g., if you need to manually
+     * initiate a gateway payment step or retrieve gateway-specific responses).
+     *
+     * @param string $gatewayName  E.g. "stripe", "payu", etc.
+     * @param array  $paymentData  Payment details to pass to the gateway
+     * @return array
      */
-    public function getPaymentsByUser(int $userId): array
+    public function processPaymentGateway(string $gatewayName, array $paymentData): array
     {
-        try {
-            return $this->paymentModel->getByUserId($userId);
-        } catch (\Exception $e) {
-            $this->logger->error("[PaymentService] Error getting payments by user: " . $e->getMessage());
-            throw $e;
-        }
+        return $this->paymentGatewayService->processPayment($gatewayName, $paymentData);
+    }
+
+    /**
+     * For handling gateway callback/webhook data. Delegates to PaymentGatewayService.
+     *
+     * @param string $gatewayName
+     * @param array  $callbackData
+     * @return array
+     */
+    public function handlePaymentCallback(string $gatewayName, array $callbackData): array
+    {
+        return $this->paymentGatewayService->handleCallback($gatewayName, $callbackData);
+    }
+
+    /**
+     * For logging transactions directly through PaymentService, if needed.
+     *
+     * @param array $transactionData
+     * @return array
+     */
+    public function logTransaction(array $transactionData): array
+    {
+        return $this->transactionService->logTransaction($transactionData);
+    }
+
+    /**
+     * Retrieves transaction history for a specific user.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getTransactionHistory(int $userId): array
+    {
+        return $this->transactionService->getHistoryByUser($userId);
+    }
+
+    /**
+     * Retrieves transaction history with admin filters (date range, type, etc.).
+     *
+     * @param array $filters
+     * @return array
+     */
+    public function getTransactionHistoryAdmin(array $filters): array
+    {
+        return $this->transactionService->getHistoryAdmin($filters);
     }
 }

@@ -87,6 +87,28 @@ class Booking extends BaseModel
     }
 
     /**
+     * Update a booking's status
+     * 
+     * @param int|string $id
+     * @param string $newStatus
+     * @return bool
+     */
+    public function updateStatus(int|string $id, string $newStatus): bool
+    {
+        // Validate the status value
+        $validStatuses = ['pending', 'confirmed', 'cancelled', 'completed', 'paid'];
+        if (!in_array($newStatus, $validStatuses)) {
+            if (isset($this->logger)) {
+                $this->logger->error("Invalid booking status: {$newStatus}");
+            }
+            return false;
+        }
+        
+        // Use the existing update method to update just the status field
+        return $this->update($id, ['status' => $newStatus]);
+    }
+
+    /**
      * Get active bookings.
      *
      * @return array

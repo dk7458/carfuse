@@ -49,14 +49,12 @@ class AuthService
     public function login(array $data)
     {
         try {
-            // Use the User model to find by email
-            $user = User::findByEmail($data['email']);
+            // Use the User model to validate password
+            $user = $this->userModel->validatePassword($data['email'], $data['password']);
             $this->logger->debug("Executing login query for user email: {$data['email']}");
             
-            if (!$user || !password_verify($data['password'], $user['password_hash'])) {
+            if (!$user) {
                 $this->logger->warning("Authentication failed", ['email' => $data['email']]);
-                
-                // Log failed authentication with unified AuditService
                 $this->auditService->logEvent(
                     'auth',
                     'Authentication failed',
@@ -79,7 +77,7 @@ class AuthService
             // Store access token in application database
             $this->storeAccessToken($userObject->id, $token);
 
-            // Log successful login with unified AuditService
+            // Keep audit log for successful login (security-critical)
             $this->auditService->logEvent(
                 'auth',
                 'Authentication successful',
@@ -99,7 +97,7 @@ class AuthService
             ];
         } catch (Exception $e) {
             $this->logger->error("[auth] ❌ Login error: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
+            $this->exceptionHandler->handle($e); // Use handle() instead of handleException()
             throw $e;
         }
     }
@@ -141,7 +139,7 @@ class AuthService
                 'name' => $data['name'],
                 'surname' => $data['surname'],
                 'email' => $data['email'],
-                'password_hash' => password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]),
+                'password' => $data['password'], // User model will hash this
                 'phone' => $data['phone'] ?? null,
                 'address' => $data['address'] ?? null,
                 'pesel_or_id' => $data['pesel_or_id'] ?? null,
@@ -153,9 +151,9 @@ class AuthService
                 'updated_at' => date('Y-m-d H:i:s')
             ];
             
-            // Log prepared data (without password_hash)
+            // Log prepared data (without password)
             $logUserData = $userData;
-            unset($logUserData['password_hash']);
+            unset($logUserData['password']);
             $this->logger->debug("Prepared user data for database", ['data' => $logUserData]);
             
             // Use the User model to create the user
@@ -163,15 +161,12 @@ class AuthService
             
             $this->logger->info("User registered successfully", ['user_id' => $userId, 'email' => $data['email']]);
             
-            // Log registration with unified AuditService - business logic event
-            $this->auditService->logEvent(
-                'auth',
-                'User registration',
-                ['email' => $data['email'], 'name' => $data['name']],
-                $userId,
-                null,
-                $_SERVER['REMOTE_ADDR'] ?? null
-            );
+            // Registration is not a security-critical event, so use logger instead of audit
+            $this->logger->info("User registration completed", [
+                'user_id' => $userId,
+                'email' => $data['email'],
+                'ip' => $_SERVER['REMOTE_ADDR'] ?? null
+            ]);
             
             return ['user_id' => $userId];
         } catch (\InvalidArgumentException $e) {
@@ -179,7 +174,7 @@ class AuthService
             throw $e;
         } catch (Exception $e) {
             $this->logger->error("Registration error: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
+            $this->exceptionHandler->handle($e); // Use handle() instead of handleException()
             throw $e;
         }
     }
@@ -187,7 +182,7 @@ class AuthService
     public function refresh(array $data)
     {
         try {
-            // Use the new method to decode the refresh token
+            // Use the TokenService to decode the refresh token
             $decoded = $this->tokenService->decodeRefreshToken($data['refresh_token']);
             
             // Use the User model to find user by ID
@@ -209,20 +204,16 @@ class AuthService
             // Store new access token in application database
             $this->storeAccessToken($decoded->sub, $token);
 
-            // Log token refresh with unified AuditService - business logic event
-            $this->auditService->logEvent(
-                'auth',
-                'Token refreshed',
-                ['user_id' => $user['id']],
-                $user['id'],
-                null,
-                $_SERVER['REMOTE_ADDR'] ?? null
-            );
+            // Use logger instead of audit for token refresh (not security-critical)
+            $this->logger->info("Token refreshed", [
+                'user_id' => $user['id'],
+                'ip' => $_SERVER['REMOTE_ADDR'] ?? null
+            ]);
             
             return ['token' => $token];
         } catch (Exception $e) {
             $this->logger->error("Refresh token error: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
+            $this->exceptionHandler->handle($e); // Use handle() instead of handleException()
             throw $e;
         }
     }
@@ -235,7 +226,7 @@ class AuthService
             $userId = (int)$data['user_id'];
         }
         
-        // Log logout with unified AuditService - business logic event
+        // Keep audit log for logout (security-critical event)
         $this->auditService->logEvent(
             'auth',
             'User logged out',
@@ -287,15 +278,12 @@ class AuthService
                 // Update the user via model
                 $this->userModel->update($userId, $updateData);
                 
-                // Log the profile update - business logic event
-                $this->auditService->logEvent(
-                    'auth',
-                    'Profile updated',
-                    ['user_id' => $userId],
-                    $userId,
-                    null,
-                    $_SERVER['REMOTE_ADDR'] ?? null
-                );
+                // Use logger instead of audit for profile updates (not security-critical)
+                $this->logger->info("Profile updated", [
+                    'user_id' => $userId,
+                    'fields_updated' => array_keys($updateData),
+                    'ip' => $_SERVER['REMOTE_ADDR'] ?? null
+                ]);
                 
                 return ["message" => "Profile updated successfully"];
             }
@@ -303,7 +291,7 @@ class AuthService
             return ["message" => "No changes to update"];
         } catch (Exception $e) {
             $this->logger->error("Update profile error: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
+            $this->exceptionHandler->handle($e); // Use handle() instead of handleException()
             throw $e;
         }
     }
@@ -341,7 +329,7 @@ class AuthService
             // Store the token using a model method
             $this->userModel->createPasswordReset($user['email'], $resetToken, $ipAddress, $tokenExpiry);
             
-            // Log password reset request with unified AuditService - business logic event
+            // Keep audit log for password reset request (security-critical)
             $this->auditService->logEvent(
                 'auth',
                 'Password reset requested',
@@ -359,6 +347,7 @@ class AuthService
             ];
         } catch (Exception $e) {
             $this->logger->error("Password reset request error: " . $e->getMessage());
+            $this->exceptionHandler->handle($e); // Use handle() instead of handleException()
             throw $e;
         }
     }
@@ -400,15 +389,14 @@ class AuthService
                 throw new Exception("User not found", 404);
             }
             
-            // Update the password via model
-            $hashedPassword = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]);
-            $this->userModel->updatePassword($user['id'], $hashedPassword);
+            // Update the password via User model
+            $this->userModel->updatePassword($user['id'], $data['password']);
             $this->logger->debug("Updating password for user ID: {$user['id']}");
             
             // Mark token as used via model
             $this->userModel->markResetTokenUsed($tokenRecord['id']);
             
-            // Log password reset completion with unified AuditService - business logic event
+            // Keep audit log for password reset completion (security-critical)
             $this->auditService->logEvent(
                 'auth',
                 'Password reset completed',
@@ -421,8 +409,17 @@ class AuthService
             return ["message" => "Password has been reset successfully"];
         } catch (Exception $e) {
             $this->logger->error("Password reset error: " . $e->getMessage());
+            $this->exceptionHandler->handle($e); // Use handle() instead of handleException()
             throw $e;
         }
+    }
+
+    /**
+     * Validate a token from the request
+     */
+    public function validateRequest(?string $authHeader = null): ?object
+    {
+        return $this->tokenService->validateRequest($authHeader);
     }
 
     private function storeAccessToken(int $userId, string $accessToken): void
@@ -440,7 +437,7 @@ class AuthService
             $this->logger->info("[auth] Access token stored in application database", ['user_id' => $userId]);
         } catch (\Exception $e) {
             $this->logger->error("[auth] Failed to store access token: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
+            $this->exceptionHandler->handle($e); // Use handle() instead of handleException()
             // Continue without failing - JWT will still work even if storage fails
         }
     }

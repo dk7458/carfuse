@@ -44,7 +44,7 @@ class NotificationService
     {
         try {
             $this->storeNotification($userId, $type, $message);
-            // Business-level logging - keep this separate from model-level audit
+            // Log notification preparation
             if (self::DEBUG_MODE) {
                 $this->logger->info('Notification prepared for dispatch', ['user_id' => $userId, 'type' => $type]);
             }
@@ -62,7 +62,7 @@ class NotificationService
     private function storeNotification(int $userId, string $type, string $message): void
     {
         try {
-            // Use the model to create the notification - model handles audit logging
+            // Create the notification record
             $this->notificationModel->create([
                 'user_id' => $userId,
                 'type'    => $type,
@@ -70,6 +70,13 @@ class NotificationService
                 'sent_at' => date('Y-m-d H:i:s'),
                 'is_read' => false,
             ]);
+            
+            if (self::DEBUG_MODE) {
+                $this->logger->info("Notification stored in database", [
+                    'user_id' => $userId, 
+                    'type' => $type
+                ]);
+            }
         } catch (\Exception $e) {
             $this->logger->error("[Notification] ❌ storeNotification error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
@@ -80,10 +87,10 @@ class NotificationService
     public function getUserNotifications(int $userId): array
     {
         try {
-            // Use the model to get user notifications
+            // Get user notifications
             $notifications = $this->notificationModel->getByUserId($userId);
             
-            // Business-level logging
+            // Log retrieval
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Notification] Retrieved notifications for user {$userId}");
             }
@@ -99,10 +106,10 @@ class NotificationService
     public function markAsRead(int $notificationId): bool
     {
         try {
-            // Use the model to mark notification as read - model handles audit logging
+            // Mark notification as read
             $result = $this->notificationModel->markAsRead($notificationId);
             
-            // Business-level logging
+            // Log the action
             if (self::DEBUG_MODE && $result) {
                 $this->logger->info("[Notification] Marked notification {$notificationId} as read");
             }
@@ -118,10 +125,10 @@ class NotificationService
     public function deleteNotification(int $notificationId): bool
     {
         try {
-            // Use the model to delete notification - model handles audit logging
+            // Delete notification
             $result = $this->notificationModel->delete($notificationId);
             
-            // Business-level logging
+            // Log the deletion
             if (self::DEBUG_MODE && $result) {
                 $this->logger->info("[Notification] Deleted notification {$notificationId}");
             }
@@ -137,10 +144,10 @@ class NotificationService
     public function markAllAsRead(int $userId): bool
     {
         try {
-            // Use the model to mark all notifications as read - model handles audit logging
+            // Mark all notifications as read
             $result = $this->notificationModel->markAllAsRead($userId);
             
-            // Business-level logging
+            // Log the action
             if (self::DEBUG_MODE && $result) {
                 $this->logger->info("[Notification] Marked all notifications as read for user {$userId}");
             }
@@ -327,6 +334,11 @@ class NotificationService
     {
         try {
             $notification = $this->notificationModel->find($id);
+            
+            if (self::DEBUG_MODE && $notification) {
+                $this->logger->info("[Notification] Retrieved notification by ID", ['id' => $id]);
+            }
+            
             return $notification;
         } catch (\Exception $e) {
             $this->logger->error("[Notification] ❌ getNotificationById error: " . $e->getMessage());
@@ -342,6 +354,14 @@ class NotificationService
     {
         try {
             $count = $this->notificationModel->getUnreadCount($userId);
+            
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Notification] Retrieved unread count for user", [
+                    'user_id' => $userId, 
+                    'count' => $count
+                ]);
+            }
+            
             return $count;
         } catch (\Exception $e) {
             $this->logger->error("[Notification] ❌ getUnreadCount error: " . $e->getMessage());

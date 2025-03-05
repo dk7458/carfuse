@@ -17,6 +17,9 @@ use App\Services\AuditService;
  * @property string $method Payment method (credit_card, PayPal, etc.)
  * @property string $status Status of the payment (pending, completed, failed)
  * @property string|null $transaction_id Unique external transaction identifier
+ * @property string $type Type of transaction ('payment' or 'refund')
+ * @property string|null $refund_reason Reason for refund, if applicable
+ * @property int|null $original_payment_id ID of the original payment (for refunds only)
  */
 class Payment extends BaseModel
 {
@@ -35,6 +38,9 @@ class Payment extends BaseModel
         'method' => 'required|string|in:credit_card,paypal,bank_transfer',
         'status' => 'required|string|in:pending,completed,failed',
         'transaction_id' => 'nullable|string|max:255',
+        'type' => 'string|in:payment,refund',
+        'refund_reason' => 'nullable|string|max:255',
+        'original_payment_id' => 'nullable|integer|exists:payments,id',
     ];
 
     public function __construct(DatabaseHelper $dbHelper, AuditService $auditService = null)
@@ -69,33 +75,155 @@ class Payment extends BaseModel
     }
 
     /**
-     * Create a new payment.
+     * Create a new payment or refund.
      *
      * @param array $data
-     * @return int ID of the created payment
+     * @return int|null ID of the created payment/refund, or null on failure
      */
     public function create(array $data): ?int
-{
-    $data['created_at'] = $data['updated_at'] = date('Y-m-d H:i:s');
-    $paymentId = $this->dbHelper->insert($this->table, $data);
-    
-    if (!$paymentId) {
-        return null; // Return null if insertion fails
+    {
+        // Set default type to 'payment' if not specified
+        $data['type'] = $data['type'] ?? 'payment';
+        
+        // Validate the data
+        if (isset($this->validator)) {
+            $validation = $this->validator->validate($data, self::$rules);
+            if ($validation->fails()) {
+                if (isset($this->logger)) {
+                    $this->logger->error('Payment validation failed', $validation->errors()->all());
+                }
+                return null;
+            }
+        }
+        
+        // For refunds, the amount should be negative (to represent money going out)
+        if ($data['type'] === 'refund' && $data['amount'] > 0) {
+            $data['amount'] = -1 * abs($data['amount']);
+        }
+
+        $data['created_at'] = $data['updated_at'] = date('Y-m-d H:i:s');
+        $paymentId = $this->dbHelper->insert($this->table, $data);
+        
+        if (!$paymentId) {
+            return null; // Return null if insertion fails
+        }
+
+        if ($this->auditService) {
+            $eventType = ($data['type'] === 'refund') ? 'Created refund' : 'Created payment';
+            
+            $auditData = [
+                'payment_id' => $paymentId,
+                'user_id' => $data['user_id'],
+                'booking_id' => $data['booking_id'],
+                'amount' => $data['amount'],
+                'method' => $data['method'],
+                'type' => $data['type']
+            ];
+            
+            // Add refund-specific data if applicable
+            if ($data['type'] === 'refund') {
+                $auditData['refund_reason'] = $data['refund_reason'] ?? null;
+                $auditData['original_payment_id'] = $data['original_payment_id'] ?? null;
+            }
+            
+            $this->auditService->logEvent($this->resourceName, $eventType, $auditData);
+        }
+        
+        return (int) $paymentId; // Ensure ID is always an integer
     }
 
-    if ($this->auditService) {
-        $this->auditService->logEvent($this->resourceName, 'Created payment', [
-            'payment_id' => $paymentId,
-            'user_id' => $data['user_id'],
-            'booking_id' => $data['booking_id'],
-            'amount' => $data['amount'],
-            'method' => $data['method']
-        ]);
+    /**
+     * Create a refund record.
+     * 
+     * @param array $refundData Must contain: user_id, booking_id, amount, method, original_payment_id
+     * @return int|null ID of the created refund, or null on failure
+     */
+    public function createRefund(array $refundData): ?int
+    {
+        // Ensure the type is set to refund
+        $refundData['type'] = 'refund';
+        
+        // Set status to completed by default if not specified
+        if (!isset($refundData['status'])) {
+            $refundData['status'] = 'completed';
+        }
+        
+        // Ensure refund reason is set
+        if (!isset($refundData['refund_reason'])) {
+            $refundData['refund_reason'] = 'Refund processed';
+        }
+        
+        // Validate required fields specific to refunds
+        if (!isset($refundData['original_payment_id'])) {
+            if (isset($this->logger)) {
+                $this->logger->error('Refund creation failed: original_payment_id is required');
+            }
+            return null;
+        }
+        
+        // Check if original payment exists
+        $originalPayment = $this->find($refundData['original_payment_id']);
+        if (!$originalPayment) {
+            if (isset($this->logger)) {
+                $this->logger->error('Refund creation failed: original payment not found', [
+                    'original_payment_id' => $refundData['original_payment_id']
+                ]);
+            }
+            return null;
+        }
+        
+        // Ensure original payment is a payment, not a refund
+        if ($originalPayment['type'] === 'refund') {
+            if (isset($this->logger)) {
+                $this->logger->error('Refund creation failed: cannot refund a refund', [
+                    'original_payment_id' => $refundData['original_payment_id']
+                ]);
+            }
+            return null;
+        }
+        
+        // Check if original payment is already fully refunded
+        $refundedAmount = $this->getRefundedAmount($refundData['original_payment_id']);
+        $originalAmount = abs($originalPayment['amount']);
+        $requestedRefundAmount = abs($refundData['amount']);
+        
+        if (($refundedAmount + $requestedRefundAmount) > $originalAmount) {
+            if (isset($this->logger)) {
+                $this->logger->error('Refund creation failed: refund amount exceeds original payment', [
+                    'original_payment_id' => $refundData['original_payment_id'],
+                    'original_amount' => $originalAmount,
+                    'already_refunded' => $refundedAmount,
+                    'requested_refund' => $requestedRefundAmount
+                ]);
+            }
+            return null;
+        }
+        
+        // Ensure refund amount is stored as negative
+        $refundData['amount'] = -1 * abs($refundData['amount']);
+        
+        // Use the create method to insert the refund record
+        $refundId = $this->create($refundData);
+        
+        if ($refundId && $this->auditService) {
+            // Add specialized refund audit log
+            $this->auditService->logEvent(
+                $this->resourceName, 
+                'refund_processed', 
+                [
+                    'refund_id' => $refundId,
+                    'original_payment_id' => $refundData['original_payment_id'],
+                    'user_id' => $refundData['user_id'],
+                    'booking_id' => $refundData['booking_id'],
+                    'amount' => $refundData['amount'],
+                    'reason' => $refundData['refund_reason'],
+                    'remaining_balance' => $originalAmount - ($refundedAmount + abs($refundData['amount']))
+                ]
+            );
+        }
+        
+        return $refundId;
     }
-    
-    return (int) $paymentId; // Ensure ID is always an integer
-}
-
 
     /**
      * Update a payment.
@@ -214,5 +342,86 @@ class Payment extends BaseModel
     {
         $query = "SELECT b.* FROM bookings b JOIN {$this->table} p ON b.id = p.booking_id WHERE p.id = :payment_id AND p.deleted_at IS NULL AND b.deleted_at IS NULL";
         return $this->dbHelper->select($query, [':payment_id' => $paymentId]);
+    }
+
+    /**
+     * Get payments by booking ID
+     * 
+     * @param int $bookingId
+     * @return array
+     */
+    public function getByBooking(int $bookingId): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE booking_id = :booking_id AND deleted_at IS NULL ORDER BY created_at DESC";
+        return $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+    }
+
+    /**
+     * Get refunds for a specific payment
+     *
+     * @param int $paymentId
+     * @return array
+     */
+    public function getRefundsForPayment(int $paymentId): array
+    {
+        $query = "SELECT * FROM {$this->table} 
+                  WHERE original_payment_id = :payment_id 
+                  AND type = 'refund' 
+                  AND deleted_at IS NULL
+                  ORDER BY created_at DESC";
+                  
+        return $this->dbHelper->select($query, [':payment_id' => $paymentId]);
+    }
+
+    /**
+     * Get all refunds
+     *
+     * @return array
+     */
+    public function getAllRefunds(): array
+    {
+        $query = "SELECT * FROM {$this->table} 
+                  WHERE type = 'refund' 
+                  AND deleted_at IS NULL
+                  ORDER BY created_at DESC";
+                  
+        return $this->dbHelper->select($query);
+    }
+
+    /**
+     * Check if a payment has been refunded
+     *
+     * @param int $paymentId
+     * @return bool
+     */
+    public function hasRefunds(int $paymentId): bool
+    {
+        $query = "SELECT COUNT(*) as refund_count 
+                  FROM {$this->table} 
+                  WHERE original_payment_id = :payment_id 
+                  AND type = 'refund' 
+                  AND deleted_at IS NULL";
+                  
+        $result = $this->dbHelper->select($query, [':payment_id' => $paymentId]);
+        return (int)$result[0]['refund_count'] > 0;
+    }
+
+    /**
+     * Get total refunded amount for a payment
+     *
+     * @param int $paymentId
+     * @return float
+     */
+    public function getRefundedAmount(int $paymentId): float
+    {
+        $query = "SELECT SUM(ABS(amount)) as total_refunded 
+                  FROM {$this->table} 
+                  WHERE original_payment_id = :payment_id 
+                  AND type = 'refund' 
+                  AND status = 'completed' 
+                  AND deleted_at IS NULL";
+                  
+        $result = $this->dbHelper->select($query, [':payment_id' => $paymentId]);
+        return (float)($result[0]['total_refunded'] ?? 0);
     }
 }

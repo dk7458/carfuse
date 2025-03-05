@@ -2,10 +2,9 @@
 
 namespace App\Controllers;
 
-use App\Helpers\DatabaseHelper;
+use App\Services\AdminService;
 use App\Services\AuditService;
 use App\Services\Auth\TokenService;
-use App\Helpers\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Log\LoggerInterface;
@@ -16,23 +15,20 @@ use App\Helpers\ExceptionHandler;
  */
 class AdminController extends Controller
 {
-    private AuditService $auditService;
+    private AdminService $adminService;
     private ResponseFactoryInterface $responseFactory;
     protected LoggerInterface $logger;
-    private TokenService $tokenService;
-    protected ExceptionHandler $exceptionHandler;
+    private ExceptionHandler $exceptionHandler;
 
     public function __construct(
         LoggerInterface $logger,
-        AuditService $auditService,
+        AdminService $adminService,
         ResponseFactoryInterface $responseFactory,
-        TokenService $tokenService,
         ExceptionHandler $exceptionHandler
     ) {
         parent::__construct($logger, $exceptionHandler);
-        $this->auditService = $auditService;
+        $this->adminService = $adminService;
         $this->responseFactory = $responseFactory;
-        $this->tokenService = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
     }
 
@@ -45,37 +41,6 @@ class AdminController extends Controller
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json');
     }
-    
-    /**
-     * Validate admin token and return admin data
-     */
-    protected function validateAdmin(): ?array
-    {
-        $this->logger->debug("Validating admin token using secure database");
-        
-        // Use TokenService to extract the token
-        $token = $this->tokenService->extractToken($this->request);
-        
-        if (empty($token)) {
-            $this->logger->info("No authorization token provided");
-            return null;
-        }
-        
-        // Validate token and fetch admin details - using secure database
-        $adminData = DatabaseHelper::select(
-            "SELECT id, email, role FROM admins WHERE token = ? AND token_expiry > NOW()", 
-            [$token],
-            true // Explicitly using secure database
-        );
-            
-        if (empty($adminData) || $adminData[0]['role'] !== 'admin') {
-            $this->logger->info("Invalid admin token or insufficient permissions");
-            return null;
-        }
-        
-        $this->logger->info("Admin validated successfully", ['admin_id' => $adminData[0]['id']]);
-        return $adminData[0];
-    }
 
     /**
      * ✅ Get a paginated list of all users with their roles.
@@ -83,7 +48,7 @@ class AdminController extends Controller
     public function getAllUsers(): ResponseInterface
     {
         try {
-            $admin = $this->validateAdmin();
+            $admin = $this->adminService->validateAdmin($this->request);
             if (!$admin) {
                 return $this->jsonResponse([
                     'status' => 'error',
@@ -91,52 +56,15 @@ class AdminController extends Controller
                 ], 401);
             }
 
-            $this->logger->debug("Fetching users with pagination using application database");
-            
             // Get pagination parameters
             $page = (int) ($this->request->getQueryParams()['page'] ?? 1);
-            $perPage = 10;
-            $offset = ($page - 1) * $perPage;
             
-            // Get users with pagination - using application database
-            $users = DatabaseHelper::select(
-                "SELECT u.*, r.name as role_name 
-                 FROM users u 
-                 LEFT JOIN roles r ON u.role_id = r.id 
-                 ORDER BY u.created_at DESC 
-                 LIMIT ? OFFSET ?",
-                [$perPage, $offset],
-                false // Explicitly using application database
-            );
-            
-            // Get total count for pagination
-            $totalUsers = DatabaseHelper::select(
-                "SELECT COUNT(*) as count FROM users", 
-                [],
-                false // Explicitly using application database
-            )[0]['count'];
-            
-            $this->auditService->logEvent(
-                'user_list_viewed',
-                'Admin viewed user list',
-                ['admin_id' => $admin['id'], 'page' => $page],
-                $admin['id'],
-                null,
-                'admin'
-            );
+            $userData = $this->adminService->getAllUsers($page, $admin['id']);
             
             return $this->jsonResponse([
                 'status' => 'success', 
                 'message' => 'User list retrieved successfully', 
-                'data' => [
-                    'users' => $users,
-                    'pagination' => [
-                        'total' => $totalUsers,
-                        'per_page' => $perPage,
-                        'current_page' => $page,
-                        'last_page' => ceil($totalUsers / $perPage)
-                    ]
-                ]
+                'data' => $userData
             ]);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
@@ -151,7 +79,7 @@ class AdminController extends Controller
     public function updateUserRole($userId): ResponseInterface
     {
         try {
-            $admin = $this->validateAdmin();
+            $admin = $this->adminService->validateAdmin($this->request);
             if (!$admin) {
                 return $this->jsonResponse([
                     'status' => 'error',
@@ -169,53 +97,14 @@ class AdminController extends Controller
                 ], 400);
             }
             
-            $this->logger->debug("Fetching user data for role update using application database", [
-                'user_id' => $userId
-            ]);
+            $result = $this->adminService->updateUserRole((int)$userId, $role, $admin['id']);
             
-            // Get user and their current role - using application database
-            $user = DatabaseHelper::select(
-                "SELECT id, role FROM users WHERE id = ?", 
-                [(int)$userId],
-                false // Explicitly using application database
-            );
-            
-            if (empty($user)) {
+            if (!$result) {
                 return $this->jsonResponse([
                     'status' => 'error',
                     'message' => 'User not found'
                 ], 404);
             }
-            
-            $oldRole = $user[0]['role'];
-            
-            $this->logger->debug("Updating user role using application database", [
-                'user_id' => $userId,
-                'old_role' => $oldRole,
-                'new_role' => $role
-            ]);
-            
-            // Update role - using application database
-            DatabaseHelper::update(
-                "users", 
-                ["role" => $role], 
-                ["id" => (int)$userId],
-                false // Explicitly using application database
-            );
-            
-            $this->auditService->logEvent(
-                'user_role_updated',
-                "User role updated from {$oldRole} to {$role}",
-                [
-                    'user_id' => $userId,
-                    'old_role' => $oldRole,
-                    'new_role' => $role,
-                    'admin_id' => $admin['id']
-                ],
-                $admin['id'],
-                null,
-                'admin'
-            );
             
             return $this->jsonResponse([
                 'status' => 'success',
@@ -234,72 +123,29 @@ class AdminController extends Controller
     public function deleteUser($userId): ResponseInterface
     {
         try {
-            $admin = $this->validateAdmin();
+            $admin = $this->adminService->validateAdmin($this->request);
             if (!$admin) {
                 return $this->jsonResponse([
                     'status' => 'error',
                     'message' => 'Invalid token or insufficient permissions'
                 ], 401);
             }
-
-            $this->logger->debug("Fetching user data for deletion using application database", [
-                'user_id' => $userId
-            ]);
             
-            // Get user data for audit log - using application database
-            $user = DatabaseHelper::select(
-                "SELECT id, email, role FROM users WHERE id = ?", 
-                [(int)$userId],
-                false // Explicitly using application database
-            );
+            $result = $this->adminService->deleteUser((int)$userId, $admin['id']);
             
-            if (empty($user)) {
+            if ($result === null) {
                 return $this->jsonResponse([
                     'status' => 'error',
                     'message' => 'User not found'
                 ], 404);
             }
             
-            $userEmail = $user[0]['email'];
-            $userRole = $user[0]['role'];
-            
-            // Check if user is a super admin
-            if ($userRole === 'super_admin') {
-                $this->logger->info("Attempted to delete a super_admin account", [
-                    'user_id' => $userId,
-                    'admin_id' => $admin['id']
-                ]);
+            if (isset($result['error'])) {
                 return $this->jsonResponse([
                     'status' => 'error',
-                    'message' => 'Super admins cannot be deleted'
+                    'message' => $result['error']
                 ], 403);
             }
-            
-            $this->logger->debug("Soft deleting user using application database", [
-                'user_id' => $userId,
-                'user_email' => $userEmail
-            ]);
-            
-            // Soft delete by setting deleted_at timestamp - using application database
-            DatabaseHelper::update(
-                "users", 
-                ["deleted_at" => date('Y-m-d H:i:s')], 
-                ["id" => (int)$userId],
-                false // Explicitly using application database
-            );
-            
-            $this->auditService->logEvent(
-                'user_deleted',
-                "User {$userEmail} was deleted",
-                [
-                    'user_id' => $userId,
-                    'user_email' => $userEmail,
-                    'admin_id' => $admin['id']
-                ],
-                $admin['id'],
-                null,
-                'admin'
-            );
             
             return $this->jsonResponse([
                 'status' => 'success',
@@ -318,72 +164,15 @@ class AdminController extends Controller
     public function getDashboardData(): ResponseInterface
     {
         try {
-            $admin = $this->validateAdmin();
+            $admin = $this->adminService->validateAdmin($this->request);
             if (!$admin) {
                 return $this->jsonResponse([
                     'status' => 'error',
                     'message' => 'Invalid token or insufficient permissions'
                 ], 401);
             }
-
-            $this->logger->debug("Fetching dashboard statistics using application database");
             
-            // Get total users count - using application database
-            $totalUsers = DatabaseHelper::select(
-                "SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL", 
-                [],
-                false // Explicitly using application database
-            )[0]['count'];
-            
-            // Get total bookings count - using application database
-            $totalBookings = DatabaseHelper::select(
-                "SELECT COUNT(*) as count FROM bookings", 
-                [],
-                false // Explicitly using application database
-            )[0]['count'];
-            
-            // Get total revenue - using application database
-            $totalRevenue = DatabaseHelper::select(
-                "SELECT SUM(amount) as total FROM payments WHERE status = 'completed'", 
-                [],
-                false // Explicitly using application database
-            )[0]['total'] ?? 0;
-            
-            // Get latest 5 users - using application database
-            $latestUsers = DatabaseHelper::select(
-                "SELECT u.*, r.name as role_name 
-                 FROM users u 
-                 LEFT JOIN roles r ON u.role_id = r.id 
-                 WHERE u.deleted_at IS NULL 
-                 ORDER BY u.created_at DESC 
-                 LIMIT 5",
-                [],
-                false // Explicitly using application database
-            );
-            
-            // Get latest 5 transactions - using application database
-            $latestTransactions = DatabaseHelper::select(
-                "SELECT * FROM transaction_logs ORDER BY created_at DESC LIMIT 5",
-                [],
-                false // Explicitly using application database
-            );
-            
-            $dashboardData = [
-                'total_users' => $totalUsers,
-                'total_bookings' => $totalBookings,
-                'total_revenue' => $totalRevenue,
-                'latest_users' => $latestUsers,
-                'latest_transactions' => $latestTransactions,
-            ];
-            
-            $this->auditService->logEvent(
-                'dashboard_viewed',
-                'Admin viewed dashboard',
-                ['admin_id' => $admin['id']],
-                $admin['id'],
-                null,
-                'admin'
-            );
+            $dashboardData = $this->adminService->getDashboardData($admin['id']);
             
             return $this->jsonResponse([
                 'status' => 'success',
@@ -403,7 +192,7 @@ class AdminController extends Controller
     public function createAdmin(): ResponseInterface
     {
         try {
-            $admin = $this->validateAdmin();
+            $admin = $this->adminService->validateAdmin($this->request);
             if (!$admin) {
                 return $this->jsonResponse([
                     'status' => 'error',
@@ -424,72 +213,14 @@ class AdminController extends Controller
                 ], 400);
             }
             
-            $this->logger->debug("Checking for existing admin email using secure database", [
-                'email' => $data['email']
-            ]);
+            $newAdmin = $this->adminService->createAdmin($data, $admin['id']);
             
-            // Check if email already exists - using secure database
-            $existingAdmin = DatabaseHelper::select(
-                "SELECT id FROM admins WHERE email = ?", 
-                [$data['email']],
-                true // Explicitly using secure database
-            );
-            
-            if (!empty($existingAdmin)) {
+            if (!$newAdmin) {
                 return $this->jsonResponse([
                     'status' => 'error',
-                    'message' => 'Email already in use'
+                    'message' => 'Email already in use or failed to create admin'
                 ], 400);
             }
-            
-            // Create new admin - using secure database
-            $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-            
-            $this->logger->debug("Creating new admin user in secure database");
-            
-            // Insert new admin record - using secure database
-            $newAdminId = DatabaseHelper::insert(
-                "admins", 
-                [
-                    "name" => $data['name'],
-                    "email" => $data['email'],
-                    "password" => $hashedPassword,
-                    "role" => 'admin',
-                    "created_at" => date('Y-m-d H:i:s')
-                ],
-                true // Explicitly using secure database
-            );
-            
-            if (!$newAdminId) {
-                return $this->jsonResponse([
-                    'status' => 'error',
-                    'message' => 'Failed to create admin user'
-                ], 500);
-            }
-            
-            $this->logger->debug("Fetching created admin details from secure database", [
-                'new_admin_id' => $newAdminId
-            ]);
-            
-            // Get created admin details for response - using secure database
-            $newAdmin = DatabaseHelper::select(
-                "SELECT id, name, email, role, created_at FROM admins WHERE id = ?", 
-                [$newAdminId],
-                true // Explicitly using secure database
-            )[0];
-            
-            $this->auditService->logEvent(
-                'admin_created',
-                "New admin user created: {$data['email']}",
-                [
-                    'created_by' => $admin['id'],
-                    'new_admin_id' => $newAdminId,
-                    'new_admin_email' => $data['email']
-                ],
-                $admin['id'],
-                null,
-                'admin'
-            );
             
             return $this->jsonResponse([
                 'status' => 'success',

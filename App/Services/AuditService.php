@@ -3,54 +3,113 @@
 namespace App\Services;
 
 use Exception;
+use DateTimeImmutable;
+use Ramsey\Uuid\Uuid;
 use App\Helpers\DatabaseHelper;
-use Psr\Log\LoggerInterface;
+use App\Helpers\LogLevelFilter;
 use App\Helpers\ExceptionHandler;
+use App\Helpers\SecurityHelper;
+use App\Services\Audit\LogManagementService;
+use App\Services\Audit\UserAuditService;
+use App\Services\Audit\TransactionAuditService;
+use Psr\Log\LoggerInterface;
 
 class AuditService
 {
-    // Define standard log categories as constants
-    public const CATEGORY_SYSTEM = 'system';
-    public const CATEGORY_AUTH = 'auth';
-    public const CATEGORY_TRANSACTION = 'transaction';
-    public const CATEGORY_BOOKING = 'booking';
-    public const CATEGORY_USER = 'user';
-    public const CATEGORY_ADMIN = 'admin';
-    public const CATEGORY_DOCUMENT = 'document';
-    public const CATEGORY_API = 'api';
-    public const CATEGORY_SECURITY = 'security';
-
+    // Categories and log levels remain unchanged
+    public const CATEGORY_SYSTEM       = 'system';
+    public const CATEGORY_AUTH         = 'auth';
+    public const CATEGORY_TRANSACTION  = 'transaction';
+    public const CATEGORY_BOOKING      = 'booking';
+    public const CATEGORY_USER         = 'user';
+    public const CATEGORY_ADMIN        = 'admin';
+    public const CATEGORY_DOCUMENT     = 'document';
+    public const CATEGORY_API          = 'api';
+    public const CATEGORY_SECURITY     = 'security';
+    public const CATEGORY_PAYMENT      = 'payment';
+    
+    public const LOG_LEVEL_DEBUG       = 'debug';
+    public const LOG_LEVEL_INFO        = 'info';
+    public const LOG_LEVEL_WARNING     = 'warning';
+    public const LOG_LEVEL_ERROR       = 'error';
+    public const LOG_LEVEL_CRITICAL    = 'critical';
+    
+    private const VALID_CATEGORIES = [
+        self::CATEGORY_SYSTEM, self::CATEGORY_AUTH, self::CATEGORY_TRANSACTION,
+        self::CATEGORY_BOOKING, self::CATEGORY_USER, self::CATEGORY_ADMIN,
+        self::CATEGORY_DOCUMENT, self::CATEGORY_API, self::CATEGORY_SECURITY,
+        self::CATEGORY_PAYMENT,
+    ];
+    
+    // Define which categories should be stored in the audit database
+    private const AUDIT_CATEGORIES = [
+        self::CATEGORY_AUTH, 
+        self::CATEGORY_SECURITY, 
+        self::CATEGORY_PAYMENT,
+        self::CATEGORY_TRANSACTION,
+        self::CATEGORY_BOOKING,
+        self::CATEGORY_USER,
+        self::CATEGORY_ADMIN
+    ];
+    
+    private const CATEGORY_MAP = [
+        self::CATEGORY_AUTH       => 'user',
+        self::CATEGORY_USER       => 'user',
+        self::CATEGORY_SYSTEM     => 'user',
+        self::CATEGORY_API        => 'user',
+        self::CATEGORY_SECURITY   => 'user', 
+        self::CATEGORY_TRANSACTION=> 'transaction',
+        self::CATEGORY_PAYMENT    => 'transaction'
+    ];
+    
+    // Configuration constants
     public const DEBUG_MODE = true;
-    private $db;
+    
+    // Injected services
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
+    private LogLevelFilter $logLevelFilter;
+    private string $requestId;
+    
+    // Injected subservices
+    private LogManagementService $logManager;
+    private UserAuditService $userAuditService;
+    private TransactionAuditService $transactionAuditService;
 
     public function __construct(
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
-        DatabaseHelper $db
+        LogManagementService $logManager,
+        UserAuditService $userAuditService,
+        TransactionAuditService $transactionAuditService,
+        LogLevelFilter $logLevelFilter = null
     ) {
-        $this->db = $db;
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
-
-        // Log the database instance being used
-        $this->logger->info("AuditService initialized with database instance", [
-            'database' => $db === DatabaseHelper::getSecureInstance() ? 'secure_db' : 'db'
-        ]);
+        $this->logManager = $logManager;
+        $this->userAuditService = $userAuditService;
+        $this->transactionAuditService = $transactionAuditService;
+        $this->logLevelFilter = $logLevelFilter ?? new LogLevelFilter();
+        $this->requestId = Uuid::uuid4()->toString();
+        
+        if (self::DEBUG_MODE) {
+            $this->logger->debug("[Audit] Service initialized", [
+                'request_id' => $this->requestId
+            ]);
+        }
     }
-
+    
     /**
-     * Unified method to log events across the system to a single audit_logs table.
-     *
-     * @param string $category The category of the event (system, transaction, booking, etc.)
-     * @param string $message Human-readable message describing the event
-     * @param array $context Additional contextual data for the event
-     * @param int|null $userId ID of the user associated with the event
-     * @param int|null $bookingId ID of the booking associated with the event
-     * @param string|null $ipAddress IP address of the user
-     * @return void
-     * @throws Exception If logging fails
+     * Get the request ID for this instance
+     */
+    public function getRequestId(): string
+    {
+        return $this->requestId;
+    }
+    
+    /**
+     * Main entry point to log an event.
+     * Routes events either to general logger or audit database based on category.
      */
     public function logEvent(
         string $category, 
@@ -58,523 +117,181 @@ class AuditService
         array $context = [], 
         ?int $userId = null, 
         ?int $bookingId = null, 
-        ?string $ipAddress = null
-    ): void {
-        try {
-            // Ensure category is standardized
-            $category = strtolower(trim($category));
-            
-            // Prepare data for insertion using DatabaseHelper::insert instead of table()->insert
-            $data = [
-                'action'             => $category,  // Using action field to store category
-                'message'            => $message,
-                'details'            => json_encode($context, JSON_UNESCAPED_UNICODE),
-                'user_reference'     => $userId,
-                'booking_reference'  => $bookingId,
-                'ip_address'         => $ipAddress,
-                'created_at'         => date('Y-m-d H:i:s') // Replace now() function with PHP date
-            ];
-            
-            // Log the data array before insertion
-            $this->logger->info("[Audit] Data to be inserted: ", $data);
-            
-            // Log the query being executed
-            $this->logger->info("[Audit] Executing query: INSERT INTO audit_logs", $data);
-            
-            // Use DatabaseHelper::insert with secure database
-            $insertId = DatabaseHelper::insert('audit_logs', $data, true);
-            
-            if (self::DEBUG_MODE) {
-                $this->logger->info("[Audit] Logged {$category} event: {$message}", [
-                    'user_reference' => $userId,
-                    'booking_reference' => $bookingId,
-                    'insert_id' => $insertId
-                ]);
-            }
-        } catch (Exception $e) {
-            $this->logger->error("[Audit] ❌ logEvent error: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
-            throw new Exception('Failed to log event: ' . $e->getMessage());
+        ?string $ipAddress = null,
+        string $logLevel = self::LOG_LEVEL_INFO
+    ): ?int {
+        if (!$this->logLevelFilter->shouldLog($logLevel)) {
+            return null;
         }
-    }
-
-    /**
-     * Legacy method to log an action.
-     * @deprecated Use logEvent() instead for new code
-     */
-    public function log(
-        string $action,
-        string $message,
-        array $details = [],
-        ?int $userId = null,
-        ?int $bookingId = null,
-        ?string $ipAddress = null
-    ): void {
-        // For backward compatibility, call the new unified method
-        $this->logEvent($action, $message, $details, $userId, $bookingId, $ipAddress);
-    }
-
-    /**
-     * Retrieve logs from the unified audit_logs table with applied filters.
-     *
-     * @param array $filters Various filters to apply (category, user_id, etc.)
-     * @return array Paginated result containing logs and pagination metadata
-     * @throws Exception If fetching logs fails
-     */
-    public function getLogs(array $filters = []): array
-    {
+        
         try {
-            // Build WHERE clause and parameters for both count and select queries
-            $whereClause = "1=1"; // Always true condition to start with
-            $params = [];
+            $normalizedCat = $this->normalizeCategory($category);
+            $context = $this->sanitizeContext($context);
+            $context['request_id'] = $this->requestId;
             
-            // Apply filters
-            if (!empty($filters['user_id'])) {
-                $whereClause .= " AND user_reference = ?";
-                $params[] = $filters['user_id'];
+            // For system events unrelated to security/payments/auth, use general logger only
+            if (!in_array($normalizedCat, self::AUDIT_CATEGORIES, true)) {
+                $logMethod = strtolower($logLevel);
+                $this->logger->$logMethod("[{$normalizedCat}] {$message}", $context);
+                return null;
             }
             
-            if (!empty($filters['booking_id'])) {
-                $whereClause .= " AND booking_reference = ?";
-                $params[] = $filters['booking_id'];
+            // Route to appropriate subservice based on category
+            $serviceKey = self::CATEGORY_MAP[$normalizedCat] ?? null;
+            
+            if ($serviceKey === 'user') {
+                // Use UserAuditService for user-related events
+                return $this->userAuditService->logUserEvent(
+                    $normalizedCat, 
+                    $context['action'] ?? $normalizedCat,
+                    $message, 
+                    $context,
+                    $userId, 
+                    $logLevel
+                );
             }
             
-            // Support both 'category' and 'action' fields
-            if (!empty($filters['category'])) {
-                $whereClause .= " AND action = ?";
-                $params[] = $filters['category'];
-            } elseif (!empty($filters['action'])) {
-                $whereClause .= " AND action = ?";
-                $params[] = $filters['action'];
+            if ($serviceKey === 'transaction') {
+                // Use TransactionAuditService for transaction-related events
+                return $this->transactionAuditService->logEvent(
+                    $normalizedCat, 
+                    $message, 
+                    $context, 
+                    $userId, 
+                    $bookingId, 
+                    $logLevel
+                );
             }
             
-            // Date range filters
-            if (!empty($filters['start_date'])) {
-                $whereClause .= " AND created_at >= ?";
-                $params[] = $filters['start_date'];
-            }
-            
-            if (!empty($filters['end_date'])) {
-                $whereClause .= " AND created_at <= ?";
-                $params[] = $filters['end_date'];
-            }
-            
-            // Message search
-            if (!empty($filters['search'])) {
-                $whereClause .= " AND message LIKE ?";
-                $params[] = '%' . $filters['search'] . '%';
-            }
-            
-            // Get total count first (for pagination)
-            $countSql = "SELECT COUNT(*) as total FROM audit_logs WHERE {$whereClause}";
-            $this->logger->info("[Audit] Executing count query: {$countSql}", $params);
-            $countResult = DatabaseHelper::select($countSql, $params);
-            $totalItems = isset($countResult[0]['total']) ? (int)$countResult[0]['total'] : 0;
-            
-            // Pagination parameters
-            $page = isset($filters['page']) ? max(1, (int)$filters['page']) : 1;
-            $perPage = isset($filters['per_page']) ? max(1, (int)$filters['per_page']) : 10;
-            $offset = ($page - 1) * $perPage;
-            $totalPages = ceil($totalItems / $perPage);
-            
-            // Custom sort options
-            $allowedSortFields = ['id', 'action', 'message', 'user_reference', 'booking_reference', 'created_at'];
-            $sortField = in_array($filters['sort_field'] ?? '', $allowedSortFields) ? $filters['sort_field'] : 'created_at';
-            $sortOrder = strtoupper($filters['sort_order'] ?? 'desc') === 'ASC' ? 'ASC' : 'DESC';
-            
-            // Build and execute the main query
-            $sql = "SELECT * FROM audit_logs WHERE {$whereClause} ORDER BY {$sortField} {$sortOrder} LIMIT {$perPage} OFFSET {$offset}";
-            $this->logger->info("[Audit] Executing select query: {$sql}", $params);
-            $logs = DatabaseHelper::select($sql, $params);
-            
-            // Process the results - parse JSON details
-            foreach ($logs as &$log) {
-                if (isset($log['details']) && is_string($log['details'])) {
-                    $log['details'] = json_decode($log['details'], true);
-                }
-            }
-            
-            // Create a custom paginated result array
-            return [
-                'data' => $logs,
-                'pagination' => [
-                    'total' => $totalItems,
-                    'per_page' => $perPage,
-                    'current_page' => $page,
-                    'last_page' => $totalPages,
-                    'from' => $offset + 1,
-                    'to' => min($offset + $perPage, $totalItems),
-                ]
-            ];
+            // Default path for audit events that don't have specialized handlers
+            return $this->logManager->createLogEntry(
+                $normalizedCat,
+                $message,
+                $context,
+                $userId,
+                $bookingId,
+                $ipAddress,
+                $logLevel
+            );
             
         } catch (Exception $e) {
-            $this->logger->error("[Audit] ❌ getLogs error: " . $e->getMessage());
+            $this->logger->error("[Audit] Logging failed: " . $e->getMessage(), [
+                'request_id' => $this->requestId,
+                'category' => $category,
+                'error' => $e->getMessage()
+            ]);
             $this->exceptionHandler->handleException($e);
-            throw new Exception('Failed to get logs: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Retrieve a single log entry by ID from the audit_logs table.
-     * 
-     * @param int $logId The ID of the log entry
-     * @return array|null The log entry
-     * @throws Exception If the log entry is not found
-     */
-    public function getLogById(int $logId)
-    {
-        try {
-            // Use DatabaseHelper::select instead of $this->db->table()->where()->first()
-            $sql = "SELECT * FROM audit_logs WHERE id = ? LIMIT 1";
-            $this->logger->info("[Audit] Executing select query: {$sql}", [$logId]);
-            $logs = DatabaseHelper::select($sql, [$logId]);
-            $log = !empty($logs) ? $logs[0] : null;
-            
-            if (!$log) {
-                throw new Exception('Log entry not found.');
-            }
-            
-            // Parse JSON details if present
-            if (isset($log['details']) && is_string($log['details'])) {
-                $log['details'] = json_decode($log['details'], true);
-            }
-            
-            return $log;
-        } catch (Exception $e) {
-            $this->logger->error("[Audit] ❌ getLogById error: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
-            throw new Exception('Failed to retrieve log: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Delete logs from the audit_logs table based on specific filters.
-     * 
-     * @param array $filters Filters to determine which logs to delete
-     * @return int Number of logs deleted
-     * @throws Exception If deletion fails
-     */
-    public function deleteLogs(array $filters): int
-    {
-        try {
-            // Build WHERE clause and parameters
-            $whereClause = "1=1";
-            $params = [];
-            
-            // Apply filters
-            if (!empty($filters['user_id'])) {
-                $whereClause .= " AND user_reference = ?";
-                $params[] = $filters['user_id'];
-            }
-            
-            if (!empty($filters['booking_id'])) {
-                $whereClause .= " AND booking_reference = ?";
-                $params[] = $filters['booking_id'];
-            }
-            
-            // Support both 'category' and 'action' fields
-            if (!empty($filters['category'])) {
-                $whereClause .= " AND action = ?";
-                $params[] = $filters['category'];
-            } elseif (!empty($filters['action'])) {
-                $whereClause .= " AND action = ?";
-                $params[] = $filters['action'];
-            }
-            
-            // Date range filters
-            if (!empty($filters['start_date'])) {
-                $whereClause .= " AND created_at >= ?";
-                $params[] = $filters['start_date'];
-            }
-            
-            if (!empty($filters['end_date'])) {
-                $whereClause .= " AND created_at <= ?";
-                $params[] = $filters['end_date'];
-            }
-            
-            // Use DatabaseHelper::safeQuery for custom DELETE query
-            $sql = "DELETE FROM audit_logs WHERE {$whereClause}";
-            $this->logger->info("[Audit] Executing delete query: {$sql}", $params);
-            $deleted = DatabaseHelper::safeQuery(function ($pdo) use ($sql, $params) {
-                $stmt = $pdo->prepare($sql);
-                $stmt->execute($params);
-                return $stmt->rowCount();
-            });
-            
-            if (self::DEBUG_MODE) {
-                $this->logger->info("[Audit] Deleted {$deleted} logs with filters: " . json_encode($filters));
-            }
-            
-            return $deleted;
-        } catch (Exception $e) {
-            $this->logger->error("[Audit] ❌ deleteLogs error: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
-            throw new Exception('Failed to delete logs: ' . $e->getMessage());
+            return null;
         }
     }
     
     /**
-     * Export logs to a CSV file based on provided filters.
-     * 
-     * @param array $filters Filters to determine which logs to export
-     * @return string Path to the exported CSV file
-     * @throws Exception If export fails
+     * Normalize and validate a category
      */
-    public function exportLogs(array $filters): string
-    {
-        try {
-            // Build WHERE clause and parameters
-            $whereClause = "1=1";
-            $params = [];
-            
-            // Apply the same filters as in getLogs
-            if (!empty($filters['user_id'])) {
-                $whereClause .= " AND user_reference = ?";
-                $params[] = $filters['user_id'];
-            }
-            
-            if (!empty($filters['booking_id'])) {
-                $whereClause .= " AND booking_reference = ?";
-                $params[] = $filters['booking_id'];
-            }
-            
-            if (!empty($filters['category'])) {
-                $whereClause .= " AND action = ?";
-                $params[] = $filters['category'];
-            } elseif (!empty($filters['action'])) {
-                $whereClause .= " AND action = ?";
-                $params[] = $filters['action'];
-            }
-            
-            if (!empty($filters['start_date'])) {
-                $whereClause .= " AND created_at >= ?";
-                $params[] = $filters['start_date'];
-            }
-            
-            if (!empty($filters['end_date'])) {
-                $whereClause .= " AND created_at <= ?";
-                $params[] = $filters['end_date'];
-            }
-            
-            // Use DatabaseHelper::select instead of query builder get()
-            $sql = "SELECT * FROM audit_logs WHERE {$whereClause} ORDER BY created_at DESC";
-            $this->logger->info("[Audit] Executing select query for export: {$sql}", $params);
-            $logs = DatabaseHelper::select($sql, $params);
-            
-            // Create CSV file
-            $filename = 'audit_logs_export_' . date('Y-m-d_His') . '.csv';
-            $filepath = sys_get_temp_dir() . '/' . $filename;
-            
-            $file = fopen($filepath, 'w');
-            
-            // Write CSV header
-            fputcsv($file, ['ID', 'Category', 'Message', 'User Reference', 'Booking Reference', 'IP Address', 'Created At', 'Details']);
-            
-            // Write data rows
-            foreach ($logs as $log) {
-                fputcsv($file, [
-                    $log['id'],
-                    $log['action'],
-                    $log['message'],
-                    $log['user_reference'],
-                    $log['booking_reference'],
-                    $log['ip_address'],
-                    $log['created_at'],
-                    $log['details'] // This will be JSON string already
+    private function normalizeCategory(string $category): string {
+        $normalizedCat = strtolower(trim($category));
+        if (!in_array($normalizedCat, self::VALID_CATEGORIES, true)) {
+            $normalizedCat = self::CATEGORY_SYSTEM;
+            if (self::DEBUG_MODE) {
+                $this->logger->warning("[Audit] Invalid category", [
+                    'request_id' => $this->requestId,
+                    'invalid' => $category,
+                    'default' => $normalizedCat
                 ]);
             }
-            
-            fclose($file);
-            
-            // Log the export action using our refactored logEvent method
-            $this->logEvent(
-                'system',
-                'Audit logs exported',
-                ['filters' => $filters, 'count' => count($logs)],
-                $_SESSION['user_id'] ?? null,
-                null,
-                $_SERVER['REMOTE_ADDR'] ?? null
-            );
-            
-            return $filepath;
-        } catch (Exception $e) {
-            $this->logger->error("[Audit] ❌ exportLogs error: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
-            throw new Exception('Failed to export logs: ' . $e->getMessage());
         }
+        return $normalizedCat;
     }
-
+    
     /**
-     * Log a user authentication event.
-     * 
-     * @param int $userId User ID
-     * @param string $action Login/Logout/Failed login
-     * @param array $context Additional context (device, browser, etc)
-     * @param string|null $ipAddress User's IP address
-     * @return void
+     * Legacy method - remains for backward compatibility
      */
-    public function logAuthEvent(int $userId, string $action, array $context = [], ?string $ipAddress = null): void
-    {
-        $message = "User authentication: {$action}";
-        $this->logEvent(
-            self::CATEGORY_AUTH,
+    public function recordEvent(
+        string $category,
+        string $action,
+        string $message,
+        array $context = [],
+        ?int $userId = null,
+        ?int $objectId = null,
+        string $logLevel = self::LOG_LEVEL_INFO
+    ): ?int {
+        $eventContext = array_merge($context, [
+            'action' => $action,
+            'timestamp' => (new DateTimeImmutable())->format('Y-m-d H:i:s'),
+            'object_id' => $objectId
+        ]);
+        return $this->logEvent(
+            $category,
             $message,
-            $context,
+            $eventContext,
             $userId,
+            $category === self::CATEGORY_BOOKING ? $objectId : null,
             null,
-            $ipAddress ?? $_SERVER['REMOTE_ADDR'] ?? null
+            $logLevel
         );
     }
-
+    
     /**
-     * Log a user action (CRUD operation on resources).
-     * 
-     * @param int|null $userId User ID
-     * @param string $action The action performed (create, update, delete)
-     * @param string $resource The resource type (user, booking, document)
-     * @param int|null $resourceId The ID of the resource
-     * @param array $changes The changes made (before/after)
-     * @return void
+     * Record a successful payment
      */
-    public function logUserAction(?int $userId, string $action, string $resource, ?int $resourceId = null, array $changes = []): void
-    {
-        $message = "User {$action} {$resource}" . ($resourceId ? " #{$resourceId}" : "");
-        
-        $context = [
-            'resource_type' => $resource,
-            'resource_id' => $resourceId,
-            'changes' => $changes
-        ];
-        
-        $this->logEvent(
-            self::CATEGORY_USER,
-            $message,
-            $context,
-            $userId,
-            null,
-            $_SERVER['REMOTE_ADDR'] ?? null
-        );
+    public function recordPaymentSuccess(array $paymentData): ?int {
+        return $this->transactionAuditService->recordPaymentSuccess($paymentData);
     }
-
+    
     /**
-     * Log a booking-related event.
-     * 
-     * @param int $bookingId Booking ID
-     * @param string $action The action performed
-     * @param int|null $userId User who performed the action
-     * @param array $context Additional context
-     * @return void
+     * Log an authentication event
      */
-    public function logBookingEvent(int $bookingId, string $action, ?int $userId = null, array $context = []): void
-    {
-        $message = "Booking #{$bookingId}: {$action}";
-        
-        $this->logEvent(
-            self::CATEGORY_BOOKING,
-            $message,
-            $context,
-            $userId,
-            $bookingId,
-            $_SERVER['REMOTE_ADDR'] ?? null
-        );
+    public function logAuthEvent(string $action, string $message, array $context = [], ?int $userId = null, string $logLevel = self::LOG_LEVEL_INFO): ?int {
+        return $this->userAuditService->logAuthEvent($action, $message, $context, $userId, $logLevel);
     }
-
-    /**
-     * Log an API request/response.
-     * 
-     * @param string $endpoint API endpoint
-     * @param string $method HTTP method
-     * @param array $requestData Request data
-     * @param array $responseData Response data
-     * @param int $statusCode HTTP status code
-     * @param int|null $userId User ID if authenticated
-     * @return void
-     */
-    public function logApiRequest(
-        string $endpoint,
-        string $method,
-        array $requestData = [],
-        array $responseData = [],
-        int $statusCode = 200,
-        ?int $userId = null
-    ): void {
-        // Remove sensitive information
-        unset($requestData['password'], $requestData['token']);
-        
-        $message = "{$method} {$endpoint} - Status: {$statusCode}";
-        
-        $context = [
-            'method' => $method,
-            'endpoint' => $endpoint,
-            'request' => $requestData,
-            'response' => $responseData,
-            'status_code' => $statusCode
-        ];
-        
-        $this->logEvent(
-            self::CATEGORY_API,
-            $message,
-            $context,
-            $userId,
-            null,
-            $_SERVER['REMOTE_ADDR'] ?? null
-        );
+    
+    // Delegate log management operations to LogManagementService
+    public function getLogs(array $filters = []): array {
+        return $this->logManager->getLogs($filters);
     }
-
-    /**
-     * Log a system event (startup, shutdown, error).
-     * 
-     * @param string $eventType Type of system event
-     * @param string $message Event message
-     * @param array $context Additional context
-     * @return void
-     */
-    public function logSystemEvent(string $eventType, string $message, array $context = []): void
-    {
-        $this->logEvent(
-            self::CATEGORY_SYSTEM,
-            "{$eventType}: {$message}",
-            $context,
-            null,
-            null,
-            null
-        );
+    
+    public function deleteLogs(array $filters, bool $forceBulkDelete = false): int {
+        return $this->logManager->deleteLogs($filters, $forceBulkDelete);
     }
-
-    /**
-     * Log a security-related event.
-     * 
-     * @param string $eventType Security event type
-     * @param string $message Event details
-     * @param array $context Additional context
-     * @param int|null $userId Associated user ID
-     * @return void
-     */
-    public function logSecurityEvent(string $eventType, string $message, array $context = [], ?int $userId = null): void
-    {
-        $this->logEvent(
-            self::CATEGORY_SECURITY,
-            "{$eventType}: {$message}",
-            $context,
-            $userId,
-            null,
-            $_SERVER['REMOTE_ADDR'] ?? null
-        );
+    
+    public function exportLogs(array $filters): array {
+        return $this->logManager->exportLogs($filters);
     }
-
+    
+    public function getLogById(int $logId): ?array {
+        return $this->logManager->getLogById($logId);
+    }
+    
     /**
-     * Get current request information for audit logs.
-     * 
-     * @return array Request information
+     * Helper method to sanitize context arrays
      */
-    public static function getRequestInfo(): array
-    {
-        return [
-            'method' => $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN',
-            'uri' => $_SERVER['REQUEST_URI'] ?? 'UNKNOWN',
-            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'UNKNOWN',
-            'referer' => $_SERVER['HTTP_REFERER'] ?? null,
-            'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN',
-        ];
+    private function sanitizeContext(array $context): array {
+        $sensitiveKeys = ['password', 'secret', 'token', 'auth', 'key', 'apiKey', 'api_key', 'credential', 'credit_card', 'card_number', 'cvv', 'ssn'];
+        $sanitized = [];
+        
+        foreach ($context as $key => $value) {
+            if ($value === null) {
+                continue;
+            }
+            
+            $keyLower = strtolower($key);
+            $isSensitive = false;
+            foreach ($sensitiveKeys as $sensitiveKey) {
+                if (strpos($keyLower, $sensitiveKey) !== false) {
+                    $isSensitive = true;
+                    break;
+                }
+            }
+            
+            if ($isSensitive) {
+                $sanitized[$key] = '[REDACTED]';
+            } elseif (is_array($value)) {
+                $sanitized[$key] = $this->sanitizeContext($value);
+            } else {
+                $sanitized[$key] = $value;
+            }
+        }
+        
+        return $sanitized;
     }
 }

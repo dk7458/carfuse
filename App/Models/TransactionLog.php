@@ -33,6 +33,44 @@ class TransactionLog extends BaseModel
     }
 
     /**
+     * Log a transaction - convenience method that uses create().
+     * This method is used for consistency with service calls.
+     *
+     * @param array $transactionData
+     * @return int The ID of the logged transaction
+     */
+    public function logTransaction(array $transactionData): int
+    {
+        // Apply any specific transaction logging logic here
+        if (!isset($transactionData['created_at'])) {
+            $transactionData['created_at'] = date('Y-m-d H:i:s');
+        }
+
+        // If a description is not provided, generate a generic one
+        if (!isset($transactionData['description'])) {
+            $type = $transactionData['type'] ?? 'transaction';
+            $transactionData['description'] = ucfirst($type) . ' processed';
+        }
+
+        // Log this transaction
+        if ($this->auditService && isset($transactionData['type'])) {
+            $this->auditService->logEvent(
+                $this->resourceName,
+                $transactionData['type'] . '_logged',
+                [
+                    'payment_id' => $transactionData['payment_id'] ?? null,
+                    'booking_id' => $transactionData['booking_id'] ?? null,
+                    'amount' => $transactionData['amount'] ?? null,
+                    'status' => $transactionData['status'] ?? null
+                ]
+            );
+        }
+
+        // Use the create method to insert the transaction record
+        return $this->create($transactionData);
+    }
+
+    /**
      * Get transactions by user ID.
      *
      * @param int $userId

@@ -22,6 +22,12 @@ File: /home/dorian/carfuse/App/Services/Validator.php
         $this->logger = $logger;
         $this->db = $db;
 
+File: /home/dorian/carfuse/App/Services/AdminService.php
+    public function __construct(
+        Admin $adminModel,
+        AuditService $auditService,
+        LoggerInterface $logger,
+
 File: /home/dorian/carfuse/App/Services/BookingService.php
     public function __construct(
         LoggerInterface $logger,
@@ -56,13 +62,31 @@ File: /home/dorian/carfuse/App/Services/AuditService.php
     public function __construct(
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
-        DatabaseHelper $db
+        LogManagementService $logManager,
 
-File: /home/dorian/carfuse/App/Services/TransactionService.php
-    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
+File: /home/dorian/carfuse/App/Services/Payment/PaymentProcessingService.php
+    public function __construct(
+        DatabaseHelper $dbHelper,
+        Payment $paymentModel,
+        Booking $bookingModel,
+
+File: /home/dorian/carfuse/App/Services/Payment/TransactionService.php
+    public function __construct(
+        TransactionLog $transactionLogModel,
+        AuditService $auditService,
+        LoggerInterface $logger
+
+File: /home/dorian/carfuse/App/Services/Payment/RefundService.php
+    public function __construct(
+        DatabaseHelper $dbHelper,
+        Payment $paymentModel,
+        TransactionLog $transactionLogModel,
+
+File: /home/dorian/carfuse/App/Services/Payment/PaymentGatewayService.php
+    public function __construct(LoggerInterface $logger)
     {
         $this->logger = $logger;
-        $this->db = $db;
+    }
 
 File: /home/dorian/carfuse/App/Services/EncryptionService.php
     public function __construct(
@@ -85,8 +109,14 @@ File: /home/dorian/carfuse/App/Services/RateLimiter.php
 File: /home/dorian/carfuse/App/Services/RevenueService.php
     public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
     {
-        $this->logger = getLogger('revenue');
+        $this->logger = $logger;
         $this->db = $db;
+
+File: /home/dorian/carfuse/App/Services/Security/FraudDetectionService.php
+    public function __construct(
+        LoggerInterface $logger,
+        ExceptionHandler $exceptionHandler = null,
+        string $requestId = null,
 
 File: /home/dorian/carfuse/App/Services/Security/KeyManager.php
     public function __construct(
@@ -106,15 +136,27 @@ File: /home/dorian/carfuse/App/Services/ReportService.php
         $this->logger = $logger;
         $this->db = $db;
 
+File: /home/dorian/carfuse/App/Services/Audit/UserAuditService.php
+    public function __construct(
+        LogManagementService $logManager, 
+        LoggerInterface $logger = null,
+        ExceptionHandler $exceptionHandler = null
+
+File: /home/dorian/carfuse/App/Services/Audit/TransactionAuditService.php
+    public function __construct(
+        LogManagementService $logManager, 
+        FraudDetectionService $fraudDetector,
+        LoggerInterface $logger = null,
+
+File: /home/dorian/carfuse/App/Services/Audit/LogManagementService.php
+    public function __construct(LoggerInterface $logger, string $requestId, ExceptionHandler $exceptionHandler = null)
+    {
+        $this->logger = $logger;
+        $this->requestId = $requestId;
+
 File: /home/dorian/carfuse/App/Services/PaymentService.php
     public function __construct(
-        LoggerInterface $logger, 
-        DatabaseHelper $db, 
-        ExceptionHandler $exceptionHandler,
-
-File: /home/dorian/carfuse/App/Services/PayUService.php
-    public function __construct(array $config, LoggerInterface $logger, ExceptionHandler $exceptionHandler)
-    {
-        $this->merchantKey = $config['merchant_key'];
-        $this->merchantSalt = $config['merchant_salt'];
+        PaymentProcessingService $paymentProcessingService,
+        RefundService $refundService,
+        PaymentGatewayService $paymentGatewayService,
 
