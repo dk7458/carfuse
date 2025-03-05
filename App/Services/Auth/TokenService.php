@@ -11,47 +11,71 @@ use App\Services\AuditService;
 use App\Models\RefreshToken;
 use App\Models\User;
 use Exception;
+use RuntimeException;
 
 class TokenService
 {
     public const DEBUG_MODE = true;
 
-    private string $jwtSecret;
-    private string $jwtRefreshSecret;
+    private array $encryptionConfig;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
     private DatabaseHelper $db;
     private AuditService $auditService;
-    private array $encryptionConfig;
     private RefreshToken $refreshTokenModel;
     private User $userModel;
 
     public function __construct(
-        string $jwtSecret,
-        string $jwtRefreshSecret,
+        array $encryptionConfig,
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
         DatabaseHelper $appDb,
         AuditService $auditService,
-        array $encryptionConfig,
         RefreshToken $refreshTokenModel,
         User $userModel
     ) {
-        $this->jwtSecret = $jwtSecret;
-        $this->jwtRefreshSecret = $jwtRefreshSecret;
-        if (empty($this->jwtSecret) || empty($this->jwtRefreshSecret)) {
-            throw new \RuntimeException('❌ JWT secrets are missing.');
-        }
+        $this->encryptionConfig = $encryptionConfig;
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
         $this->db = $appDb;
         $this->auditService = $auditService;
-        $this->encryptionConfig = $encryptionConfig;
         $this->refreshTokenModel = $refreshTokenModel;
         $this->userModel = $userModel;
         
+        // Validate encryption config
+        $this->validateEncryptionConfig();
+        
         if (self::DEBUG_MODE) {
             $this->logger->info("[auth] TokenService initialized.");
+        }
+    }
+    
+    /**
+     * Validate that all required encryption config values are present
+     */
+    private function validateEncryptionConfig(): void
+    {
+        $requiredKeys = ['jwt_secret', 'jwt_refresh_secret', 'encryption_key', 'issuer', 'audience'];
+        
+        foreach ($requiredKeys as $key) {
+            if (empty($this->encryptionConfig[$key] ?? null)) {
+                $errorMsg = "❌ Required encryption config value '$key' is missing or empty.";
+                $this->logger->error($errorMsg);
+                throw new RuntimeException($errorMsg);
+            }
+        }
+        
+        // Validate key lengths
+        if (strlen($this->encryptionConfig['jwt_secret']) < 32) {
+            throw new RuntimeException('JWT secret key must be at least 32 characters long.');
+        }
+        
+        if (strlen($this->encryptionConfig['jwt_refresh_secret']) < 32) {
+            throw new RuntimeException('JWT refresh secret key must be at least 32 characters long.');
+        }
+        
+        if (strlen($this->encryptionConfig['encryption_key']) < 32) {
+            throw new RuntimeException('Encryption key must be at least 32 characters long.');
         }
     }
 
@@ -77,7 +101,7 @@ class TokenService
         ];
         
         try {
-            $token = JWT::encode($payload, $this->jwtSecret, 'HS256');
+            $token = JWT::encode($payload, $this->encryptionConfig['jwt_secret'], 'HS256');
             
             if (self::DEBUG_MODE) {
                 $this->logger->info("[auth] ✅ Token generated.", ['userId' => $userId]);
@@ -118,7 +142,7 @@ class TokenService
         ];
         
         try {
-            $refreshToken = JWT::encode($payload, $this->jwtRefreshSecret, 'HS256');
+            $refreshToken = JWT::encode($payload, $this->encryptionConfig['jwt_refresh_secret'], 'HS256');
             
             // Store the refresh token using the RefreshToken model
             $this->refreshTokenModel->store($userId, $refreshToken, 604800);
@@ -147,7 +171,7 @@ class TokenService
     public function verifyToken(string $token): array
     {
         try {
-            $decoded = JWT::decode($token, new Key($this->jwtSecret, 'HS256'));
+            $decoded = JWT::decode($token, new Key($this->encryptionConfig['jwt_secret'], 'HS256'));
             
             if ($decoded->exp < time()) {
                 // Log token expiration
@@ -160,7 +184,9 @@ class TokenService
                     $_SERVER['REMOTE_ADDR'] ?? null
                 );
                 
-                throw new Exception("Token has expired.");
+                $errorMsg = "Token has expired.";
+                $this->logger->warning($errorMsg);
+                throw new Exception($errorMsg);
             }
             
             $this->logger->info("✅ Token verified.", ['userId' => $decoded->sub]);
@@ -204,10 +230,12 @@ class TokenService
                     );
                 }
                 
-                throw new Exception("Refresh token has been revoked.");
+                $errorMsg = "Refresh token has been revoked.";
+                $this->logger->warning($errorMsg);
+                throw new Exception($errorMsg);
             }
             
-            $decoded = JWT::decode($refreshToken, new Key($this->jwtRefreshSecret, 'HS256'));
+            $decoded = JWT::decode($refreshToken, new Key($this->encryptionConfig['jwt_refresh_secret'], 'HS256'));
             
             if ($decoded->exp < time()) {
                 // Log expired token attempt
@@ -220,7 +248,9 @@ class TokenService
                     $_SERVER['REMOTE_ADDR'] ?? null
                 );
                 
-                throw new Exception("Refresh token has expired.");
+                $errorMsg = "Refresh token has expired.";
+                $this->logger->warning($errorMsg);
+                throw new Exception($errorMsg);
             }
             
             $this->logger->debug("Refresh token decoded successfully", ['sub' => $decoded->sub]);
