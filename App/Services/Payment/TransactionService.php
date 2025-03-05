@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Payment;
 
 use App\Models\TransactionLog;
 use App\Services\AuditService;
-use App\Logging\LoggerInterface;
+use Psr\Log\LoggerInterface;
 use Exception;
 
 class TransactionService

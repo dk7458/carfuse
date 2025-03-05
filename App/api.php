@@ -7,7 +7,7 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
 // ✅ Load encryption keys
-$config = require __DIR__ . '/encryption.php';
+$config = require_once __DIR__ . '/encryption.php';
 $jwtSecret = $config['jwt_secret'] ?? '';
 
 header('Content-Type: application/json');

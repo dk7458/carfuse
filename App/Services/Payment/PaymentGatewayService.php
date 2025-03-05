@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Payment;
 
-use App\Logging\LoggerInterface;
+use Psr\Log\LoggerInterface;
 use Exception;
 
 class PaymentGatewayService

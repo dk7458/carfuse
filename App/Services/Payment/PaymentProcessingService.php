@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Payment;
 
 use App\Helpers\DatabaseHelper;
 use App\Models\Payment;
 use App\Models\Booking;
 use App\Models\TransactionLog;
 use App\Services\AuditService;
-use App\Logging\LoggerInterface;
+use Psr\Log\LoggerInterface;
 use Exception;
 
 class PaymentProcessingService
