@@ -139,7 +139,7 @@ foreach ($requiredConfigs as $file) {
 }
 
 // Then, load any additional configuration files from the config directory
-$additionalFiles = array_diff(scandir($configDir), ['.', '..', '.gitignore']);
+$additionalFiles = array_diff(scandir($configDir), ['.', '..', '.gitignore', 'dependencies.php', 'svc_dep.php', 'ctrl_dep.php']);
 foreach ($additionalFiles as $file) {
     // Skip already loaded required configs and non-PHP files
     $filename = pathinfo($file, PATHINFO_FILENAME);
@@ -278,11 +278,11 @@ global $container; // declare container as global
 
 // Step 7: Initialize Dependency Injection Container
 try {
-    // Create container
+    // Create container exactly once
     $container = new \DI\Container();
     $GLOBALS['container'] = $container; // Make container available globally
 
-    // Register loggers first
+    // Register loggers, core services, etc.
     $container->set(Psr\Log\LoggerInterface::class, $logger);
     $container->set('logger', $logger);
     foreach ($loggers as $category => $categoryLogger) {
@@ -291,7 +291,7 @@ try {
     
     $logger->info("✓ Logger services registered in DI container");
     
-    // Register pre-initialized core services, db instances etc.
+    // Register pre-initialized services and database instances:
     $container->set(App\Helpers\ExceptionHandler::class, $coreServices['exceptionHandler']);
     $container->set(App\Helpers\LogLevelFilter::class, $coreServices['logLevelFilter']);
     $container->set(App\Services\Security\FraudDetectionService::class, $coreServices['fraudDetectionService']);
@@ -302,13 +302,13 @@ try {
     $container->set(DatabaseHelper::class, $database);
     $container->set('db', $database);
     $container->set('secure_db', $secure_database);
-    
+
     $logger->info("✓ Pre-initialized core services registered in DI container");
-    
-    // Now load dependencies.php (which uses $GLOBALS['container'])
-    $diDependencies = require_once __DIR__ . '/config/dependencies.php';
-    
-    // Load service and controller dependencies
+
+    // Now load dependencies (do NOT re-create the container there)
+    require_once __DIR__ . '/config/dependencies.php';
+
+    // Load svc_dep and ctrl_dep as usual
     $svc_dep = require __DIR__ . '/config/svc_dep.php';
     if (is_callable($svc_dep)) {
         $svc_dep($container, $config);
@@ -316,8 +316,6 @@ try {
     } else {
         throw new Exception("svc_dep.php did not return a callable");
     }
-    
-    // Load controller dependencies
     $ctrl_dep = require __DIR__ . '/config/ctrl_dep.php';
     if (is_callable($ctrl_dep)) {
         $ctrl_dep($container);
@@ -325,7 +323,7 @@ try {
     } else {
         throw new Exception("ctrl_dep.php did not return a callable");
     }
-    
+
     $logger->info("✓ Dependencies initialized successfully");
 } catch (Exception $e) {
     $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());

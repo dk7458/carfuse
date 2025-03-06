@@ -63,20 +63,13 @@ global $config;
 // Access the global logger variable instead of using the container initially
 global $logger;
 
-// Step 1: Get the container from global scope
-try {
-    if (isset($GLOBALS['container']) && $GLOBALS['container'] instanceof Container) {
-        $container = $GLOBALS['container'];
-    } else {
-        throw new Exception("Container not properly initialized in bootstrap.php");
-    }
-    $logger->info("🔄 Step 1: Starting Dependency Injection with pre-configured container.");
-} catch (Exception $e) {
-    // Fallback logging without container dependency
-    $fallbackLogger = new Logger('fallback');
-    $fallbackLogger->pushHandler(new StreamHandler('php://stderr', Logger::ERROR));
-    $fallbackLogger->error("❌ [DI] Failed to access container: " . $e->getMessage());
-    die("❌ Dependency Injection container failed: " . $e->getMessage() . "\n");
+// Step 1: Retrieve the pre-created container from $GLOBALS
+if (isset($GLOBALS['container']) && $GLOBALS['container'] instanceof Container) {
+    $container = $GLOBALS['container'];
+    $logger->info("🔄 Step 1: Using pre-configured container from bootstrap.");
+} else {
+    $logger->critical("❌ Container not properly initialized in bootstrap.php");
+    die("❌ Dependency Injection container failed: Container not properly initialized in bootstrap.php\n");
 }
 
 // Note: ExceptionHandler is now initialized in bootstrap.php
