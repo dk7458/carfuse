@@ -23,6 +23,7 @@ return array(
     'App\\Helpers\\ApiHelper' => $baseDir . '/App/Helpers/ApiHelper.php',
     'App\\Helpers\\DatabaseHelper' => $baseDir . '/App/Helpers/DatabaseHelper.php',
     'App\\Helpers\\ExceptionHandler' => $baseDir . '/App/Helpers/ExceptionHandler.php',
+    'App\\Helpers\\LogLevelFilter' => $baseDir . '/App/Helpers/LogLevelFilter.php',
     'App\\Helpers\\LogQueryBuilder' => $baseDir . '/App/Helpers/LogQueryBuilder.php',
     'App\\Helpers\\LoggingHelper' => $baseDir . '/App/Helpers/LoggingHelper.php',
     'App\\Helpers\\SecurityHelper' => $baseDir . '/App/Helpers/SecurityHelper.php',
