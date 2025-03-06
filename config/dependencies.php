@@ -70,14 +70,22 @@ try {
     
     // Register categorized loggers using global functions from logger.php
     $container->set(LoggerInterface::class, fn() => getLogger('system'));
-    $container->set('auth_logger', fn() => getLogger('auth'));
-    $container->set('db_logger', fn() => getLogger('db'));
-    $container->set('api_logger', fn() => getLogger('api'));
-    $container->set('security_logger', fn() => getLogger('security'));
-    $container->set('audit_logger', fn() => getLogger('audit')); 
-    $container->set('dependencies_logger', fn() => getLogger('dependencies'));
+    $container->set('logger.auth', fn() => getLogger('auth')); // Updated label
+    $container->set('logger.db', fn() => getLogger('db')); // Updated label
+    $container->set('logger.api', fn() => getLogger('api')); // Updated label
+    $container->set('logger.security', fn() => getLogger('security')); // Updated label
+    $container->set('logger.audit', fn() => getLogger('audit')); // Updated label
+    $container->set('logger.dependencies', fn() => getLogger('dependencies')); // Updated label
+    $container->set('logger.payment', fn() => getLogger('payment'));
+    $container->set('logger.booking', fn() => getLogger('booking'));
+    $container->set('logger.file', fn() => getLogger('file'));
+    $container->set('logger.admin', fn() => getLogger('admin'));
+    $container->set('logger.metrics', fn() => getLogger('metrics'));
+    $container->set('logger.report', fn() => getLogger('report'));
+    $container->set('logger.revenue', fn() => getLogger('revenue'));
+    $container->set('logger.application', fn() => getLogger('application'));
     
-    $container->get('dependencies_logger')->info("🔄 Step 1: Starting Dependency Injection.");
+    $container->get('logger.dependencies')->info("🔄 Step 1: Starting Dependency Injection."); // Updated label
     $container->get(LoggerInterface::class)->info("Step 1: DI Container created and loggers registered.");
 } catch (Exception $e) {
     $fallbackLogger = new Logger('fallback');
@@ -89,8 +97,8 @@ try {
 // Register ExceptionHandler after the loggers are available
 $container->set(ExceptionHandler::class, function($c) {
     return new ExceptionHandler(
-        $c->get('db_logger'),
-        $c->get('auth_logger'),
+        $c->get('logger.db'), // Updated label
+        $c->get('logger.auth'), // Updated label
         $c->get(LoggerInterface::class)
     );
 });
@@ -104,7 +112,7 @@ $container->set(SecurityHelper::class, fn() => new SecurityHelper());
 // Step 3: Initialize DatabaseHelper - CENTRALIZED
 try {
     // Set logger for DatabaseHelper
-    DatabaseHelper::setLogger($container->get('db_logger'));
+    DatabaseHelper::setLogger($container->get('logger.db'));
 
     // Ensure correct instance assignments before registering them in the DI container
     DatabaseHelper::getInstance();
@@ -125,11 +133,11 @@ try {
     });
 
     // Debugging: Log which databases are assigned
-    $container->get('db_logger')->info("[BOOTSTRAP] ✅ App Database: " . DatabaseHelper::getAppInstance()->getPdo()->query("SELECT DATABASE()")->fetchColumn());
-    $container->get('db_logger')->info("[BOOTSTRAP] ✅ Secure Database: " . DatabaseHelper::getSecureDbInstance()->getPdo()->query("SELECT DATABASE()")->fetchColumn());
+    $container->get('logger.db')->info("[BOOTSTRAP] ✅ App Database: " . DatabaseHelper::getAppInstance()->getPdo()->query("SELECT DATABASE()")->fetchColumn());
+    $container->get('logger.db')->info("[BOOTSTRAP] ✅ Secure Database: " . DatabaseHelper::getSecureDbInstance()->getPdo()->query("SELECT DATABASE()")->fetchColumn());
 
 } catch (Exception $e) {
-    $container->get('db_logger')->critical("[BOOTSTRAP] ❌ Database initialization failed: " . $e->getMessage());
+    $container->get('logger.db')->critical("[BOOTSTRAP] ❌ Database initialization failed: " . $e->getMessage());
     die("Database initialization failed.");
 }
 
@@ -140,9 +148,9 @@ try {
     if (!$pdo) {
         throw new Exception("❌ Database connection failed.");
     }
-    $container->get('db_logger')->info("✅ Database connection verified successfully.");
+    $container->get('logger.db')->info("✅ Database connection verified successfully.");
 } catch (Exception $e) {
-    $container->get('db_logger')->critical("❌ Database connection verification failed: " . $e->getMessage());
+    $container->get('logger.db')->critical("❌ Database connection verification failed: " . $e->getMessage());
     die("❌ Database connection issue: " . $e->getMessage() . "\n");
 }
 
@@ -165,7 +173,7 @@ $container->set(FileStorage::class, function($c) use ($config) {
     return new FileStorage(
         $config['filestorage'],
         $c->get(EncryptionService::class),
-        $c->get('api_logger'),
+        $c->get('logger.api'),
         $c->get(ExceptionHandler::class)
     );
 });
@@ -211,16 +219,16 @@ $requiredServices = [
     RateLimiter::class,
 ];
 
-$container->get('dependencies_logger')->info("🔄 Step 9: Checking for circular dependencies...");
+$container->get('logger.dependencies')->info("🔄 Step 9: Checking for circular dependencies...");
 $failedServices = [];
 
 foreach ($requiredServices as $service) {
     try {
         $container->get($service);
-        $container->get('dependencies_logger')->info("✅ Service loaded successfully: {$service}");
+        $container->get('logger.dependencies')->info("✅ Service loaded successfully: {$service}");
     } catch (Exception $e) {
         $errorMsg = "❌ Service failed to load: {$service}: " . $e->getMessage();
-        $container->get('dependencies_logger')->critical($errorMsg, ['trace' => $e->getTraceAsString()]);
+        $container->get('logger.dependencies')->critical($errorMsg, ['trace' => $e->getTraceAsString()]);
         $failedServices[] = $errorMsg;
     }
 }
@@ -229,15 +237,15 @@ if (!empty($failedServices)) {
     die("❌ Service failures: " . implode("\n", $failedServices) . "\n");
 }
 
-$container->get('dependencies_logger')->info("✅ DI container validation completed successfully.");
+$container->get('logger.dependencies')->info("✅ DI container validation completed successfully.");
 
 // Verify AuditService is properly initialized
 try {
     $auditService = $container->get(AuditService::class);
-    $container->get('dependencies_logger')->info("✅ AuditService verification successful");
+    $container->get('logger.dependencies')->info("✅ AuditService verification successful");
     $auditService->logEvent('system', 'Dependencies loaded successfully', ['source' => 'dependencies.php']);
 } catch (Exception $e) {
-    $container->get('dependencies_logger')->critical("❌ AuditService verification failed: " . $e->getMessage());
+    $container->get('logger.dependencies')->critical("❌ AuditService verification failed: " . $e->getMessage());
 }
 
 // Before returning the container, verify security-related services load successfully
@@ -253,6 +261,6 @@ try {
     ];
     return $result;
 } catch (Exception $e) {
-    $container->get('dependencies_logger')->critical("❌ Security services failed to load: " . $e->getMessage());
+    $container->get('logger.dependencies')->critical("❌ Security services failed to load: " . $e->getMessage());
     die("❌ Security services failed to load: " . $e->getMessage() . "\n");
 }

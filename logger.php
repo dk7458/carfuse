@@ -51,7 +51,14 @@ $logFiles = [
     'security'    => 'security.log',
     'system'      => 'system.log',
     'audit'       => 'audit.log',    // Added for audit logging
-    'dependencies' => 'dependencies.log' // Added for dependency tracking
+    'dependencies' => 'dependencies.log', // Added for dependency tracking
+    'payment'     => 'payment.log',     // Added for payment processing
+    'booking'     => 'booking.log',     // Added for booking operations
+    'file'        => 'file.log',        // Added for file operations
+    'admin'       => 'admin.log',       // Added for admin operations
+    'metrics'     => 'metrics.log',     // Added for metrics collection
+    'report'      => 'report.log',      // Added for report generation
+    'revenue'     => 'revenue.log'      // Added for revenue tracking
 ];
 
 $loggers = [];
