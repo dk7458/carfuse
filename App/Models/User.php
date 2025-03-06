@@ -28,12 +28,11 @@ use App\Services\AuditService;
  */
 class User extends BaseModel
 {
-    private $pdo;
-    private LoggerInterface $logger;
+    protected $logger;
 
-    public function __construct(DatabaseHelper $dbHelper, LoggerInterface $logger)
+    public function __construct(DatabaseHelper $dbHelper = null, LoggerInterface $logger = null, AuditService $auditService = null)
     {
-        $this->pdo = $dbHelper->getPdo();
+        parent::__construct($dbHelper, $auditService);
         $this->logger = $logger;
     }
 
