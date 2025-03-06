@@ -173,6 +173,7 @@ return function (Container $container, array $config) {
         return new TransactionAuditService(
             $c->get(LogManagementService::class),
             $c->get(FraudDetectionService::class),
+            $c->get(ExceptionHandler::class),
             $c->get('logger.payment')
         );
     });
