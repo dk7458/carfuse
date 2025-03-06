@@ -98,15 +98,6 @@ return function (Container $container, array $config) {
     });
 
     // Basic services with minimal dependencies
-    $container->set(LogManagementService::class, function($c) {
-        $requestId = uniqid('req-', true);
-        return new LogManagementService(
-            $c->get('logger.audit'),
-            $requestId,
-            $c->get(ExceptionHandler::class)
-        );
-    });
-
     $container->set(Validator::class, function($c) {
         return new Validator(
             $c->get('logger.api'),
@@ -136,48 +127,16 @@ return function (Container $container, array $config) {
         );
     });
 
-    $container->set(FraudDetectionService::class, function($c) use ($config) {
-        $requestId = uniqid('fraud-', true);
-        // Pass the 'fraud_detection' config to the service
-        $fraudConfig = $config['fraud_detection'] ?? [];
-        return new FraudDetectionService(
-            $c->get('logger.security'),
-            $c->get(ExceptionHandler::class),
-            $fraudConfig,
-            $requestId
-        );
-    });
+    // Skip re-registering core services that were initialized in bootstrap
+    // The following services are already registered:
+    // - LogLevelFilter
+    // - FraudDetectionService
+    // - LogManagementService
+    // - UserAuditService
+    // - TransactionAuditService
+    // - AuditService
 
     // Services with dependencies on basic services
-    $container->set(AuditService::class, function($c) {
-        return new AuditService(
-            $c->get('logger.audit'),
-            $c->get(ExceptionHandler::class),
-            $c->get(LogManagementService::class),
-            $c->get(UserAuditService::class),
-            $c->get(TransactionAuditService::class),
-            $c->get(LogLevelFilter::class),
-
-        );
-    });
-
-    $container->set(UserAuditService::class, function($c) {
-        return new UserAuditService(
-            $c->get(LogManagementService::class),
-            $c->get(ExceptionHandler::class),
-            $c->get('logger.audit')
-        );
-    });
-
-    $container->set(TransactionAuditService::class, function($c) {
-        return new TransactionAuditService(
-            $c->get(LogManagementService::class),
-            $c->get(FraudDetectionService::class),
-            $c->get(ExceptionHandler::class),
-            $c->get('logger.payment')
-        );
-    });
-
     $container->set(FileStorage::class, function($c) use ($config) {
         return new FileStorage(
             $config['storage'] ?? [],
@@ -192,7 +151,7 @@ return function (Container $container, array $config) {
             $c->get('logger.auth'),
             $c->get(ExceptionHandler::class),
             $c->get('db'),
-            $c->get(AuditService::class),
+            $c->get(AuditService::class), // Using the pre-initialized AuditService
             $c->get(RefreshToken::class),
             $c->get(User::class)
         );
@@ -276,12 +235,12 @@ return function (Container $container, array $config) {
         return new AuthService(
             $c->get(DatabaseHelper::class),
             $c->get(TokenService::class),
-            $c->get(ExceptionHandler::class),
-            $c->get('logger.auth'),            // Add LoggerInterface
-            $c->get(AuditService::class),      // Add AuditService
-            $config['encryption'] ?? [],       // Add encryption config
-            $c->get(Validator::class),         // Add Validator
-            $c->get(User::class)               // Add User model
+            $c->get(ExceptionHandler::class), // Using pre-initialized ExceptionHandler
+            $c->get('logger.auth'),
+            $c->get(AuditService::class),     // Using pre-initialized AuditService
+            $config['encryption'] ?? [],
+            $c->get(Validator::class),
+            $c->get(User::class)
         );
     });
 

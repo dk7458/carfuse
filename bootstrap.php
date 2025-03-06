@@ -188,45 +188,108 @@ try {
     exit("❌ Database initialization failed: " . $e->getMessage() . "\n");
 }
 
-// Step 6: Initialize AuditService early with audit logger
+// Step 6: Initialize Core Services in Correct Order
+// Set up a services container to hold our core initialized services
+$coreServices = [];
+
 try {
-    $auditService = new AuditService($loggers['audit'], $exceptionHandler, $secure_database);
+    // 1. First initialize all loggers (already done earlier in file)
+    $coreServices['logger'] = $logger;
+    $coreServices['loggers'] = $loggers;
+    
+    // 2. Initialize ExceptionHandler
+    $exceptionHandler = new ExceptionHandler(
+        $loggers['db'],
+        $loggers['auth'],
+        $logger
+    );
+    $coreServices['exceptionHandler'] = $exceptionHandler;
+    $logger->info("✓ ExceptionHandler initialized");
+    
+    // 3. Initialize LogLevelFilter
+    $logLevelFilter = new \App\Helpers\LogLevelFilter($config['logging']['min_level'] ?? 'debug');
+    $coreServices['logLevelFilter'] = $logLevelFilter;
+    $logger->info("✓ LogLevelFilter initialized");
+    
+    // 4. Initialize FraudDetectionService
+    $fraudDetectionService = new \App\Services\Security\FraudDetectionService(
+        $loggers['security'], 
+        $exceptionHandler,
+        $config['fraud_detection'] ?? [],
+        uniqid('fraud-', true)
+    );
+    $coreServices['fraudDetectionService'] = $fraudDetectionService;
+    $logger->info("✓ FraudDetectionService initialized");
+    
+    // 5. Initialize LogManagementService
+    $logManagementService = new \App\Services\Audit\LogManagementService(
+        $loggers['audit'],
+        uniqid('req-', true),
+        $exceptionHandler
+    );
+    $coreServices['logManagementService'] = $logManagementService;
+    $logger->info("✓ LogManagementService initialized");
+    
+    // 6. Initialize UserAuditService
+    $userAuditService = new \App\Services\Audit\UserAuditService(
+        $logManagementService,
+        $exceptionHandler,
+        $loggers['audit']
+    );
+    $coreServices['userAuditService'] = $userAuditService;
+    $logger->info("✓ UserAuditService initialized");
+    
+    // 7. Initialize TransactionAuditService
+    $transactionAuditService = new \App\Services\Audit\TransactionAuditService(
+        $logManagementService,
+        $fraudDetectionService,
+        $exceptionHandler,
+        $loggers['payment']
+    );
+    $coreServices['transactionAuditService'] = $transactionAuditService;
+    $logger->info("✓ TransactionAuditService initialized");
+    
+    // 8. Initialize AuditService with all its dependencies
+    $auditService = new \App\Services\AuditService(
+        $loggers['audit'],
+        $exceptionHandler,
+        $logManagementService,
+        $userAuditService,
+        $transactionAuditService,
+        $logLevelFilter
+    );
+    $coreServices['auditService'] = $auditService;
+    $logger->info("✓ AuditService initialized successfully");
+    
+    // Log successful initialization
     $auditService->logEvent(
         'system',
-        'AuditService initialized during bootstrap',
+        'Core services initialized during bootstrap',
         ['environment' => $_ENV['APP_ENV'] ?? 'unknown']
     );
-    $logger->info("✅ AuditService initialized successfully early in bootstrap.");
 } catch (Exception $e) {
-    $logger->critical("❌ Failed to initialize AuditService: " . $e->getMessage());
-    exit("❌ AuditService initialization failed: " . $e->getMessage() . "\n");
+    $logger->critical("❌ Failed to initialize core services: " . $e->getMessage(), [
+        'trace' => $e->getTraceAsString()
+    ]);
+    exit("❌ Core services initialization failed: " . $e->getMessage() . "\n");
 }
 
 // Step 7: Initialize Dependency Injection Container
 try {
-    // Load dependencies configuration and get the return value
+    // Load dependencies configuration
     $diDependencies = require_once __DIR__ . '/config/dependencies.php';
-    
-    // Check if the return value is valid
-    if (!is_array($diDependencies) || !isset($diDependencies['container'])) {
-        throw new Exception("Dependencies configuration did not return expected structure");
-    }
     
     // Get the container from the returned array
     $container = $diDependencies['container'];
     
-    // Verify container is valid
-    if (!$container instanceof \DI\Container) {
-        throw new Exception("Invalid container instance returned from dependencies.php");
-    }
-    
-    // Register our pre-initialized AuditService in the container
-    $container->set(AuditService::class, $auditService);
-    $logger->info("✅ Pre-initialized AuditService registered in DI container.");
-    
-    // Register our pre-initialized ExceptionHandler in the container
-    $container->set(ExceptionHandler::class, $exceptionHandler);
-    $logger->info("✅ Pre-initialized ExceptionHandler registered in DI container.");
+    // Register our pre-initialized services in the container
+    $container->set(App\Helpers\ExceptionHandler::class, $coreServices['exceptionHandler']);
+    $container->set(App\Helpers\LogLevelFilter::class, $coreServices['logLevelFilter']);
+    $container->set(App\Services\Security\FraudDetectionService::class, $coreServices['fraudDetectionService']);
+    $container->set(App\Services\Audit\LogManagementService::class, $coreServices['logManagementService']);
+    $container->set(App\Services\Audit\UserAuditService::class, $coreServices['userAuditService']);
+    $container->set(App\Services\Audit\TransactionAuditService::class, $coreServices['transactionAuditService']);
+    $container->set(App\Services\AuditService::class, $coreServices['auditService']);
     
     // Register all loggers in the container
     $container->set(LoggerInterface::class, $logger);
@@ -234,10 +297,30 @@ try {
     
     // Register category-specific loggers
     foreach ($loggers as $category => $categoryLogger) {
-        $container->set("{$category}_logger", $categoryLogger);
+        $container->set("logger.{$category}", $categoryLogger);
     }
     
-    $logger->info("🔄 Dependencies initialized successfully.");
+    $logger->info("✓ Pre-initialized core services registered in DI container");
+    
+    // Now we need to load service dependencies after our core services are registered
+    $svc_dep = require __DIR__ . '/config/svc_dep.php';
+    if (is_callable($svc_dep)) {
+        $svc_dep($container, $config);
+        $logger->info("✓ Service dependencies loaded");
+    } else {
+        throw new Exception("svc_dep.php did not return a callable");
+    }
+    
+    // Load controller dependencies
+    $ctrl_dep = require __DIR__ . '/config/ctrl_dep.php';
+    if (is_callable($ctrl_dep)) {
+        $ctrl_dep($container);
+        $logger->info("✓ Controller dependencies loaded");
+    } else {
+        throw new Exception("ctrl_dep.php did not return a callable");
+    }
+    
+    $logger->info("✓ Dependencies initialized successfully");
 } catch (Exception $e) {
     $logger->critical("❌ Failed to initialize DI container: " . $e->getMessage());
     exit("❌ DI container initialization failed: " . $e->getMessage() . "\n");
@@ -316,8 +399,6 @@ return [
     'logger'            => $logger,
     'loggers'           => $loggers,
     'container'         => $container,
-    'auditService'      => $auditService, // Return the pre-initialized audit service
-    'exceptionHandler'  => $exceptionHandler, // Add ExceptionHandler to the return array
-    'encryptionService' => $container->get(\App\Services\EncryptionService::class),
+    'coreServices'      => $coreServices,  // Include all core services
     'config'            => $config, // Pass the configuration array
 ];

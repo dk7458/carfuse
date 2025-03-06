@@ -60,33 +60,13 @@ use Psr\Http\Message\ResponseFactoryInterface;
 // Make $config available to the container
 global $config;
 
-// Step 1: Initialize DI Container and Loggers
+// Step 1: Initialize DI Container
 try {
     // Create container
     $container = new Container();
-    $container->set(ExceptionHandler::class, function () {
-        return new ExceptionHandler();
-    });
     
-    // Register categorized loggers using global functions from logger.php
-    $container->set(LoggerInterface::class, fn() => getLogger('system'));
-    $container->set('logger.auth', fn() => getLogger('auth')); // Updated label
-    $container->set('logger.db', fn() => getLogger('db')); // Updated label
-    $container->set('logger.api', fn() => getLogger('api')); // Updated label
-    $container->set('logger.security', fn() => getLogger('security')); // Updated label
-    $container->set('logger.audit', fn() => getLogger('audit')); // Updated label
-    $container->set('logger.dependencies', fn() => getLogger('dependencies')); // Updated label
-    $container->set('logger.payment', fn() => getLogger('payment'));
-    $container->set('logger.booking', fn() => getLogger('booking'));
-    $container->set('logger.file', fn() => getLogger('file'));
-    $container->set('logger.admin', fn() => getLogger('admin'));
-    $container->set('logger.metrics', fn() => getLogger('metrics'));
-    $container->set('logger.report', fn() => getLogger('report'));
-    $container->set('logger.revenue', fn() => getLogger('revenue'));
-    $container->set('logger.application', fn() => getLogger('application'));
-    
-    $container->get('logger.dependencies')->info("🔄 Step 1: Starting Dependency Injection."); // Updated label
-    $container->get(LoggerInterface::class)->info("Step 1: DI Container created and loggers registered.");
+    // Note: Logger registration is now handled in bootstrap.php
+    $container->get('logger.dependencies')->info("🔄 Step 1: Starting Dependency Injection.");
 } catch (Exception $e) {
     $fallbackLogger = new Logger('fallback');
     $fallbackLogger->pushHandler(new StreamHandler('php://stderr', Logger::ERROR));
@@ -94,78 +74,23 @@ try {
     die("❌ Dependency Injection container failed: " . $e->getMessage() . "\n");
 }
 
-// Register ExceptionHandler after the loggers are available
-$container->set(ExceptionHandler::class, function($c) {
-    return new ExceptionHandler(
-        $c->get('logger.db'), // Updated label
-        $c->get('logger.auth'), // Updated label
-        $c->get(LoggerInterface::class)
-    );
-});
+// Note: ExceptionHandler is now initialized in bootstrap.php
+// No need to register it here as it will be set from bootstrap.php
 
 // Add helper registrations
 $container->set(SecurityHelper::class, fn() => new SecurityHelper());
 
-// Register LogLevelFilter
-$container->set(LogLevelFilter::class, function($c) use ($config) {
-    // Get minimum log level from config, default to 'debug' if not set
-    $minLevel = $config['logging']['min_level'] ?? 'debug';
-    return new LogLevelFilter($minLevel);
-});
+// Note: LogLevelFilter is now initialized in bootstrap.php
+// No need to register it here
 
-// Step 2: Configuration loading is now handled in bootstrap.php
-// $config is expected to be available globally
-
-// Step 3: Initialize DatabaseHelper - CENTRALIZED
-try {
-    // Set logger for DatabaseHelper
-    DatabaseHelper::setLogger($container->get('logger.db'));
-
-    // Ensure correct instance assignments before registering them in the DI container
-    DatabaseHelper::getInstance();
-    DatabaseHelper::getSecureInstance();
-
-    // Register DatabaseHelper using its singleton pattern
-    $container->set(DatabaseHelper::class, function () {
-        return DatabaseHelper::getAppInstance();
-    });
-
-    // Register named instances for backward compatibility
-    $container->set('db', function () {
-        return DatabaseHelper::getAppInstance();
-    });
-
-    $container->set('secure_db', function () {
-        return DatabaseHelper::getSecureDbInstance();
-    });
-
-    // Debugging: Log which databases are assigned
-    $container->get('logger.db')->info("[BOOTSTRAP] ✅ App Database: " . DatabaseHelper::getAppInstance()->getPdo()->query("SELECT DATABASE()")->fetchColumn());
-    $container->get('logger.db')->info("[BOOTSTRAP] ✅ Secure Database: " . DatabaseHelper::getSecureDbInstance()->getPdo()->query("SELECT DATABASE()")->fetchColumn());
-
-} catch (Exception $e) {
-    $container->get('logger.db')->critical("[BOOTSTRAP] ❌ Database initialization failed: " . $e->getMessage());
-    die("Database initialization failed.");
-}
-
-
-// Debug database connection before proceeding
-try {
-    $pdo = $container->get(DatabaseHelper::class)->getConnection();
-    if (!$pdo) {
-        throw new Exception("❌ Database connection failed.");
-    }
-    $container->get('logger.db')->info("✅ Database connection verified successfully.");
-} catch (Exception $e) {
-    $container->get('logger.db')->critical("❌ Database connection verification failed: " . $e->getMessage());
-    die("❌ Database connection issue: " . $e->getMessage() . "\n");
-}
+// Note: DatabaseHelper initialization is handled in bootstrap.php 
+// and registered to the container from there
 
 // Step 4: Initialize EncryptionService
 $container->set(EncryptionService::class, function($c) use ($config) {
     return new EncryptionService(
         $c->get(LoggerInterface::class),
-        $c->get(ExceptionHandler::class),
+        $c->get(ExceptionHandler::class), // Using pre-initialized ExceptionHandler
         $config['encryption']['encryption_key']
     );
 });
@@ -262,8 +187,7 @@ try {
         'db'                => $container->get(DatabaseHelper::class),
         'secure_db'         => $container->get('secure_db'),
         'logger'            => $container->get(LoggerInterface::class),
-        'auditService'      => $container->get(AuditService::class),
-        'encryptionService' => $container->get(EncryptionService::class),
+        'auditService'      => $container->get(AuditService::class), // Pre-initialized in bootstrap
         'container'         => $container,
     ];
     return $result;
