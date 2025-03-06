@@ -13,6 +13,7 @@ use App\Helpers\ApiHelper;
 use App\Services\Validator;
 use App\Services\AuditService;
 
+
 class AuthService
 {
     private $pdo;

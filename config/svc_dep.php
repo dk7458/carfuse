@@ -263,6 +263,7 @@ return function (Container $container, array $config) {
         );
     });
 
+    
     $container->set(SignatureService::class, function($c) use ($config) {
         return new SignatureService(
             $c->get('logger.security'),
