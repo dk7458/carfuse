@@ -164,8 +164,8 @@ return function (Container $container, array $config) {
     $container->set(UserAuditService::class, function($c) {
         return new UserAuditService(
             $c->get(LogManagementService::class),
-            $c->get('logger.audit'),
-            $c->get(ExceptionHandler::class)
+            $c->get(ExceptionHandler::class),
+            $c->get('logger.audit')
         );
     });
 
