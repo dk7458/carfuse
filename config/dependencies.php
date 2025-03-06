@@ -13,6 +13,7 @@ use Monolog\Handler\StreamHandler;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ExceptionHandler;
 use App\Helpers\SetupHelper;
+use App\Helpers\LogLevelFilter;
 use App\Helpers\SecurityHelper;
 use App\Middleware\RequireAuthMiddleware;
 use App\Services\Validator;

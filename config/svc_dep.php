@@ -4,6 +4,7 @@ use DI\Container;
 use Psr\Log\LoggerInterface;
 use App\Helpers\DatabaseHelper;
 use App\Helpers\ExceptionHandler;
+use App\Helpers\LogLevelFilter;
 use App\Services\Validator;
 use App\Services\RateLimiter;
 use App\Services\Auth\TokenService;
@@ -149,7 +150,11 @@ return function (Container $container, array $config) {
         return new AuditService(
             $c->get('audit_logger'),
             $c->get(ExceptionHandler::class),
-            $c->get(LogManagementService::class)
+            $c->get(LogManagementService::class),
+            $c->get(UserAuditService::class),
+            $c->get(TransactionAuditService::class),
+            $c->get(LogLevelFilter::class),
+
         );
     });
 
