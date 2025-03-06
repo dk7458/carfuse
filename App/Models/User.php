@@ -358,8 +358,11 @@ class User extends BaseModel
 
     /**
      * Find a user by their ID
+     * 
+     * @param string|int $id
+     * @return array|null
      */
-    public function find(int $id): ?array
+    public function find(string|int $id): ?array
     {
         try {
             $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = ? AND active = 1");
