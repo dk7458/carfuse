@@ -22,11 +22,14 @@ class LogManagementService
     private string $requestId;
     private ExceptionHandler $exceptionHandler;
     
-    public function __construct(LoggerInterface $logger, string $requestId, ExceptionHandler $exceptionHandler = null)
-    {
+    public function __construct(
+        LoggerInterface $logger, 
+        string $requestId, 
+        ExceptionHandler $exceptionHandler
+    ) {
         $this->logger = $logger;
         $this->requestId = $requestId;
-        $this->exceptionHandler = $exceptionHandler ?? new ExceptionHandler($logger);
+        $this->exceptionHandler = $exceptionHandler;
     }
     
     /**

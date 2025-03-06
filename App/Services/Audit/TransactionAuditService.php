@@ -18,13 +18,13 @@ class TransactionAuditService
     public function __construct(
         LogManagementService $logManager, 
         FraudDetectionService $fraudDetector,
-        LoggerInterface $logger = null,
-        ExceptionHandler $exceptionHandler = null
+        ExceptionHandler $exceptionHandler,
+        LoggerInterface $logger = null
     ) {
         $this->logManager = $logManager;
         $this->fraudDetector = $fraudDetector;
+        $this->exceptionHandler = $exceptionHandler;
         $this->logger = $logger ?? $logManager->getLogger();
-        $this->exceptionHandler = $exceptionHandler ?? new ExceptionHandler($this->logger);
     }
     
     /**

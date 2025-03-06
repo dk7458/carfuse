@@ -1,13 +1,17 @@
 <?php
 require_once __DIR__ . '/../../../vendor/autoload.php';
 require_once __DIR__ . '/../../../App/Controllers/AuthController.php';
+require_once __DIR__ . '/bootstrap.php'; // Include bootstrap to get container and services
 
 use App\Controllers\AuthController;
 use App\Helpers\ApiHelper;
 use App\Helpers\ExceptionHandler;
 
-// Initialize ExceptionHandler with the 'api' logger.
-$exceptionHandler = new ExceptionHandler(getLogger('api'));
+// Get bootstrap return values
+$bootstrap = require_once __DIR__ . '/bootstrap.php';
+$container = $bootstrap['container'];
+$exceptionHandler = $bootstrap['exceptionHandler'];
+$logger = $bootstrap['loggers']['api']; // Use api logger specifically for this endpoint
 
 header('Content-Type: application/json');
 

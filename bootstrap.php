@@ -224,6 +224,10 @@ try {
     $container->set(AuditService::class, $auditService);
     $logger->info("✅ Pre-initialized AuditService registered in DI container.");
     
+    // Register our pre-initialized ExceptionHandler in the container
+    $container->set(ExceptionHandler::class, $exceptionHandler);
+    $logger->info("✅ Pre-initialized ExceptionHandler registered in DI container.");
+    
     // Register all loggers in the container
     $container->set(LoggerInterface::class, $logger);
     $container->set('logger', $logger);
@@ -313,6 +317,7 @@ return [
     'loggers'           => $loggers,
     'container'         => $container,
     'auditService'      => $auditService, // Return the pre-initialized audit service
+    'exceptionHandler'  => $exceptionHandler, // Add ExceptionHandler to the return array
     'encryptionService' => $container->get(\App\Services\EncryptionService::class),
     'config'            => $config, // Pass the configuration array
 ];

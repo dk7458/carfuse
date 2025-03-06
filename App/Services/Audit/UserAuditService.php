@@ -4,6 +4,7 @@ namespace App\Services\Audit;
 
 use App\Helpers\ExceptionHandler;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Exception;
 
 class UserAuditService
@@ -23,12 +24,12 @@ class UserAuditService
     
     public function __construct(
         LogManagementService $logManager, 
-        LoggerInterface $logger = null,
-        ExceptionHandler $exceptionHandler = null
+        ExceptionHandler $exceptionHandler,
+        LoggerInterface $logger = null
     ) {
         $this->logManager = $logManager;
+        $this->exceptionHandler = $exceptionHandler;
         $this->logger = $logger ?? $logManager->getLogger() ?? new NullLogger();
-        $this->exceptionHandler = $exceptionHandler ?? new ExceptionHandler($this->logger);
     }
     
     /**
