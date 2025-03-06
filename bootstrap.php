@@ -276,22 +276,10 @@ try {
 
 // Step 7: Initialize Dependency Injection Container
 try {
-    // Load dependencies configuration
-    $diDependencies = require_once __DIR__ . '/config/dependencies.php';
+    // Create container first
+    $container = new \DI\Container();
     
-    // Get the container from the returned array
-    $container = $diDependencies['container'];
-    
-    // Register our pre-initialized services in the container
-    $container->set(App\Helpers\ExceptionHandler::class, $coreServices['exceptionHandler']);
-    $container->set(App\Helpers\LogLevelFilter::class, $coreServices['logLevelFilter']);
-    $container->set(App\Services\Security\FraudDetectionService::class, $coreServices['fraudDetectionService']);
-    $container->set(App\Services\Audit\LogManagementService::class, $coreServices['logManagementService']);
-    $container->set(App\Services\Audit\UserAuditService::class, $coreServices['userAuditService']);
-    $container->set(App\Services\Audit\TransactionAuditService::class, $coreServices['transactionAuditService']);
-    $container->set(App\Services\AuditService::class, $coreServices['auditService']);
-    
-    // Register all loggers in the container
+    // Register all loggers in the container BEFORE loading dependencies.php
     $container->set(LoggerInterface::class, $logger);
     $container->set('logger', $logger);
     
@@ -300,9 +288,28 @@ try {
         $container->set("logger.{$category}", $categoryLogger);
     }
     
+    $logger->info("✓ Logger services registered in DI container");
+    
+    // Then register our pre-initialized services in the container
+    $container->set(App\Helpers\ExceptionHandler::class, $coreServices['exceptionHandler']);
+    $container->set(App\Helpers\LogLevelFilter::class, $coreServices['logLevelFilter']);
+    $container->set(App\Services\Security\FraudDetectionService::class, $coreServices['fraudDetectionService']);
+    $container->set(App\Services\Audit\LogManagementService::class, $coreServices['logManagementService']);
+    $container->set(App\Services\Audit\UserAuditService::class, $coreServices['userAuditService']);
+    $container->set(App\Services\Audit\TransactionAuditService::class, $coreServices['transactionAuditService']);
+    $container->set(App\Services\AuditService::class, $coreServices['auditService']);
+    
+    // Register database connections
+    $container->set(DatabaseHelper::class, $database);
+    $container->set('db', $database);
+    $container->set('secure_db', $secure_database);
+    
     $logger->info("✓ Pre-initialized core services registered in DI container");
     
-    // Now we need to load service dependencies after our core services are registered
+    // Now load dependencies.php with pre-registered loggers
+    $diDependencies = require_once __DIR__ . '/config/dependencies.php';
+    
+    // Load service and controller dependencies
     $svc_dep = require __DIR__ . '/config/svc_dep.php';
     if (is_callable($svc_dep)) {
         $svc_dep($container, $config);

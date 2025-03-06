@@ -60,14 +60,20 @@ use Psr\Http\Message\ResponseFactoryInterface;
 // Make $config available to the container
 global $config;
 
-// Step 1: Initialize DI Container
+// Access the global logger variable instead of using the container initially
+global $logger;
+
+// Step 1: Initialize DI Container - Container is now passed from bootstrap.php
 try {
-    // Create container
-    $container = new Container();
+    // Note: Container is created in bootstrap.php and passed to this file
+    if (!isset($container) || !$container instanceof Container) {
+        throw new Exception("Container not properly initialized in bootstrap.php");
+    }
     
-    // Note: Logger registration is now handled in bootstrap.php
-    $container->get('logger.dependencies')->info("🔄 Step 1: Starting Dependency Injection.");
+    // Use the global logger first for safety
+    $logger->info("🔄 Step 1: Starting Dependency Injection.");
 } catch (Exception $e) {
+    // Fallback logging without container dependency
     $fallbackLogger = new Logger('fallback');
     $fallbackLogger->pushHandler(new StreamHandler('php://stderr', Logger::ERROR));
     $fallbackLogger->error("❌ [DI] Failed to initialize DI container: " . $e->getMessage());
@@ -78,7 +84,9 @@ try {
 // No need to register it here as it will be set from bootstrap.php
 
 // Add helper registrations
-$container->set(SecurityHelper::class, fn() => new SecurityHelper());
+if (!$container->has(SecurityHelper::class)) {
+    $container->set(SecurityHelper::class, fn() => new SecurityHelper());
+}
 
 // Note: LogLevelFilter is now initialized in bootstrap.php
 // No need to register it here
