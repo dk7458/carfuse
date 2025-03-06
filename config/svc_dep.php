@@ -271,11 +271,16 @@ return function (Container $container, array $config) {
         );
     });
 
-    $container->set(AuthService::class, function($c) {
+    $container->set(AuthService::class, function($c) use ($config) {
         return new AuthService(
             $c->get(DatabaseHelper::class),
             $c->get(TokenService::class),
-            $c->get(ExceptionHandler::class)
+            $c->get(ExceptionHandler::class),
+            $c->get('logger.auth'),            // Add LoggerInterface
+            $c->get(AuditService::class),      // Add AuditService
+            $config['encryption'] ?? [],       // Add encryption config
+            $c->get(Validator::class),         // Add Validator
+            $c->get(User::class)               // Add User model
         );
     });
 
