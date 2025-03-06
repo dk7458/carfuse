@@ -274,23 +274,24 @@ try {
     exit("❌ Core services initialization failed: " . $e->getMessage() . "\n");
 }
 
+global $container; // declare container as global
+
 // Step 7: Initialize Dependency Injection Container
 try {
-    // Create container first
+    // Create container
     $container = new \DI\Container();
-    
-    // Register all loggers in the container BEFORE loading dependencies.php
-    $container->set(LoggerInterface::class, $logger);
+    $GLOBALS['container'] = $container; // Make container available globally
+
+    // Register loggers first
+    $container->set(Psr\Log\LoggerInterface::class, $logger);
     $container->set('logger', $logger);
-    
-    // Register category-specific loggers
     foreach ($loggers as $category => $categoryLogger) {
         $container->set("logger.{$category}", $categoryLogger);
     }
     
     $logger->info("✓ Logger services registered in DI container");
     
-    // Register our pre-initialized services in the container
+    // Register pre-initialized core services, db instances etc.
     $container->set(App\Helpers\ExceptionHandler::class, $coreServices['exceptionHandler']);
     $container->set(App\Helpers\LogLevelFilter::class, $coreServices['logLevelFilter']);
     $container->set(App\Services\Security\FraudDetectionService::class, $coreServices['fraudDetectionService']);
@@ -298,17 +299,13 @@ try {
     $container->set(App\Services\Audit\UserAuditService::class, $coreServices['userAuditService']);
     $container->set(App\Services\Audit\TransactionAuditService::class, $coreServices['transactionAuditService']);
     $container->set(App\Services\AuditService::class, $coreServices['auditService']);
-    
-    // Register database connections
     $container->set(DatabaseHelper::class, $database);
     $container->set('db', $database);
     $container->set('secure_db', $secure_database);
     
     $logger->info("✓ Pre-initialized core services registered in DI container");
     
-    // Now load dependencies.php with pre-registered loggers
-    // Pass the container to dependencies.php by including it in a context where $container is available
-    $GLOBALS['container'] = $container; // Make container accessible globally
+    // Now load dependencies.php (which uses $GLOBALS['container'])
     $diDependencies = require_once __DIR__ . '/config/dependencies.php';
     
     // Load service and controller dependencies
