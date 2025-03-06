@@ -3,7 +3,6 @@
 namespace App\Services\Security;
 
 use App\Helpers\ExceptionHandler;
-use App\Helpers\ConfigHelper;
 use Psr\Log\LoggerInterface;
 use Exception;
 
@@ -61,31 +60,26 @@ class FraudDetectionService
     
     public function __construct(
         LoggerInterface $logger,
-        ExceptionHandler $exceptionHandler = null,
-        string $requestId = null,
-        array $customConfig = null
+        ExceptionHandler $exceptionHandler,
+        array $config, // Inject configuration
+        string $requestId = null
     ) {
         $this->logger = $logger;
-        $this->exceptionHandler = $exceptionHandler ?? new ExceptionHandler($logger);
+        $this->exceptionHandler = $exceptionHandler;
         $this->requestId = $requestId ?? uniqid('fraud_');
         
         // Load configuration
-        $this->loadConfig($customConfig);
+        $this->loadConfig($config);
     }
     
     /**
      * Load fraud detection configuration
      */
-    private function loadConfig(array $customConfig = null): void
+    private function loadConfig(array $config): void
     {
         try {
-            // Use provided config or load from config file
-            if ($customConfig !== null) {
-                $this->config = $customConfig;
-            } else {
-                // Try to load from config file using ConfigHelper
-                $this->config = ConfigHelper::get('fraud_detection') ?? [];
-            }
+            // Use provided config
+            $this->config = $config;
             
             // Set risk thresholds from config or use defaults
             $this->riskThresholds = [
@@ -101,8 +95,7 @@ class FraudDetectionService
             $this->riskyDomains = $this->config['risky_email_domains'] ?? self::DEFAULT_RISKY_EMAIL_DOMAINS;
             
             $this->logger->debug("[FraudDetection] Configuration loaded", [
-                'request_id' => $this->requestId,
-                'custom_config' => $customConfig !== null ? 'yes' : 'no'
+                'request_id' => $this->requestId
             ]);
         } catch (Exception $e) {
             $this->logger->error("[FraudDetection] Failed to load configuration: " . $e->getMessage(), [

@@ -136,11 +136,14 @@ return function (Container $container, array $config) {
         );
     });
 
-    $container->set(FraudDetectionService::class, function($c) {
+    $container->set(FraudDetectionService::class, function($c) use ($config) {
         $requestId = uniqid('fraud-', true);
+        // Pass the 'fraud_detection' config to the service
+        $fraudConfig = $config['fraud_detection'] ?? [];
         return new FraudDetectionService(
             $c->get('security_logger'),
             $c->get(ExceptionHandler::class),
+            $fraudConfig,
             $requestId
         );
     });
