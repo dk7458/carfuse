@@ -106,6 +106,13 @@ $container->set(ExceptionHandler::class, function($c) {
 // Add helper registrations
 $container->set(SecurityHelper::class, fn() => new SecurityHelper());
 
+// Register LogLevelFilter
+$container->set(LogLevelFilter::class, function($c) use ($config) {
+    // Get minimum log level from config, default to 'debug' if not set
+    $minLevel = $config['logging']['min_level'] ?? 'debug';
+    return new LogLevelFilter($minLevel);
+});
+
 // Step 2: Configuration loading is now handled in bootstrap.php
 // $config is expected to be available globally
 
