@@ -151,8 +151,8 @@ return function (Container $container, array $config) {
     // Services with dependencies on basic services
     $container->set(AuditService::class, function($c) {
         return new AuditService(
-            $c->get(ExceptionHandler::class),
             $c->get('logger.audit'),
+            $c->get(ExceptionHandler::class),
             $c->get(LogManagementService::class),
             $c->get(UserAuditService::class),
             $c->get(TransactionAuditService::class),
