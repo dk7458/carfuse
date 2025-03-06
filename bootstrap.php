@@ -290,7 +290,7 @@ try {
     
     $logger->info("✓ Logger services registered in DI container");
     
-    // Then register our pre-initialized services in the container
+    // Register our pre-initialized services in the container
     $container->set(App\Helpers\ExceptionHandler::class, $coreServices['exceptionHandler']);
     $container->set(App\Helpers\LogLevelFilter::class, $coreServices['logLevelFilter']);
     $container->set(App\Services\Security\FraudDetectionService::class, $coreServices['fraudDetectionService']);
@@ -307,6 +307,8 @@ try {
     $logger->info("✓ Pre-initialized core services registered in DI container");
     
     // Now load dependencies.php with pre-registered loggers
+    // Pass the container to dependencies.php by including it in a context where $container is available
+    $GLOBALS['container'] = $container; // Make container accessible globally
     $diDependencies = require_once __DIR__ . '/config/dependencies.php';
     
     // Load service and controller dependencies
