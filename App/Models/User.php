@@ -51,6 +51,9 @@ class User extends BaseModel
         'role',
         'phone',
         'address',
+        'status',
+        'created_at',
+        'updated_at'
     ];
 
     protected $hidden = [
@@ -624,5 +627,51 @@ class User extends BaseModel
             ]);
             throw $e;
         }
+    }
+
+    public function getRecentActivity(string|int $userId, int $limit = 5): array
+    {
+        $query = "SELECT activity_type, description, created_at 
+                  FROM user_activities 
+                  WHERE user_id = :user_id 
+                  ORDER BY created_at DESC 
+                  LIMIT $limit";
+        return $this->dbHelper->select($query, [':user_id' => $userId]);
+    }
+
+    public function logActivity(string|int $userId, string $activityType, string $description, ?string $ipAddress = null): bool
+    {
+        $data = [
+            'user_id'       => $userId,
+            'activity_type' => $activityType,
+            'description'   => $description,
+            'created_at'    => date('Y-m-d H:i:s'),
+            'ip_address'    => $ipAddress
+        ];
+        return (bool) $this->dbHelper->insert('user_activities', $data);
+    }
+
+    /**
+     * Get users within a date range with optional filters
+     *
+     * @param string $start
+     * @param string $end
+     * @param array $filters
+     * @return array
+     */
+    public function getByDateRange(string $start, string $end, array $filters = []): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE created_at BETWEEN :start AND :end";
+        
+        $params = [':start' => $start, ':end' => $end];
+        
+        if (!empty($filters['status'])) {
+            $query .= " AND status = :status";
+            $params[':status'] = $filters['status'];
+        }
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 }

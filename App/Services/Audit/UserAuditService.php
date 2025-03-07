@@ -3,6 +3,7 @@
 namespace App\Services\Audit;
 
 use App\Helpers\ExceptionHandler;
+use App\Models\AuditLog;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Exception;
@@ -12,6 +13,7 @@ class UserAuditService
     private LogManagementService $logManager;
     private ExceptionHandler $exceptionHandler;
     private LoggerInterface $logger;
+    private array $config;
     
     /**
      * User event categories
@@ -30,6 +32,7 @@ class UserAuditService
         $this->logManager = $logManager;
         $this->exceptionHandler = $exceptionHandler;
         $this->logger = $logger ?? $logManager->getLogger() ?? new NullLogger();
+        $this->config = require __DIR__ . '/../../../config/audit.php';
     }
     
     /**
@@ -53,6 +56,11 @@ class UserAuditService
         string $logLevel = 'info'
     ): ?int {
         try {
+            // Check if this log level is enabled in config
+            if (!($this->config['log_levels'][$logLevel] ?? true)) {
+                return null;
+            }
+            
             // Enrich context with user-specific data
             $enrichedContext = $this->enrichUserContext($action, $context);
             

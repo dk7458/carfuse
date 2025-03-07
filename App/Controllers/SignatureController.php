@@ -4,7 +4,7 @@ namespace App\Controllers;
 
 use App\Services\SignatureService;
 use App\Services\AuditService;
-use App\Helpers\TokenValidator;
+use App\Services\Auth\TokenService;
 use App\Helpers\ExceptionHandler;
 use Psr\Log\LoggerInterface;
 
@@ -22,29 +22,32 @@ class SignatureController extends Controller
     protected LoggerInterface $logger;
     protected ExceptionHandler $exceptionHandler;
     private AuditService $auditService;
+    private TokenService $tokenService;
 
     public function __construct(
         LoggerInterface $logger,
         SignatureService $signatureService,
         ExceptionHandler $exceptionHandler,
-        AuditService $auditService
+        AuditService $auditService,
+        TokenService $tokenService
     ) {
         parent::__construct($logger, $exceptionHandler);
         $this->signatureService = $signatureService;
         $this->exceptionHandler = $exceptionHandler;
         $this->auditService = $auditService;
+        $this->tokenService = $tokenService;
     }
 
     /**
      * Upload a signature.
      *
      * @param array $data The uploaded signature file and associated metadata.
-     * @return array Response indicating success or failure.
+     * @return array Response containing upload status
      */
     public function uploadSignature(array $data): array
     {
         try {
-            $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+            $user = $this->tokenService->validateRequest($this->request->getHeader('Authorization'));
             if (!$user) {
                 return ['status' => 'error', 'message' => 'Unauthorized access', 'code' => 401];
             }
@@ -56,14 +59,14 @@ class SignatureController extends Controller
 
             $this->validator->validate($data, $rules);
 
-            $signaturePath = $this->signatureService->uploadSignature($data['user_id'], $data['file']);
+            $signaturePath = $this->signatureService->uploadSignature($data['file'], $data['user_id']);
             
             // Log the signature upload event
             $this->auditService->logEvent(
                 'signature_uploaded',
                 "Signature uploaded successfully",
                 ['user_id' => $data['user_id']],
-                $user->id,
+                $user['id'],
                 null,
                 'document'
             );
@@ -86,6 +89,11 @@ class SignatureController extends Controller
     public function verifySignature(int $userId, string $documentHash): array
     {
         try {
+            $user = $this->tokenService->validateRequest($this->request->getHeader('Authorization'));
+            if (!$user) {
+                return ['status' => 'error', 'message' => 'Unauthorized access', 'code' => 401];
+            }
+            
             $isValid = $this->signatureService->verifySignature($userId, $documentHash);
             
             // Log the signature verification attempt
@@ -97,7 +105,7 @@ class SignatureController extends Controller
                     'document_hash' => substr($documentHash, 0, 10) . '...',
                     'result' => $isValid ? 'valid' : 'invalid'
                 ],
-                null, // No authenticated user (system action)
+                $user['id'],
                 null,
                 'document'
             );
@@ -123,7 +131,7 @@ class SignatureController extends Controller
     public function getSignature(int $userId): array
     {
         try {
-            $requestingUser = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+            $requestingUser = $this->tokenService->validateRequest($this->request->getHeader('Authorization'));
             if (!$requestingUser) {
                 return ['status' => 'error', 'message' => 'Unauthorized access', 'code' => 401];
             }
@@ -136,9 +144,9 @@ class SignatureController extends Controller
                 "Signature retrieved " . ($signaturePath ? "successfully" : "failed - not found"),
                 [
                     'user_id' => $userId,
-                    'requested_by' => $requestingUser->id
+                    'requested_by' => $requestingUser['id']
                 ],
-                $requestingUser->id,
+                $requestingUser['id'],
                 null,
                 'document'
             );

@@ -2,7 +2,7 @@
 
 namespace App\Queues;
 
-use DocumentManager\Services\FileStorage;
+use App\Services\FileStorage;
 use Psr\Log\LoggerInterface;
 
 class DocumentQueue
@@ -10,15 +10,24 @@ class DocumentQueue
     private FileStorage $fileStorage;
     private string $queueFile;
     private LoggerInterface $logger;
-    private const MAX_RETRY_ATTEMPTS = 3;
+    private int $maxRetryAttempts;
 
-    public function __construct(LoggerInterface $logger, FileStorage $fileStorage, string $queueFile)
-    {
+    public function __construct(
+        LoggerInterface $logger, 
+        FileStorage $fileStorage, 
+        array $config
+    ) {
         $this->logger = $logger;
         $this->fileStorage = $fileStorage;
-        $this->queueFile = $queueFile;
+        
+        // Get configuration from injected config
+        $this->queueFile = $config['documents']['queue']['file'] ?? __DIR__ . '/../../storage/queues/document_queue.json';
+        $this->maxRetryAttempts = $config['documents']['queue']['max_retry_attempts'] ?? 3;
     }
 
+    /**
+     * Add document to processing queue
+     */
     public function push(array $document): void
     {
         $queue = $this->getQueue();
@@ -28,12 +37,19 @@ class DocumentQueue
         $this->logger->info('Document added to queue', $document);
     }
 
+    /**
+     * Process queued documents
+     */
     public function process(): void
     {
         $queue = $this->getQueue();
         foreach ($queue as $index => $document) {
             try {
-                $success = $this->fileStorage->storeFile($document['file_path'], $document['destination']);
+                $success = $this->fileStorage->storeFile(
+                    $document['destination_path'],
+                    $document['file_name'],
+                    $document['content']
+                );
 
                 if ($success) {
                     unset($queue[$index]);
@@ -46,7 +62,7 @@ class DocumentQueue
                     ]);
                 }
 
-                if ($queue[$index]['attempts'] >= self::MAX_RETRY_ATTEMPTS) {
+                if ($queue[$index]['attempts'] >= $this->maxRetryAttempts) {
                     $this->logger->error('Max retry attempts reached for document', $document);
                     unset($queue[$index]);
                 }
@@ -61,6 +77,9 @@ class DocumentQueue
         $this->saveQueue(array_values($queue));
     }
 
+    /**
+     * Get the current document queue
+     */
     private function getQueue(): array
     {
         if (!file_exists($this->queueFile)) {
@@ -69,6 +88,9 @@ class DocumentQueue
         return json_decode(file_get_contents($this->queueFile), true) ?? [];
     }
 
+    /**
+     * Save the document queue
+     */
     private function saveQueue(array $queue): void
     {
         file_put_contents($this->queueFile, json_encode($queue, JSON_PRETTY_PRINT));

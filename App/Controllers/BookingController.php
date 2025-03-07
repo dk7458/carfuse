@@ -2,12 +2,13 @@
 
 namespace App\Controllers;
 
-use App\Models\Booking;
 use App\Models\RefundLog;
 use App\Services\AuthService;
 use App\Services\AuditService;
+use App\Services\BookingService;
+use App\Services\PaymentService;
+use App\Services\NotificationService;
 use App\Services\Auth\TokenService;
-use App\Helpers\DatabaseHelper;
 use App\Helpers\ExceptionHandler;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
@@ -79,7 +80,7 @@ class BookingController extends Controller
                 ], 401);
             }
             
-            $booking = Booking::with('logs')->findOrFail($id);
+            $booking = $this->bookingService->getBookingById($id);
             
             // Audit log for viewing booking
             $this->auditService->logEvent(
@@ -98,7 +99,6 @@ class BookingController extends Controller
             ]);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
                 'message' => 'Failed to fetch booking details'
@@ -122,14 +122,8 @@ class BookingController extends Controller
             
             $data = $_POST; // minimal custom validation assumed
             
-            $booking = Booking::findOrFail($id);
-            $oldPickup = $booking->pickup_date;
-            $oldDropoff = $booking->dropoff_date;
-            
-            $booking->update([
-                'pickup_date'  => $data['pickup_date'],
-                'dropoff_date' => $data['dropoff_date'],
-            ]);
+            // Let the service handle the business logic
+            $this->bookingService->rescheduleBooking($id, $data['pickup_date'], $data['dropoff_date']);
             
             // Audit the rescheduling action
             $this->auditService->logEvent(
@@ -138,9 +132,7 @@ class BookingController extends Controller
                 [
                     'booking_id' => $id,
                     'user_id' => $user['id'],
-                    'old_pickup' => $oldPickup,
                     'new_pickup' => $data['pickup_date'],
-                    'old_dropoff' => $oldDropoff,
                     'new_dropoff' => $data['dropoff_date']
                 ],
                 $user['id'],
@@ -154,7 +146,6 @@ class BookingController extends Controller
             ]);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
                 'message' => 'Failed to reschedule booking'
@@ -176,14 +167,15 @@ class BookingController extends Controller
                 ], 401);
             }
             
-            $booking = Booking::findOrFail($id);
-            $oldStatus = $booking->status;
-            $booking->update(['status' => 'canceled']);
+            // Let the service handle the cancellation and refund calculation
+            $refundAmount = $this->bookingService->cancelBooking($id);
 
-            // Process refund if applicable.
-            $refundAmount = $booking->calculateRefund(); // Assumes a calculateRefund() method exists.
+            // Process refund if applicable through payment service
             if ($refundAmount > 0) {
-                $refund = RefundLog::create([
+                // The RefundLog creation should ideally be handled by a PaymentService
+                // This is a potential future refactoring
+                $refundLog = new RefundLog();
+                $refundId = $refundLog->create([
                     'booking_id' => $id,
                     'amount'     => $refundAmount,
                     'status'     => 'processed'
@@ -197,7 +189,7 @@ class BookingController extends Controller
                         'booking_id' => $id,
                         'user_id' => $user['id'],
                         'refund_amount' => $refundAmount,
-                        'refund_id' => $refund->id
+                        'refund_id' => $refundId
                     ],
                     $user['id'],
                     $id,
@@ -212,8 +204,7 @@ class BookingController extends Controller
                 [
                     'booking_id' => $id,
                     'user_id' => $user['id'],
-                    'old_status' => $oldStatus,
-                    'refund_amount' => $refundAmount ?? 0
+                    'refund_amount' => $refundAmount
                 ],
                 $user['id'],
                 $id,
@@ -226,7 +217,6 @@ class BookingController extends Controller
             ]);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
                 'message' => 'Failed to cancel booking'
@@ -248,9 +238,8 @@ class BookingController extends Controller
                 ], 401);
             }
             
-            // Instead of getting booking logs directly from a logs table,
-            // fetch audit events related to this booking from the audit service
-            $logs = $this->auditService->getEventsByReference('booking_reference', $bookingId);
+            // Get logs through the service
+            $logs = $this->bookingService->getBookingLogs($bookingId);
             
             // Log this access to audit logs
             $this->auditService->logEvent(
@@ -272,7 +261,6 @@ class BookingController extends Controller
             ]);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
                 'message' => 'Failed to fetch booking logs'
@@ -294,7 +282,7 @@ class BookingController extends Controller
                 ], 401);
             }
             
-            $bookings = Booking::where('user_id', $user['id'])->latest()->get();
+            $bookings = $this->bookingService->getUserBookings($user['id']);
             
             // Log the fetch operation
             $this->auditService->logEvent(
@@ -313,7 +301,6 @@ class BookingController extends Controller
             ]);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
                 'message' => 'Failed to fetch user bookings'
@@ -336,41 +323,38 @@ class BookingController extends Controller
             }
 
             $data = $_POST; // assuming custom validation is performed elsewhere
+            $data['user_id'] = $user['id'];
             
-            // Check vehicle availability using an assumed Booking::isAvailable() scope.
-            if (!Booking::isAvailable($data['vehicle_id'], $data['pickup_date'], $data['dropoff_date'])) {
-                return $this->jsonResponse([
-                    'status' => 'error',
-                    'message' => 'Vehicle is not available for the selected dates'
-                ], 400);
+            // Let the BookingService handle all booking creation logic
+            $result = $this->bookingService->createBooking($data);
+            
+            if ($result['status'] == 'error') {
+                return $this->jsonResponse($result, 400);
             }
-            
-            $booking = Booking::create($data);
-            
+
             // Log the booking creation to the audit logs
             $this->auditService->logEvent(
                 'booking_created',
-                "New booking #{$booking->id} created",
+                "New booking created",
                 [
-                    'booking_id' => $booking->id,
+                    'booking_id' => $result['booking_id'],
                     'user_id' => $user['id'],
                     'vehicle_id' => $data['vehicle_id'],
                     'pickup_date' => $data['pickup_date'], 
                     'dropoff_date' => $data['dropoff_date']
                 ],
                 $user['id'],
-                $booking->id,
+                $result['booking_id'],
                 'booking'
             );
             
             return $this->jsonResponse([
                 'status' => 'success',
                 'message' => 'Booking created successfully',
-                'data' => ['booking_id' => $booking->id]
+                'data' => ['booking_id' => $result['booking_id']]
             ], 201);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse([
                 'status' => 'error',
                 'message' => 'Failed to create booking'

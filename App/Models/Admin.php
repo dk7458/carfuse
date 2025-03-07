@@ -189,47 +189,53 @@ class Admin extends BaseModel
 
     /**
      * Find admin by token
+     * 
+     * @param string $token
+     * @return array|null
      */
     public function findByToken(string $token): ?array
     {
-        $adminData = DatabaseHelper::select(
-            "SELECT id, email, role FROM admins WHERE token = ? AND token_expiry > NOW()",
-            [$token],
-            true // Using secure database
-        );
-        
-        return !empty($adminData) ? $adminData[0] : null;
+        $query = "SELECT id, email, role FROM {$this->table} 
+                 WHERE token = :token AND token_expiry > NOW()";
+                 
+        $result = $this->dbHelper->select($query, [':token' => $token], true);
+        return !empty($result) ? $result[0] : null;
     }
 
     /**
      * Get paginated list of all users with their roles
+     * 
+     * @param int $page
+     * @param int $perPage
+     * @return array
      */
     public function getPaginatedUsers(int $page, int $perPage): array
     {
         $offset = ($page - 1) * $perPage;
         
-        $users = DatabaseHelper::select(
-            "SELECT u.*, r.name as role_name 
-             FROM users u 
-             LEFT JOIN roles r ON u.role_id = r.id 
-             ORDER BY u.created_at DESC 
-             LIMIT ? OFFSET ?",
-            [$perPage, $offset],
-            false // Using application database
-        );
-        
-        return $users;
+        $query = "SELECT u.*, r.name as role_name 
+                 FROM users u 
+                 LEFT JOIN roles r ON u.role_id = r.id 
+                 ORDER BY u.created_at DESC 
+                 LIMIT :limit OFFSET :offset";
+                 
+        return $this->dbHelper->select($query, [
+            ':limit' => $perPage,
+            ':offset' => $offset
+        ], false);
     }
 
     /**
      * Get total user count
+     * 
+     * @return int
      */
     public function getTotalUserCount(): int
     {
-        $result = DatabaseHelper::select(
+        $result = $this->dbHelper->select(
             "SELECT COUNT(*) as count FROM users",
             [],
-            false // Using application database
+            false
         );
         
         return (int)$result[0]['count'];
@@ -237,88 +243,86 @@ class Admin extends BaseModel
 
     /**
      * Get user by ID
+     * 
+     * @param int $userId
+     * @return array|null
      */
     public function getUserById(int $userId): ?array
     {
-        $user = DatabaseHelper::select(
-            "SELECT id, email, role FROM users WHERE id = ?",
-            [$userId],
-            false // Using application database
+        $result = $this->dbHelper->select(
+            "SELECT id, email, role FROM users WHERE id = :id",
+            [':id' => $userId],
+            false
         );
         
-        return !empty($user) ? $user[0] : null;
+        return !empty($result) ? $result[0] : null;
     }
 
     /**
      * Update user role
+     * 
+     * @param int $userId
+     * @param string $role
+     * @return bool
      */
     public function updateUserRole(int $userId, string $role): bool
     {
-        return DatabaseHelper::update(
+        return $this->dbHelper->update(
             "users",
             ["role" => $role],
             ["id" => $userId],
-            false // Using application database
+            false
         );
     }
 
     /**
      * Soft delete user
+     * 
+     * @param int $userId
+     * @return bool
      */
     public function softDeleteUser(int $userId): bool
     {
-        return DatabaseHelper::update(
+        return $this->dbHelper->update(
             "users",
             ["deleted_at" => date('Y-m-d H:i:s')],
             ["id" => $userId],
-            false // Using application database
+            false
         );
     }
 
     /**
      * Get dashboard statistics
+     * 
+     * @return array
      */
     public function getDashboardStatistics(): array
     {
         // Get total users count
-        $totalUsers = DatabaseHelper::select(
-            "SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL",
-            [],
-            false
-        )[0]['count'];
+        $userQuery = "SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL";
+        $totalUsers = $this->dbHelper->select($userQuery, [], false)[0]['count'];
         
         // Get total bookings count
-        $totalBookings = DatabaseHelper::select(
-            "SELECT COUNT(*) as count FROM bookings",
-            [],
-            false
-        )[0]['count'];
+        $bookingQuery = "SELECT COUNT(*) as count FROM bookings";
+        $totalBookings = $this->dbHelper->select($bookingQuery, [], false)[0]['count'];
         
         // Get total revenue
-        $totalRevenue = DatabaseHelper::select(
-            "SELECT SUM(amount) as total FROM payments WHERE status = 'completed'",
-            [],
-            false
-        )[0]['total'] ?? 0;
+        $revenueQuery = "SELECT SUM(amount) as total FROM payments WHERE status = 'completed'";
+        $revenueResult = $this->dbHelper->select($revenueQuery, [], false);
+        $totalRevenue = $revenueResult[0]['total'] ?? 0;
         
         // Get latest 5 users
-        $latestUsers = DatabaseHelper::select(
-            "SELECT u.*, r.name as role_name 
-             FROM users u 
-             LEFT JOIN roles r ON u.role_id = r.id 
-             WHERE u.deleted_at IS NULL 
-             ORDER BY u.created_at DESC 
-             LIMIT 5",
-            [],
-            false
-        );
+        $latestUserQuery = "SELECT u.*, r.name as role_name 
+            FROM users u 
+            LEFT JOIN roles r ON u.role_id = r.id 
+            WHERE u.deleted_at IS NULL 
+            ORDER BY u.created_at DESC 
+            LIMIT 5";
+        $latestUsers = $this->dbHelper->select($latestUserQuery, [], false);
         
         // Get latest 5 transactions
-        $latestTransactions = DatabaseHelper::select(
-            "SELECT * FROM transaction_logs ORDER BY created_at DESC LIMIT 5",
-            [],
-            false
-        );
+        $transactionQuery = "SELECT * FROM transaction_logs ORDER BY created_at DESC LIMIT 5";
+        $latestTransactions = $this->dbHelper->select($transactionQuery, [], false);
         
         return [
             'total_users' => $totalUsers,
@@ -330,17 +334,17 @@ class Admin extends BaseModel
     }
 
     /**
-     * Check if admin with email exists
+     * Find admin by email
+     * 
+     * @param string $email
+     * @return array|null
      */
     public function findByEmail(string $email): ?array
     {
-        $admin = DatabaseHelper::select(
-            "SELECT id FROM admins WHERE email = ?",
-            [$email],
-            true // Using secure database
-        );
+        $query = "SELECT id FROM {$this->table} WHERE email = :email";
         
-        return !empty($admin) ? $admin[0] : null;
+        $result = $this->dbHelper->select($query, [':email' => $email], true);
+        return !empty($result) ? $result[0] : null;
     }
 
     /**
@@ -359,16 +363,16 @@ class Admin extends BaseModel
     }
 
     /**
-     * Get admin by ID
+     * Find admin by ID
+     * 
+     * @param int $adminId
+     * @return array|null
      */
     public function findById(int $adminId): ?array
     {
-        $admin = DatabaseHelper::select(
-            "SELECT id, name, email, role, created_at FROM admins WHERE id = ?",
-            [$adminId],
-            true // Using secure database
-        );
+        $query = "SELECT id, name, email, role, created_at FROM {$this->table} WHERE id = :id";
         
-        return !empty($admin) ? $admin[0] : null;
+        $result = $this->dbHelper->select($query, [':id' => $adminId], true);
+        return !empty($result) ? $result[0] : null;
     }
 }

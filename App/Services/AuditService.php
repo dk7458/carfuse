@@ -12,6 +12,7 @@ use App\Helpers\SecurityHelper;
 use App\Services\Audit\LogManagementService;
 use App\Services\Audit\UserAuditService;
 use App\Services\Audit\TransactionAuditService;
+use App\Models\AuditLog;
 use Psr\Log\LoggerInterface;
 
 class AuditService
@@ -76,13 +77,17 @@ class AuditService
     private UserAuditService $userAuditService;
     private TransactionAuditService $transactionAuditService;
 
+    // New property for AuditLog model
+    private AuditLog $auditLog;
+
     public function __construct(
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
         LogManagementService $logManager,
         UserAuditService $userAuditService,
         TransactionAuditService $transactionAuditService,
-        LogLevelFilter $logLevelFilter = null
+        LogLevelFilter $logLevelFilter = null,
+        AuditLog $auditLog = null
     ) {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
@@ -91,6 +96,7 @@ class AuditService
         $this->transactionAuditService = $transactionAuditService;
         $this->logLevelFilter = $logLevelFilter ?? new LogLevelFilter();
         $this->requestId = Uuid::uuid4()->toString();
+        $this->auditLog = $auditLog ?? new AuditLog();
         
         if (self::DEBUG_MODE) {
             $this->logger->debug("[Audit] Service initialized", [
@@ -247,19 +253,59 @@ class AuditService
     
     // Delegate log management operations to LogManagementService
     public function getLogs(array $filters = []): array {
-        return $this->logManager->getLogs($filters);
+        try {
+            // Use LogManagementService instead of direct AuditLog access
+            return $this->logManager->getLogs($filters);
+        } catch (Exception $e) {
+            $this->logger->error("[Audit] Failed to get logs: " . $e->getMessage(), [
+                'request_id' => $this->requestId,
+                'filters' => $filters
+            ]);
+            $this->exceptionHandler->handleException($e);
+            return ['data' => [], 'pagination' => ['total' => 0]];
+        }
     }
     
     public function deleteLogs(array $filters, bool $forceBulkDelete = false): int {
-        return $this->logManager->deleteLogs($filters, $forceBulkDelete);
+        try {
+            // Use LogManagementService instead of direct AuditLog access
+            return $this->logManager->deleteLogs($filters, $forceBulkDelete);
+        } catch (Exception $e) {
+            $this->logger->error("[Audit] Failed to delete logs: " . $e->getMessage(), [
+                'request_id' => $this->requestId,
+                'filters' => $filters
+            ]);
+            $this->exceptionHandler->handleException($e);
+            return 0;
+        }
     }
     
     public function exportLogs(array $filters): array {
-        return $this->logManager->exportLogs($filters);
+        try {
+            // Use LogManagementService instead of direct AuditLog access
+            return $this->logManager->exportLogs($filters);
+        } catch (Exception $e) {
+            $this->logger->error("[Audit] Failed to export logs: " . $e->getMessage(), [
+                'request_id' => $this->requestId,
+                'filters' => $filters
+            ]);
+            $this->exceptionHandler->handleException($e);
+            throw $e; // Re-throw since this is an important user-initiated action
+        }
     }
     
     public function getLogById(int $logId): ?array {
-        return $this->logManager->getLogById($logId);
+        try {
+            // Use LogManagementService instead of direct AuditLog access
+            return $this->logManager->getLogById($logId);
+        } catch (Exception $e) {
+            $this->logger->error("[Audit] Failed to get log by ID: " . $e->getMessage(), [
+                'request_id' => $this->requestId,
+                'log_id' => $logId
+            ]);
+            $this->exceptionHandler->handleException($e);
+            return null;
+        }
     }
     
     /**

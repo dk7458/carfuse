@@ -16,6 +16,21 @@ class Booking extends BaseModel
     protected $resourceName = 'booking';
     protected $useTimestamps = true;
     protected $useSoftDeletes = true;
+
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'user_id',
+        'vehicle_id',
+        'start_date',
+        'end_date',
+        'status',
+        'created_at',
+        'updated_at'
+    ];
     
     /**
      * Constructor
@@ -174,29 +189,63 @@ class Booking extends BaseModel
     }
 
     /**
-     * Get bookings by date range
-     * 
-     * @param string $startDate
-     * @param string $endDate
+     * Get bookings within a date range with optional filters
+     *
+     * @param string $start
+     * @param string $end
+     * @param array $filters
      * @return array
      */
-    public function getByDateRange(string $startDate, string $endDate): array
+    public function getByDateRange(string $start, string $end, array $filters = []): array
     {
-        $query = "
-            SELECT * FROM {$this->table}
-            WHERE pickup_date >= :start_date AND dropoff_date <= :end_date
-        ";
+        // Check if we're filtering by pickup/dropoff dates or creation dates
+        $dateField = !empty($filters['date_field']) ? $filters['date_field'] : 'created_at';
         
-        if ($this->useSoftDeletes) {
-            $query .= " AND deleted_at IS NULL";
+        $query = "SELECT b.*, u.name as user_name, v.model as vehicle_model 
+                 FROM {$this->table} b
+                 LEFT JOIN users u ON b.user_id = u.id
+                 LEFT JOIN vehicles v ON b.vehicle_id = v.id
+                 WHERE b.{$dateField} BETWEEN :start AND :end";
+        
+        $params = [':start' => $start, ':end' => $end];
+        
+        if (!empty($filters['status'])) {
+            $query .= " AND b.status = :status";
+            $params[':status'] = $filters['status'];
         }
         
-        $query .= " ORDER BY pickup_date ASC";
+        // Add sorting
+        $query .= " ORDER BY b.{$dateField} ASC";
         
-        return $this->dbHelper->select($query, [
-            ':start_date' => $startDate,
-            ':end_date' => $endDate
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get bookings for a specific user within a date range
+     *
+     * @param int $userId
+     * @param string $start
+     * @param string $end
+     * @return array
+     */
+    public function getByUserAndDateRange(int $userId, string $start, string $end): array
+    {
+        $query = "SELECT b.*, v.model as vehicle_model 
+                 FROM {$this->table} b
+                 LEFT JOIN vehicles v ON b.vehicle_id = v.id
+                 WHERE b.user_id = :user_id
+                 AND b.created_at BETWEEN :start AND :end";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':start' => $start,
+            ':end' => $end
         ]);
+        
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
     /**
@@ -301,5 +350,138 @@ class Booking extends BaseModel
         ]);
         
         return $result[0]['booking_count'] == 0;
+    }
+
+    /**
+     * Get user ID for a booking
+     * 
+     * @param int|string $bookingId
+     * @return int|null
+     */
+    public function getUserId(int|string $bookingId): ?int
+    {
+        $query = "
+            SELECT user_id FROM {$this->table}
+            WHERE id = :booking_id
+        ";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $result = $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+        return isset($result[0]['user_id']) ? (int)$result[0]['user_id'] : null;
+    }
+
+    /**
+     * Get monthly booking trends
+     * 
+     * @return array
+     */
+    public function getMonthlyTrends(): array
+    {
+        $year = date('Y');
+        $query = "
+            SELECT 
+                MONTH(created_at) as month,
+                COUNT(*) as total
+            FROM {$this->table}
+            WHERE YEAR(created_at) = :year
+        ";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $query .= " GROUP BY MONTH(created_at) ORDER BY month ASC";
+        
+        return $this->dbHelper->select($query, [':year' => $year]);
+    }
+
+    /**
+     * Get total number of bookings
+     * 
+     * @return int
+     */
+    public function getTotalBookings(): int
+    {
+        $query = "SELECT COUNT(*) as total FROM {$this->table}";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " WHERE deleted_at IS NULL";
+        }
+        
+        $result = $this->dbHelper->select($query);
+        return isset($result[0]['total']) ? (int)$result[0]['total'] : 0;
+    }
+
+    /**
+     * Get number of completed bookings
+     * 
+     * @return int
+     */
+    public function getCompletedBookings(): int
+    {
+        $query = "
+            SELECT COUNT(*) as total FROM {$this->table}
+            WHERE status = 'completed'
+        ";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $result = $this->dbHelper->select($query);
+        return isset($result[0]['total']) ? (int)$result[0]['total'] : 0;
+    }
+    
+    /**
+     * Get number of canceled bookings
+     * 
+     * @return int
+     */
+    public function getCanceledBookings(): int
+    {
+        $query = "
+            SELECT COUNT(*) as total FROM {$this->table}
+            WHERE status = 'canceled'
+        ";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $result = $this->dbHelper->select($query);
+        return isset($result[0]['total']) ? (int)$result[0]['total'] : 0;
+    }
+    
+    /**
+     * Get booking logs for a specific booking
+     * 
+     * @param int|string $bookingId
+     * @return array
+     */
+    public function getLogs(int|string $bookingId): array
+    {
+        $query = "
+            SELECT * FROM booking_logs
+            WHERE booking_id = :booking_id
+            ORDER BY created_at DESC
+        ";
+        
+        return $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+    }
+    
+    /**
+     * Check if a booking is available based on vehicle and dates
+     * 
+     * @param int|string $vehicleId
+     * @param string $pickupDate
+     * @param string $dropoffDate
+     * @return bool
+     */
+    public function isAvailable(int|string $vehicleId, string $pickupDate, string $dropoffDate): bool
+    {
+        return $this->isVehicleAvailable($vehicleId, $pickupDate, $dropoffDate);
     }
 }

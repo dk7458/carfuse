@@ -253,13 +253,15 @@ class AdminService
             $this->logger->debug("Creating new admin user");
             
             // Insert new admin record
-            $newAdminId = $this->adminModel->create([
+            $newAdminData = [
                 "name" => $data['name'],
                 "email" => $data['email'],
                 "password" => $hashedPassword,
                 "role" => 'admin',
                 "created_at" => date('Y-m-d H:i:s')
-            ]);
+            ];
+            
+            $newAdminId = $this->adminModel->create($newAdminData);
             
             if (!$newAdminId) {
                 return null;

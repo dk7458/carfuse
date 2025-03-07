@@ -8,6 +8,8 @@ use App\Helpers\ExceptionHandler;
 
 /**
  * AuditController - Handles viewing and retrieving audit logs.
+ * Follows the clean controller pattern by delegating all DB operations
+ * to the AuditService.
  */
 class AuditController extends Controller
 {
@@ -29,7 +31,7 @@ class AuditController extends Controller
     }
     
     /**
-     * ✅ Get audit logs data for admin dashboard
+     * Admin dashboard view for audit logs
      */
     public function index()
     {
@@ -40,21 +42,24 @@ class AuditController extends Controller
             }
             
             // Process filters from request
-            $filters = $this->processFilters($_POST);
+            $filters = $this->processFilters($_GET);
             
             // Get logs using the audit service
             $logs = $this->auditService->getLogs($filters);
             
-            return $this->jsonResponse('success', ['logs' => $logs], 200);
+            return $this->jsonResponse('success', $logs, 200);
         } catch (\Exception $e) {
+            $this->logger->error('Error in audit log retrieval: ' . $e->getMessage(), [
+                'controller' => 'AuditController',
+                'method' => 'index'
+            ]);
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', 'Failed to retrieve audit logs', 500);
         }
     }
 
     /**
-     * ✅ API Endpoint: Fetch logs based on filters.
+     * API Endpoint: Fetch logs based on filters
      */
     public function fetchLogs()
     {
@@ -70,10 +75,13 @@ class AuditController extends Controller
             // Get logs using the audit service
             $logs = $this->auditService->getLogs($filters);
             
-            return $this->jsonResponse('success', ['logs' => $logs], 200);
+            return $this->jsonResponse('success', $logs, 200);
         } catch (\Exception $e) {
+            $this->logger->error('Error in API log retrieval: ' . $e->getMessage(), [
+                'controller' => 'AuditController',
+                'method' => 'fetchLogs'
+            ]);
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', 'Failed to fetch logs', 500);
         }
     }
@@ -91,11 +99,49 @@ class AuditController extends Controller
             
             $log = $this->auditService->getLogById((int)$id);
             
+            if (!$log) {
+                return $this->jsonResponse('error', 'Log not found', 404);
+            }
+            
             return $this->jsonResponse('success', ['log' => $log], 200);
         } catch (\Exception $e) {
+            $this->logger->error('Error retrieving log details: ' . $e->getMessage(), [
+                'controller' => 'AuditController',
+                'method' => 'getLog',
+                'id' => $id
+            ]);
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', 'Failed to retrieve log', 500);
+        }
+    }
+    
+    /**
+     * API Endpoint: Export logs based on filters
+     */
+    public function exportLogs()
+    {
+        try {
+            // Check if user has admin role
+            if (!$this->hasAdminAccess()) {
+                return $this->jsonResponse('error', 'Admin access required', 403);
+            }
+            
+            // Process filters from request
+            $filters = $this->processFilters($_POST);
+            
+            // Get export info from audit service
+            $exportInfo = $this->auditService->exportLogs($filters);
+            
+            return $this->jsonResponse('success', [
+                'export' => $exportInfo
+            ], 200);
+        } catch (\Exception $e) {
+            $this->logger->error('Error exporting logs: ' . $e->getMessage(), [
+                'controller' => 'AuditController',
+                'method' => 'exportLogs'
+            ]);
+            $this->exceptionHandler->handleException($e);
+            return $this->jsonResponse('error', 'Failed to export logs', 500);
         }
     }
     
@@ -106,12 +152,12 @@ class AuditController extends Controller
     {
         $filters = [];
         
-        // Category filter (unified log type)
+        // Category filter
         if (!empty($rawFilters['category'])) {
             $filters['category'] = $rawFilters['category'];
         }
         
-        // Action filter (for backward compatibility)
+        // Action filter
         if (!empty($rawFilters['action'])) {
             $filters['action'] = $rawFilters['action'];
         }
@@ -135,6 +181,20 @@ class AuditController extends Controller
             $filters['end_date'] = $rawFilters['end_date'];
         }
         
+        // Pagination
+        if (isset($rawFilters['page'])) {
+            $filters['page'] = max(1, (int)$rawFilters['page']);
+        }
+        
+        if (isset($rawFilters['per_page'])) {
+            $filters['per_page'] = min(100, max(10, (int)$rawFilters['per_page']));
+        }
+        
+        // Log level
+        if (!empty($rawFilters['log_level'])) {
+            $filters['log_level'] = $rawFilters['log_level'];
+        }
+        
         return $filters;
     }
     
@@ -143,7 +203,12 @@ class AuditController extends Controller
      */
     private function hasAdminAccess(): bool
     {
-        // Replace with your actual authentication logic
-        return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+        // Get configuration for allowed roles
+        $config = require __DIR__ . '/../../config/audit.php';
+        $allowedRoles = $config['access']['allowed_roles'] ?? ['admin'];
+        
+        // Check if user role is in allowed roles
+        $userRole = $_SESSION['user_role'] ?? '';
+        return in_array($userRole, $allowedRoles, true);
     }
 }

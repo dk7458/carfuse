@@ -3,13 +3,10 @@
 namespace App\Controllers;
 
 use App\Services\DocumentService;
-use App\Services\EncryptionService;
-use App\Services\FileStorage;
 use App\Services\Validator;
 use App\Services\AuditService;
 use App\Helpers\ExceptionHandler;
 use Psr\Log\LoggerInterface;
-use App\Models\DocumentTemplate;
 
 require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
 
@@ -43,35 +40,19 @@ class DocumentController extends Controller
         try {
             $rules = [
                 'name' => 'required|string|max:255',
-                'file' => 'required|file|mimes:pdf,docx|max:10240', // Max 10MB
+                'content' => 'required|string',
             ];
 
             if (!$this->validator->validate($data, $rules)) {
                 return $this->jsonResponse('error', ['message' => 'Validation failed', 'errors' => $this->validator->errors()], 400);
             }
 
-            // Store file using FileStorage service
-            $filePath = FileStorage::store($data['file']);
-            // Create a new template using Eloquent ORM
-            $template = DocumentTemplate::create([
-                'name' => $data['name'],
-                'file_path' => $filePath,
-            ]);
+            // Delegate template upload to service
+            $this->documentService->uploadTemplate($data['name'], $data['content']);
             
-            // Log document creation using unified audit service
-            $this->auditService->logEvent(
-                'document_template_uploaded', 
-                "Template uploaded successfully", 
-                ['template_id' => $template->id, 'template_name' => $data['name']],
-                $_SESSION['user_id'] ?? null,
-                null,
-                'document'
-            );
-            
-            return $this->jsonResponse('success', ['message' => 'Template uploaded successfully', 'template_id' => $template->id], 201);
+            return $this->jsonResponse('success', ['message' => 'Template uploaded successfully'], 201);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', ['message' => 'Failed to upload template'], 500);
         }
     }
@@ -82,23 +63,12 @@ class DocumentController extends Controller
     public function generateContract(int $bookingId, int $userId): array
     {
         try {
-            // Use a secure contract generation method ensuring encryption is applied
+            // Delegate contract generation to service
             $contractPath = $this->documentService->generateContractSecure($bookingId, $userId);
-            
-            // Log the contract generation using unified audit service
-            $this->auditService->logEvent(
-                'contract_generated',
-                "Contract generated successfully",
-                ['contract_type' => 'booking', 'booking_id' => $bookingId], 
-                $userId,
-                $bookingId,
-                'document'
-            );
             
             return $this->jsonResponse('success', ['message' => 'Contract generated successfully', 'contract_path' => $contractPath], 200);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', ['message' => 'Failed to generate contract'], 500);
         }
     }
@@ -110,29 +80,19 @@ class DocumentController extends Controller
     {
         try {
             $rules = [
-                'file' => 'required|file|mimes:pdf|max:5120', // Max 5MB
+                'content' => 'required|string',
             ];
 
             if (!$this->validator->validate($data, $rules)) {
                 return $this->jsonResponse('error', ['message' => 'Validation failed', 'errors' => $this->validator->errors()], 400);
             }
 
-            $path = $this->documentService->uploadTerms($data['file']);
-            
-            // Log using the unified audit service
-            $this->auditService->logEvent(
-                'terms_uploaded',
-                "Terms and Conditions document uploaded",
-                ['document_type' => 'terms_conditions', 'path' => $path],
-                $_SESSION['user_id'] ?? null,
-                null,
-                'document'
-            );
+            // Delegate T&C upload to service
+            $this->documentService->uploadTerms($data['content']);
 
             return $this->jsonResponse('success', ['message' => 'T&C document uploaded successfully'], 201);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', ['message' => 'Failed to upload T&C document'], 500);
         }
     }
@@ -143,22 +103,12 @@ class DocumentController extends Controller
     public function generateInvoice(int $bookingId): array
     {
         try {
+            // Delegate invoice generation to service
             $invoicePath = $this->documentService->generateInvoice($bookingId);
-            
-            // Log using the unified audit service
-            $this->auditService->logEvent(
-                'invoice_generated',
-                "Invoice generated successfully",
-                ['document_type' => 'invoice', 'booking_id' => $bookingId],
-                $_SESSION['user_id'] ?? null,
-                $bookingId,
-                'document'
-            );
 
             return $this->jsonResponse('success', ['message' => 'Invoice generated successfully', 'invoice_path' => $invoicePath], 200);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', ['message' => 'Failed to generate invoice'], 500);
         }
     }
@@ -169,23 +119,45 @@ class DocumentController extends Controller
     public function deleteDocument(int $documentId): array
     {
         try {
+            // Delegate document deletion to service
             $this->documentService->deleteDocument($documentId);
-            
-            // Log using the unified audit service
-            $this->auditService->logEvent(
-                'document_deleted',
-                "Document deleted successfully",
-                ['document_id' => $documentId],
-                $_SESSION['user_id'] ?? null,
-                null,
-                'document'
-            );
 
             return $this->jsonResponse('success', ['message' => 'Document deleted successfully'], 200);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
-            // The following won't execute if handleException exits as expected
             return $this->jsonResponse('error', ['message' => 'Failed to delete document'], 500);
+        }
+    }
+    
+    /**
+     * Get all templates
+     */
+    public function getTemplates(): array
+    {
+        try {
+            // Delegate to service
+            $templates = $this->documentService->getTemplates();
+            
+            return $this->jsonResponse('success', ['templates' => $templates], 200);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            return $this->jsonResponse('error', ['message' => 'Failed to retrieve templates'], 500);
+        }
+    }
+    
+    /**
+     * Get a specific template
+     */
+    public function getTemplate(int $templateId): array
+    {
+        try {
+            // Delegate to service
+            $template = $this->documentService->getTemplateById($templateId);
+            
+            return $this->jsonResponse('success', ['template' => $template], 200);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            return $this->jsonResponse('error', ['message' => 'Failed to retrieve template'], 500);
         }
     }
 }

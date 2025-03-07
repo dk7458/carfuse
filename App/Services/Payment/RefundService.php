@@ -20,14 +20,6 @@ class RefundService
      *  - Log refund transactions in TransactionLog
      *  - Use AuditService for approved refunds and chargebacks
      *  - Use LoggerInterface for refund API failures and debugging
-     *
-     * @author 
-     * @version 1.0
-     * @description
-     *   - Refund request handling
-     *   - Database transaction with beginTransaction/commit/rollback
-     *   - Verification of original Payment record
-     *   - Logging successful or failed refunds
      */
     private DatabaseHelper $dbHelper;
     private Payment $paymentModel;
@@ -95,11 +87,10 @@ class RefundService
         // Begin transaction
         $this->dbHelper->beginTransaction();
         try {
-            // 1. Create a refund record (implementation depends on your Payment model's structure)
-            //    You might track refunds in a separate 'refunds' table or as negative Payment entries.
+            // Create a refund record using the Payment model's method
             $refundId = $this->paymentModel->createRefund($refundData);
 
-            // 2. Log the refund in the transaction log
+            // Log the refund in the transaction log
             $this->transactionLogModel->logTransaction([
                 'payment_id'    => $refundData['payment_id'],
                 'refund_id'     => $refundId,
@@ -108,11 +99,10 @@ class RefundService
                 'description'   => "Refund processed: {$refundData['reason']}",
             ]);
 
-            // 3. Commit transaction
+            // Commit transaction
             $this->dbHelper->commit();
 
-            // 4. Audit the approved refund or chargeback
-            //    (You could distinguish between normal refunds and chargebacks if needed)
+            // Audit the approved refund
             $this->auditService->recordRefundSuccess($refundData);
 
             // Return success response

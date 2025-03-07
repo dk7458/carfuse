@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Helpers\DatabaseHelper;
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\User;
@@ -13,21 +12,28 @@ use App\Helpers\ExceptionHandler;
 class ReportService
 {
     public const DEBUG_MODE = true;
-    private DatabaseHelper $db;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
+    private Booking $bookingModel;
+    private Payment $paymentModel;
+    private User $userModel;
 
-    public function __construct(LoggerInterface $logger, DatabaseHelper $db, ExceptionHandler $exceptionHandler)
-    {
+    public function __construct(
+        LoggerInterface $logger, 
+        ExceptionHandler $exceptionHandler,
+        Booking $bookingModel,
+        Payment $paymentModel,
+        User $userModel
+    ) {
         $this->logger = $logger;
-        $this->db = $db;
         $this->exceptionHandler = $exceptionHandler;
+        $this->bookingModel = $bookingModel;
+        $this->paymentModel = $paymentModel;
+        $this->userModel = $userModel;
     }    
 
     public function generateReport(string $reportType, array $dateRange, string $format, array $filters = []): string
     {
-        $start = $dateRange['start'];
-        $end   = $dateRange['end'];
         $data = match ($reportType) {
             'bookings' => $this->getBookingReportData($dateRange, $filters),
             'payments' => $this->getPaymentReportData($dateRange, $filters),
@@ -39,18 +45,9 @@ class ReportService
 
     public function generateUserReport(int $userId, string $reportType, array $dateRange, string $format): string
     {
-        $start = $dateRange['start'];
-        $end   = $dateRange['end'];
         $data = match ($reportType) {
-            'bookings' => Booking::with('user')
-                         ->where('user_id', $userId)
-                         ->whereBetween('created_at', [$start, $end])
-                         ->get()
-                         ->toArray(),
-            'payments' => Payment::where('user_id', $userId)
-                         ->whereBetween('created_at', [$start, $end])
-                         ->get()
-                         ->toArray(),
+            'bookings' => $this->bookingModel->getByUserAndDateRange($userId, $dateRange['start'], $dateRange['end']),
+            'payments' => $this->paymentModel->getByUserAndDateRange($userId, $dateRange['start'], $dateRange['end']),
             default    => throw new \InvalidArgumentException("Invalid report type: $reportType"),
         };
         return $this->exportReport($data, "{$reportType}_user_{$userId}", $format);
@@ -59,16 +56,14 @@ class ReportService
     private function getBookingReportData(array $dateRange, array $filters): array
     {
         try {
-            $query = $this->db->table('bookings')->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
-            if (!empty($filters['status'])) {
-                $query->where('status', $filters['status']);
-            }
+            $data = $this->bookingModel->getByDateRange($dateRange['start'], $dateRange['end'], $filters);
+            
             if (self::DEBUG_MODE) {
-                $this->logger->info("[db] Fetched booking report data", ['category' => 'report']);
+                $this->logger->info("[model] Fetched booking report data", ['category' => 'report']);
             }
-            return $query->get();
+            return $data;
         } catch (\Exception $e) {
-            $this->logger->error("[db] Database error (booking): " . $e->getMessage());
+            $this->logger->error("[model] Error fetching booking data: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -77,16 +72,14 @@ class ReportService
     private function getPaymentReportData(array $dateRange, array $filters): array
     {
         try {
-            $query = $this->db->table('payments')->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
-            if (!empty($filters['type'])) {
-                $query->where('type', $filters['type']);
-            }
+            $data = $this->paymentModel->getByDateRange($dateRange['start'], $dateRange['end'], $filters);
+            
             if (self::DEBUG_MODE) {
-                $this->logger->info("[db] Fetched payment report data", ['category' => 'report']);
+                $this->logger->info("[model] Fetched payment report data", ['category' => 'report']);
             }
-            return $query->get();
+            return $data;
         } catch (\Exception $e) {
-            $this->logger->error("[db] Database error (payments): " . $e->getMessage());
+            $this->logger->error("[model] Error fetching payment data: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }
@@ -95,15 +88,14 @@ class ReportService
     private function getUserReportData(array $dateRange, array $filters): array
     {
         try {
-            $data = $this->db->table('users')
-                         ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
-                         ->get();
+            $data = $this->userModel->getByDateRange($dateRange['start'], $dateRange['end'], $filters);
+            
             if (self::DEBUG_MODE) {
-                $this->logger->info("[db] Fetched user report data");
+                $this->logger->info("[model] Fetched user report data");
             }
             return $data;
         } catch (\Exception $e) {
-            $this->logger->error("[db] Database error (users): " . $e->getMessage());
+            $this->logger->error("[model] Error fetching user data: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             throw $e;
         }

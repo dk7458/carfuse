@@ -136,7 +136,7 @@ return function (Container $container) {
 
     $container->set(AuditController::class, function($c) {
         return new AuditController(
-            $c->get(LoggerInterface::class),
+            $c->get('logger.audit') ?? $c->get(LoggerInterface::class),
             $c->get(AuditService::class),
             $c->get(ExceptionHandler::class)
         );

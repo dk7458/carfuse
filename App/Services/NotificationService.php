@@ -20,19 +20,16 @@ class NotificationService
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
     private array $config;
-    private DatabaseHelper $db;
     private Notification $notificationModel;
 
     public function __construct(
         LoggerInterface $logger, 
         ExceptionHandler $exceptionHandler, 
-        DatabaseHelper $db, 
         Notification $notificationModel,
         array $config
     ) {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
-        $this->db = $db;
         $this->notificationModel = $notificationModel;
         $this->config = $config;
     }
@@ -43,7 +40,17 @@ class NotificationService
     public function sendNotification(int $userId, string $type, string $message, array $options = []): bool
     {
         try {
-            $this->storeNotification($userId, $type, $message);
+            $notificationData = [
+                'user_id' => $userId,
+                'type'    => $type,
+                'message' => $message,
+                'sent_at' => date('Y-m-d H:i:s'),
+                'is_read' => false,
+            ];
+            
+            // Store notification using the model
+            $this->notificationModel->create($notificationData);
+            
             // Log notification preparation
             if (self::DEBUG_MODE) {
                 $this->logger->info('Notification prepared for dispatch', ['user_id' => $userId, 'type' => $type]);
@@ -57,37 +64,12 @@ class NotificationService
     }
 
     /**
-     * Store notification in the database
+     * Get user notifications
      */
-    private function storeNotification(int $userId, string $type, string $message): void
-    {
-        try {
-            // Create the notification record
-            $this->notificationModel->create([
-                'user_id' => $userId,
-                'type'    => $type,
-                'message' => $message,
-                'sent_at' => date('Y-m-d H:i:s'),
-                'is_read' => false,
-            ]);
-            
-            if (self::DEBUG_MODE) {
-                $this->logger->info("Notification stored in database", [
-                    'user_id' => $userId, 
-                    'type' => $type
-                ]);
-            }
-        } catch (\Exception $e) {
-            $this->logger->error("[Notification] ❌ storeNotification error: " . $e->getMessage());
-            $this->exceptionHandler->handleException($e);
-            throw $e;
-        }
-    }
-
     public function getUserNotifications(int $userId): array
     {
         try {
-            // Get user notifications
+            // Get user notifications using the model
             $notifications = $this->notificationModel->getByUserId($userId);
             
             // Log retrieval
@@ -102,11 +84,35 @@ class NotificationService
             throw $e;
         }
     }
+    
+    /**
+     * Get unread notifications for a user
+     */
+    public function getUnreadNotifications(int $userId): array
+    {
+        try {
+            $notifications = $this->notificationModel->getUnreadByUserId($userId);
+            
+            // Log retrieval
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Notification] Retrieved unread notifications for user {$userId}");
+            }
+            
+            return $notifications;
+        } catch (\Exception $e) {
+            $this->logger->error("[Notification] ❌ getUnreadNotifications error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            throw $e;
+        }
+    }
 
+    /**
+     * Mark a notification as read
+     */
     public function markAsRead(int $notificationId): bool
     {
         try {
-            // Mark notification as read
+            // Mark notification as read using the model
             $result = $this->notificationModel->markAsRead($notificationId);
             
             // Log the action
@@ -122,10 +128,13 @@ class NotificationService
         }
     }
 
+    /**
+     * Delete a notification
+     */
     public function deleteNotification(int $notificationId): bool
     {
         try {
-            // Delete notification
+            // Delete notification using the model
             $result = $this->notificationModel->delete($notificationId);
             
             // Log the deletion
@@ -141,10 +150,13 @@ class NotificationService
         }
     }
 
+    /**
+     * Mark all notifications as read for a user
+     */
     public function markAllAsRead(int $userId): bool
     {
         try {
-            // Mark all notifications as read
+            // Mark all notifications as read using the model
             $result = $this->notificationModel->markAllAsRead($userId);
             
             // Log the action
@@ -342,6 +354,20 @@ class NotificationService
             return $notification;
         } catch (\Exception $e) {
             $this->logger->error("[Notification] ❌ getNotificationById error: " . $e->getMessage());
+            $this->exceptionHandler->handleException($e);
+            return null;
+        }
+    }
+    
+    /**
+     * Verify notification ownership
+     */
+    public function verifyNotificationOwnership(int $notificationId, int $userId): ?array
+    {
+        try {
+            return $this->notificationModel->findForUser($notificationId, $userId);
+        } catch (\Exception $e) {
+            $this->logger->error("[Notification] ❌ verifyNotificationOwnership error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
             return null;
         }

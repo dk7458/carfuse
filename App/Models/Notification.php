@@ -113,6 +113,71 @@ class Notification extends BaseModel
     }
 
     /**
+     * Mark all notifications as read for a user.
+     *
+     * @param int $userId
+     * @return bool
+     */
+    public function markAllAsRead(int $userId): bool
+    {
+        return $this->markAllAsReadForUser($userId);
+    }
+
+    /**
+     * Get unread notifications count for a user.
+     *
+     * @param int $userId
+     * @return int
+     */
+    public function getUnreadCount(int $userId): int
+    {
+        $query = "
+            SELECT COUNT(*) as count FROM {$this->table}
+            WHERE user_id = :user_id AND is_read = 0
+        ";
+        
+        $result = $this->dbHelper->selectOne($query, [':user_id' => $userId]);
+        return $result ? (int)$result['count'] : 0;
+    }
+
+    /**
+     * Find a notification by ID and ensure it belongs to the specified user.
+     *
+     * @param int $id
+     * @param int $userId
+     * @return array|null
+     */
+    public function findForUser(int $id, int $userId): ?array
+    {
+        $query = "
+            SELECT * FROM {$this->table}
+            WHERE id = :id AND user_id = :user_id
+        ";
+        
+        $result = $this->dbHelper->select($query, [':id' => $id, ':user_id' => $userId]);
+        return $result[0] ?? null;
+    }
+
+    /**
+     * Delete all notifications for a user.
+     *
+     * @param int $userId
+     * @return bool
+     */
+    public function deleteAllForUser(int $userId): bool
+    {
+        $result = $this->dbHelper->delete($this->table, ['user_id' => $userId]);
+        
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'all_notifications_deleted', [
+                'user_id' => $userId
+            ]);
+        }
+        
+        return $result;
+    }
+
+    /**
      * Get the user associated with a notification.
      *
      * @param int $notificationId

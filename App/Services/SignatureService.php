@@ -7,7 +7,7 @@ use GuzzleHttp\Client;
 use Psr\Log\LoggerInterface;
 use App\Services\FileStorage;
 use App\Services\EncryptionService;
-use App\Helpers\DatabaseHelper;
+use App\Models\Signature;
 use App\Helpers\ExceptionHandler;
 
 /**
@@ -19,7 +19,7 @@ class SignatureService
 {
     public const DEBUG_MODE = true;
     private LoggerInterface $logger;
-    private DatabaseHelper $db;
+    private Signature $signatureModel;
     private string $apiEndpoint;
     private string $apiKey;
     private FileStorage $fileStorage;
@@ -28,7 +28,7 @@ class SignatureService
 
     public function __construct(
         LoggerInterface $logger,
-        DatabaseHelper $db,
+        Signature $signatureModel,
         array $config,
         FileStorage $fileStorage,
         EncryptionService $encryptionService,
@@ -39,7 +39,7 @@ class SignatureService
         }
 
         $this->logger = $logger;
-        $this->db = $db;
+        $this->signatureModel = $signatureModel;
         $this->apiEndpoint = $config['api_endpoint'];
         $this->apiKey = $config['api_key'];
         $this->fileStorage = $fileStorage;
@@ -59,12 +59,8 @@ class SignatureService
         $storagePath = $this->fileStorage->storeFile("signatures/{$userId}", $fileName, $encryptedContent, false);
 
         try {
-            $this->db->table('signatures')->insert([
-                'user_id'   => $userId,
-                'file_path' => $storagePath,
-                'encrypted' => true,
-                'created_at'=> date('Y-m-d H:i:s'),
-            ]);
+            $this->signatureModel->storeSignaturePath($userId, $storagePath, true);
+            
             if (self::DEBUG_MODE) {
                 $this->logger->info("[db] Signature record created", ['userId' => $userId, 'storagePath' => $storagePath]);
             }
@@ -141,13 +137,34 @@ class SignatureService
      */
     public function getSignatures(int $userId): array
     {
-        $storedSignatures = $this->fileStorage->retrieveFiles("signatures/{$userId}");
-
-        if (empty($storedSignatures)) {
+        $signatures = $this->signatureModel->getSignaturesByUserId($userId);
+        
+        if (empty($signatures)) {
             throw new Exception('No signatures found.');
         }
-
-        return array_map(fn($path) => $this->encryptionService->decrypt($this->fileStorage->retrieveFile($path, false)), $storedSignatures);
+        
+        $result = [];
+        foreach ($signatures as $signature) {
+            $result[] = $this->encryptionService->decrypt(
+                $this->fileStorage->retrieveFile($signature['file_path'], false)
+            );
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Get signature for a specific user
+     */
+    public function getSignature(int $userId): ?string
+    {
+        $signaturePath = $this->signatureModel->getSignaturePathByUserId($userId);
+        
+        if (!$signaturePath) {
+            return null;
+        }
+        
+        return $signaturePath;
     }
 
     /**
@@ -180,24 +197,17 @@ class SignatureService
                 'headers' => $this->getAuthHeaders(),
                 'sink' => $outputPath,
             ]);
-
-            return $response->getStatusCode() === 200;
+            
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[api] Downloaded signed document", ['requestId' => $requestId]);
+            }
+            
+            return true;
         } catch (Exception $e) {
-            $this->logger->error("[api] Failed to download AES signed document: " . $e->getMessage());
+            $this->logger->error("[api] Failed to download signed document: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
-            throw new Exception("Failed to download AES signed document: " . $e->getMessage());
+            throw new Exception("Failed to download signed document: " . $e->getMessage());
         }
-    }
-
-    /**
-     * Get authentication headers for API requests.
-     */
-    private function getAuthHeaders(): array
-    {
-        return [
-            'Authorization' => "Bearer {$this->apiKey}",
-            'Content-Type'  => 'application/json',
-        ];
     }
 
     /**
@@ -218,5 +228,17 @@ class SignatureService
     {
         $this->logger->error($message, ['error' => $e->getMessage()]);
         throw new Exception("$message: " . $e->getMessage());
+    }
+
+    /**
+     * Get authentication headers for API requests.
+     */
+    private function getAuthHeaders(): array
+    {
+        return [
+            'Authorization' => 'Bearer ' . $this->apiKey,
+            'Content-Type' => 'application/json',
+            'X-Signature-Key' => $this->config['signature_key'] ?? '',
+        ];
     }
 }

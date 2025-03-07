@@ -2,193 +2,253 @@
 
 namespace App\Services\Payment;
 
+use App\Models\TransactionLog;
+use App\Models\Payment;
+use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
 use Exception;
 
 class PaymentGatewayService
 {
     /**
-     * Handles external gateway payments, including:
-     *  - Initiating payment requests to Stripe, PayU, or other providers
-     *  - Handling responses and mapping them to a standard format
-     *  - Fraud detection/authorization logic (if the gateway doesn’t already do it)
-     *  - Handling webhooks or callback data to confirm payment status
-     *  - Logging relevant details for debugging
-     *
-     * @author 
-     * @version 1.0
-     * @description
-     *   - External API calls to payment gateways
-     *   - Securely handling API keys/credentials (from .env or config)
-     *   - Logging errors, warnings, or debug info via LoggerInterface
+     * Handles external gateway payments
      */
-
     private LoggerInterface $logger;
+    private TransactionLog $transactionLogModel;
+    private Payment $paymentModel;
+    private AuditService $auditService;
+    private array $gatewayConfigs;
 
     /**
-     * Depending on your actual gateway usage, you might need:
-     *  - Guzzle or another HTTP client
-     *  - Gateway-specific SDKs
-     *  - Configuration values for API keys, secrets, etc.
-     *
-     * @param LoggerInterface $logger
+     * Constructor with required dependencies
      */
-    public function __construct(LoggerInterface $logger)
-    {
+    public function __construct(
+        LoggerInterface $logger, 
+        TransactionLog $transactionLogModel,
+        Payment $paymentModel,
+        AuditService $auditService
+    ) {
         $this->logger = $logger;
+        $this->transactionLogModel = $transactionLogModel;
+        $this->paymentModel = $paymentModel;
+        $this->auditService = $auditService;
+        
+        // Load gateway configurations
+        $this->gatewayConfigs = [
+            'stripe' => [
+                'api_key' => $_ENV['STRIPE_API_KEY'] ?? null,
+                'webhook_secret' => $_ENV['STRIPE_WEBHOOK_SECRET'] ?? null,
+            ],
+            'payu' => [
+                'merchant_id' => $_ENV['PAYU_MERCHANT_ID'] ?? null,
+                'api_key' => $_ENV['PAYU_API_KEY'] ?? null,
+            ]
+        ];
     }
 
     /**
-     * Orchestrates payment with the specified gateway.
+     * Process payment with the specified gateway
      *
-     * @param string $gatewayName  E.g. "stripe", "payu", etc.
-     * @param array  $paymentData  [
-     *       'amount'     => 120.00,
-     *       'currency'   => 'USD',
-     *       'card_token' => 'tok_abc123', // Stripe example
-     *       // Possibly customer info, etc...
-     * ]
+     * @param string $gatewayName
+     * @param array $paymentData
      * @return array
-     *   Typically includes a standardized response: ['status' => 'success', 'gateway_id' => 'XYZ']
      */
     public function processPayment(string $gatewayName, array $paymentData): array
     {
         try {
-            // Example: Switch or strategy pattern for different gateways
-            switch (strtolower($gatewayName)) {
-                case 'stripe':
-                    return $this->processStripePayment($paymentData);
-
-                case 'payu':
-                    return $this->processPayUPayment($paymentData);
-
-                default:
-                    throw new Exception("Unsupported payment gateway: {$gatewayName}");
+            // Validate basic payment data
+            if (!isset($paymentData['amount']) || !isset($paymentData['user_id'])) {
+                throw new Exception("Missing required payment data");
             }
+            
+            // Make sure we have gateway configuration
+            $gatewayName = strtolower($gatewayName);
+            if (!isset($this->gatewayConfigs[$gatewayName])) {
+                throw new Exception("Unsupported payment gateway: {$gatewayName}");
+            }
+            
+            // Process payment based on gateway
+            switch ($gatewayName) {
+                case 'stripe':
+                    $result = $this->processStripePayment($paymentData);
+                    break;
+                case 'payu':
+                    $result = $this->processPayUPayment($paymentData);
+                    break;
+                default:
+                    throw new Exception("Gateway implementation not found: {$gatewayName}");
+            }
+            
+            // Create payment record if successful
+            if ($result['status'] === 'success') {
+                $paymentId = $this->paymentModel->createPayment([
+                    'user_id' => $paymentData['user_id'],
+                    'booking_id' => $paymentData['booking_id'] ?? null,
+                    'amount' => $paymentData['amount'],
+                    'method' => $gatewayName,
+                    'status' => 'completed',
+                    'transaction_id' => $result['gateway_id'] ?? null,
+                    'currency' => $paymentData['currency'] ?? 'USD',
+                ]);
+                
+                // Log transaction
+                $this->transactionLogModel->logTransaction([
+                    'payment_id' => $paymentId,
+                    'booking_id' => $paymentData['booking_id'] ?? null,
+                    'user_id' => $paymentData['user_id'],
+                    'amount' => $paymentData['amount'],
+                    'currency' => $paymentData['currency'] ?? 'USD',
+                    'status' => 'completed',
+                    'type' => 'payment',
+                    'description' => "Payment processed via {$gatewayName}",
+                    'gateway' => $gatewayName,
+                    'gateway_transaction_id' => $result['gateway_id'] ?? null,
+                ]);
+                
+                // Add payment ID to result
+                $result['payment_id'] = $paymentId;
+            }
+            
+            return $result;
         } catch (Exception $e) {
             $this->logger->error('Payment gateway error', [
                 'gateway' => $gatewayName,
-                'data'    => $paymentData,
-                'error'   => $e->getMessage()
+                'data' => $paymentData,
+                'error' => $e->getMessage()
             ]);
+            
+            $this->auditService->logEvent(
+                'payment_gateway',
+                'payment_failed',
+                [
+                    'gateway' => $gatewayName,
+                    'error' => $e->getMessage(),
+                    'user_id' => $paymentData['user_id'] ?? null,
+                    'booking_id' => $paymentData['booking_id'] ?? null,
+                    'amount' => $paymentData['amount'] ?? null
+                ],
+                $paymentData['user_id'] ?? null,
+                $paymentData['booking_id'] ?? null
+            );
+            
             throw $e;
         }
     }
 
     /**
-     * Generic handler for gateway webhook callbacks.
-     * Gateways typically send POST requests to a URL you define.
+     * Handle gateway callback/webhook
      *
      * @param string $gatewayName
-     * @param array  $callbackData e.g. JSON payload from Stripe/PayU
+     * @param array $callbackData
      * @return array
-     *   Provide a response that your app can use to confirm payment status, etc.
      */
     public function handleCallback(string $gatewayName, array $callbackData): array
     {
         try {
-            // You might do signature verification or event type checks here
-            // For example, with Stripe: verify the event using a secret key
-
-            switch (strtolower($gatewayName)) {
+            $gatewayName = strtolower($gatewayName);
+            
+            if (!isset($this->gatewayConfigs[$gatewayName])) {
+                throw new Exception("Unsupported payment gateway callback: {$gatewayName}");
+            }
+            
+            switch ($gatewayName) {
                 case 'stripe':
                     return $this->handleStripeCallback($callbackData);
-
                 case 'payu':
                     return $this->handlePayUCallback($callbackData);
-
                 default:
-                    throw new Exception("Unsupported payment gateway callback: {$gatewayName}");
+                    throw new Exception("Gateway callback implementation not found: {$gatewayName}");
             }
         } catch (Exception $e) {
             $this->logger->error('Payment gateway callback error', [
                 'gateway' => $gatewayName,
-                'data'    => $callbackData,
-                'error'   => $e->getMessage()
+                'data' => $callbackData,
+                'error' => $e->getMessage()
             ]);
-            // In practice, you’d respond with an HTTP error or a structured JSON error
+            
             throw $e;
         }
     }
 
     /**
-     * Example: Implementation detail for Stripe payment
-     *
-     * @param array $paymentData
-     * @return array
+     * Process Stripe payment
      */
     private function processStripePayment(array $paymentData): array
     {
-        // Pseudocode for Stripe integration
-        // You’d typically use Stripe’s PHP SDK or an HTTP call
-        // $stripe = new \Stripe\StripeClient($this->stripeApiKey);
-        // $charge = $stripe->charges->create([...]);
-        // return some standardized format
-
+        // In a real implementation, this would use the Stripe SDK
         $this->logger->info('Processing Stripe payment', $paymentData);
 
-        // Placeholder return
+        // Let's simulate a successful payment
         return [
-            'status'     => 'success',
-            'gateway_id' => 'stripe_charge_ABC123',
-            'message'    => 'Stripe payment completed.'
+            'status' => 'success',
+            'gateway_id' => 'stripe_' . bin2hex(random_bytes(8)),
+            'message' => 'Stripe payment completed'
         ];
     }
 
     /**
-     * Example: Implementation detail for PayU payment
-     *
-     * @param array $paymentData
-     * @return array
+     * Process PayU payment
      */
     private function processPayUPayment(array $paymentData): array
     {
+        // In a real implementation, this would use the PayU API
         $this->logger->info('Processing PayU payment', $paymentData);
-
-        // Pseudocode for PayU
-        // $response = $this->httpClient->post('https://api.payu.com/v2/payments', [...]);
-        // parse response, handle success/failure
-
-        // Placeholder return
+        
+        // Let's simulate a successful payment
         return [
-            'status'     => 'success',
-            'gateway_id' => 'payu_transaction_ABC123',
-            'message'    => 'PayU payment completed.'
+            'status' => 'success',
+            'gateway_id' => 'payu_' . bin2hex(random_bytes(8)),
+            'message' => 'PayU payment completed'
         ];
     }
 
     /**
-     * Example method for handling Stripe webhook data
-     *
-     * @param array $callbackData
-     * @return array
+     * Handle Stripe webhook callback
      */
     private function handleStripeCallback(array $callbackData): array
     {
-        // E.g., verify signature, parse event, check payment_intent status, etc.
-        $this->logger->info('Handling Stripe webhook callback', $callbackData);
-
-        // Return standardized response
+        $this->logger->info('Processing Stripe callback', $callbackData);
+        
+        // In a real implementation, this would:
+        // 1. Verify the webhook signature using Stripe SDK
+        // 2. Extract payment details and status
+        // 3. Update corresponding payment record
+        // 4. Log transaction update
+        
+        // Let's simulate processing a webhook
+        if (isset($callbackData['type']) && $callbackData['type'] === 'payment_intent.succeeded') {
+            // Update payment and transaction in database
+            
+            // Audit the event
+            $this->auditService->logEvent(
+                'payment_gateway',
+                'webhook_processed',
+                [
+                    'gateway' => 'stripe',
+                    'event_type' => $callbackData['type'],
+                    'payment_intent_id' => $callbackData['data']['object']['id'] ?? null
+                ]
+            );
+        }
+        
         return [
-            'status'  => 'received',
-            'message' => 'Stripe webhook processed.'
+            'status' => 'received',
+            'message' => 'Stripe webhook processed'
         ];
     }
 
     /**
-     * Example method for handling PayU webhook data
-     *
-     * @param array $callbackData
-     * @return array
+     * Handle PayU webhook callback
      */
     private function handlePayUCallback(array $callbackData): array
     {
-        $this->logger->info('Handling PayU webhook callback', $callbackData);
-
-        // Return standardized response
+        $this->logger->info('Processing PayU callback', $callbackData);
+        
+        // Similar to Stripe callback handling, with PayU-specific logic
+        
         return [
-            'status'  => 'received',
-            'message' => 'PayU webhook processed.'
+            'status' => 'received',
+            'message' => 'PayU webhook processed'
         ];
     }
 }

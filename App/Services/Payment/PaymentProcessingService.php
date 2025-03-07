@@ -15,17 +15,6 @@ class PaymentProcessingService
     /**
      * Handles payment initiation, validation, database transactions,
      * and logging for successful or failed payments.
-     *
-     * @author 
-     * @version 1.0
-     * @description
-     *   - PaymentValidation & Payment Initiation
-     *   - Transaction handling (beginTransaction, commit/rollback)
-     *   - Stores payment record in Payment model
-     *   - Updates booking status in Booking model
-     *   - Logs transaction in TransactionLog model
-     *   - Uses AuditService for successful payment and fraud validation
-     *   - Uses LoggerInterface for API failures and debugging
      */
     private DatabaseHelper $dbHelper;
     private Payment $paymentModel;
@@ -57,14 +46,6 @@ class PaymentProcessingService
      * Main method for processing a payment.
      * 
      * @param array $paymentData
-     *   Example structure: [
-     *       'booking_id' => 123,
-     *       'amount'     => 500.00,
-     *       'currency'   => 'USD',
-     *       'payment_method' => 'stripe',
-     *       'customer_id' => 456,
-     *       // Other relevant data...
-     *   ]
      * @return array
      *   Return a standardized response, e.g. ['status' => 'success', 'payment_id' => XYZ]
      * @throws Exception
@@ -103,26 +84,26 @@ class PaymentProcessingService
         $this->dbHelper->beginTransaction();
 
         try {
-            // 1. Create Payment record
+            // Create Payment record using the model
             $paymentId = $this->paymentModel->createPayment($paymentData);
 
-            // 2. Update Booking status using the updateStatus method
+            // Update Booking status
             $this->bookingModel->updateStatus($paymentData['booking_id'], 'paid');
 
-            // 3. Insert Transaction Log entry
+            // Insert Transaction Log entry
             $this->transactionLogModel->logTransaction([
                 'payment_id' => $paymentId,
                 'booking_id' => $paymentData['booking_id'],
                 'amount' => $paymentData['amount'],
-                'currency' => $paymentData['currency'],
+                'currency' => $paymentData['currency'] ?? 'USD',
                 'status' => 'completed',
                 'description' => 'Payment processed successfully.',
             ]);
 
-            // 4. Commit transaction
+            // Commit transaction
             $this->dbHelper->commit();
 
-            // 5. Audit successful payment with enhanced audit data
+            // Audit successful payment
             $auditPaymentData = array_merge($paymentData, [
                 'payment_id' => $paymentId,
                 'timestamp' => date('Y-m-d H:i:s'),

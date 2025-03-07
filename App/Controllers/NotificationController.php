@@ -2,10 +2,10 @@
 
 namespace App\Controllers;
 
-use App\Models\Notification;
+use App\Services\NotificationService;
 use App\Services\AuthService;
 use App\Helpers\JsonResponse;
-use App\Helpers\TokenValidator;
+use App\Services\TokenService;
 use App\Helpers\ExceptionHandler;
 use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
@@ -25,15 +25,21 @@ class NotificationController extends Controller
     protected LoggerInterface $logger;
     protected ExceptionHandler $exceptionHandler;
     private AuditService $auditService;
+    private TokenService $tokenService;
+    private NotificationService $notificationService;
 
     public function __construct(
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
-        AuditService $auditService
+        AuditService $auditService,
+        TokenService $tokenService,
+        NotificationService $notificationService
     ) {
         parent::__construct($logger, $exceptionHandler);
         $this->exceptionHandler = $exceptionHandler;
         $this->auditService = $auditService;
+        $this->tokenService = $tokenService;
+        $this->notificationService = $notificationService;
     }
 
     /**
@@ -42,12 +48,17 @@ class NotificationController extends Controller
     public function viewNotifications(): ResponseInterface
     {
         try {
-            $userId = AuthService::getUserIdFromToken();
+            // Use TokenService to validate the request and get the user
+            $user = $this->tokenService->validateRequest($this->request);
+            if (!$user) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'message' => 'Invalid token or unauthorized access'
+                ], 401);
+            }
             
-            $notifications = Notification::with('user')
-                ->where('user_id', $userId)
-                ->latest()
-                ->get();
+            $userId = $user['id'];
+            $notifications = $this->notificationService->getUserNotifications($userId);
                 
             // Log notification view in audit logs
             $this->auditService->logEvent(
@@ -80,7 +91,7 @@ class NotificationController extends Controller
     public function getUserNotifications(): ResponseInterface
     {
         try {
-            $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+            $user = $this->tokenService->validateRequest($this->request);
             if (!$user) {
                 return $this->jsonResponse([
                     'status' => 'error',
@@ -88,17 +99,14 @@ class NotificationController extends Controller
                 ], 401);
             }
 
-            $notifications = Notification::with('user')
-                ->where('user_id', $user->id)
-                ->latest()
-                ->get();
+            $notifications = $this->notificationService->getUserNotifications($user['id']);
                 
             // Log in audit logs
             $this->auditService->logEvent(
                 'user_notifications_fetched',
                 "User fetched their notifications via API",
-                ['user_id' => $user->id],
-                $user->id,
+                ['user_id' => $user['id']],
+                $user['id'],
                 null,
                 'notification'
             );
@@ -124,7 +132,7 @@ class NotificationController extends Controller
     public function fetchNotificationsAjax(): ResponseInterface
     {
         try {
-            $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+            $user = $this->tokenService->validateRequest($this->request);
             if (!$user) {
                 return $this->jsonResponse([
                     'status' => 'error',
@@ -132,18 +140,15 @@ class NotificationController extends Controller
                 ], 401);
             }
 
-            $notifications = Notification::with('user')
-                ->where('user_id', $user->id)
-                ->where('is_read', false)
-                ->latest()
-                ->get();
+            $notifications = $this->notificationService->getUnreadNotifications($user['id']);
+            $notificationCount = count($notifications);
                 
             // Log notification fetch in audit logs
             $this->auditService->logEvent(
                 'unread_notifications_fetched',
                 "User fetched unread notifications",
-                ['user_id' => $user->id, 'count' => $notifications->count()],
-                $user->id,
+                ['user_id' => $user['id'], 'count' => $notificationCount],
+                $user['id'],
                 null,
                 'notification'
             );
@@ -169,7 +174,7 @@ class NotificationController extends Controller
     public function markNotificationAsRead(): ResponseInterface
     {
         try {
-            $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+            $user = $this->tokenService->validateRequest($this->request);
             if (!$user) {
                 return $this->jsonResponse([
                     'status' => 'error',
@@ -181,24 +186,23 @@ class NotificationController extends Controller
                 'notification_id' => 'required|integer'
             ]);
 
-            $notification = Notification::findOrFail($data['notification_id']);
-            
-            // Ensure user owns this notification
-            if ($notification->user_id != $user->id) {
+            // Verify ownership first using notification service
+            $notification = $this->notificationService->verifyNotificationOwnership($data['notification_id'], $user['id']);
+            if (!$notification) {
                 return $this->jsonResponse([
                     'status' => 'error',
-                    'message' => 'Unauthorized'
-                ], 403);
+                    'message' => 'Notification not found or access denied'
+                ], 404);
             }
 
-            $notification->update(['is_read' => true]);
+            $result = $this->notificationService->markAsRead($data['notification_id']);
             
             // Log in audit logs
             $this->auditService->logEvent(
                 'notification_marked_as_read',
                 "User marked a notification as read",
-                ['user_id' => $user->id, 'notification_id' => $data['notification_id']],
-                $user->id,
+                ['user_id' => $user['id'], 'notification_id' => $data['notification_id']],
+                $user['id'],
                 null,
                 'notification'
             );
@@ -223,7 +227,7 @@ class NotificationController extends Controller
     public function deleteNotification(): ResponseInterface
     {
         try {
-            $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+            $user = $this->tokenService->validateRequest($this->request);
             if (!$user) {
                 return $this->jsonResponse([
                     'status' => 'error',
@@ -235,24 +239,23 @@ class NotificationController extends Controller
                 'notification_id' => 'required|integer'
             ]);
 
-            $notification = Notification::findOrFail($data['notification_id']);
-            
-            // Ensure user owns this notification
-            if ($notification->user_id != $user->id) {
+            // Verify ownership first using notification service
+            $notification = $this->notificationService->verifyNotificationOwnership($data['notification_id'], $user['id']);
+            if (!$notification) {
                 return $this->jsonResponse([
                     'status' => 'error',
-                    'message' => 'Unauthorized'
-                ], 403);
+                    'message' => 'Notification not found or access denied'
+                ], 404);
             }
 
-            $notification->delete();
+            $this->notificationService->deleteNotification($data['notification_id']);
             
             // Log in audit logs
             $this->auditService->logEvent(
                 'notification_deleted',
                 "User deleted a notification",
-                ['user_id' => $user->id, 'notification_id' => $data['notification_id']],
-                $user->id,
+                ['user_id' => $user['id'], 'notification_id' => $data['notification_id']],
+                $user['id'],
                 null,
                 'notification'
             );
@@ -277,7 +280,7 @@ class NotificationController extends Controller
     public function sendNotification(): ResponseInterface
     {
         try {
-            $user = TokenValidator::validateToken($this->request->getHeader('Authorization'));
+            $user = $this->tokenService->validateRequest($this->request);
             if (!$user) {
                 return $this->jsonResponse([
                     'status' => 'error',
@@ -292,30 +295,41 @@ class NotificationController extends Controller
                 'options' => 'nullable|array',
             ]);
 
-            // Store notification via Eloquent
-            $notification = Notification::create([
-                'user_id' => $data['user_id'],
-                'type'    => $data['type'],
-                'message' => $data['message'],
-                'sent_at' => date('Y-m-d H:i:s'),
-                'is_read' => false,
-            ]);
+            $options = $data['options'] ?? [];
+            
+            // Use service to send notification
+            $result = $this->notificationService->sendNotification(
+                $data['user_id'], 
+                $data['type'], 
+                $data['message'], 
+                $options
+            );
+            
+            if (!$result) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'Failed to send notification'
+                ], 500);
+            }
             
             // Log in audit logs
             $this->auditService->logEvent(
                 'notification_sent',
                 "User sent a notification",
-                ['user_id' => $data['user_id'], 'notification_id' => $notification->id],
-                $user->id,
+                ['user_id' => $data['user_id'], 'type' => $data['type']],
+                $user['id'],
                 null,
                 'notification'
             );
             
-            // Optionally dispatch via queue or any external channel here.
+            // Get the recent notifications to return the newly created one
+            $recentNotifications = $this->notificationService->getUserNotifications($data['user_id']);
+            $latestNotification = !empty($recentNotifications) ? $recentNotifications[0] : null;
+            
             return $this->jsonResponse([
                 'status' => 'success',
                 'message' => 'Notification sent successfully',
-                'data' => ['notification' => $notification]
+                'data' => ['notification' => $latestNotification]
             ]);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);

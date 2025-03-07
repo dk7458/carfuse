@@ -120,7 +120,7 @@ $logger->info("🔄 Environment variables loaded from {$dotenvPath}");
 // Step 3: Load Configuration Files Dynamically
 $config = [];
 $configDir = __DIR__ . '/config';
-$requiredConfigs = ['database', 'encryption', 'app', 'filestorage', 'keymanager'];
+$requiredConfigs = ['database', 'encryption', 'app', 'filestorage', 'keymanager', 'documents'];
 
 // First, load required configuration files
 foreach ($requiredConfigs as $file) {

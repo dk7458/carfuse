@@ -7,7 +7,6 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Log\LoggerInterface;
 use App\Services\Auth\TokenService;
-use App\Helpers\DatabaseHelper;
 use App\Services\RateLimiter;
 use App\Helpers\ExceptionHandler;
 
@@ -16,7 +15,6 @@ class AuthController extends Controller
     protected LoggerInterface $logger;
     private AuthService $authService;
     private TokenService $tokenService;
-    private $pdo;
     private RateLimiter $rateLimiter;
     protected ExceptionHandler $exceptionHandler;
 
@@ -24,14 +22,12 @@ class AuthController extends Controller
         LoggerInterface $logger,
         AuthService $authService,
         TokenService $tokenService,
-        DatabaseHelper $dbHelper,
         RateLimiter $rateLimiter,
         ExceptionHandler $exceptionHandler
     ) {
         parent::__construct($logger, $exceptionHandler);
         $this->authService = $authService;
         $this->tokenService = $tokenService;
-        $this->pdo = $dbHelper->getPdo();
         $this->rateLimiter = $rateLimiter;
         $this->exceptionHandler = $exceptionHandler;
     }    

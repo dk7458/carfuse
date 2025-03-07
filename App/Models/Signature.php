@@ -10,6 +10,14 @@ class Signature extends BaseModel
     protected $resourceName = 'signature';
     protected $useTimestamps = true;
     protected $useSoftDeletes = false;
+    private EncryptionService $encryptionService;
+
+    public function __construct(DatabaseHelper $db, EncryptionService $encryptionService = null)
+    {
+        parent::__construct($db);
+        // If encryption service is not injected, try to resolve it through container or create new instance
+        $this->encryptionService = $encryptionService ?? app(EncryptionService::class) ?? new EncryptionService();
+    }
 
     /**
      * Create a new signature.
@@ -20,7 +28,7 @@ class Signature extends BaseModel
     public function create(array $data): int
     {
         if (isset($data['signature'])) {
-            $data['signature'] = EncryptionService::encrypt($data['signature']);
+            $data['signature'] = $this->encryptionService->encrypt($data['signature']);
         }
 
         return parent::create($data);
@@ -36,7 +44,7 @@ class Signature extends BaseModel
     public function update(int $id, array $data): bool
     {
         if (isset($data['signature'])) {
-            $data['signature'] = EncryptionService::encrypt($data['signature']);
+            $data['signature'] = $this->encryptionService->encrypt($data['signature']);
         }
 
         return parent::update($id, $data);
@@ -53,7 +61,7 @@ class Signature extends BaseModel
         $signature = $this->find($signatureId);
 
         if ($signature && isset($signature['signature'])) {
-            return EncryptionService::decrypt($signature['signature']);
+            return $this->encryptionService->decrypt($signature['signature']);
         }
 
         return null;
@@ -77,5 +85,53 @@ class Signature extends BaseModel
         $stmt = $this->pdo->prepare($query);
         $stmt->execute([':user_id' => $signature['user_id']]);
         return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Store signature file path.
+     *
+     * @param int $userId
+     * @param string $filePath
+     * @param bool $encrypted
+     * @return int
+     */
+    public function storeSignaturePath(int $userId, string $filePath, bool $encrypted = true): int
+    {
+        return $this->create([
+            'user_id' => $userId,
+            'file_path' => $filePath,
+            'encrypted' => $encrypted,
+            'created_at' => date('Y-m-d H:i:s')
+        ]);
+    }
+
+    /**
+     * Get signatures by user ID.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getSignaturesByUserId(int $userId): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get signature path by user ID.
+     *
+     * @param int $userId
+     * @return string|null
+     */
+    public function getSignaturePathByUserId(int $userId): ?string
+    {
+        $query = "SELECT file_path FROM {$this->table} WHERE user_id = :user_id ORDER BY created_at DESC LIMIT 1";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+        
+        return $result ? $result['file_path'] : null;
     }
 }

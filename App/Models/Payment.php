@@ -25,7 +25,23 @@ class Payment extends BaseModel
 {
     protected $table = 'payments';
     protected $resourceName = 'payment';
-    
+    protected $useSoftDeletes = true;
+
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'user_id',
+        'booking_id',
+        'amount',
+        'type',
+        'status',
+        'created_at',
+        'updated_at'
+    ];
+
     /**
      * Validation rules for the model.
      *
@@ -305,17 +321,42 @@ class Payment extends BaseModel
     }
 
     /**
-     * Get payments within a date range.
-     * Replaces scopeByDateRange.
+     * Get payments within a date range with optional filters
      *
-     * @param string $startDate
-     * @param string $endDate
+     * @param string $start
+     * @param string $end
+     * @param array $filters
      * @return array
      */
-    public function getByDateRange(string $startDate, string $endDate): array
+    public function getByDateRange(string $start, string $end, array $filters = []): array
     {
-        $query = "SELECT * FROM {$this->table} WHERE created_at BETWEEN :start_date AND :end_date AND deleted_at IS NULL ORDER BY created_at DESC";
-        return $this->dbHelper->select($query, [':start_date' => $startDate, ':end_date' => $endDate]);
+        $query = "SELECT p.*, u.name as user_name 
+                 FROM {$this->table} p
+                 LEFT JOIN users u ON p.user_id = u.id
+                 WHERE p.created_at BETWEEN :start AND :end";
+
+        if ($this->useSoftDeletes) {
+            $query .= " AND p.deleted_at IS NULL";
+        }
+        
+        $params = [':start' => $start, ':end' => $end];
+        
+        if (!empty($filters['type'])) {
+            $query .= " AND p.type = :type";
+            $params[':type'] = $filters['type'];
+        }
+        
+        if (!empty($filters['status'])) {
+            $query .= " AND p.status = :status";
+            $params[':status'] = $filters['status'];
+        }
+        
+        // Add sorting
+        $query .= " ORDER BY p.created_at DESC";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
     /**
@@ -423,5 +464,75 @@ class Payment extends BaseModel
                   
         $result = $this->dbHelper->select($query, [':payment_id' => $paymentId]);
         return (float)($result[0]['total_refunded'] ?? 0);
+    }
+
+    /**
+     * Create a payment and return its ID
+     * 
+     * @param array $paymentData Payment details
+     * @return int ID of created payment
+     * @throws \Exception If creation fails
+     */
+    public function createPayment(array $paymentData): int
+    {
+        // Set default values if not provided
+        $data = array_merge([
+            'status' => 'pending',
+            'type' => 'payment',
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s')
+        ], $paymentData);
+        
+        // Encrypt sensitive data
+        $data = $this->encryptSensitiveData($data);
+        
+        // Create the payment record
+        $paymentId = $this->create($data);
+        
+        if (!$paymentId) {
+            throw new \Exception('Payment creation failed');
+        }
+        
+        // Log the payment creation for security auditing
+        if ($this->auditService) {
+            $this->auditService->logEvent(
+                $this->resourceName,
+                'payment_created',
+                [
+                    'payment_id' => $paymentId,
+                    'user_id' => $data['user_id'],
+                    'amount' => $paymentData['amount'], // Use unencrypted amount for audit
+                    'method' => $data['method'],
+                    'status' => $data['status']
+                ],
+                $data['user_id'] ?? null
+            );
+        }
+        
+        return $paymentId;
+    }
+
+    /**
+     * Get payments for a specific user within a date range
+     *
+     * @param int $userId
+     * @param string $start
+     * @param string $end
+     * @return array
+     */
+    public function getByUserAndDateRange(int $userId, string $start, string $end): array
+    {
+        $query = "SELECT * FROM {$this->table} 
+                 WHERE user_id = :user_id
+                 AND created_at BETWEEN :start AND :end";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':start' => $start,
+            ':end' => $end
+        ]);
+        
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 }

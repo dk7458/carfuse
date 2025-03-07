@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Booking;
 use Exception;
-use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 
@@ -13,18 +12,15 @@ class BookingService
     public const DEBUG_MODE = true;
     private LoggerInterface $logger;
     private ExceptionHandler $exceptionHandler;
-    private DatabaseHelper $db;
     private Booking $bookingModel;
 
     public function __construct(
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
-        DatabaseHelper $db,
         Booking $bookingModel
     ) {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
-        $this->db = $db;
         $this->bookingModel = $bookingModel;
     }
 
@@ -70,7 +66,6 @@ class BookingService
                 throw new Exception("Failed to update booking.");
             }
             
-            // Business-level logging (keep it as it's not just a record change)
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Booking] Rescheduled booking id: {$id}");
             }
@@ -92,18 +87,22 @@ class BookingService
                 throw new Exception("Booking not found.");
             }
 
-            $updated = $this->bookingModel->update($id, ['status' => 'canceled']);
+            $refundAmount = $this->calculateRefundAmount($booking);
+            
+            $updated = $this->bookingModel->update($id, [
+                'status' => 'canceled',
+                'refund_amount' => $refundAmount
+            ]);
 
             if (!$updated) {
                 throw new Exception("Failed to update booking status.");
             }
             
-            // Business-level logging (keep it as it's not just a record change)
             if (self::DEBUG_MODE) {
                 $this->logger->info("[Booking] Canceled booking id: {$id}");
             }
             
-            return isset($booking['refund_amount']) ? (float)$booking['refund_amount'] : 0.0;
+            return $refundAmount;
         } catch (Exception $e) {
             $this->logger->error("[Booking] ❌ cancelBooking error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
@@ -112,16 +111,37 @@ class BookingService
     }
 
     /**
+     * Calculate refund amount for a booking
+     * 
+     * @param array $booking
+     * @return float
+     */
+    private function calculateRefundAmount(array $booking): float
+    {
+        $pickupDate = new \DateTime($booking['pickup_date']);
+        $now = new \DateTime();
+        $daysUntilPickup = $now->diff($pickupDate)->days;
+        
+        $totalAmount = $booking['total_amount'] ?? 0;
+        
+        // Example refund policy
+        if ($daysUntilPickup > 7) {
+            return $totalAmount * 0.9; // 90% refund if canceled more than 7 days in advance
+        } elseif ($daysUntilPickup > 3) {
+            return $totalAmount * 0.5; // 50% refund if canceled 3-7 days in advance
+        } elseif ($daysUntilPickup > 1) {
+            return $totalAmount * 0.25; // 25% refund if canceled 1-3 days in advance
+        }
+        
+        return 0; // No refund for last-minute cancellations
+    }
+
+    /**
      * Get user ID associated with a booking
      */
     public function getUserIdByBooking(int $id): int
     {
         try {
-            $booking = $this->bookingModel->find($id);
-            if (!$booking) {
-                throw new Exception("Booking not found.");
-            }
-            
             $userId = $this->bookingModel->getUserId($id);
             
             if (!$userId) {
@@ -243,7 +263,7 @@ class BookingService
     /**
      * Check booking availability
      */
-    private function isBookingAvailable(int $vehicleId, string $pickupDate, string $dropoffDate): bool
+    public function isBookingAvailable(int $vehicleId, string $pickupDate, string $dropoffDate): bool
     {
         try {
             $available = $this->bookingModel->isAvailable($vehicleId, $pickupDate, $dropoffDate);
@@ -263,32 +283,38 @@ class BookingService
     /**
      * Create a new booking
      */
-    public function createBooking(int $userId, int $vehicleId, string $pickupDate, string $dropoffDate): array
+    public function createBooking(array $bookingData): array
     {
-        if (!$this->isBookingAvailable($vehicleId, $pickupDate, $dropoffDate)) {
-            $this->logger->error("[Booking] ❌ Vehicle not available for booking (vehicle id: {$vehicleId})");
+        if (!$this->isBookingAvailable($bookingData['vehicle_id'], $bookingData['pickup_date'], $bookingData['dropoff_date'])) {
+            $this->logger->error("[Booking] ❌ Vehicle not available for booking (vehicle id: {$bookingData['vehicle_id']})");
             return ['status' => 'error', 'message' => 'Vehicle not available for the selected dates'];
         }
 
         try {
-            $bookingData = [
-                'user_id'     => $userId,
-                'vehicle_id'  => $vehicleId,
-                'pickup_date' => $pickupDate,
-                'dropoff_date'=> $dropoffDate,
-                'status'      => 'booked',
-                'created_at'  => date('Y-m-d H:i:s'),
-                'updated_at'  => date('Y-m-d H:i:s')
-            ];
+            // Add default fields if not provided
+            if (!isset($bookingData['status'])) {
+                $bookingData['status'] = 'booked';
+            }
             
-            $booking = $this->bookingModel->create($bookingData);
+            if (!isset($bookingData['created_at'])) {
+                $bookingData['created_at'] = date('Y-m-d H:i:s');
+            }
+            
+            if (!isset($bookingData['updated_at'])) {
+                $bookingData['updated_at'] = date('Y-m-d H:i:s');
+            }
+            
+            $bookingId = $this->bookingModel->create($bookingData);
 
-            // Business-level logging (keep it as it's not just a record change)
-            if (self::DEBUG_MODE) {
-                $this->logger->info("[Booking] Booking created for user {$userId}");
+            if (!$bookingId) {
+                throw new Exception("Failed to create booking.");
             }
 
-            return ['status' => 'success', 'message' => 'Booking created successfully'];
+            if (self::DEBUG_MODE) {
+                $this->logger->info("[Booking] Booking created for user {$bookingData['user_id']}");
+            }
+
+            return ['status' => 'success', 'message' => 'Booking created successfully', 'booking_id' => $bookingId];
         } catch (Exception $e) {
             $this->logger->error("[Booking] ❌ createBooking error: " . $e->getMessage());
             $this->exceptionHandler->handleException($e);
