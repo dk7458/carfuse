@@ -2,19 +2,37 @@
 
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
+use App\Controllers\AdminController;
+use App\Controllers\AdminDashboardController;
+use App\Controllers\AuditController;
 use App\Controllers\AuthController;
+use App\Controllers\BookingController;
+use App\Controllers\DashboardController;
+use App\Controllers\DocumentController;
+use App\Controllers\NotificationController;
+use App\Controllers\PaymentController;
+use App\Controllers\ReportController;
+use App\Controllers\SignatureController;
 use App\Controllers\UserController;
 use DI\Container;
 
 return function (Container $container) {
     return simpleDispatcher(function (RouteCollector $router) use ($container) {
-        // Ensure the AuthController is instantiated
+        // Get controller instances from the container
         $authController = $container->get(AuthController::class);
-
-        // Ensure the UserController is instantiated
         $userController = $container->get(UserController::class);
+        $adminController = $container->get(AdminController::class);
+        $adminDashboardController = $container->get(AdminDashboardController::class);
+        $auditController = $container->get(AuditController::class);
+        $bookingController = $container->get(BookingController::class);
+        $dashboardController = $container->get(DashboardController::class);
+        $documentController = $container->get(DocumentController::class);
+        $notificationController = $container->get(NotificationController::class);
+        $paymentController = $container->get(PaymentController::class);
+        $reportController = $container->get(ReportController::class);
+        $signatureController = $container->get(SignatureController::class);
 
-        // Define routes
+        // Basic view routes
         $router->addRoute(['GET'], '/', fn() => require '../public/views/home.php');
         $router->addRoute(['GET'], '/dashboard', fn() => require '../public/views/dashboard.php');
         $router->addRoute(['GET'], '/profile', fn() => require '../public/views/user/profile.php');
@@ -24,66 +42,108 @@ return function (Container $container) {
         $router->addRoute(['GET'], '/auth/password_reset', fn() => require '../public/views/auth/password_reset.php');
         $router->addRoute(['GET'], '/documents/signing_page', fn() => require '../public/views/documents/signing_page.php');
 
+        // Auth routes
         $router->addRoute(['POST'], '/api/auth/login', [$authController, 'login']);
         $router->addRoute(['POST'], '/api/auth/register', [$authController, 'register']);
         $router->addRoute(['POST'], '/api/auth/refresh', [$authController, 'refresh']);
         $router->addRoute(['POST'], '/api/auth/logout', [$authController, 'logout']);
-        $router->addRoute(['POST'], '/api/auth/reset-request', [$authController, 'resetPasswordRequest']);
-        $router->addRoute(['POST'], '/api/auth/reset', [$authController, 'resetPassword']); // New endpoint
-        $router->addRoute(['GET'], '/api/auth/userDetails', [$authController, 'userDetails']);
+        $router->addRoute(['GET'], '/api/auth/user', [$authController, 'userDetails']);
+        $router->addRoute(['POST'], '/api/auth/reset-password-request', [$authController, 'resetPasswordRequest']);
+        $router->addRoute(['POST'], '/api/auth/reset-password', [$authController, 'resetPassword']);
 
-        // Protected API Routes (Require Authentication)
-        $router->addGroup('/api/user', function (RouteCollector $r) use ($userController) {
+        // User routes
+        $router->addGroup('/api/users', function (RouteCollector $r) use ($userController) {
+            $r->addRoute(['POST'], '/register', [$userController, 'registerUser']);
             $r->addRoute(['GET'], '/profile', [$userController, 'getUserProfile']);
-            $r->addRoute(['POST'], '/updateProfile', [$userController, 'updateProfile']);
-            $r->addRoute(['GET'], '/settings', 'App\Middleware\TokenValidationMiddleware');
-            $r->addRoute(['GET'], '/notifications', 'App\Middleware\TokenValidationMiddleware');
+            $r->addRoute(['PUT'], '/profile', [$userController, 'updateProfile']);
+            $r->addRoute(['POST'], '/password/request', [$userController, 'requestPasswordReset']);
+            $r->addRoute(['POST'], '/password/reset', [$userController, 'resetPassword']);
+            $r->addRoute(['GET'], '/dashboard', [$userController, 'userDashboard']);
         });
 
-        $router->addGroup('/api/dashboard', function (RouteCollector $r) {
-            $r->addRoute(['GET'], '/metrics', 'App\Middleware\TokenValidationMiddleware');
-            $r->addRoute(['GET'], '/reports', 'App\Middleware\TokenValidationMiddleware');
+        // Admin routes
+        $router->addGroup('/api/admin', function (RouteCollector $r) use ($adminController, $adminDashboardController) {
+            $r->addRoute(['GET'], '/users', [$adminController, 'getAllUsers']);
+            $r->addRoute(['PUT'], '/users/{userId}/role', [$adminController, 'updateUserRole']);
+            $r->addRoute(['DELETE'], '/users/{userId}', [$adminController, 'deleteUser']);
+            $r->addRoute(['GET'], '/dashboard/data', [$adminController, 'getDashboardData']);
+            $r->addRoute(['POST'], '/create', [$adminController, 'createAdmin']);
+            $r->addRoute(['GET'], '/dashboard', [$adminDashboardController, 'index']);
         });
 
-        // Booking API Routes
-        $router->addGroup('/api/bookings', function (RouteCollector $r) {
-            $r->addRoute(['POST'], '/create', 'App\Controllers\BookingController@createBooking');
-            $r->addRoute(['GET'], '/view/{id:\d+}', 'App\Controllers\BookingController@viewBooking');
-            $r->addRoute(['POST'], '/cancel/{id:\d+}', 'App\Controllers\BookingController@cancelBooking');
-            $r->addRoute(['POST'], '/reschedule/{id:\d+}', 'App\Controllers\BookingController@rescheduleBooking');
+        // Audit routes
+        $router->addGroup('/api/audit', function (RouteCollector $r) use ($auditController) {
+            $r->addRoute(['GET'], '', [$auditController, 'index']);
+            $r->addRoute(['POST'], '/fetch', [$auditController, 'fetchLogs']);
+            $r->addRoute(['GET'], '/{id:\d+}', [$auditController, 'getLog']);
+            $r->addRoute(['POST'], '/export', [$auditController, 'exportLogs']);
         });
 
-        // Payment API Routes
-        $router->addGroup('/api/payments', function (RouteCollector $r) {
-            $r->addRoute(['POST'], '/process', 'App\Controllers\PaymentController@processPayment');
-            $r->addRoute(['POST'], '/refund/{id:\d+}', 'App\Controllers\PaymentController@refundPayment');
-            $r->addRoute(['GET'], '/history', 'App\Controllers\PaymentController@paymentHistory');
+        // Dashboard routes
+        $router->addGroup('/api/dashboard', function (RouteCollector $r) use ($dashboardController) {
+            $r->addRoute(['GET'], '', [$dashboardController, 'userDashboard']);
+            $r->addRoute(['GET'], '/bookings', [$dashboardController, 'getUserBookings']);
+            $r->addRoute(['GET'], '/statistics', [$dashboardController, 'fetchStatistics']);
+            $r->addRoute(['GET'], '/notifications', [$dashboardController, 'fetchNotifications']);
+            $r->addRoute(['GET'], '/profile', [$dashboardController, 'fetchUserProfile']);
         });
 
-        // Report API Routes
-        $router->addGroup('/api/reports', function (RouteCollector $r) {
-            $r->addRoute(['POST'], '/generate', 'App\Controllers\ReportController@generateReport');
-            $r->addRoute(['GET'], '/view/{id:\d+}', 'App\Controllers\ReportController@viewReport');
+        // Booking routes
+        $router->addGroup('/api/bookings', function (RouteCollector $r) use ($bookingController) {
+            $r->addRoute(['GET'], '/{id:\d+}', [$bookingController, 'viewBooking']);
+            $r->addRoute(['POST'], '/{id:\d+}/reschedule', [$bookingController, 'rescheduleBooking']);
+            $r->addRoute(['POST'], '/{id:\d+}/cancel', [$bookingController, 'cancelBooking']);
+            $r->addRoute(['GET'], '/{bookingId:\d+}/logs', [$bookingController, 'getBookingLogs']);
+            $r->addRoute(['GET'], '/user', [$bookingController, 'getUserBookings']);
+            $r->addRoute(['POST'], '', [$bookingController, 'createBooking']);
         });
 
-        // Admin API Routes
-        $router->addGroup('/api/admin', function (RouteCollector $r) {
-            $r->addRoute(['GET'], '/users', 'App\Middleware\AuthMiddleware');
-            $r->addRoute(['GET'], '/dashboard', 'App\Middleware\AuthMiddleware');
-            $r->addRoute(['GET'], '/logs', 'App\Middleware\AuthMiddleware');
+        // Document routes
+        $router->addGroup('/api/documents', function (RouteCollector $r) use ($documentController) {
+            $r->addRoute(['POST'], '/templates', [$documentController, 'uploadTemplate']);
+            $r->addRoute(['GET'], '/templates', [$documentController, 'getTemplates']);
+            $r->addRoute(['GET'], '/templates/{templateId:\d+}', [$documentController, 'getTemplate']);
+            $r->addRoute(['GET'], '/contracts/{bookingId:\d+}', [$documentController, 'generateContract']);
+            $r->addRoute(['POST'], '/terms', [$documentController, 'uploadTerms']);
+            $r->addRoute(['GET'], '/invoices/{bookingId:\d+}', [$documentController, 'generateInvoice']);
+            $r->addRoute(['DELETE'], '/{documentId:\d+}', [$documentController, 'deleteDocument']);
         });
 
-        // Document API Routes
-        $router->addGroup('/api/documents', function (RouteCollector $r) {
-            $r->addRoute(['POST'], '/upload', 'App\Controllers\DocumentController@uploadDocument');
-            $r->addRoute(['POST'], '/sign', 'App\Controllers\DocumentController@signDocument');
-            $r->addRoute(['GET'], '/view/{id:\d+}', 'App\Controllers\DocumentController@viewDocument');
+        // Notification routes
+        $router->addGroup('/api/notifications', function (RouteCollector $r) use ($notificationController) {
+            $r->addRoute(['GET'], '', [$notificationController, 'viewNotifications']);
+            $r->addRoute(['GET'], '/user', [$notificationController, 'getUserNotifications']);
+            $r->addRoute(['GET'], '/ajax', [$notificationController, 'fetchNotificationsAjax']);
+            $r->addRoute(['POST'], '/mark-read', [$notificationController, 'markNotificationAsRead']);
+            $r->addRoute(['POST'], '/delete', [$notificationController, 'deleteNotification']);
+            $r->addRoute(['POST'], '/send', [$notificationController, 'sendNotification']);
         });
 
-        // System API Routes
-        $router->addGroup('/api/system', function (RouteCollector $r) {
-            $r->addRoute(['GET'], '/logs', 'App\Middleware\AuthMiddleware');
-            $r->addRoute(['GET'], '/status', 'App\Middleware\TokenValidationMiddleware');
+        // Payment routes
+        $router->addGroup('/api/payments', function (RouteCollector $r) use ($paymentController) {
+            $r->addRoute(['POST'], '/process', [$paymentController, 'processPayment']);
+            $r->addRoute(['POST'], '/refund', [$paymentController, 'refundPayment']);
+            $r->addRoute(['GET'], '/transactions', [$paymentController, 'getUserTransactions']);
+            $r->addRoute(['GET'], '/{transactionId:\d+}', [$paymentController, 'getPaymentDetails']);
+            $r->addRoute(['POST'], '/methods', [$paymentController, 'addPaymentMethod']);
+            $r->addRoute(['GET'], '/methods', [$paymentController, 'getUserPaymentMethods']);
+            $r->addRoute(['POST'], '/gateway/process', [$paymentController, 'processGatewayPayment']);
+            $r->addRoute(['POST', 'GET'], '/gateway/callback/{gateway}', [$paymentController, 'handleGatewayCallback']);
+        });
+
+        // Report routes
+        $router->addGroup('/api/reports', function (RouteCollector $r) use ($reportController) {
+            $r->addRoute(['GET'], '', [$reportController, 'index']);
+            $r->addRoute(['POST'], '/generate', [$reportController, 'generateReport']);
+            $r->addRoute(['GET'], '/user', [$reportController, 'userReports']);
+            $r->addRoute(['POST'], '/user/generate', [$reportController, 'generateUserReport']);
+        });
+
+        // Signature routes
+        $router->addGroup('/api/signatures', function (RouteCollector $r) use ($signatureController) {
+            $r->addRoute(['POST'], '/upload', [$signatureController, 'uploadSignature']);
+            $r->addRoute(['POST'], '/verify/{userId:\d+}', [$signatureController, 'verifySignature']);
+            $r->addRoute(['GET'], '/{userId:\d+}', [$signatureController, 'getSignature']);
         });
 
         // Catch-All for Unmatched Requests
