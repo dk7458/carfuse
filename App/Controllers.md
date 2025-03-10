@@ -44,8 +44,8 @@
 **Class Purpose**: Provides common functionality for API controllers, including standardized JSON responses and error handling.
 
 **Key Methods**:
-- `success(string $message, array $data = [], int $status = 200)`
-- `error(string $message, array $errors = [], int $status = 400)`
+- `success(string $message, array $data = [], $status = 200)`
+- `error(string $message, array $errors = [], $status = 400)`
 
 **HTTP Routes**: N/A (Base Controller)
 

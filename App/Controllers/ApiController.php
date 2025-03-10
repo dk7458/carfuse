@@ -34,7 +34,7 @@ class ApiController extends Controller
     /**
      * Create a success response
      */
-    protected function success($message, $data = [], int $status = 200): ResponseInterface
+    protected function success($message, $data = [], $status = 200): ResponseInterface
     {
         return $this->jsonResponse([
             'status' => 'success',
@@ -46,7 +46,7 @@ class ApiController extends Controller
     /**
      * Create an error response
      */
-    protected function error($message, $errors = [], int $status = 400): ResponseInterface
+    protected function error($message, $errors = [], $status = 400): ResponseInterface
     {
         return $this->jsonResponse([
             'status' => 'error',

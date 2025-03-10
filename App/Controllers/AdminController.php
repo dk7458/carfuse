@@ -35,7 +35,7 @@ class AdminController extends Controller
     /**
      * Create standardized PSR-7 JSON response
      */
-    public function jsonResponse(ResponseInterface $response, $data, int $status = 200): ResponseInterface
+    public function jsonResponse(ResponseInterface $response, $data, $status = 200): ResponseInterface
     {
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
