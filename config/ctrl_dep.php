@@ -22,6 +22,8 @@ use App\Services\Validator;
 use App\Services\Auth\TokenService;
 use App\Helpers\ExceptionHandler;
 use App\Services\Auth\AuthService;
+use App\Services\NotifcationService;
+use App\Services\UserService;
 use App\Services\BookingService;
 use App\Services\PaymentService;
 use App\Services\StatisticsService;
@@ -61,7 +63,12 @@ return function (Container $container) {
             $c->get(LoggerInterface::class),
             $c->get(BookingService::class),
             $c->get(PaymentService::class),
-            $c->get(Validator::class)
+            $c->get(Validator::class),
+            $c->get(AuditService::class),
+            $c->get(NotificationService::class),
+            $c->get(ResponseFactoryInterface::class),
+            $c->get(TokenService::class),
+            $c->get(ExceptionHandler::class),
         );
     });
 
@@ -69,7 +76,9 @@ return function (Container $container) {
         return new NotificationController(
             $c->get(LoggerInterface::class),
             $c->get(ExceptionHandler::class),
-            $c->get(AuditService::class)
+            $c->get(AuditService::class),
+            $c->get(TokenService::class),
+            $c->get(NotifcationService::class)
         );
     });
 
@@ -87,7 +96,8 @@ return function (Container $container) {
             $c->get(LoggerInterface::class),
             $c->get(SignatureService::class),
             $c->get(ExceptionHandler::class),
-            $c->get(AuditService::class)
+            $c->get(AuditService::class),
+            $c->get(TokenService::class)
         );
     });
 
@@ -96,7 +106,10 @@ return function (Container $container) {
             $c->get(LoggerInterface::class),
             $c->get(BookingService::class),
             $c->get(StatisticsService::class),
-            $c->get(NotificationService::class)
+            $c->get(NotificationService::class),
+            $c->get(UserService::class),
+            $c->get(AuditService::class),
+            $c->get(ExceptionHandler::class)
         );
     });
 
@@ -113,7 +126,9 @@ return function (Container $container) {
             $c->get(LoggerInterface::class),
             $c->get(PaymentService::class),
             $c->get(Validator::class),
-            $c->get(NotificationService::class)
+            $c->get(NotificationService::class),
+            $c->get(ResponseFactoryInterface::class),
+            $c->get(ExceptionHandler::class)
         );
     });
 
@@ -122,8 +137,9 @@ return function (Container $container) {
             $c->get(LoggerInterface::class),
             $c->get(DocumentService::class),
             $c->get(Validator::class),
-            $c->get(AuditService::class)
-        );
+            $c->get(AuditService::class),
+            $c->get(ExceptionHandler::class)
+       );
     });
 
     $container->set(ReportController::class, function($c) {
@@ -131,7 +147,8 @@ return function (Container $container) {
             $c->get(LoggerInterface::class),
             $c->get(ReportService::class),
             $c->get(NotificationService::class),
-            $c->get(ExceptionHandler::class)
+            $c->get(ExceptionHandler::class),
+            $c->get(AuditService::class)
         );
     });
 

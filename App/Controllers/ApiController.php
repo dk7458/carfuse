@@ -16,7 +16,7 @@ use App\Services\AuditService;
  */
 class ApiController extends Controller
 {
-    protected ResponseFactoryInterface $responseFactory;
+    private ResponseFactoryInterface $responseFactory;
     protected ExceptionHandler $exceptionHandler;
     protected AuditService $auditService;
     

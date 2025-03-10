@@ -3,9 +3,9 @@ File: /home/dorian/carfuse/App/Controllers/UserController.php
         LoggerInterface $logger,
         Validator $validator,
         TokenService $tokenService,
-        parent::__construct($logger);
-        $this->validator = $validator;
-        $this->tokenService = $tokenService;
+        parent::__construct($logger, $exceptionHandler);
+        $this->validator     = $validator;
+        $this->tokenService  = $tokenService;
         $this->exceptionHandler = $exceptionHandler;
 
 File: /home/dorian/carfuse/App/Controllers/BookingController.php
@@ -13,7 +13,7 @@ File: /home/dorian/carfuse/App/Controllers/BookingController.php
         LoggerInterface $logger,
         BookingService $bookingService,
         PaymentService $paymentService,
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->bookingService = $bookingService;
         $this->paymentService = $paymentService;
         $this->validator = $validator;
@@ -22,38 +22,38 @@ File: /home/dorian/carfuse/App/Controllers/NotificationController.php
     public function __construct(
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
-        AuditService $auditService
-        parent::__construct($logger);
+        AuditService $auditService,
+        parent::__construct($logger, $exceptionHandler);
         $this->exceptionHandler = $exceptionHandler;
         $this->auditService = $auditService;
-    }
+        $this->tokenService = $tokenService;
 
 File: /home/dorian/carfuse/App/Controllers/AdminController.php
     public function __construct(
         LoggerInterface $logger,
-        AuditService $auditService,
+        AdminService $adminService,
         ResponseFactoryInterface $responseFactory,
-        parent::__construct($logger);
-        $this->auditService = $auditService;
+        parent::__construct($logger, $exceptionHandler);
+        $this->adminService = $adminService;
         $this->responseFactory = $responseFactory;
-        $this->tokenService = $tokenService;
+        $this->exceptionHandler = $exceptionHandler;
 
 File: /home/dorian/carfuse/App/Controllers/AuthController.php
     public function __construct(
         LoggerInterface $logger,
         AuthService $authService,
         TokenService $tokenService,
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->authService = $authService;
         $this->tokenService = $tokenService;
-        $this->pdo = $dbHelper->getPdo();
+        $this->rateLimiter = $rateLimiter;
 
 File: /home/dorian/carfuse/App/Controllers/SignatureController.php
     public function __construct(
         LoggerInterface $logger,
         SignatureService $signatureService,
         ExceptionHandler $exceptionHandler,
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->signatureService = $signatureService;
         $this->exceptionHandler = $exceptionHandler;
         $this->auditService = $auditService;
@@ -63,7 +63,7 @@ File: /home/dorian/carfuse/App/Controllers/DashboardController.php
         LoggerInterface $logger,
         BookingService $bookingService,
         StatisticsService $statisticsService,
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->bookingService = $bookingService;
         $this->statisticsService = $statisticsService;
         $this->notificationService = $notificationService;
@@ -73,7 +73,7 @@ File: /home/dorian/carfuse/App/Controllers/AdminDashboardController.php
         LoggerInterface $logger,
         ExceptionHandler $exceptionHandler,
         AuditService $auditService
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->exceptionHandler = $exceptionHandler;
         $this->auditService = $auditService;
     }
@@ -83,13 +83,13 @@ File: /home/dorian/carfuse/App/Controllers/PaymentController.php
         LoggerInterface $logger,
         PaymentService $paymentService,
         Validator $validator,
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->paymentService = $paymentService;
         $this->validator = $validator;
         $this->notificationService = $notificationService;
 
 File: /home/dorian/carfuse/App/Controllers/Controller.php
-    public function __construct(LoggerInterface $logger, ?ExceptionHandler $exceptionHandler = null)
+    public function __construct(LoggerInterface $logger, ExceptionHandler $exceptionHandler)
     {
         $this->logger = $logger;
         $this->exceptionHandler = $exceptionHandler;
@@ -99,7 +99,7 @@ File: /home/dorian/carfuse/App/Controllers/DocumentController.php
         LoggerInterface $logger,
         DocumentService $documentService,
         Validator $validator,
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->documentService = $documentService;
         $this->validator = $validator;
         $this->auditService = $auditService;
@@ -109,7 +109,7 @@ File: /home/dorian/carfuse/App/Controllers/ReportController.php
         LoggerInterface $logger,
         ReportService $reportService,
         NotificationService $notificationService,
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->reportService = $reportService;
         $this->notificationService = $notificationService;
         $this->exceptionHandler = $exceptionHandler;
@@ -129,7 +129,7 @@ File: /home/dorian/carfuse/App/Controllers/AuditController.php
         LoggerInterface $logger, 
         AuditService $auditService,
         ExceptionHandler $exceptionHandler
-        parent::__construct($logger);
+        parent::__construct($logger, $exceptionHandler);
         $this->auditService = $auditService;
         $this->exceptionHandler = $exceptionHandler;
     }
