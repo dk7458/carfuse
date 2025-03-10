@@ -16,6 +16,7 @@ use App\Controllers\ApiController;
 use Psr\Http\Message\ResponseFactoryInterface;
 use DI\Container;
 use Psr\Log\LoggerInterface;
+use App\Models\User;
 use App\Services\AuditService;
 use App\Services\Validator;
 use App\Services\Auth\TokenService;
