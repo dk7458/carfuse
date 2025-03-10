@@ -49,7 +49,6 @@ return function (Container $container) {
             $c->get(LoggerInterface::class),
             $c->get(AuthService::class),
             $c->get(TokenService::class),
-            $c->get(DatabaseHelper::class),
             $c->get(RateLimiter::class),
             $c->get(ExceptionHandler::class)
         );
