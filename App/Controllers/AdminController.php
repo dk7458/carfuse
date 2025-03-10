@@ -35,11 +35,10 @@ class AdminController extends Controller
     /**
      * Create standardized PSR-7 JSON response
      */
-    protected function jsonResponse(array $data, int $status = 200): ResponseInterface
+    protected function jsonResponse(\Psr\Http\Message\ResponseInterface $response, array $data, int $status = 200): ResponseInterface
     {
-        $response = $this->responseFactory->createResponse($status);
         $response->getBody()->write(json_encode($data));
-        return $response->withHeader('Content-Type', 'application/json');
+        return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
     }
 
     /**
@@ -50,7 +49,7 @@ class AdminController extends Controller
         try {
             $admin = $this->adminService->validateAdmin($this->request);
             if (!$admin) {
-                return $this->jsonResponse([
+                return $this->jsonResponse($this->responseFactory->createResponse(), [
                     'status' => 'error',
                     'message' => 'Invalid token or insufficient permissions'
                 ], 401);
@@ -61,7 +60,7 @@ class AdminController extends Controller
             
             $userData = $this->adminService->getAllUsers($page, $admin['id']);
             
-            return $this->jsonResponse([
+            return $this->jsonResponse($this->responseFactory->createResponse(), [
                 'status' => 'success', 
                 'message' => 'User list retrieved successfully', 
                 'data' => $userData
@@ -69,7 +68,7 @@ class AdminController extends Controller
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
             // The following won't execute if handleException exits as expected
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to retrieve users'], 500);
+            return $this->jsonResponse($this->responseFactory->createResponse(), ['status' => 'error', 'message' => 'Failed to retrieve users'], 500);
         }
     }
 
@@ -81,7 +80,7 @@ class AdminController extends Controller
         try {
             $admin = $this->adminService->validateAdmin($this->request);
             if (!$admin) {
-                return $this->jsonResponse([
+                return $this->jsonResponse($this->responseFactory->createResponse(), [
                     'status' => 'error',
                     'message' => 'Invalid token or insufficient permissions'
                 ], 401);
@@ -91,7 +90,7 @@ class AdminController extends Controller
             $role = $data['role'] ?? '';
             $allowedRoles = ['user', 'admin', 'manager'];
             if (!$role || !in_array($role, $allowedRoles)) {
-                return $this->jsonResponse([
+                return $this->jsonResponse($this->responseFactory->createResponse(), [
                     'status' => 'error',
                     'message' => 'Invalid role'
                 ], 400);
@@ -100,20 +99,20 @@ class AdminController extends Controller
             $result = $this->adminService->updateUserRole((int)$userId, $role, $admin['id']);
             
             if (!$result) {
-                return $this->jsonResponse([
+                return $this->jsonResponse($this->responseFactory->createResponse(), [
                     'status' => 'error',
                     'message' => 'User not found'
                 ], 404);
             }
             
-            return $this->jsonResponse([
+            return $this->jsonResponse($this->responseFactory->createResponse(), [
                 'status' => 'success',
                 'message' => 'User role updated successfully'
             ]);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
             // The following won't execute if handleException exits as expected
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to update user role'], 500);
+            return $this->jsonResponse($this->responseFactory->createResponse(), ['status' => 'error', 'message' => 'Failed to update user role'], 500);
         }
     }
 
@@ -125,7 +124,7 @@ class AdminController extends Controller
         try {
             $admin = $this->adminService->validateAdmin($this->request);
             if (!$admin) {
-                return $this->jsonResponse([
+                return $this->jsonResponse($this->responseFactory->createResponse(), [
                     'status' => 'error',
                     'message' => 'Invalid token or insufficient permissions'
                 ], 401);
@@ -134,27 +133,27 @@ class AdminController extends Controller
             $result = $this->adminService->deleteUser((int)$userId, $admin['id']);
             
             if ($result === null) {
-                return $this->jsonResponse([
+                return $this->jsonResponse($this->responseFactory->createResponse(), [
                     'status' => 'error',
                     'message' => 'User not found'
                 ], 404);
             }
             
             if (isset($result['error'])) {
-                return $this->jsonResponse([
+                return $this->jsonResponse($this->responseFactory->createResponse(), [
                     'status' => 'error',
                     'message' => $result['error']
                 ], 403);
             }
             
-            return $this->jsonResponse([
+            return $this->jsonResponse($this->responseFactory->createResponse(), [
                 'status' => 'success',
                 'message' => 'User deleted successfully'
             ]);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
             // The following won't execute if handleException exits as expected
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to delete user'], 500);
+            return $this->jsonResponse($this->responseFactory->createResponse(), ['status' => 'error', 'message' => 'Failed to delete user'], 500);
         }
     }
 
@@ -166,7 +165,7 @@ class AdminController extends Controller
         try {
             $admin = $this->adminService->validateAdmin($this->request);
             if (!$admin) {
-                return $this->jsonResponse([
+                return $this->jsonResponse($this->responseFactory->createResponse(), [
                     'status' => 'error',
                     'message' => 'Invalid token or insufficient permissions'
                 ], 401);
@@ -174,7 +173,7 @@ class AdminController extends Controller
             
             $dashboardData = $this->adminService->getDashboardData($admin['id']);
             
-            return $this->jsonResponse([
+            return $this->jsonResponse($this->responseFactory->createResponse(), [
                 'status' => 'success',
                 'message' => 'Dashboard data retrieved successfully',
                 'data' => $dashboardData
@@ -182,7 +181,7 @@ class AdminController extends Controller
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
             // The following won't execute if handleException exits as expected
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to retrieve dashboard data'], 500);
+            return $this->jsonResponse($this->responseFactory->createResponse(), ['status' => 'error', 'message' => 'Failed to retrieve dashboard data'], 500);
         }
     }
 
@@ -194,7 +193,7 @@ class AdminController extends Controller
         try {
             $admin = $this->adminService->validateAdmin($this->request);
             if (!$admin) {
-                return $this->jsonResponse([
+                return $this->jsonResponse($this->responseFactory->createResponse(), [
                     'status' => 'error',
                     'message' => 'Invalid token or insufficient permissions'
                 ], 401);
@@ -207,7 +206,7 @@ class AdminController extends Controller
                 !filter_var($data['email'], FILTER_VALIDATE_EMAIL) ||
                 strlen($data['password']) < 8
             ) {
-                return $this->jsonResponse([
+                return $this->jsonResponse($this->responseFactory->createResponse(), [
                     'status' => 'error',
                     'message' => 'Invalid input. Email must be valid and password must be at least 8 characters'
                 ], 400);
@@ -216,13 +215,13 @@ class AdminController extends Controller
             $newAdmin = $this->adminService->createAdmin($data, $admin['id']);
             
             if (!$newAdmin) {
-                return $this->jsonResponse([
+                return $this->jsonResponse($this->responseFactory->createResponse(), [
                     'status' => 'error',
                     'message' => 'Email already in use or failed to create admin'
                 ], 400);
             }
             
-            return $this->jsonResponse([
+            return $this->jsonResponse($this->responseFactory->createResponse(), [
                 'status' => 'success',
                 'message' => 'Admin created successfully',
                 'data' => $newAdmin
@@ -230,7 +229,7 @@ class AdminController extends Controller
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
             // The following won't execute if handleException exits as expected
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to create admin user'], 500);
+            return $this->jsonResponse($this->responseFactory->createResponse(), ['status' => 'error', 'message' => 'Failed to create admin user'], 500);
         }
     }
 }
