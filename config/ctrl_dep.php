@@ -22,7 +22,7 @@ use Psr\Log\LoggerInterface;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\AdminService;
-use App\Validation\Validator;
+use App\Services\Validator;
 use App\Services\Auth\TokenService;
 use App\Helpers\ExceptionHandler;
 use App\Services\Auth\AuthService;

@@ -10,7 +10,7 @@ use App\Services\PaymentService;
 use App\Services\NotificationService;
 use App\Services\Auth\TokenService;
 use App\Helpers\ExceptionHandler;
-use App\Validation\Validator;
+use App\Services\Validator;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Log\LoggerInterface;

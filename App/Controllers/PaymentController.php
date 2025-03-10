@@ -8,7 +8,7 @@ use App\Helpers\ExceptionHandler;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
 use App\Services\NotificationService;
-use App\Validation\Validator;
+use App\Services\Validator;
 
 /**
  * Payment Controller
