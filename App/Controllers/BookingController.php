@@ -10,6 +10,7 @@ use App\Services\PaymentService;
 use App\Services\NotificationService;
 use App\Services\Auth\TokenService;
 use App\Helpers\ExceptionHandler;
+use App\Validation\Validator;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Log\LoggerInterface;
@@ -120,10 +121,28 @@ class BookingController extends Controller
                 ], 401);
             }
             
-            $data = $_POST; // minimal custom validation assumed
+            $data = $this->validator->validate($_POST, [
+                'pickup_date' => 'required|date',
+                'dropoff_date' => 'required|date|after:pickup_date'
+            ]);
+            
+            if ($this->validator->failed()) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'Validation error',
+                    'errors' => $this->validator->errors()
+                ], 400);
+            }
             
             // Let the service handle the business logic
-            $this->bookingService->rescheduleBooking($id, $data['pickup_date'], $data['dropoff_date']);
+            $result = $this->bookingService->rescheduleBooking($id, $data['pickup_date'], $data['dropoff_date'], $user['id']);
+            
+            if (isset($result['error'])) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => $result['error']
+                ], 400);
+            }
             
             // Audit the rescheduling action
             $this->auditService->logEvent(
@@ -139,6 +158,9 @@ class BookingController extends Controller
                 $id,
                 'booking'
             );
+            
+            // Send notification about rescheduled booking
+            $this->notificationService->sendBookingUpdatedNotification($id, $user['id']);
             
             return $this->jsonResponse([
                 'status' => 'success',
@@ -168,17 +190,24 @@ class BookingController extends Controller
             }
             
             // Let the service handle the cancellation and refund calculation
-            $refundAmount = $this->bookingService->cancelBooking($id);
+            $result = $this->bookingService->cancelBooking($id, $user['id']);
+            
+            if (isset($result['error'])) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => $result['error']
+                ], 400);
+            }
+
+            $refundAmount = $result['refund_amount'] ?? 0;
 
             // Process refund if applicable through payment service
             if ($refundAmount > 0) {
-                // The RefundLog creation should ideally be handled by a PaymentService
-                // This is a potential future refactoring
-                $refundLog = new RefundLog();
-                $refundId = $refundLog->create([
+                $refundResult = $this->paymentService->processRefund([
                     'booking_id' => $id,
-                    'amount'     => $refundAmount,
-                    'status'     => 'processed'
+                    'amount' => $refundAmount,
+                    'user_id' => $user['id'],
+                    'reason' => 'Booking cancellation'
                 ]);
                 
                 // Audit the refund processed
@@ -189,7 +218,7 @@ class BookingController extends Controller
                         'booking_id' => $id,
                         'user_id' => $user['id'],
                         'refund_amount' => $refundAmount,
-                        'refund_id' => $refundId
+                        'refund_id' => $refundResult['refund_id'] ?? null
                     ],
                     $user['id'],
                     $id,
@@ -211,9 +240,15 @@ class BookingController extends Controller
                 'booking'
             );
             
+            // Send notification about canceled booking
+            $this->notificationService->sendBookingCanceledNotification($id, $user['id']);
+            
             return $this->jsonResponse([
                 'status' => 'success',
-                'message' => 'Booking canceled successfully'
+                'message' => 'Booking canceled successfully',
+                'data' => [
+                    'refund_amount' => $refundAmount
+                ]
             ]);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
@@ -236,6 +271,15 @@ class BookingController extends Controller
                     'status' => 'error',
                     'message' => 'Unauthorized access'
                 ], 401);
+            }
+            
+            // Check if user has access to this booking
+            $hasAccess = $this->bookingService->validateBookingAccess($bookingId, $user['id']);
+            if (!$hasAccess && !isset($user['role']) && $user['role'] !== 'admin') {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'You do not have permission to view this booking'
+                ], 403);
             }
             
             // Get logs through the service
@@ -282,7 +326,12 @@ class BookingController extends Controller
                 ], 401);
             }
             
-            $bookings = $this->bookingService->getUserBookings($user['id']);
+            // Get pagination parameters
+            $page = (int) ($this->request->getQueryParams()['page'] ?? 1);
+            $perPage = (int) ($this->request->getQueryParams()['per_page'] ?? 10);
+            $status = $this->request->getQueryParams()['status'] ?? null;
+            
+            $bookings = $this->bookingService->getUserBookings($user['id'], $page, $perPage, $status);
             
             // Log the fetch operation
             $this->auditService->logEvent(
@@ -297,7 +346,7 @@ class BookingController extends Controller
             return $this->jsonResponse([
                 'status' => 'success',
                 'message' => 'User bookings fetched successfully',
-                'data' => ['bookings' => $bookings]
+                'data' => $bookings
             ]);
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
@@ -322,14 +371,33 @@ class BookingController extends Controller
                 ], 401);
             }
 
-            $data = $_POST; // assuming custom validation is performed elsewhere
+            $data = $this->validator->validate($_POST, [
+                'vehicle_id' => 'required|integer',
+                'pickup_date' => 'required|date',
+                'dropoff_date' => 'required|date|after:pickup_date',
+                'pickup_location' => 'required|string',
+                'dropoff_location' => 'required|string',
+                'payment_method_id' => 'required|integer'
+            ]);
+            
+            if ($this->validator->failed()) {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => 'Validation error',
+                    'errors' => $this->validator->errors()
+                ], 400);
+            }
+            
             $data['user_id'] = $user['id'];
             
             // Let the BookingService handle all booking creation logic
             $result = $this->bookingService->createBooking($data);
             
-            if ($result['status'] == 'error') {
-                return $this->jsonResponse($result, 400);
+            if (isset($result['status']) && $result['status'] == 'error') {
+                return $this->jsonResponse([
+                    'status' => 'error',
+                    'message' => $result['message'] ?? 'Failed to create booking'
+                ], 400);
             }
 
             // Log the booking creation to the audit logs
@@ -347,6 +415,9 @@ class BookingController extends Controller
                 $result['booking_id'],
                 'booking'
             );
+            
+            // Send notification for new booking
+            $this->notificationService->sendBookingConfirmationNotification($result['booking_id'], $user['id']);
             
             return $this->jsonResponse([
                 'status' => 'success',

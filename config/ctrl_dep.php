@@ -13,21 +13,24 @@ use App\Controllers\DocumentController;
 use App\Controllers\ReportController;
 use App\Controllers\AuditController;
 use App\Controllers\ApiController;
+
 use Psr\Http\Message\ResponseFactoryInterface;
+use Slim\Psr7\Factory\ResponseFactory;
 use DI\Container;
 use Psr\Log\LoggerInterface;
+
 use App\Models\User;
 use App\Services\AuditService;
-use App\Services\Validator;
+use App\Services\AdminService;
+use App\Validation\Validator;
 use App\Services\Auth\TokenService;
 use App\Helpers\ExceptionHandler;
 use App\Services\Auth\AuthService;
-use App\Services\NotifcationService;
+use App\Services\NotificationService;
 use App\Services\UserService;
 use App\Services\BookingService;
 use App\Services\PaymentService;
 use App\Services\StatisticsService;
-use App\Services\NotificationService;
 use App\Services\SignatureService;
 use App\Services\DocumentService;
 use App\Services\ReportService;
@@ -35,7 +38,22 @@ use App\Helpers\DatabaseHelper;
 use App\Services\RateLimiter;
 
 return function (Container $container) {
+    // Bind ResponseFactoryInterface to an implementation
+    if (!$container->has(ResponseFactoryInterface::class)) {
+        $container->set(ResponseFactoryInterface::class, function() {
+            return new ResponseFactory();
+        });
+    }
+    
     // Controllers
+    $container->set(ApiController::class, function($c) {
+        return new ApiController(
+            $c->get(LoggerInterface::class),
+            $c->get(AuditService::class),
+            $c->get(ExceptionHandler::class)
+        );
+    });
+    
     $container->set(UserController::class, function($c) {
         return new UserController(
             $c->get(LoggerInterface::class),
@@ -66,9 +84,8 @@ return function (Container $container) {
             $c->get(Validator::class),
             $c->get(AuditService::class),
             $c->get(NotificationService::class),
-            $c->get(ResponseFactoryInterface::class),
             $c->get(TokenService::class),
-            $c->get(ExceptionHandler::class),
+            $c->get(ExceptionHandler::class)
         );
     });
 
@@ -78,16 +95,16 @@ return function (Container $container) {
             $c->get(ExceptionHandler::class),
             $c->get(AuditService::class),
             $c->get(TokenService::class),
-            $c->get(NotifcationService::class)
+            $c->get(NotificationService::class)
         );
     });
 
     $container->set(AdminController::class, function($c) {
         return new AdminController(
             $c->get(LoggerInterface::class),
-            $c->get(AuditService::class),
+            $c->get(AdminService::class),
             $c->get(ResponseFactoryInterface::class),
-            $c->get(TokenService::class)
+            $c->get(ExceptionHandler::class)
         );
     });
 
@@ -127,7 +144,6 @@ return function (Container $container) {
             $c->get(PaymentService::class),
             $c->get(Validator::class),
             $c->get(NotificationService::class),
-            $c->get(ResponseFactoryInterface::class),
             $c->get(ExceptionHandler::class)
         );
     });
@@ -160,12 +176,6 @@ return function (Container $container) {
         );
     });
     
-    $container->set(ApiController::class, function($c) {
-        return new ApiController(
-            $c->get(LoggerInterface::class),
-            $c->get(ResponseFactoryInterface::class),
-            $c->get(ExceptionHandler::class),
-            $c->get(AuditService::class)
-        );
-    });
+    // Lazy-load controllers only when needed
+    $container->get(LoggerInterface::class)->info("Controllers registered successfully.");
 };

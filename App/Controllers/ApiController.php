@@ -4,7 +4,6 @@ namespace App\Controllers;
 
 use App\Helpers\ExceptionHandler;
 use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Log\LoggerInterface;
 use App\Services\AuditService;
 
@@ -16,7 +15,6 @@ use App\Services\AuditService;
  */
 class ApiController extends Controller
 {
-    private ResponseFactoryInterface $responseFactory;
     protected ExceptionHandler $exceptionHandler;
     protected AuditService $auditService;
     
@@ -25,24 +23,12 @@ class ApiController extends Controller
      */
     public function __construct(
         LoggerInterface $logger,
-        ResponseFactoryInterface $responseFactory,
-        ExceptionHandler $exceptionHandler,
-        AuditService $auditService
+        AuditService $auditService,
+        ExceptionHandler $exceptionHandler
     ) {
         parent::__construct($logger, $exceptionHandler);
-        $this->responseFactory = $responseFactory;
         $this->exceptionHandler = $exceptionHandler;
         $this->auditService = $auditService;
-    }
-
-    /**
-     * Create standardized PSR-7 JSON response
-     */
-    protected function jsonResponse(array $data, int $status = 200): ResponseInterface
-    {
-        $response = $this->responseFactory->createResponse($status);
-        $response->getBody()->write(json_encode($data));
-        return $response->withHeader('Content-Type', 'application/json');
     }
 
     /**
