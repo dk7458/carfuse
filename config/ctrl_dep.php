@@ -40,7 +40,8 @@ return function (Container $container) {
             $c->get(TokenService::class),
             $c->get(ExceptionHandler::class),
             $c->get(AuthService::class),
-            $c->get(AuditService::class)
+            $c->get(AuditService::class),
+            $c->get(User::class)
         );
     });
 
