@@ -46,10 +46,8 @@ class Booking extends BaseModel
      * @param DatabaseHelper|null $dbHelper
      * @param AuditService|null $auditService
      */
-    public function __construct(?DatabaseHelper $dbHelper = null, AuditService $auditService = null)
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService)
     {
-        $dbHelper = $dbHelper ?? new DatabaseHelper();
-
         parent::__construct($dbHelper, $auditService);
     }
     
