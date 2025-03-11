@@ -44,7 +44,7 @@ class Signature extends BaseModel
      * @param array $data
      * @return bool
      */
-    public function update(int $id, array $data): bool
+    public function update(string|int $id, array $data): bool
     {
         if (isset($data['signature'])) {
             $data['signature'] = $this->encryptionService->encrypt($data['signature']);
