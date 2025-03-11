@@ -15,7 +15,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Log\LoggerInterface;
 
-require_once   '/../Helpers/ViewHelper.php';
+require_once   'ViewHelper.php';
 
 /**
  * Booking Controller

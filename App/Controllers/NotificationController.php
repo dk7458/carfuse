@@ -11,7 +11,7 @@ use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
 use Psr\Http\Message\ResponseInterface;
 
-require_once   '/../Helpers/ViewHelper.php';
+require_once   'ViewHelper.php';
 
 /**
  * Notification Controller
