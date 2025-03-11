@@ -73,7 +73,8 @@ return function (Container $container, array $config) {
     $container->set(Admin::class, function($c) {
         return new Admin(
             $c->get(DatabaseHelper::class),
-            $c->get('logger.db')
+            $c->get(AuditService::class),  // Changed from logger.db to AuditService
+            $c->get('logger.db') ?? $c->get(LoggerInterface::class)
         );
     });
 
@@ -290,7 +291,8 @@ return function (Container $container, array $config) {
         return new AdminService(
             $c->get(Admin::class),
             $c->get(AuditService::class),
-            $c->get('logger.admin')
+            $c->get('logger.admin') ?? $c->get(LoggerInterface::class),
+            $c->get(ExceptionHandler::class)
         );
     });
 
