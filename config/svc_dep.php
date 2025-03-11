@@ -200,7 +200,8 @@ return function (Container $container, array $config) {
         return new FileStorage(
             $config['storage'] ?? [],
             $c->get(EncryptionService::class),
-            $c->get('logger.file') ?? $c->get(LoggerInterface::class)
+            $c->get('logger.file') ?? $c->get(LoggerInterface::class),
+            $c->get(ExceptionHandler::class)
         );
     });
 

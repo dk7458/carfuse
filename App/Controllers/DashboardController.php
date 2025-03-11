@@ -21,7 +21,7 @@ require_once   'ViewHelper.php';
 class DashboardController extends Controller
 {
     private BookingService $bookingService;
-    private MetricsService $statisticsService;
+    private MetricsService $metricsService;
     private NotificationService $notificationService;
     private UserService $userService;
     private AuditService $auditService;
