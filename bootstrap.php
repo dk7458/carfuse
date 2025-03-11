@@ -69,7 +69,10 @@ $loggers = [
     'metrics' => null,
     'report' => null,
     'revenue' => null,
-    'dependencies' => null
+    'dependencies' => null,
+    'filestorage' => null,
+    'keymanager' => null, 
+    'documents' => null,
 ];
 
 // Initialize each category logger

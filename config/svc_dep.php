@@ -64,10 +64,11 @@ return function (Container $container, array $config) {
         );
     });
 
-    $container->set('bookingModel', function($c) {
-        return new App\Models\Booking(
+    $container->set(Booking::class, function($c) {
+        return new Booking(
             $c->get(DatabaseHelper::class),
-            $c->get(AuditService::class)  // Changed from logger.db to AuditService
+            $c->get(AuditService::class),
+            $c->get('logger.booking')
         );
     });
 
@@ -75,7 +76,7 @@ return function (Container $container, array $config) {
         return new Admin(
             $c->get(DatabaseHelper::class),
             $c->get(AuditService::class),  // Changed from logger.db to AuditService
-            $c->get('logger.db') ?? $c->get(LoggerInterface::class)
+            $c->get('logger.db')
         );
     });
 
