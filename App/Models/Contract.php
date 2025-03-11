@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
+use App\Services\AuditService;
 
 /**
  * Contract Model
