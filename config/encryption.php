@@ -18,13 +18,35 @@ try {
         $env = [];
     }
 
+    // Helper function to generate a secure random key if needed
+    function generateSecureKey(): string {
+        return bin2hex(random_bytes(32)); // 64 character hex string (32 bytes)
+    }
+
     // ✅ Create a function to retrieve env values with validation
-    function getRequiredEnv(array $env, string $key, string $fallback, bool $validateLength = false) {
-        $value = $env[$key] ?? getenv($key) ?: $fallback;
+    function getEncryptionKey(array $env, string $key) {
+        global $logFile;
+        $value = $env[$key] ?? getenv($key) ?: null;
         
-        // Only validate length for security keys when specifically requested
-        if ($validateLength && strlen($value) < 32) {
-            throw new Exception("$key must be at least 32 characters long.");
+        // If value is missing, generate a temporary one and log a warning
+        if (empty($value)) {
+            $value = generateSecureKey();
+            $message = "[" . date('Y-m-d H:i:s') . "][WARNING] {$key} not found in environment. " . 
+                       "Using a temporary value - THIS IS NOT SECURE FOR PRODUCTION. " .
+                       "Please set {$key} in your .env file.";
+            error_log($message . "\n", 3, $logFile);
+            
+            // Also output to stderr during development
+            if ($_ENV['APP_ENV'] ?? 'development' !== 'production') {
+                error_log($message);
+            }
+        }
+        
+        // Validate length for security
+        if (strlen($value) < 32) {
+            $message = "[" . date('Y-m-d H:i:s') . "][ERROR] {$key} must be at least 32 characters long.";
+            error_log($message . "\n", 3, $logFile);
+            throw new Exception("{$key} must be at least 32 characters long.");
         }
         
         return $value;
@@ -32,28 +54,20 @@ try {
 
     // ✅ Build full configuration array with all required values
     $config = [
-        // Security keys - all guaranteed to be at least 32 chars
-        'jwt_secret' => getRequiredEnv($env, 'JWT_SECRET', 
-            'e4uererje46ye575e7k5jkEAEAGRHSTEHJaet55utaeeHWHU%HJETEUUTEEuzjhrywstrrsaga', 
-            true),  // Apply length validation
-        'jwt_refresh_secret' => getRequiredEnv($env, 'JWT_REFRESH_SECRET', 
-            '347378%^%R#V#B#RT&I#BR^&BR^#B^#R$RBGBB##GT#GT&#GN#G', 
-            true),  // Apply length validation
-        'encryption_key' => getRequiredEnv($env, 'ENCRYPTION_KEY', 
-            'bt3rb32t9b7t8B^&b78Rv566cv7ec5D7dc6Vd&^vdrb67v76^58bt*&6bt89n8N8N*7n', 
-            true),  // Apply length validation
+        // Security keys - all guaranteed to be at least 32 chars, with no hardcoded fallbacks
+        'jwt_secret' => getEncryptionKey($env, 'JWT_SECRET'),
+        'jwt_refresh_secret' => getEncryptionKey($env, 'JWT_REFRESH_SECRET'),
+        'encryption_key' => getEncryptionKey($env, 'ENCRYPTION_KEY'),
         
-        // JWT configuration - NO length validation for these values
-        'issuer' => getRequiredEnv($env, 'JWT_ISSUER', 'carfuse-api'),
-        'audience' => getRequiredEnv($env, 'JWT_AUDIENCE', 'carfuse-clients'),
+        // JWT configuration - Non-sensitive defaults are still acceptable
+        'issuer' => $env['JWT_ISSUER'] ?? getenv('JWT_ISSUER') ?: 'carfuse-api',
+        'audience' => $env['JWT_AUDIENCE'] ?? getenv('JWT_AUDIENCE') ?: 'carfuse-clients',
         
         // Encryption settings
         'cipher' => 'AES-256-CBC',
         
         // Key alias for backwards compatibility
-        'key' => getRequiredEnv($env, 'ENCRYPTION_KEY', 
-            'bt3rb32t9b7t8B^&b78Rv566cv7ec5D7dc6Vd&^vdrb67v76^58bt*&6bt89n8N8N*7n', 
-            true),  // Apply length validation
+        'key' => getEncryptionKey($env, 'ENCRYPTION_KEY'),
         
         // Token expiration settings (in seconds)
         'access_token_ttl' => (int)($env['ACCESS_TOKEN_TTL'] ?? getenv('ACCESS_TOKEN_TTL') ?: 3600),

@@ -27,7 +27,7 @@ class UserService
         ExceptionHandler $exceptionHandler,
         AuditService $auditService,
         User $userModel,
-        string $jwtSecret = 'default_secret'
+        string $jwtSecret
     ) {
         $this->logger = $logger;
         $this->db = $db;

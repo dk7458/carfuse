@@ -230,7 +230,10 @@ return function (Container $container, array $config) {
         return new UserService(
             $c->get('logger.auth') ?? $c->get(LoggerInterface::class),
             $c->get(DatabaseHelper::class),
-            $c->get(ExceptionHandler::class)
+            $c->get(ExceptionHandler::class),
+            $c->get(AuditService::class),
+            $c->get(User::class),
+            $config['encryption']['jwtSecret'] ?? '',
         );
     });
 
