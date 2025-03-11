@@ -4,9 +4,9 @@ namespace App\Services;
 
 use Exception;
 use App\Helpers\DatabaseHelper;
-use AuditManager\Services\AuditService;
-use DocumentManager\Services\FileStorage;
-use DocumentManager\Services\TemplateService;
+use App\Services\AuditService;
+use App\Services\FileStorage;
+use App\Services\TemplateService;
 use App\Services\EncryptionService;
 use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
