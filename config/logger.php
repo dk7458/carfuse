@@ -1,92 +1,104 @@
 <?php
 /**
  * Logger configuration
- * This file contains functions for creating and configuring loggers
+ * This file provides helper functions for working with the pre-initialized loggers
  */
 
-use Monolog\Logger;
-use Monolog\Handler\StreamHandler;
-use Monolog\Handler\RotatingFileHandler;
-use Monolog\Formatter\LineFormatter;
-use Monolog\Processor\IntrospectionProcessor;
-use Monolog\Processor\WebProcessor;
+// Access the global loggers already created in root logger.php
+global $logger, $loggers;
 
 /**
- * Creates a configured logger instance
+ * Get a logger by category, falls back to main logger if category doesn't exist
  *
- * @param string $name The logger channel name
- * @param string $logDir The directory to store log files
- * @return Logger The configured logger instance
+ * @param string $category The logger category to retrieve
+ * @return \Psr\Log\LoggerInterface The requested logger
  */
-function createLogger(string $name, string $logDir = null): Logger {
-    if ($logDir === null) {
-        $logDir = dirname(__DIR__) . '/logs';
+function getLoggerByCategory(string $category = 'application'): \Psr\Log\LoggerInterface {
+    global $loggers, $logger;
+    
+    if (!isset($loggers[$category])) {
+        // Log warning about missing category but return fallback
+        if (isset($logger)) {
+            $logger->warning("Requested logger for category '{$category}' not found, using fallback");
+        }
+        return $logger;
     }
     
-    // Create directory if it doesn't exist
-    if (!is_dir($logDir)) {
-        mkdir($logDir, 0755, true);
-    }
-    
-    // Create logger
-    $logger = new Logger($name);
-    
-    // Create formatter
-    $formatter = new LineFormatter(
-        "[%datetime%] %channel%.%level_name%: %message% %context% %extra%\n",
-        "Y-m-d H:i:s.u",
-        true,
-        true
-    );
-    
-    // Add handlers with the formatter
-    $streamHandler = new StreamHandler('php://stderr', Logger::DEBUG);
-    $streamHandler->setFormatter($formatter);
-    $logger->pushHandler($streamHandler);
-    
-    $fileHandler = new RotatingFileHandler($logDir . "/{$name}.log", 14, Logger::INFO);
-    $fileHandler->setFormatter($formatter);
-    $logger->pushHandler($fileHandler);
-    
-    // Add processors
-    $logger->pushProcessor(new WebProcessor());
-    $logger->pushProcessor(new IntrospectionProcessor());
-    
-    return $logger;
+    return $loggers[$category];
 }
 
 /**
- * Creates the standard set of application loggers
+ * Get a collection of loggers by their categories
  *
- * @param string $logDir The directory to store log files
+ * @param array $categories List of logger categories to retrieve
  * @return array Array of logger instances indexed by category
  */
-function createLoggers(string $logDir = null): array {
-    $categories = [
-        'app', 'db', 'auth', 'api', 'audit', 'security',
-        'payment', 'booking', 'metrics', 'report',
-        'revenue', 'dependencies'
-    ];
+function getLoggers(array $categories = []): array {
+    global $loggers;
     
-    $loggers = [];
-    foreach ($categories as $category) {
-        try {
-            $loggers[$category] = createLogger($category, $logDir);
-        } catch (Exception $e) {
-            // Create a minimal fallback logger for this category
-            $fallbackLogger = new Logger($category . '_fallback');
-            $fallbackLogger->pushHandler(new StreamHandler('php://stderr', Logger::DEBUG));
-            $loggers[$category] = $fallbackLogger;
-            
-            // Log error about logger creation failure
-            error_log("Failed to create {$category} logger: " . $e->getMessage());
-        }
+    if (empty($categories)) {
+        return $loggers;
     }
     
-    return $loggers;
+    $result = [];
+    foreach ($categories as $category) {
+        $result[$category] = getLoggerByCategory($category);
+    }
+    
+    return $result;
 }
 
+/**
+ * Get available logger categories
+ *
+ * @return array List of available logger categories
+ */
+function getLoggerCategories(): array {
+    global $loggers;
+    return array_keys($loggers);
+}
+
+/**
+ * Register a new custom logger in the global loggers array
+ *
+ * @param string $category The category name for the logger
+ * @param \Psr\Log\LoggerInterface $logger The logger instance
+ * @return bool Success status
+ */
+function registerCustomLogger(string $category, \Psr\Log\LoggerInterface $logger): bool {
+    global $loggers;
+    
+    if (isset($loggers[$category])) {
+        // Don't overwrite existing loggers
+        return false;
+    }
+    
+    $loggers[$category] = $logger;
+    return true;
+}
+
+/**
+ * Create a child logger with a specific context
+ *
+ * @param string $category The parent logger category
+ * @param string $context The context to add to the logger name
+ * @return \Psr\Log\LoggerInterface The child logger
+ */
+function createContextLogger(string $category, string $context): \Psr\Log\LoggerInterface {
+    $parentLogger = getLoggerByCategory($category);
+    
+    if ($parentLogger instanceof \Monolog\Logger) {
+        return $parentLogger->withName("{$category}.{$context}");
+    }
+    
+    return $parentLogger; // Return original if not Monolog
+}
+
+// Return functions for importing
 return [
-    'createLogger' => 'createLogger',
-    'createLoggers' => 'createLoggers'
+    'getLogger' => 'getLoggerByCategory',
+    'getLoggers' => 'getLoggers',
+    'getLoggerCategories' => 'getLoggerCategories',
+    'registerCustomLogger' => 'registerCustomLogger',
+    'createContextLogger' => 'createContextLogger'
 ];
