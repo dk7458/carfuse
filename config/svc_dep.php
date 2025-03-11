@@ -142,6 +142,7 @@ return function (Container $container, array $config) {
     $container->set(Contract::class, function($c) {
         return new Contract(
             $c->get(DatabaseHelper::class),
+            $c->get(AuditService::class),
             $c->get('logger.document') ?? $c->get('logger.db')
         );
     });

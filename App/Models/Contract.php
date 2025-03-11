@@ -38,10 +38,11 @@ class Contract extends BaseModel
      * 
      * @param DatabaseHelper $db Database helper instance
      * @param LoggerInterface $logger Logger instance
+     * @param AuditService $auditService Audit service instance
      */
-    public function __construct(DatabaseHelper $db, LoggerInterface $logger)
+    public function __construct(DatabaseHelper $db, AuditService $auditService, LoggerInterface $logger)
     {
-        parent::__construct($db, null, $logger);
+        parent::__construct($db, $auditService, $logger);
     }
     
     /**
