@@ -85,12 +85,12 @@ return function (Container $container, array $config) {
         );
     });
 
-    $container->set(Booking::class, function($c) {
-        return new Booking(
-            $c->get(DatabaseHelper::class),
-            $c->get('logger.booking')
-        );
-    });
+    //$container->set(Booking::class, function($c) {
+    //    return new Booking(
+    //        $c->get(DatabaseHelper::class),
+    //        $c->get('logger.booking')
+    //    );
+    //});
 
     $container->set(TransactionLog::class, function($c) {
         return new TransactionLog(
