@@ -16,7 +16,7 @@ require_once   'ViewHelper.php';
 class DashboardController extends Controller
 {
     private BookingService $bookingService;
-    private StatisticsService $statisticsService;
+    private MetricsService$statisticsService;
     private NotificationService $notificationService;
     private UserService $userService;
     private AuditService $auditService;
@@ -26,7 +26,7 @@ class DashboardController extends Controller
     public function __construct(
         LoggerInterface $logger,
         BookingService $bookingService,
-        StatisticsService $statisticsService,
+        MetricsService$statisticsService,
         NotificationService $notificationService,
         UserService $userService,
         AuditService $auditService,
@@ -34,7 +34,7 @@ class DashboardController extends Controller
     ) {
         parent::__construct($logger, $exceptionHandler);
         $this->bookingService = $bookingService;
-        $this->statisticsService = $statisticsService;
+        $this->MetricsService= $statisticsService;
         $this->notificationService = $notificationService;
         $this->userService = $userService;
         $this->auditService = $auditService;

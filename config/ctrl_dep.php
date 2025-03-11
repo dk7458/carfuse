@@ -30,7 +30,7 @@ use App\Services\NotificationService;
 use App\Services\UserService;
 use App\Services\BookingService;
 use App\Services\PaymentService;
-use App\Services\StatisticsService;
+use App\Services\MetricsService;
 use App\Services\SignatureService;
 use App\Services\DocumentService;
 use App\Services\ReportService;
@@ -126,7 +126,7 @@ return function (Container $container) {
         return new DashboardController(
             $loggers['dashboard'] ?? $loggers['api'] ?? $logger,
             $c->get(BookingService::class),
-            $c->get(StatisticsService::class),
+            $c->get(MetricsService::class),
             $c->get(NotificationService::class),
             $c->get(UserService::class),
             $c->get(AuditService::class),
