@@ -34,7 +34,7 @@ class User extends BaseModel
 
     public function __construct(DatabaseHelper $dbHelper, LoggerInterface $logger, AuditService $auditService)
     {
-        parent::__construct($dbHelper, $auditService);
+        parent::__construct($dbHelper, $auditService, $logger);
         $this->logger = $logger;
     }
 

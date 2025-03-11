@@ -42,7 +42,7 @@ class Admin extends BaseModel
      */
     public function __construct(DatabaseHelper $dbHelper, AuditService $auditService)
     {
-        parent::__construct($dbHelper, $auditService);
+        parent::__construct($dbHelper, $auditService, $logger);
     }
     
     /**
