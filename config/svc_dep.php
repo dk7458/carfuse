@@ -78,7 +78,8 @@ return function (Container $container, array $config) {
 
     $container->set(RefreshToken::class, function($c) {
         return new RefreshToken(
-            $c->get(DatabaseHelper::class), 
+            $c->get(DatabaseHelper::class),
+            $c->get(AuditService::class), 
             $c->get('logger.auth') ?? $c->get(LoggerInterface::class)
         );
     });

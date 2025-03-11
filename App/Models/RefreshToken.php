@@ -20,10 +20,10 @@ class RefreshToken extends BaseModel
      * @param DatabaseHelper $dbHelper
      * @param LoggerInterface $logger
      */
-    public function __construct(DatabaseHelper $dbHelper, LoggerInterface $logger)
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService, LoggerInterface $logger)
     {
         // Call parent constructor with null AuditService as third parameter
-        parent::__construct($dbHelper, null, $logger);
+        parent::__construct($dbHelper, $auditService, $logger);
     }
 
     /**
