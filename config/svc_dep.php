@@ -52,7 +52,8 @@ return function (Container $container, array $config) {
     $container->set(User::class, function($c) {
         return new User(
             $c->get(DatabaseHelper::class),
-            $c->get('logger.db')
+            $c->get('logger.db'),
+            $c->get(AuditService::class)  
         );
     });
 
