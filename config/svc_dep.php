@@ -343,7 +343,12 @@ return function (Container $container, array $config) {
         return new PaymentService(
             $c->get(PaymentProcessingService::class),
             $c->get(RefundService::class),
-            $c->get(PaymentGatewayService::class)
+            $c->get(PaymentGatewayService::class),
+            $c->get(TransactionService::class),
+            $c->get(Payment::class),
+            $c->get(PaymentMethod::class),
+            $c->get(Booking::class),
+            $c->get(AuditService::class)
         );
     });
 
