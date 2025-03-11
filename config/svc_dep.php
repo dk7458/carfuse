@@ -28,6 +28,7 @@ use App\Services\PayUService;
 use App\Models\User;
 use App\Models\RefreshToken;
 use App\Models\Admin;
+use App\Models\Contract;
 use App\Models\Payment;
 use App\Models\Booking;
 use App\Models\TransactionLog;
