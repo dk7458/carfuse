@@ -44,11 +44,15 @@ class DocumentTemplate extends BaseModel
      * Constructor
      *
      * @param DatabaseHelper $dbHelper
-     * @param LoggerInterface|null $logger
+     * @param LoggerInterface $logger
+     * @param AuditService $auditService
      */
-    public function __construct(DatabaseHelper $dbHelper, ?LoggerInterface $logger = null)
+    public function __construct(
+        DatabaseHelper $dbHelper, 
+        AuditService $auditService, 
+        LoggerInterface $logger)
     {
-        parent::__construct($dbHelper, null, $logger);
+        parent::__construct($dbHelper, $auditService, $logger);
     }
 
     /**
