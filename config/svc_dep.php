@@ -319,7 +319,10 @@ return function (Container $container, array $config) {
         return new PaymentProcessingService(
             $c->get(DatabaseHelper::class),
             $c->get(Payment::class),
-            $c->get(Booking::class)
+            $c->get(Booking::class),
+            $c->get(TransactionLog::class),
+            $c->get(AuditService::class),
+            $c->get('logger.payment') ?? $c->get(LoggerInterface::class)
         );
     });
 
