@@ -133,7 +133,8 @@ return function (Container $container, array $config) {
     $container->set(DocumentTemplate::class, function($c) {
         return new DocumentTemplate(
             $c->get(DatabaseHelper::class),
-            $c->get('logger.document') ?? $c->get('logger.db')
+            $c->get('logger.document') ?? $c->get('logger.db'),
+            $c->get(AuditService::class)
         );
     });
     
