@@ -35,6 +35,7 @@ use App\Models\Document;
 use App\Models\DocumentTemplate;
 use App\Models\PaymentMethod;
 use App\Models\DocumentQueue;
+use App\Models\Notification;
 use App\Services\AdminService;
 use App\Services\Payment\PaymentProcessingService;
 use App\Services\Payment\RefundService;
@@ -109,6 +110,14 @@ return function (Container $container, array $config) {
             $c->get(DatabaseHelper::class),
             $c->get(AuditService::class),
             $c->get('logger.payment') ?? $c->get(LoggerInterface::class)
+        );
+    });
+
+    $container->set(Notification::class, function($c) {
+        return new Notification(
+           // $c->get(DatabaseHelper::class),
+            //$c->get(AuditService::class),
+            //$c->get('logger.notification') ?? $c->get('logger.db') ?? $c->get(LoggerInterface::class)
         );
     });
 
@@ -229,7 +238,7 @@ return function (Container $container, array $config) {
         return new NotificationService(
             $c->get('logger.notification') ?? $c->get('logger.api') ?? $c->get(LoggerInterface::class),
             $c->get(ExceptionHandler::class),
-            $c->get(DatabaseHelper::class)
+            $c->get(Notification::class)
         );
     });
 
