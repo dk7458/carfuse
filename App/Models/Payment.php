@@ -71,7 +71,7 @@ class Payment extends BaseModel
      * @param int $id
      * @return array|null
      */
-    public function find(int $id): ?array
+    public function findPayment(int $id): ?array
     {
         $query = "SELECT * FROM {$this->table} WHERE id = :id AND deleted_at IS NULL LIMIT 1";
         $result = $this->dbHelper->select($query, [':id' => $id]);

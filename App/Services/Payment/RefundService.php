@@ -69,7 +69,7 @@ class RefundService
         }
 
         // Fetch and verify original payment
-        $originalPayment = $this->paymentModel->find($refundData['payment_id']);
+        $originalPayment = $this->paymentModel->findPayment($refundData['payment_id']);
         if (!$originalPayment) {
             $this->logger->warning('No original payment found for refund', $refundData);
             throw new Exception('Original payment not found.');

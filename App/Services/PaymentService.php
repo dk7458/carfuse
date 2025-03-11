@@ -113,7 +113,7 @@ class PaymentService
     public function refundPayment(array $refundData): array
     {
         // Get the original payment
-        $payment = $this->paymentModel->find($refundData['payment_id']);
+        $payment = $this->paymentModel->findPayment($refundData['payment_id']);
         if (!$payment) {
             throw new \Exception('Original payment not found');
         }

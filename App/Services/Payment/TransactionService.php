@@ -208,7 +208,7 @@ class TransactionService
             
             // For payments, get the associated payment details
             if (isset($transaction['payment_id'])) {
-                $payment = $this->paymentModel->find($transaction['payment_id']);
+                $payment = $this->paymentModel->findPayment($transaction['payment_id']);
                 if ($payment) {
                     $transaction['payment_details'] = $payment;
                 }
