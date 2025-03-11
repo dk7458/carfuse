@@ -64,7 +64,7 @@ return function (Container $container, array $config) {
     $container->set(User::class, function($c) {
         return new User(
             $c->get(DatabaseHelper::class),
-            $c->get('logger.user') ?? $c->get('logger.db') ?? $c->get(LoggerInterface::class),  // Use specific logger if available
+            $c->get('logger.api') ?? $c->get('logger.db') ?? $c->get(LoggerInterface::class),  // Use specific logger if available
             $c->get(AuditService::class)
         );
     });
