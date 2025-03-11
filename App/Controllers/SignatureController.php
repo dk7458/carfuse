@@ -8,7 +8,7 @@ use App\Services\Auth\TokenService;
 use App\Helpers\ExceptionHandler;
 use Psr\Log\LoggerInterface;
 
-require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+require_once   '/../Helpers/ViewHelper.php';
 
 /**
  * Signature Controller

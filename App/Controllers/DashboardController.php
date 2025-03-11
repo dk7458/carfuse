@@ -11,7 +11,7 @@ use App\Helpers\ExceptionHandler;
 use Illuminate\Support\Facades\Cache;
 use Psr\Log\LoggerInterface;
 
-require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+require_once   '/../Helpers/ViewHelper.php';
 
 class DashboardController extends Controller
 {

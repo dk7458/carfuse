@@ -8,7 +8,7 @@ use App\Services\AuditService;
 use App\Helpers\ExceptionHandler;
 use Psr\Log\LoggerInterface;
 
-require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+require_once   '/../Helpers/ViewHelper.php';
 
 class DocumentController extends Controller
 {

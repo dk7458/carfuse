@@ -10,7 +10,7 @@ use Psr\Log\LoggerInterface;
 use App\Helpers\ExceptionHandler;
 use App\Services\AuditService;
 
-require_once BASE_PATH . '/App/Helpers/ViewHelper.php';
+require_once   '/../Helpers/ViewHelper.php';
 
 class AdminDashboardController extends Controller
 {
