@@ -87,6 +87,7 @@ return function (Container $container) {
             $c->get(Validator::class),
             $c->get(AuditService::class),
             $c->get(NotificationService::class),
+            $c->get(ResponseFactoryInterface::class),
             $c->get(TokenService::class),
             $c->get(ExceptionHandler::class)
         );
