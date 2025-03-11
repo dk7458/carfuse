@@ -60,6 +60,7 @@ try {
 $loggers = [
     'db' => null,
     'auth' => null,
+    'admin' => null,
     'api' => null,
     'audit' => null,
     'security' => null,
