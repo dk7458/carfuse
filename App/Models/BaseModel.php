@@ -76,9 +76,9 @@ abstract class BaseModel
      * @param AuditService|null $auditService Audit service instance for logging
      * @param LoggerInterface|null $logger Logger for errors and debug info
      */
-    public function __construct(DatabaseHelper $dbHelper, ?AuditService $auditService = null, ?LoggerInterface $logger = null)
+    public function __construct(?DatabaseHelper $dbHelper = null, ?AuditService $auditService = null, ?LoggerInterface $logger = null)
     {
-        $this->dbHelper = $dbHelper;
+        $this->dbHelper = $dbHelper ?? new DatabaseHelper();
         $this->auditService = $auditService;
         $this->logger = $logger;
         $this->pdo = $this->dbHelper->getPdo();
