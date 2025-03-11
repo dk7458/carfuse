@@ -66,7 +66,7 @@ return function (Container $container, array $config) {
     $container->set('bookingModel', function($c) {
         return new App\Models\Booking(
             $c->get(DatabaseHelper::class),
-            $c->get('logger.db')
+            $c->get(AuditService::class)  // Changed from logger.db to AuditService
         );
     });
 
