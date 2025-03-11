@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
+use Psr\Log\LoggerInterface;
 
 /**
  * Payment Model
@@ -61,6 +62,9 @@ class Payment extends BaseModel
 
     public function __construct(DatabaseHelper $dbHelper, AuditService $auditService, LoggerInterface $logger)
 {
+    global $loggers;
+    $logger = $logger ?? $loggers['payment'];
+
     parent::__construct($dbHelper, $auditService, $logger);
 }
 

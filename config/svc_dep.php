@@ -41,26 +41,38 @@ use App\Services\Audit\UserAuditService;
 use App\Services\Audit\TransactionAuditService;
 use App\Models\AuditLog;
 
-return function (Container $container, array $config) {
-    // Service definitions here, using $container and $config
-    // Example:
-    // $container->set(\App\Services\MyService::class, function() use ($config) {
-    //     return new \App\Services\MyService($config['my_config']);
-    // });
+global $logger, $loggers;  // ✅ Ensure global loggers are available
 
+
+return function (Container $container, array $config) {
+    // Make sure we have access to the global loggers
+    global $logger, $loggers;
+
+    // Register main application logger
+    $container->set(LoggerInterface::class, function () use ($logger) {
+        return $logger;  // Use the pre-initialized main application logger
+    });
+    
+    // Register category-specific loggers from the global $loggers array
+    foreach ($loggers as $category => $categoryLogger) {
+        $container->set("logger.{$category}", function() use ($categoryLogger) {
+            return $categoryLogger;
+        });
+    }
+    
     // Register Models
     $container->set(User::class, function($c) {
         return new User(
             $c->get(DatabaseHelper::class),
-            $c->get('logger.db'),
-            $c->get(AuditService::class)  
+            $c->get('logger.user') ?? $c->get('logger.db') ?? $c->get(LoggerInterface::class),  // Use specific logger if available
+            $c->get(AuditService::class)
         );
     });
 
     $container->set(RefreshToken::class, function($c) {
         return new RefreshToken(
-            $c->get('secure_db'), 
-            $c->get('logger.auth')
+            $c->get(DatabaseHelper::class), 
+            $c->get('logger.auth') ?? $c->get(LoggerInterface::class)
         );
     });
 
@@ -68,15 +80,15 @@ return function (Container $container, array $config) {
         return new Booking(
             $c->get(DatabaseHelper::class),
             $c->get(AuditService::class),
-            $c->get('logger.booking')
+            $c->get('logger.booking') ?? $c->get(LoggerInterface::class)
         );
     });
 
     $container->set(Admin::class, function($c) {
         return new Admin(
             $c->get(DatabaseHelper::class),
-            $c->get(AuditService::class),  // Changed from logger.db to AuditService
-            $c->get('logger.db')
+            $c->get(AuditService::class),
+            $c->get('logger.admin') ?? $c->get('logger.db') ?? $c->get(LoggerInterface::class)
         );
     });
 
@@ -84,21 +96,15 @@ return function (Container $container, array $config) {
         return new Payment(
             $c->get(DatabaseHelper::class),
             $c->get(AuditService::class),
-            $c->get('logger.payment')
+            $c->get('logger.payment') ?? $c->get(LoggerInterface::class)
         );
     });
-
-    //$container->set(Booking::class, function($c) {
-    //    return new Booking(
-    //        $c->get(DatabaseHelper::class),
-    //        $c->get('logger.booking')
-    //    );
-    //});
 
     $container->set(TransactionLog::class, function($c) {
         return new TransactionLog(
             $c->get(DatabaseHelper::class),
-            $c->get('logger.payment')
+            $c->get(AuditService::class),
+            $c->get('logger.payment') ?? $c->get(LoggerInterface::class)
         );
     });
 
@@ -106,7 +112,7 @@ return function (Container $container, array $config) {
     $container->set(Document::class, function($c) {
         return new Document(
             $c->get(DatabaseHelper::class),
-            $c->get('logger.document') ?? $c->get('logger.db'),
+            $c->get('logger.document') ?? $c->get('logger.db') ?? $c->get(LoggerInterface::class),
             $c->get(AuditService::class)
         );
     });
@@ -137,7 +143,7 @@ return function (Container $container, array $config) {
     // Basic services with minimal dependencies
     $container->set(Validator::class, function($c) {
         return new Validator(
-            $c->get('logger.api'),
+            $c->get('logger.api') ?? $c->get(LoggerInterface::class),
             $c->get(DatabaseHelper::class),
             $c->get(ExceptionHandler::class)
         );
@@ -145,20 +151,20 @@ return function (Container $container, array $config) {
 
     $container->set(RateLimiter::class, function($c) {
         return new RateLimiter(
-            $c->get('logger.api'),
+            $c->get('logger.api') ?? $c->get(LoggerInterface::class),
             $c->get(ExceptionHandler::class)
         );
     });
 
     $container->set(PaymentGatewayService::class, function($c) {
         return new PaymentGatewayService(
-            $c->get('logger.payment')
+            $c->get('logger.payment') ?? $c->get(LoggerInterface::class)
         );
     });
 
     $container->set(EncryptionService::class, function($c) use ($config) {
         return new EncryptionService(
-            $c->get('logger.security'),
+            $c->get('logger.security') ?? $c->get(LoggerInterface::class),
             $c->get(ExceptionHandler::class),
             $config['encryption']['key']
         );
@@ -178,14 +184,14 @@ return function (Container $container, array $config) {
         return new FileStorage(
             $config['storage'] ?? [],
             $c->get(EncryptionService::class),
-            $c->get('logger.file')
+            $c->get('logger.file') ?? $c->get(LoggerInterface::class)
         );
     });
 
     $container->set(TokenService::class, function($c) use ($config) {
         return new TokenService(
             $config['encryption'],
-            $c->get('logger.auth'),
+            $c->get('logger.auth') ?? $c->get(LoggerInterface::class),
             $c->get(ExceptionHandler::class),
             $c->get('db'),
             $c->get(AuditService::class), // Using the pre-initialized AuditService
@@ -198,14 +204,14 @@ return function (Container $container, array $config) {
         return new TransactionService(
             $c->get(TransactionLog::class),
             $c->get(AuditService::class),
-            $c->get('logger.payment')
+            $c->get('logger.payment') ?? $c->get(LoggerInterface::class)
         );
     });
 
     // Update existing service registrations
     $container->set(UserService::class, function($c) {
         return new UserService(
-            $c->get('logger.auth'),
+            $c->get('logger.auth') ?? $c->get(LoggerInterface::class),
             $c->get(DatabaseHelper::class),
             $c->get(ExceptionHandler::class)
         );
@@ -213,7 +219,7 @@ return function (Container $container, array $config) {
 
     $container->set(NotificationService::class, function($c) {
         return new NotificationService(
-            $c->get('logger.api'),
+            $c->get('logger.notification') ?? $c->get('logger.api') ?? $c->get(LoggerInterface::class),
             $c->get(ExceptionHandler::class),
             $c->get(DatabaseHelper::class)
         );
@@ -354,37 +360,38 @@ return function (Container $container, array $config) {
     // Core audit services should be initialized in bootstrap.php
     // Only register if they're not already in the container
     
-    // AuditService registration - if not already registered
+    // AuditService registration - update to use pre-initialized loggers
     if (!$container->has(AuditService::class)) {
-        $container->set(AuditService::class, function($c) use ($config) {
+        $container->set(AuditService::class, function($c) use ($loggers, $logger, $config) {
             $requestId = uniqid('audit-', true);
             
-            // Get required dependencies
-            $logger = $c->get('logger.audit') ?? $c->get(LoggerInterface::class);
+            // Get the appropriate logger from the global loggers array
+            $auditLogger = $loggers['audit'] ?? $logger;
+            
             $exceptionHandler = $c->get(ExceptionHandler::class);
             $logLevelFilter = $c->get(LogLevelFilter::class) ?? new LogLevelFilter($config['audit']['log_levels'] ?? []);
             $auditLog = $c->get(AuditLog::class);
             
-            // Get or create sub-services
+            // Get or create sub-services with correct loggers
             $logManager = $c->has(LogManagementService::class) 
                 ? $c->get(LogManagementService::class)
-                : new LogManagementService($logger, $requestId, $exceptionHandler, $auditLog);
+                : new LogManagementService($auditLogger, $requestId, $exceptionHandler, $auditLog);
                 
             $fraudDetector = $c->has(FraudDetectionService::class) 
                 ? $c->get(FraudDetectionService::class)
-                : new FraudDetectionService($logger, $exceptionHandler);
+                : new FraudDetectionService($loggers['security'] ?? $logger, $exceptionHandler);
                 
             $userAuditService = $c->has(UserAuditService::class)
                 ? $c->get(UserAuditService::class)
-                : new UserAuditService($logManager, $exceptionHandler, $logger);
+                : new UserAuditService($logManager, $exceptionHandler, $auditLogger);
                 
             $transactionAuditService = $c->has(TransactionAuditService::class)
                 ? $c->get(TransactionAuditService::class)
-                : new TransactionAuditService($logManager, $fraudDetector, $exceptionHandler, $logger);
+                : new TransactionAuditService($logManager, $fraudDetector, $exceptionHandler, $loggers['payment'] ?? $logger);
             
-            // Create AuditService
+            // Create AuditService with the correct logger
             return new AuditService(
-                $logger,
+                $auditLogger,
                 $exceptionHandler,
                 $logManager,
                 $userAuditService,
@@ -395,17 +402,18 @@ return function (Container $container, array $config) {
         });
     }
     
-    // Register service dependencies that aren't yet registered
+    // Register service dependencies with pre-initialized loggers
+    
     // LogManagementService
     if (!$container->has(LogManagementService::class)) {
-        $container->set(LogManagementService::class, function($c) {
-            $logger = $c->get('logger.audit') ?? $c->get(LoggerInterface::class);
+        $container->set(LogManagementService::class, function($c) use ($loggers, $logger) {
+            $auditLogger = $loggers['audit'] ?? $logger;
             $exceptionHandler = $c->get(ExceptionHandler::class);
             $auditLog = $c->get(AuditLog::class);
             $requestId = uniqid('log-', true);
             
             return new LogManagementService(
-                $logger,
+                $auditLogger,
                 $requestId,
                 $exceptionHandler,
                 $auditLog
@@ -415,13 +423,13 @@ return function (Container $container, array $config) {
     
     // FraudDetectionService
     if (!$container->has(FraudDetectionService::class)) {
-        $container->set(FraudDetectionService::class, function($c) use ($config) {
-            $logger = $c->get('logger.security') ?? $c->get(LoggerInterface::class);
+        $container->set(FraudDetectionService::class, function($c) use ($loggers, $logger, $config) {
+            $securityLogger = $loggers['security'] ?? $logger;
             $exceptionHandler = $c->get(ExceptionHandler::class);
             $fraudConfig = $config['audit']['services']['fraud_detection'] ?? [];
             
             return new FraudDetectionService(
-                $logger,
+                $securityLogger,
                 $exceptionHandler,
                 $fraudConfig,
                 uniqid('fraud-', true)
@@ -431,23 +439,23 @@ return function (Container $container, array $config) {
     
     // UserAuditService
     if (!$container->has(UserAuditService::class)) {
-        $container->set(UserAuditService::class, function($c) {
-            $logger = $c->get('logger.audit') ?? $c->get(LoggerInterface::class);
+        $container->set(UserAuditService::class, function($c) use ($loggers, $logger) {
+            $auditLogger = $loggers['audit'] ?? $logger;
             $exceptionHandler = $c->get(ExceptionHandler::class);
             $logManager = $c->get(LogManagementService::class);
             
             return new UserAuditService(
                 $logManager,
                 $exceptionHandler,
-                $logger
+                $auditLogger
             );
         });
     }
     
     // TransactionAuditService
     if (!$container->has(TransactionAuditService::class)) {
-        $container->set(TransactionAuditService::class, function($c) {
-            $logger = $c->get('logger.payment') ?? $c->get(LoggerInterface::class);
+        $container->set(TransactionAuditService::class, function($c) use ($loggers, $logger) {
+            $paymentLogger = $loggers['payment'] ?? $logger;
             $exceptionHandler = $c->get(ExceptionHandler::class);
             $logManager = $c->get(LogManagementService::class);
             $fraudDetector = $c->get(FraudDetectionService::class);
@@ -456,7 +464,7 @@ return function (Container $container, array $config) {
                 $logManager,
                 $fraudDetector,
                 $exceptionHandler,
-                $logger
+                $paymentLogger
             );
         });
     }

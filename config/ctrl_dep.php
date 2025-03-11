@@ -38,6 +38,9 @@ use App\Helpers\DatabaseHelper;
 use App\Services\RateLimiter;
 
 return function (Container $container) {
+    // Access the global loggers
+    global $logger, $loggers;
+
     // Bind ResponseFactoryInterface to an implementation
     if (!$container->has(ResponseFactoryInterface::class)) {
         $container->set(ResponseFactoryInterface::class, function() {
@@ -46,17 +49,17 @@ return function (Container $container) {
     }
     
     // Controllers
-    $container->set(ApiController::class, function($c) {
+    $container->set(ApiController::class, function($c) use ($logger, $loggers) {
         return new ApiController(
-            $c->get(LoggerInterface::class),
+            $loggers['api'] ?? $logger,
             $c->get(AuditService::class),
             $c->get(ExceptionHandler::class)
         );
     });
     
-    $container->set(UserController::class, function($c) {
+    $container->set(UserController::class, function($c) use ($logger, $loggers) {
         return new UserController(
-            $c->get(LoggerInterface::class),
+            $loggers['user'] ?? $loggers['api'] ?? $logger,
             $c->get(Validator::class),
             $c->get(TokenService::class),
             $c->get(ExceptionHandler::class),
@@ -66,9 +69,9 @@ return function (Container $container) {
         );
     });
 
-    $container->set(AuthController::class, function($c) {
+    $container->set(AuthController::class, function($c) use ($logger, $loggers) {
         return new AuthController(
-            $c->get(LoggerInterface::class),
+            $loggers['auth'] ?? $logger,
             $c->get(AuthService::class),
             $c->get(TokenService::class),
             $c->get(RateLimiter::class),
@@ -76,9 +79,9 @@ return function (Container $container) {
         );
     });
 
-    $container->set(BookingController::class, function($c) {
+    $container->set(BookingController::class, function($c) use ($logger, $loggers) {
         return new BookingController(
-            $c->get(LoggerInterface::class),
+            $loggers['booking'] ?? $logger,
             $c->get(BookingService::class),
             $c->get(PaymentService::class),
             $c->get(Validator::class),
@@ -89,9 +92,9 @@ return function (Container $container) {
         );
     });
 
-    $container->set(NotificationController::class, function($c) {
+    $container->set(NotificationController::class, function($c) use ($logger, $loggers) {
         return new NotificationController(
-            $c->get(LoggerInterface::class),
+            $loggers['notification'] ?? $loggers['api'] ?? $logger,
             $c->get(ExceptionHandler::class),
             $c->get(AuditService::class),
             $c->get(TokenService::class),
@@ -99,18 +102,18 @@ return function (Container $container) {
         );
     });
 
-    $container->set(AdminController::class, function($c) {
+    $container->set(AdminController::class, function($c) use ($logger, $loggers) {
         return new AdminController(
-            $c->get(LoggerInterface::class),
+            $loggers['admin'] ?? $logger,
             $c->get(AdminService::class),
             $c->get(ResponseFactoryInterface::class),
             $c->get(ExceptionHandler::class)
         );
     });
 
-    $container->set(SignatureController::class, function($c) {
+    $container->set(SignatureController::class, function($c) use ($logger, $loggers) {
         return new SignatureController(
-            $c->get(LoggerInterface::class),
+            $loggers['security'] ?? $logger,
             $c->get(SignatureService::class),
             $c->get(ExceptionHandler::class),
             $c->get(AuditService::class),
@@ -118,9 +121,9 @@ return function (Container $container) {
         );
     });
 
-    $container->set(DashboardController::class, function($c) {
+    $container->set(DashboardController::class, function($c) use ($logger, $loggers) {
         return new DashboardController(
-            $c->get(LoggerInterface::class),
+            $loggers['dashboard'] ?? $loggers['api'] ?? $logger,
             $c->get(BookingService::class),
             $c->get(StatisticsService::class),
             $c->get(NotificationService::class),
@@ -130,17 +133,17 @@ return function (Container $container) {
         );
     });
 
-    $container->set(AdminDashboardController::class, function($c) {
+    $container->set(AdminDashboardController::class, function($c) use ($logger, $loggers) {
         return new AdminDashboardController(
-            $c->get(LoggerInterface::class),
+            $loggers['admin'] ?? $logger,
             $c->get(ExceptionHandler::class),
             $c->get(AuditService::class)
         );
     });
 
-    $container->set(PaymentController::class, function($c) {
+    $container->set(PaymentController::class, function($c) use ($logger, $loggers) {
         return new PaymentController(
-            $c->get(LoggerInterface::class),
+            $loggers['payment'] ?? $logger,
             $c->get(PaymentService::class),
             $c->get(Validator::class),
             $c->get(NotificationService::class),
@@ -148,9 +151,9 @@ return function (Container $container) {
         );
     });
 
-    $container->set(DocumentController::class, function($c) {
+    $container->set(DocumentController::class, function($c) use ($logger, $loggers) {
         return new DocumentController(
-            $c->get(LoggerInterface::class),
+            $loggers['document'] ?? $logger,
             $c->get(DocumentService::class),
             $c->get(Validator::class),
             $c->get(AuditService::class),
@@ -158,9 +161,9 @@ return function (Container $container) {
        );
     });
 
-    $container->set(ReportController::class, function($c) {
+    $container->set(ReportController::class, function($c) use ($logger, $loggers) {
         return new ReportController(
-            $c->get(LoggerInterface::class),
+            $loggers['report'] ?? $logger,
             $c->get(ReportService::class),
             $c->get(NotificationService::class),
             $c->get(ExceptionHandler::class),
@@ -168,9 +171,9 @@ return function (Container $container) {
         );
     });
 
-    $container->set(AuditController::class, function($c) {
+    $container->set(AuditController::class, function($c) use ($logger, $loggers) {
         return new AuditController(
-            $c->get('logger.audit') ?? $c->get(LoggerInterface::class),
+            $loggers['audit'] ?? $logger,
             $c->get(AuditService::class),
             $c->get(ExceptionHandler::class)
         );
