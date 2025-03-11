@@ -84,10 +84,10 @@ class Payment extends BaseModel
      *
      * @return array
      */
-    public function all(): array
+
+    public function all(array $orderBy = ['created_at' => 'DESC'], ?int $limit = null, ?int $offset = null): array
     {
-        $query = "SELECT * FROM {$this->table} WHERE deleted_at IS NULL ORDER BY created_at DESC";
-        return $this->dbHelper->select($query);
+        return parent::all($orderBy, $limit, $offset);
     }
 
     /**
