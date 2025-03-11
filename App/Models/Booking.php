@@ -62,7 +62,7 @@ class Booking extends BaseModel
      * @param array $data
      * @return int|string
      */
-    public function create(array $data): int|string
+    public function create(array $data): int
     {
         $id = parent::create($data);
         
