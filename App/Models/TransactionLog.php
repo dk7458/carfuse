@@ -18,10 +18,10 @@ class TransactionLog extends BaseFinancialModel
     protected $useTimestamps = true; // Transaction logs use timestamps
     protected $useSoftDeletes = false; // Transaction logs don't use soft deletes
 
-    private DatabaseHelper $dbHelper;
-    private ?AuditService $auditService;
+    protected DatabaseHelper $dbHelper;
+    protected AuditService $auditService;
 
-    public function __construct(DatabaseHelper $dbHelper, ?AuditService $auditService = null)
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService)
     {
         $this->dbHelper = $dbHelper;
         $this->auditService = $auditService;
