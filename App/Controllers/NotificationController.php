@@ -5,7 +5,7 @@ namespace App\Controllers;
 use App\Services\NotificationService;
 use App\Services\AuthService;
 use App\Helpers\JsonResponse;
-use App\Services\TokenService;
+use App\Services\Auth\TokenService;
 use App\Helpers\ExceptionHandler;
 use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
