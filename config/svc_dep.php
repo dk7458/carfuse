@@ -115,9 +115,9 @@ return function (Container $container, array $config) {
 
     $container->set(Notification::class, function($c) {
         return new Notification(
-           // $c->get(DatabaseHelper::class),
-            //$c->get(AuditService::class),
-            //$c->get('logger.notification') ?? $c->get('logger.db') ?? $c->get(LoggerInterface::class)
+            $c->get(DatabaseHelper::class),
+            $c->get(AuditService::class),
+            $c->get('logger.notification') ?? $c->get('logger.db') ?? $c->get(LoggerInterface::class)
         );
     });
 
