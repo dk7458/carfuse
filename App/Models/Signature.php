@@ -6,6 +6,7 @@ namespace App\Models;
 use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
 use App\Services\EncryptionService;
+use Psr\Log\LoggerInterface;
 
 class Signature extends BaseModel
 {
@@ -15,11 +16,22 @@ class Signature extends BaseModel
     protected $useSoftDeletes = false;
     private EncryptionService $encryptionService;
 
-    public function __construct(DatabaseHelper $db, EncryptionService $encryptionService = null)
+    /**
+     * Constructor
+     *
+     * @param DatabaseHelper $dbHelper Database helper instance
+     * @param EncryptionService $encryptionService Encryption service
+     * @param AuditService|null $auditService Audit service instance for logging (optional)
+     * @param LoggerInterface|null $logger Logger for errors and debug info (optional)
+     */
+    public function __construct(
+        DatabaseHelper $dbHelper, 
+        EncryptionService $encryptionService,
+        AuditService $auditService, 
+        LoggerInterface $logger)
     {
-        parent::__construct($db);
-        // If encryption service is not injected, try to resolve it through container or create new instance
-        $this->encryptionService = $encryptionService ?? app(EncryptionService::class) ?? new EncryptionService();
+        parent::__construct($dbHelper, $auditService, $logger);
+        $this->encryptionService = $encryptionService;
     }
 
     /**

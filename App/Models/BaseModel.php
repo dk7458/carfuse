@@ -73,13 +73,13 @@ abstract class BaseModel
      * Constructor
      *
      * @param DatabaseHelper $dbHelper Database helper instance
-     * @param AuditService|null $auditService Audit service instance for logging
-     * @param LoggerInterface|null $logger Logger for errors and debug info
+     * @param AuditService|null $auditService Audit service instance for logging (optional)
+     * @param LoggerInterface|null $logger Logger for errors and debug info (optional)
      */
     public function __construct(
         DatabaseHelper $dbHelper, 
-        AuditService $auditService, 
-        LoggerInterface $logger)
+        ?AuditService $auditService = null, 
+        ?LoggerInterface $logger = null)
     {
         $this->dbHelper = $dbHelper;
         $this->auditService = $auditService;

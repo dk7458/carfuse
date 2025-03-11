@@ -108,6 +108,15 @@ return function (Container $container, array $config) {
         );
     });
 
+    $container->set(Signature::class, function($c) {
+        return new Signature(
+            $c->get(DatabaseHelper::class),
+            $c->get(EncryptionService::class),
+            $c->get(AuditService::class),
+            $c->get('logger.security') ?? $c->get(LoggerInterface::class)
+        );
+    });
+
     $container->set(TransactionLog::class, function($c) {
         return new TransactionLog(
             $c->get(DatabaseHelper::class),
