@@ -287,8 +287,10 @@ return function (Container $container, array $config) {
     $container->set(ReportService::class, function($c) {
         return new ReportService(
             $c->get('logger.report'),
-            $c->get(DatabaseHelper::class),
-            $c->get(ExceptionHandler::class)
+            $c->get(ExceptionHandler::class),
+            $c->get(Booking::class),
+            $c->get(Payment::class),
+            $c->get(User::class)
         );
     });
 
