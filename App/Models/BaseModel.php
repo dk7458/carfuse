@@ -61,7 +61,7 @@ abstract class BaseModel
      */
     public function __construct(DatabaseHelper $dbHelper = null, AuditService $auditService = null)
     {
-        $this->dbHelper = $dbHelper ?? new DatabaseHelper();
+        $this->dbHelper = $dbHelper ?? DatabaseHelper::getInstance(); // ✅ Correct way to use a singleton
         $this->auditService = $auditService;
         $this->pdo = $this->dbHelper->getPdo();
     }
