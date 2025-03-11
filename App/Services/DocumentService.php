@@ -1,6 +1,6 @@
 <?php
 
-namespace DocumentManager\Services;
+namespace App\Services;
 
 use Exception;
 use App\Helpers\DatabaseHelper;

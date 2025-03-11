@@ -31,7 +31,7 @@ class DashboardController extends Controller
     public function __construct(
         LoggerInterface $logger,
         BookingService $bookingService,
-        MetricsService $statisticsService,
+        MetricsService $metricsService,
         NotificationService $notificationService,
         UserService $userService,
         AuditService $auditService,
@@ -39,7 +39,7 @@ class DashboardController extends Controller
     ) {
         parent::__construct($logger, $exceptionHandler);
         $this->bookingService = $bookingService;
-        $this->MetricsService = $statisticsService;
+        $this->metricsService = $metricsService;
         $this->notificationService = $notificationService;
         $this->userService = $userService;
         $this->auditService = $auditService;
