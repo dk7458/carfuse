@@ -4,37 +4,22 @@
  * Logger Configuration
  *
  * This file initializes Monolog as the application-wide logger,
- * ensuring all services use a single logging instance.
+ * ensuring all services use a single logging instance with proper rotation,
+ * formatting, and contextual information.
  */
 require_once __DIR__ . '/vendor/autoload.php';
 
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
+use Monolog\Handler\RotatingFileHandler;
 use Monolog\Formatter\LineFormatter;
+use Monolog\Processor\WebProcessor;
+use Monolog\Processor\IntrospectionProcessor;
+use Monolog\Processor\MemoryUsageProcessor;
 use Psr\Log\LoggerInterface;
 
-/**
- * Create a fallback logger in case the main logging system fails
- */
-if (!function_exists('getLogger')) {
-    function getLogger($name = 'system', $level = Logger::INFO) {
-        $logger = new Logger($name);
-        $handler = new StreamHandler('php://stderr', $level);
-        $formatter = new LineFormatter(
-            "[%datetime%] [%channel%] %level_name%: %message%\n",
-            "Y-m-d H:i:s"
-        );
-        $handler->setFormatter($formatter);
-        $logger->pushHandler($handler);
-        return $logger;
-    }
-}
-
-// Initialize a global logger for early bootstrap operations
-$logger = getLogger('bootstrap');
-
-// ✅ Define Log Directory
-$logDir = __DIR__ . '/../logs';
+// ✅ Define Log Directory with proper permissions
+$logDir = __DIR__ . '/logs';
 if (!is_dir($logDir)) {
     if (!mkdir($logDir, 0775, true)) {
         error_log("❌ [LOGGER] Failed to create logs directory: {$logDir}");
@@ -42,76 +27,130 @@ if (!is_dir($logDir)) {
     }
 }
 
-// ✅ Log Categories (Separated Logs for Different Services)
-$logFiles = [
-    'application' => 'application.log',
-    'auth'        => 'auth.log',
-    'db'          => 'db.log',
-    'api'         => 'api.log',
-    'security'    => 'security.log',
-    'system'      => 'system.log',
-    'audit'       => 'audit.log',    // Added for audit logging
-    'dependencies' => 'dependencies.log', // Added for dependency tracking
-    'payment'     => 'payment.log',     // Added for payment processing
-    'booking'     => 'booking.log',     // Added for booking operations
-    'file'        => 'file.log',        // Added for file operations
-    'admin'       => 'admin.log',       // Added for admin operations
-    'metrics'     => 'metrics.log',     // Added for metrics collection
-    'report'      => 'report.log',      // Added for report generation
-    'revenue'     => 'revenue.log'      // Added for revenue tracking
-];
+// ✅ Define a consistent formatter for all loggers
+$dateFormat = "Y-m-d H:i:s.u";
+$output = "[%datetime%] [%channel%] %level_name%: %message% %context% %extra%\n";
+$formatter = new LineFormatter($output, $dateFormat, true, true);
 
-$loggers = [];
-
-foreach ($logFiles as $category => $fileName) {
-    $logFile = "{$logDir}/{$fileName}";
-
-    if (!file_exists($logFile)) {
-        if (!touch($logFile)) {
-            error_log("❌ [LOGGER] Failed to create log file: {$logFile}");
-            continue;
-        }
-        chmod($logFile, 0664);
-    }
-
-    try {
-        $logger = new Logger($category);
-        $streamHandler = new StreamHandler($logFile, Logger::DEBUG);
-
-        // ✅ JSON Formatting for Structured Logs
-        $formatter = new LineFormatter(
-            "[%datetime%] [%channel%] %level_name%: %message%\n",
-            "Y-m-d H:i:s",
-            true,
-            true
-        );
-
+/**
+ * Create a logger with proper handlers, formatters, and processors
+ */
+function createLogger(string $channel, string $logFile, int $level = Logger::DEBUG): Logger {
+    global $formatter;
+    
+    $logger = new Logger($channel);
+    
+    // Add file handler with rotation (14 days retention)
+    $fileHandler = new RotatingFileHandler($logFile, 14, $level);
+    $fileHandler->setFormatter($formatter);
+    $logger->pushHandler($fileHandler);
+    
+    // Add stderr handler for immediate visibility during development
+    if ($_ENV['APP_ENV'] ?? 'development' !== 'production') {
+        $streamHandler = new StreamHandler('php://stderr', $level);
         $streamHandler->setFormatter($formatter);
         $logger->pushHandler($streamHandler);
+    }
+    
+    // Add processors for additional context
+    $logger->pushProcessor(new WebProcessor());
+    $logger->pushProcessor(new IntrospectionProcessor());
+    $logger->pushProcessor(new MemoryUsageProcessor());
+    
+    return $logger;
+}
 
-        $loggers[$category] = $logger;
-    } catch (Exception $e) {
+// ✅ Log Categories (Complete set for all application components)
+$logCategories = [
+    'application',  // General application logs
+    'auth',         // Authentication and authorization
+    'user',         // User-related operations
+    'db',           // Database operations
+    'api',          // API requests and responses
+    'security',     // Security events and warnings
+    'system',       // System-level events
+    'audit',        // Security audit trail
+    'dependencies', // Service dependencies
+    'payment',      // Payment processing
+    'booking',      // Booking operations
+    'file',         // File operations
+    'admin',        // Admin operations
+    'metrics',      // Performance metrics
+    'report',       // Report generation
+    'revenue',      // Revenue tracking
+    'notification', // Notification services
+    'document',     // Document management
+    'dashboard',    // Dashboard operations
+    'encryption',   // Encryption operations
+    'cache',        // Cache operations
+    'session',      // Session management
+    'validation',   // Data validation
+];
+
+// Initialize all loggers
+$loggers = [];
+$fallbackCreated = false;
+
+foreach ($logCategories as $category) {
+    $logFile = "{$logDir}/{$category}.log";
+    
+    // Ensure log file exists and is writable
+    try {
+        if (!file_exists($logFile)) {
+            touch($logFile);
+            chmod($logFile, 0664);
+        }
+        
+        if (!is_writable($logFile)) {
+            throw new \Exception("Log file not writable: {$logFile}");
+        }
+        
+        // Create the logger with all proper handlers
+        $loggers[$category] = createLogger($category, $logFile);
+        
+    } catch (\Exception $e) {
+        // Create a fallback logger if we haven't already
+        if (!$fallbackCreated) {
+            $fallbackLogger = new Logger('fallback');
+            $fallbackHandler = new StreamHandler('php://stderr', Logger::WARNING);
+            $fallbackHandler->setFormatter($formatter);
+            $fallbackLogger->pushHandler($fallbackHandler);
+            $fallbackCreated = true;
+        }
+        
         error_log("❌ [LOGGER] Failed to initialize logger for {$category}: " . $e->getMessage());
+        $loggers[$category] = $fallbackLogger;
     }
 }
 
-// ✅ Function to Retrieve Logger by Category
-function getLogger(string $category = 'application'): LoggerInterface
-{
+// Set the default application logger
+$logger = $loggers['application'];
+$logger->info("Logger system initialized with " . count($logCategories) . " categories");
+
+/**
+ * Helper function to retrieve a specific logger
+ */
+function getLogger(string $category = 'application'): LoggerInterface {
     global $loggers;
     if (!isset($loggers[$category])) {
-        error_log("❌ [LOGGER] Logger for category '{$category}' not initialized.");
-        return new Logger('fallback');
+        error_log("❌ [LOGGER] Requested logger for category '{$category}' not found, using fallback");
+        return $loggers['application'] ?? new Logger('fallback');
     }
     return $loggers[$category];
 }
 
-// ✅ Function to Retrieve Default Logger
-function getDefaultLogger(): LoggerInterface
-{
-    return getLogger('application');
+/**
+ * Helper function to retrieve the default logger
+ */
+function getDefaultLogger(): LoggerInterface {
+    global $logger;
+    return $logger;
 }
 
-// ✅ Return Default Logger (Ensuring Availability)
-return getDefaultLogger();
+// Make loggers globally available
+$GLOBALS['logger'] = $logger;
+$GLOBALS['loggers'] = $loggers;
+
+// Return the default logger
+return $logger;
 

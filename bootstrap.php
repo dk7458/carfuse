@@ -1,9 +1,17 @@
 <?php
 require_once __DIR__ . '/vendor/autoload.php';
+
+// Load the logger configuration first to get pre-initialized loggers
+$logger = require_once __DIR__ . '/logger.php';
+// Get access to the category loggers array
+global $loggers;
+
+// Now we have access to both the main $logger and category-specific $loggers
+$logger->info("🔄 Bootstrap starting with pre-initialized loggers");
+
 require_once __DIR__ . '/App/Helpers/ExceptionHandler.php';
 require_once __DIR__ . '/App/Helpers/SecurityHelper.php';
 require_once __DIR__ . '/App/Helpers/DatabaseHelper.php';
-require_once __DIR__ . '/logger.php'; // Ensure the global getLogger function is included
 $logger->info("🔄 Security helper and other critical services loaded.");
 
 use Dotenv\Dotenv;
@@ -19,86 +27,8 @@ use Monolog\Formatter\LineFormatter;
 use Monolog\Processor\IntrospectionProcessor;
 use Monolog\Processor\WebProcessor;
 
-// Step 1: Initialize Default Logger
-$logDir = __DIR__ . '/logs';
-if (!is_dir($logDir)) {
-    mkdir($logDir, 0755, true);
-}
-
-// Create default logger
-try {
-    $logger = new Logger('app');
-    $formatter = new LineFormatter(
-        "[%datetime%] %channel%.%level_name%: %message% %context% %extra%\n",
-        "Y-m-d H:i:s.u",
-        true,
-        true
-    );
-    
-    // Add handlers with the formatter
-    $streamHandler = new StreamHandler('php://stderr', Logger::DEBUG);
-    $streamHandler->setFormatter($formatter);
-    $logger->pushHandler($streamHandler);
-    
-    $fileHandler = new RotatingFileHandler($logDir . '/app.log', 14, Logger::INFO);
-    $fileHandler->setFormatter($formatter);
-    $logger->pushHandler($fileHandler);
-    
-    // Add processors
-    $logger->pushProcessor(new WebProcessor());
-    $logger->pushProcessor(new IntrospectionProcessor());
-    
-    $logger->info("🔄 Logger initialized successfully.");
-} catch (Exception $e) {
-    error_log("❌ [BOOTSTRAP] Logger initialization failed: " . $e->getMessage());
-    // Create a minimal fallback logger
-    $logger = new Logger('fallback');
-    $logger->pushHandler(new StreamHandler('php://stderr', Logger::DEBUG));
-}
-
-// Create category-specific loggers
-$loggers = [
-    'db' => null,
-    'auth' => null,
-    'admin' => null,
-    'api' => null,
-    'audit' => null,
-    'security' => null,
-    'payment' => null,
-    'booking' => null,
-    'metrics' => null,
-    'report' => null,
-    'revenue' => null,
-    'dependencies' => null,
-    'filestorage' => null,
-    'keymanager' => null, 
-    'documents' => null,
-];
-
-// Initialize each category logger
-foreach ($loggers as $category => &$categoryLogger) {
-    try {
-        $categoryLogger = new Logger($category);
-        
-        // Add handlers with the formatter
-        $streamHandler = new StreamHandler('php://stderr', Logger::DEBUG);
-        $streamHandler->setFormatter($formatter);
-        $categoryLogger->pushHandler($streamHandler);
-        
-        $fileHandler = new RotatingFileHandler($logDir . "/{$category}.log", 14, Logger::INFO);
-        $fileHandler->setFormatter($formatter);
-        $categoryLogger->pushHandler($fileHandler);
-        
-        // Add processors
-        $categoryLogger->pushProcessor(new WebProcessor());
-        $categoryLogger->pushProcessor(new IntrospectionProcessor());
-    } catch (Exception $e) {
-        error_log("❌ [BOOTSTRAP] {$category} logger initialization failed: " . $e->getMessage());
-        // Create a minimal fallback logger for this category
-        $categoryLogger = new Logger($category . '_fallback');
-        $categoryLogger->pushHandler(new StreamHandler('php://stderr', Logger::DEBUG));
-    }
-}
+// Step 1: Use pre-initialized loggers from logger.php
+// No need to create loggers here as we've already loaded them
 
 // Step 2: Load Environment Variables
 $dotenvPath = __DIR__;
@@ -197,7 +127,7 @@ try {
 $coreServices = [];
 
 try {
-    // 1. First initialize all loggers (already done earlier in file)
+    // 1. Use pre-initialized loggers
     $coreServices['logger'] = $logger;
     $coreServices['loggers'] = $loggers;
     
@@ -405,7 +335,7 @@ return [
     'db'                => $database,
     'secure_db'         => $secure_database,
     'logger'            => $logger,
-    'loggers'           => $loggers,
+    'loggers'           => $loggers,  // Return the pre-initialized loggers
     'container'         => $container,
     'coreServices'      => $coreServices,  // Include all core services
     'config'            => $config, // Pass the configuration array
