@@ -206,6 +206,7 @@ return function (Container $container, array $config) {
     $container->set(TransactionService::class, function($c) {
         return new TransactionService(
             $c->get(TransactionLog::class),
+            $c->get(Payment::class),
             $c->get(AuditService::class),
             $c->get('logger.payment') ?? $c->get(LoggerInterface::class)
         );
