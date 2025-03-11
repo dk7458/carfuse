@@ -125,8 +125,8 @@ return function (Container $container, array $config) {
     $container->set(Document::class, function($c) {
         return new Document(
             $c->get(DatabaseHelper::class),
-            $c->get('logger.document') ?? $c->get('logger.db') ?? $c->get(LoggerInterface::class),
-            $c->get(AuditService::class)
+            $c->get(AuditService::class),
+            $c->get('logger.document') ?? $c->get('logger.db') ?? $c->get(LoggerInterface::class)
         );
     });
     
