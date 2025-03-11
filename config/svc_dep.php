@@ -292,6 +292,7 @@ return function (Container $container, array $config) {
             $c->get(Admin::class),
             $c->get(AuditService::class),
             $c->get('logger.admin') ?? $c->get(LoggerInterface::class),
+            $c->get(TokenService::class),
             $c->get(ExceptionHandler::class)
         );
     });
