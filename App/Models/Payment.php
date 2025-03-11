@@ -91,12 +91,12 @@ class Payment extends BaseModel
     }
 
     /**
-     * Create a new payment or refund.
+     * Create a new payment or refund record
      *
      * @param array $data
      * @return int|null ID of the created payment/refund, or null on failure
      */
-    public function create(array $data): ?int
+    public function createPaymentRecord(array $data): ?int
     {
         // Set default type to 'payment' if not specified
         $data['type'] = $data['type'] ?? 'payment';
@@ -112,16 +112,16 @@ class Payment extends BaseModel
             }
         }
         
-        // For refunds, the amount should be negative (to represent money going out)
+        // For refunds, the amount should be negative
         if ($data['type'] === 'refund' && $data['amount'] > 0) {
             $data['amount'] = -1 * abs($data['amount']);
         }
 
         $data['created_at'] = $data['updated_at'] = date('Y-m-d H:i:s');
-        $paymentId = $this->dbHelper->insert($this->table, $data);
+        $paymentId = parent::create($data);
         
         if (!$paymentId) {
-            return null; // Return null if insertion fails
+            return null;
         }
 
         if ($this->auditService) {
@@ -136,7 +136,6 @@ class Payment extends BaseModel
                 'type' => $data['type']
             ];
             
-            // Add refund-specific data if applicable
             if ($data['type'] === 'refund') {
                 $auditData['refund_reason'] = $data['refund_reason'] ?? null;
                 $auditData['original_payment_id'] = $data['original_payment_id'] ?? null;
@@ -145,7 +144,7 @@ class Payment extends BaseModel
             $this->auditService->logEvent($this->resourceName, $eventType, $auditData);
         }
         
-        return (int) $paymentId; // Ensure ID is always an integer
+        return (int) $paymentId;
     }
 
     /**
@@ -242,18 +241,17 @@ class Payment extends BaseModel
     }
 
     /**
-     * Update a payment.
+     * Update a payment record with audit logging
      *
      * @param int $id
      * @param array $data
      * @return bool
      */
-    public function update(int $id, array $data): bool
+    public function updatePaymentRecord(int $id, array $data): bool
     {
         $data['updated_at'] = date('Y-m-d H:i:s');
-        $result = $this->dbHelper->update($this->table, $data, ['id' => $id, 'deleted_at IS NULL']);
+        $result = parent::update($id, $data);
         
-        // Log audit if service is available and update was successful
         if ($result && $this->auditService) {
             $this->auditService->logEvent($this->resourceName, 'Updated payment', [
                 'payment_id' => $id,
@@ -265,22 +263,21 @@ class Payment extends BaseModel
     }
 
     /**
-     * Soft delete a payment.
+     * Soft delete a payment with audit logging
      *
      * @param int $id
      * @return bool
      */
-    public function delete(int $id): bool
+    public function softDeletePayment(int $id): bool
     {
-        $result = $this->dbHelper->update($this->table, ['deleted_at' => date('Y-m-d H:i:s')], ['id' => $id]);
-    
+        $result = parent::delete($id);
+
         if ($result && $this->auditService) {
             $this->auditService->logEvent($this->resourceName, 'Deleted payment', ['payment_id' => $id]);
         }
         
         return $result;
     }
-    
 
     /**
      * Get payments by user ID.

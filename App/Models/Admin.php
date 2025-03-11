@@ -70,59 +70,6 @@ class Admin extends BaseModel
     }
     
     /**
-     * Override create to handle password hashing.
-     *
-     * @param array $data
-     * @return int|string
-     */
-    public function create(array $data): int
-    {
-        if (isset($data['password'])) {
-            $data['password'] = self::hashPassword($data['password']);
-        }
-        
-        $id = parent::create($data);
-        
-        // Add custom audit logging if needed
-        if ($this->auditService) {
-            $this->auditService->logEvent('admin', 'admin_created', [
-                'id' => $id,
-                'name' => $data['name'] ?? null,
-                'email' => $data['email'] ?? null,
-                'role' => $data['role'] ?? null
-            ]);
-        }
-        
-        return $id;
-    }
-    
-    /**
-     * Override update to handle password hashing.
-     *
-     * @param int|string $id
-     * @param array $data
-     * @return bool
-     */
-    public function update(int|string $id, array $data): bool
-    {
-        if (isset($data['password'])) {
-            $data['password'] = self::hashPassword($data['password']);
-        }
-        
-        $result = parent::update($id, $data);
-        
-        // Add custom audit logging if needed
-        if ($result && $this->auditService) {
-            $this->auditService->logEvent('admin', 'admin_updated', [
-                'id' => $id,
-                'updated_fields' => array_keys($data)
-            ]);
-        }
-        
-        return $result;
-    }
-    
-    /**
      * Get admin by email.
      *
      * @param string $email
@@ -392,5 +339,56 @@ class Admin extends BaseModel
         
         $result = $this->dbHelper->select($query, [':id' => $adminId], true);
         return !empty($result) ? $result[0] : null;
+    }
+
+    /**
+     * Create an admin user with password hashing
+     *
+     * @param array $data
+     * @return int|string
+     */
+    public function createAdminWithHashedPassword(array $data): int|string
+    {
+        if (isset($data['password'])) {
+            $data['password'] = self::hashPassword($data['password']);
+        }
+        
+        $id = parent::create($data);
+        
+        if ($this->auditService) {
+            $this->auditService->logEvent('admin', 'admin_created', [
+                'id' => $id,
+                'name' => $data['name'] ?? null,
+                'email' => $data['email'] ?? null,
+                'role' => $data['role'] ?? null
+            ]);
+        }
+        
+        return $id;
+    }
+
+    /**
+     * Update an admin with password handling
+     *
+     * @param int|string $id
+     * @param array $data
+     * @return bool
+     */
+    public function updateAdminWithPasswordHandling(int|string $id, array $data): bool
+    {
+        if (isset($data['password'])) {
+            $data['password'] = self::hashPassword($data['password']);
+        }
+        
+        $result = parent::update($id, $data);
+        
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent('admin', 'admin_updated', [
+                'id' => $id,
+                'updated_fields' => array_keys($data)
+            ]);
+        }
+        
+        return $result;
     }
 }

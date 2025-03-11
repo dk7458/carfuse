@@ -146,7 +146,7 @@ class PaymentService
     public function addPaymentMethod(array $methodData): array
     {
         // Use the payment method model to add the method
-        $methodId = $this->paymentMethodModel->create([
+        $methodId = $this->paymentMethodModel->createPaymentMethodWithValidation([
             'user_id'     => $methodData['user_id'],
             'payment_type'=> $methodData['type'],
             'card_last4'  => $methodData['card_last4'] ?? null,

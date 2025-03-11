@@ -54,9 +54,9 @@ class PaymentMethod extends BaseModel
     }
 
     /**
-     * Add a new payment method.
+     * Create a payment method with validation
      */
-    public function create(array $data): int
+    public function createPaymentMethodWithValidation(array $data): int
     {
         $validPaymentTypes = ['credit_card', 'paypal', 'bank_transfer'];
         if (!in_array($data['payment_type'], $validPaymentTypes)) {
@@ -65,11 +65,11 @@ class PaymentMethod extends BaseModel
 
         return parent::create($data);
     }
-    
+
     /**
-     * Update a payment method.
+     * Update a payment method with custom fields
      */
-    public function update(int $id, array $data): bool
+    public function customUpdatePaymentMethod(int $id, array $data): bool
     {
         $setClauses = [];
         $params = [':id' => $id];
@@ -95,11 +95,11 @@ class PaymentMethod extends BaseModel
         ");
         return $stmt->execute($params);
     }
-    
+
     /**
-     * Delete a payment method.
+     * Remove a payment method
      */
-    public function delete(int $id): bool
+    public function removePaymentMethod(int $id): bool
     {
         $stmt = $this->pdo->prepare("DELETE FROM payment_methods WHERE id = :id");
         return $stmt->execute([':id' => $id]);

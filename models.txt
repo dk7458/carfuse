@@ -5,6 +5,7 @@ namespace App\Models;
 
 use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
+use Psr\Log\LoggerInterface;
 
 /**
  * Booking Model
@@ -47,9 +48,9 @@ class Booking extends BaseModel
      * @param DatabaseHelper|null $dbHelper
      * @param AuditService|null $auditService
      */
-    public function __construct(DatabaseHelper $dbHelper = null, AuditService $auditService = null)
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService, LoggerInterface $logger)
     {
-        parent::__construct($dbHelper, $auditService);
+        parent::__construct($dbHelper, $auditService, $logger);
     }
     
     /**
@@ -1495,6 +1496,7 @@ namespace App\Models;
 
 use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
+use Psr\Log\LoggerInterface;
 
 /**
  * Admin Model - Manages system administrators.
@@ -1531,9 +1533,9 @@ class Admin extends BaseModel
      * @param DatabaseHelper $dbHelper
      * @param AuditService|null $auditService
      */
-    public function __construct(DatabaseHelper $dbHelper = null, AuditService $auditService = null)
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService, LoggerInterface $logger)
     {
-        parent::__construct($dbHelper, $auditService);
+        parent::__construct($dbHelper, $auditService, $logger);
     }
     
     /**
@@ -2622,6 +2624,7 @@ use Psr\Log\LoggerInterface;
 use Illuminate\Support\Facades\Hash;
 use Ramsey\Uuid\Uuid;
 use App\Services\AuditService;
+use App\Services\EmailService;
 
 /**
  * User Model
@@ -2643,10 +2646,11 @@ use App\Services\AuditService;
 class User extends BaseModel
 {
     protected $logger;
+    protected $emailService;
 
-    public function __construct(DatabaseHelper $dbHelper = null, LoggerInterface $logger = null, AuditService $auditService = null)
+    public function __construct(DatabaseHelper $dbHelper, LoggerInterface $logger, AuditService $auditService)
     {
-        parent::__construct($dbHelper, $auditService);
+        parent::__construct($dbHelper, $auditService, $logger);
         $this->logger = $logger;
     }
 
@@ -2687,12 +2691,32 @@ class User extends BaseModel
     ];
 
     /**
-     * Relationships
+     * Override create method to hash password and assign default role.
+     * 
+     * @param array $data
+     * @return int|string
      */
+    public function create(array $data): int|string
+    {
+        // Hash password if provided
+        if (isset($data['password'])) {
+            $data['password_hash'] = self::hashPassword($data['password']);
+            unset($data['password']);
+        }
+        
+        // Set default role if not provided
+        if (!isset($data['role'])) {
+            $data['role'] = 'user';
+        }
+        
+        // Call parent create method to handle database insertion
+        return parent::create($data);
+    }
 
     /**
-     * Get user's bookings
+     * Override create method to hash password, assign default role, and send welcome email.
      * 
+     * @param array $data
      * @param string $userId
      * @return array
      */
@@ -2881,43 +2905,6 @@ class User extends BaseModel
     /**
      * Database operations
      */
-
-    /**
-     * Create a new user
-     * 
-     * @param array $data
-     * @return int The ID of the created user (or UUID converted to integer if using UUID)
-     */
-    public function create(array $data): int
-    {
-        if (isset($data['password'])) {
-            $data['password_hash'] = self::hashPassword($data['password']);
-            unset($data['password']);
-        }
-
-        if ($this->useUuid && !isset($data['id'])) {
-            $data['id'] = Uuid::uuid4()->toString();
-        }
-
-        if ($this->useTimestamps) {
-            $now = date('Y-m-d H:i:s');
-            $data['created_at'] = $now;
-            $data['updated_at'] = $now;
-        }
-
-        $id = $this->dbHelper->insert($this->table, $data);
-        
-        // Log the creation if audit service is available
-        if ($this->auditService) {
-            $this->auditService->logEvent('user', 'created', [
-                'id' => $id,
-                'email' => $data['email'] ?? 'unknown'
-            ]);
-        }
-
-        // Ensure we return an integer to match the parent class signature
-        return is_numeric($id) ? (int)$id : crc32($id);
-    }
 
     /**
      * Update user data
@@ -3601,7 +3588,7 @@ abstract class BaseModel
      * @param AuditService|null $auditService Audit service instance for logging
      * @param LoggerInterface|null $logger Logger for errors and debug info
      */
-    public function __construct(DatabaseHelper $dbHelper, ?AuditService $auditService = null, ?LoggerInterface $logger = null)
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService, LoggerInterface $logger)
     {
         $this->dbHelper = $dbHelper;
         $this->auditService = $auditService;

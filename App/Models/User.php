@@ -75,6 +75,46 @@ class User extends BaseModel
     ];
 
     /**
+     * Create a new user with role assignment and password hashing
+     * 
+     * @param array $data
+     * @return int|string
+     */
+    public function createWithDefaultRole(array $data): int|string
+    {
+        // Hash password if provided
+        if (isset($data['password'])) {
+            $data['password_hash'] = self::hashPassword($data['password']);
+            unset($data['password']);
+        }
+        
+        // Set default role if not provided
+        if (!isset($data['role'])) {
+            $data['role'] = 'user';
+        }
+        
+        // Call parent create method to handle database insertion
+        return parent::create($data);
+    }
+
+    /**
+     * Update user data with password handling
+     * 
+     * @param string|int $id
+     * @param array $data
+     * @return bool
+     */
+    public function updateWithPasswordHandling(string|int $id, array $data): bool
+    {
+        if (isset($data['password'])) {
+            $data['password_hash'] = self::hashPassword($data['password']);
+            unset($data['password']);
+        }
+
+        return parent::update($id, $data);
+    }
+
+    /**
      * Override create method to hash password and assign default role.
      * 
      * @param array $data

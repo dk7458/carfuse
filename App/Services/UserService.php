@@ -53,7 +53,7 @@ class UserService
 
         try {
             // Use User model to create the user
-            $userId = $this->userModel->create($data);
+            $userId = $this->userModel->createWithDefaultRole($data);
             
             if (self::DEBUG_MODE) {
                 $this->logger->info("[auth] ✅ User registered.", ['userId' => $userId]);

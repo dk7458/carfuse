@@ -69,7 +69,7 @@ class UserController extends Controller
             
             // Prepare and create new user (User model handles password hashing and timestamps)
             $data['role'] = 'user';
-            $userId = $this->userModel->create($data);
+            $userId = $this->userModel->createWithDefaultRole($data);
             
             // Removed direct audit logging – User model handles logging after creation
             

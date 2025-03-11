@@ -32,12 +32,12 @@ class PasswordReset extends BaseModel
     }
 
     /**
-     * Create a new password reset.
+     * Create a new password reset with token generation
      *
      * @param array $data
      * @return int
      */
-    public function create(array $data): int
+    public function createPasswordResetWithToken(array $data): int
     {
         // Generate a token if not provided
         if (!isset($data['token'])) {
