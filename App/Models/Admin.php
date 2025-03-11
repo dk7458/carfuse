@@ -40,7 +40,7 @@ class Admin extends BaseModel
      * @param DatabaseHelper $dbHelper
      * @param AuditService|null $auditService
      */
-    public function __construct(DatabaseHelper $dbHelper = null, AuditService $auditService = null)
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService)
     {
         parent::__construct($dbHelper, $auditService);
     }

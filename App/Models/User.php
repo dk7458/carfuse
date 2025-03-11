@@ -32,11 +32,10 @@ class User extends BaseModel
     protected $logger;
     protected $emailService;
 
-    public function __construct(DatabaseHelper $dbHelper = null, LoggerInterface $logger = null, AuditService $auditService = null, EmailService $emailService = null)
+    public function __construct(DatabaseHelper $dbHelper, LoggerInterface $logger, AuditService $auditService)
     {
         parent::__construct($dbHelper, $auditService);
         $this->logger = $logger;
-        $this->emailService = $emailService;
     }
 
     protected $table = 'users';
