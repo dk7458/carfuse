@@ -14,6 +14,25 @@ class Admin extends BaseModel
     protected $resourceName = 'admin';
     protected $useTimestamps = true;
     protected $useSoftDeletes = true;
+
+    /**
+     * @var array The attributes that are mass assignable
+     */
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'role'
+    ];
+
+    /**
+     * @var array Data type casting definitions
+     */
+    protected $casts = [
+        'id' => 'int',
+        'email' => 'string',
+        'role' => 'string'
+    ];
     
     /**
      * Constructor
@@ -50,8 +69,7 @@ class Admin extends BaseModel
     }
     
     /**
-     * Create an admin.
-     * Override to handle password hashing.
+     * Override create to handle password hashing.
      *
      * @param array $data
      * @return int|string
@@ -78,8 +96,7 @@ class Admin extends BaseModel
     }
     
     /**
-     * Update an admin.
-     * Override to handle password hashing.
+     * Override update to handle password hashing.
      *
      * @param int|string $id
      * @param array $data

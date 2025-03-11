@@ -14,8 +14,29 @@ class Notification extends BaseModel
 {
     protected $table = 'notifications';
     protected $resourceName = 'notification';
-    protected $useTimestamps = false;  // We'll use sent_at instead of created_at
+    protected $useTimestamps = true;  // We'll use sent_at instead of created_at
     protected $useSoftDeletes = false; // Notifications don't use soft deletes
+
+    /**
+     * @var array The attributes that are mass assignable
+     */
+    protected $fillable = [
+        'user_id',
+        'message',
+        'type',
+        'link',
+        'is_read',
+        'sent_at'
+    ];
+
+    /**
+     * @var array Data type casting definitions
+     */
+    protected $casts = [
+        'user_id' => 'int',
+        'is_read' => 'bool',
+        'sent_at' => 'datetime'
+    ];
 
     /**
      * Mark a notification as read.

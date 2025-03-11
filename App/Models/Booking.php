@@ -25,11 +25,19 @@ class Booking extends BaseModel
     protected $fillable = [
         'user_id',
         'vehicle_id',
-        'start_date',
-        'end_date',
-        'status',
-        'created_at',
-        'updated_at'
+        'pickup_date',
+        'dropoff_date',
+        'status'
+    ];
+
+    /**
+     * @var array Data type casting definitions
+     */
+    protected $casts = [
+        'user_id' => 'int',
+        'vehicle_id' => 'int',
+        'pickup_date' => 'datetime',
+        'dropoff_date' => 'datetime'
     ];
     
     /**
@@ -55,51 +63,6 @@ class Booking extends BaseModel
         'dropoff_date' => 'required|date|after_or_equal:pickup_date',
         'status' => 'required|string|in:pending,confirmed,cancelled,completed',
     ];
-
-    /**
-     * Create a new booking
-     * 
-     * @param array $data
-     * @return int|string
-     */
-    public function create(array $data): int
-    {
-        $id = parent::create($data);
-        
-        // Custom audit logging
-        if ($id && $this->auditService) {
-            $this->auditService->logEvent($this->resourceName, 'booking_created', [
-                'booking_id' => $id,
-                'user_id' => $data['user_id'] ?? null,
-                'vehicle_id' => $data['vehicle_id'] ?? null,
-                'status' => $data['status'] ?? null
-            ]);
-        }
-        
-        return $id;
-    }
-
-    /**
-     * Update a booking
-     * 
-     * @param int|string $id
-     * @param array $data
-     * @return bool
-     */
-    public function update(int|string $id, array $data): bool
-    {
-        $result = parent::update($id, $data);
-        
-        // Custom audit logging
-        if ($result && $this->auditService) {
-            $this->auditService->logEvent($this->resourceName, 'booking_updated', [
-                'booking_id' => $id,
-                'updated_fields' => array_keys($data)
-            ]);
-        }
-        
-        return $result;
-    }
 
     /**
      * Update a booking's status

@@ -31,20 +31,27 @@ class Vehicle extends BaseModel
     ];
 
     /**
-     * Create a new vehicle
-     * 
-     * @param array $data
-     * @return int
+     * The attributes that are mass assignable.
+     *
+     * @var array
      */
-    public function create(array $data): int
-    {
-        // Ensure status is properly managed
-        if (empty($data['status'])) {
-            $data['status'] = 'available';
-        }
+    protected $fillable = [
+        'registration_number',
+        'type',
+        'status',
+        'make',
+        'model',
+        'year',
+    ];
 
-        return parent::create($data);
-    }
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'year' => 'integer',
+    ];
 
     /**
      * Find available vehicles

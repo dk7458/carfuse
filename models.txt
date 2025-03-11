@@ -17,6 +17,29 @@ class Booking extends BaseModel
     protected $resourceName = 'booking';
     protected $useTimestamps = true;
     protected $useSoftDeletes = true;
+
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'user_id',
+        'vehicle_id',
+        'pickup_date',
+        'dropoff_date',
+        'status'
+    ];
+
+    /**
+     * @var array Data type casting definitions
+     */
+    protected $casts = [
+        'user_id' => 'int',
+        'vehicle_id' => 'int',
+        'pickup_date' => 'datetime',
+        'dropoff_date' => 'datetime'
+    ];
     
     /**
      * Constructor
@@ -41,51 +64,6 @@ class Booking extends BaseModel
         'dropoff_date' => 'required|date|after_or_equal:pickup_date',
         'status' => 'required|string|in:pending,confirmed,cancelled,completed',
     ];
-
-    /**
-     * Create a new booking
-     * 
-     * @param array $data
-     * @return int|string
-     */
-    public function create(array $data): int|string
-    {
-        $id = parent::create($data);
-        
-        // Custom audit logging
-        if ($id && $this->auditService) {
-            $this->auditService->logEvent($this->resourceName, 'booking_created', [
-                'booking_id' => $id,
-                'user_id' => $data['user_id'] ?? null,
-                'vehicle_id' => $data['vehicle_id'] ?? null,
-                'status' => $data['status'] ?? null
-            ]);
-        }
-        
-        return $id;
-    }
-
-    /**
-     * Update a booking
-     * 
-     * @param int|string $id
-     * @param array $data
-     * @return bool
-     */
-    public function update(int|string $id, array $data): bool
-    {
-        $result = parent::update($id, $data);
-        
-        // Custom audit logging
-        if ($result && $this->auditService) {
-            $this->auditService->logEvent($this->resourceName, 'booking_updated', [
-                'booking_id' => $id,
-                'updated_fields' => array_keys($data)
-            ]);
-        }
-        
-        return $result;
-    }
 
     /**
      * Update a booking's status
@@ -175,29 +153,63 @@ class Booking extends BaseModel
     }
 
     /**
-     * Get bookings by date range
-     * 
-     * @param string $startDate
-     * @param string $endDate
+     * Get bookings within a date range with optional filters
+     *
+     * @param string $start
+     * @param string $end
+     * @param array $filters
      * @return array
      */
-    public function getByDateRange(string $startDate, string $endDate): array
+    public function getByDateRange(string $start, string $end, array $filters = []): array
     {
-        $query = "
-            SELECT * FROM {$this->table}
-            WHERE pickup_date >= :start_date AND dropoff_date <= :end_date
-        ";
+        // Check if we're filtering by pickup/dropoff dates or creation dates
+        $dateField = !empty($filters['date_field']) ? $filters['date_field'] : 'created_at';
         
-        if ($this->useSoftDeletes) {
-            $query .= " AND deleted_at IS NULL";
+        $query = "SELECT b.*, u.name as user_name, v.model as vehicle_model 
+                 FROM {$this->table} b
+                 LEFT JOIN users u ON b.user_id = u.id
+                 LEFT JOIN vehicles v ON b.vehicle_id = v.id
+                 WHERE b.{$dateField} BETWEEN :start AND :end";
+        
+        $params = [':start' => $start, ':end' => $end];
+        
+        if (!empty($filters['status'])) {
+            $query .= " AND b.status = :status";
+            $params[':status'] = $filters['status'];
         }
         
-        $query .= " ORDER BY pickup_date ASC";
+        // Add sorting
+        $query .= " ORDER BY b.{$dateField} ASC";
         
-        return $this->dbHelper->select($query, [
-            ':start_date' => $startDate,
-            ':end_date' => $endDate
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get bookings for a specific user within a date range
+     *
+     * @param int $userId
+     * @param string $start
+     * @param string $end
+     * @return array
+     */
+    public function getByUserAndDateRange(int $userId, string $start, string $end): array
+    {
+        $query = "SELECT b.*, v.model as vehicle_model 
+                 FROM {$this->table} b
+                 LEFT JOIN vehicles v ON b.vehicle_id = v.id
+                 WHERE b.user_id = :user_id
+                 AND b.created_at BETWEEN :start AND :end";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':start' => $start,
+            ':end' => $end
         ]);
+        
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
     /**
@@ -303,6 +315,139 @@ class Booking extends BaseModel
         
         return $result[0]['booking_count'] == 0;
     }
+
+    /**
+     * Get user ID for a booking
+     * 
+     * @param int|string $bookingId
+     * @return int|null
+     */
+    public function getUserId(int|string $bookingId): ?int
+    {
+        $query = "
+            SELECT user_id FROM {$this->table}
+            WHERE id = :booking_id
+        ";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $result = $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+        return isset($result[0]['user_id']) ? (int)$result[0]['user_id'] : null;
+    }
+
+    /**
+     * Get monthly booking trends
+     * 
+     * @return array
+     */
+    public function getMonthlyTrends(): array
+    {
+        $year = date('Y');
+        $query = "
+            SELECT 
+                MONTH(created_at) as month,
+                COUNT(*) as total
+            FROM {$this->table}
+            WHERE YEAR(created_at) = :year
+        ";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $query .= " GROUP BY MONTH(created_at) ORDER BY month ASC";
+        
+        return $this->dbHelper->select($query, [':year' => $year]);
+    }
+
+    /**
+     * Get total number of bookings
+     * 
+     * @return int
+     */
+    public function getTotalBookings(): int
+    {
+        $query = "SELECT COUNT(*) as total FROM {$this->table}";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " WHERE deleted_at IS NULL";
+        }
+        
+        $result = $this->dbHelper->select($query);
+        return isset($result[0]['total']) ? (int)$result[0]['total'] : 0;
+    }
+
+    /**
+     * Get number of completed bookings
+     * 
+     * @return int
+     */
+    public function getCompletedBookings(): int
+    {
+        $query = "
+            SELECT COUNT(*) as total FROM {$this->table}
+            WHERE status = 'completed'
+        ";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $result = $this->dbHelper->select($query);
+        return isset($result[0]['total']) ? (int)$result[0]['total'] : 0;
+    }
+    
+    /**
+     * Get number of canceled bookings
+     * 
+     * @return int
+     */
+    public function getCanceledBookings(): int
+    {
+        $query = "
+            SELECT COUNT(*) as total FROM {$this->table}
+            WHERE status = 'canceled'
+        ";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $result = $this->dbHelper->select($query);
+        return isset($result[0]['total']) ? (int)$result[0]['total'] : 0;
+    }
+    
+    /**
+     * Get booking logs for a specific booking
+     * 
+     * @param int|string $bookingId
+     * @return array
+     */
+    public function getLogs(int|string $bookingId): array
+    {
+        $query = "
+            SELECT * FROM booking_logs
+            WHERE booking_id = :booking_id
+            ORDER BY created_at DESC
+        ";
+        
+        return $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+    }
+    
+    /**
+     * Check if a booking is available based on vehicle and dates
+     * 
+     * @param int|string $vehicleId
+     * @param string $pickupDate
+     * @param string $dropoffDate
+     * @return bool
+     */
+    public function isAvailable(int|string $vehicleId, string $pickupDate, string $dropoffDate): bool
+    {
+        return $this->isVehicleAvailable($vehicleId, $pickupDate, $dropoffDate);
+    }
 }
 === App/Models/TransactionLog.php ===
 <?php
@@ -318,30 +463,44 @@ use App\Services\EncryptionService;
  *
  * Represents a financial transaction and handles interactions with the `transaction_logs` table.
  */
-class TransactionLog extends BaseModel
+class TransactionLog extends BaseFinancialModel
 {
     protected $table = 'transaction_logs';
     protected $resourceName = 'transaction_log';
     protected $useTimestamps = true; // Transaction logs use timestamps
     protected $useSoftDeletes = false; // Transaction logs don't use soft deletes
 
-    /**
-     * Create a new transaction log.
-     *
-     * @param array $data
-     * @return int
-     */
-    public function create(array $data): int
-    {
-        // Encrypt transaction details
-        $data['amount'] = EncryptionService::encrypt($data['amount']);
+    private DatabaseHelper $dbHelper;
+    private ?AuditService $auditService;
 
-        return parent::create($data);
+    public function __construct(DatabaseHelper $dbHelper, ?AuditService $auditService = null)
+    {
+        $this->dbHelper = $dbHelper;
+        $this->auditService = $auditService;
     }
 
     /**
-     * Log a transaction - convenience method that uses create().
-     * This method is used for consistency with service calls.
+     * Get the database helper instance.
+     *
+     * @return DatabaseHelper
+     */
+    public function getDbHelper(): DatabaseHelper
+    {
+        return $this->dbHelper;
+    }
+
+    /**
+     * Get the table name.
+     *
+     * @return string
+     */
+    public function getTable(): string
+    {
+        return $this->table;
+    }
+
+    /**
+     * Log a transaction - this is the method that other services will call.
      *
      * @param array $transactionData
      * @return int The ID of the logged transaction
@@ -359,22 +518,53 @@ class TransactionLog extends BaseModel
             $transactionData['description'] = ucfirst($type) . ' processed';
         }
 
-        // Log this transaction
+        // Log this transaction for security audit
         if ($this->auditService && isset($transactionData['type'])) {
-            $this->auditService->logEvent(
-                $this->resourceName,
+            $this->recordAuditEvent(
                 $transactionData['type'] . '_logged',
                 [
                     'payment_id' => $transactionData['payment_id'] ?? null,
                     'booking_id' => $transactionData['booking_id'] ?? null,
                     'amount' => $transactionData['amount'] ?? null,
                     'status' => $transactionData['status'] ?? null
-                ]
+                ],
+                $transactionData['user_id'] ?? null
             );
         }
 
-        // Use the create method to insert the transaction record
-        return $this->create($transactionData);
+        // Encrypt any sensitive data and create the transaction log
+        $encryptedData = $this->encryptSensitiveData($transactionData);
+        return $this->create($encryptedData);
+    }
+
+    /**
+     * Create a new transaction log.
+     *
+     * @param array $data
+     * @return int The ID of the created transaction log
+     * @throws \Exception If creation fails
+     */
+    public function create(array $data): int
+    {
+        // Required fields check
+        if (!isset($data['payment_id']) || !isset($data['amount'])) {
+            throw new \Exception('Transaction log requires payment_id and amount');
+        }
+        
+        // Add timestamps
+        if (!isset($data['created_at'])) {
+            $data['created_at'] = date('Y-m-d H:i:s');
+        }
+        $data['updated_at'] = date('Y-m-d H:i:s');
+
+        // Insert the record
+        $logId = $this->dbHelper->insert($this->table, $data);
+        
+        if (!$logId) {
+            throw new \Exception('Failed to create transaction log');
+        }
+        
+        return (int)$logId;
     }
 
     /**
@@ -405,15 +595,14 @@ class TransactionLog extends BaseModel
     public function getById(int $id): ?array
     {
         $query = "SELECT * FROM {$this->table} WHERE id = :id";
-        $transaction = $this->dbHelper->select($query, [':id' => $id]);
-
-        if ($transaction) {
-            $transaction = $transaction[0] ?? null;
-            // Decrypt transaction details
-            $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
+        $result = $this->dbHelper->select($query, [':id' => $id]);
+        
+        if (!empty($result)) {
+            // Decrypt sensitive data before returning
+            return $this->decryptSensitiveData($result[0]);
         }
-
-        return $transaction ?: null;
+        
+        return null;
     }
 
     /**
@@ -425,8 +614,13 @@ class TransactionLog extends BaseModel
      */
     public function updateStatus(int $id, string $status): bool
     {
-        $result = parent::update($id, ['status' => $status]);
-
+        $data = [
+            'status' => $status,
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+        
+        $result = $this->dbHelper->update($this->table, $data, ['id' => $id]);
+        
         // Log the event
         if ($result && $this->auditService) {
             $this->auditService->logEvent($this->resourceName, 'status_update', [
@@ -435,7 +629,7 @@ class TransactionLog extends BaseModel
             ]);
         }
 
-        return $result;
+        return (bool)$result;
     }
 
     /**
@@ -455,6 +649,30 @@ class TransactionLog extends BaseModel
         }
 
         return $transactions;
+    }
+
+    /**
+     * Get transactions by payment ID.
+     *
+     * @param int $paymentId
+     * @return array
+     */
+    public function getByPaymentId(int $paymentId): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE payment_id = :payment_id ORDER BY created_at DESC";
+        return $this->dbHelper->select($query, [':payment_id' => $paymentId]);
+    }
+
+    /**
+     * Get transactions by booking ID.
+     *
+     * @param int $bookingId
+     * @return array
+     */
+    public function getByBookingId(int $bookingId): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE booking_id = :booking_id ORDER BY created_at DESC";
+        return $this->dbHelper->select($query, [':booking_id' => $bookingId]);
     }
 }
 === App/Models/RefreshToken.php ===
@@ -683,7 +901,23 @@ class Payment extends BaseModel
 {
     protected $table = 'payments';
     protected $resourceName = 'payment';
-    
+    protected $useSoftDeletes = true;
+
+    /**
+     * Attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'user_id',
+        'booking_id',
+        'amount',
+        'type',
+        'status',
+        'created_at',
+        'updated_at'
+    ];
+
     /**
      * Validation rules for the model.
      *
@@ -963,17 +1197,42 @@ class Payment extends BaseModel
     }
 
     /**
-     * Get payments within a date range.
-     * Replaces scopeByDateRange.
+     * Get payments within a date range with optional filters
      *
-     * @param string $startDate
-     * @param string $endDate
+     * @param string $start
+     * @param string $end
+     * @param array $filters
      * @return array
      */
-    public function getByDateRange(string $startDate, string $endDate): array
+    public function getByDateRange(string $start, string $end, array $filters = []): array
     {
-        $query = "SELECT * FROM {$this->table} WHERE created_at BETWEEN :start_date AND :end_date AND deleted_at IS NULL ORDER BY created_at DESC";
-        return $this->dbHelper->select($query, [':start_date' => $startDate, ':end_date' => $endDate]);
+        $query = "SELECT p.*, u.name as user_name 
+                 FROM {$this->table} p
+                 LEFT JOIN users u ON p.user_id = u.id
+                 WHERE p.created_at BETWEEN :start AND :end";
+
+        if ($this->useSoftDeletes) {
+            $query .= " AND p.deleted_at IS NULL";
+        }
+        
+        $params = [':start' => $start, ':end' => $end];
+        
+        if (!empty($filters['type'])) {
+            $query .= " AND p.type = :type";
+            $params[':type'] = $filters['type'];
+        }
+        
+        if (!empty($filters['status'])) {
+            $query .= " AND p.status = :status";
+            $params[':status'] = $filters['status'];
+        }
+        
+        // Add sorting
+        $query .= " ORDER BY p.created_at DESC";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
     /**
@@ -1082,6 +1341,152 @@ class Payment extends BaseModel
         $result = $this->dbHelper->select($query, [':payment_id' => $paymentId]);
         return (float)($result[0]['total_refunded'] ?? 0);
     }
+
+    /**
+     * Create a payment and return its ID
+     * 
+     * @param array $paymentData Payment details
+     * @return int ID of created payment
+     * @throws \Exception If creation fails
+     */
+    public function createPayment(array $paymentData): int
+    {
+        // Set default values if not provided
+        $data = array_merge([
+            'status' => 'pending',
+            'type' => 'payment',
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s')
+        ], $paymentData);
+        
+        // Encrypt sensitive data
+        $data = $this->encryptSensitiveData($data);
+        
+        // Create the payment record
+        $paymentId = $this->create($data);
+        
+        if (!$paymentId) {
+            throw new \Exception('Payment creation failed');
+        }
+        
+        // Log the payment creation for security auditing
+        if ($this->auditService) {
+            $this->auditService->logEvent(
+                $this->resourceName,
+                'payment_created',
+                [
+                    'payment_id' => $paymentId,
+                    'user_id' => $data['user_id'],
+                    'amount' => $paymentData['amount'], // Use unencrypted amount for audit
+                    'method' => $data['method'],
+                    'status' => $data['status']
+                ],
+                $data['user_id'] ?? null
+            );
+        }
+        
+        return $paymentId;
+    }
+
+    /**
+     * Get payments for a specific user within a date range
+     *
+     * @param int $userId
+     * @param string $start
+     * @param string $end
+     * @return array
+     */
+    public function getByUserAndDateRange(int $userId, string $start, string $end): array
+    {
+        $query = "SELECT * FROM {$this->table} 
+                 WHERE user_id = :user_id
+                 AND created_at BETWEEN :start AND :end";
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':start' => $start,
+            ':end' => $end
+        ]);
+        
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+}
+=== App/Models/Contract.php ===
+<?php
+
+namespace App\Models;
+
+use App\Helpers\DatabaseHelper;
+use Psr\Log\LoggerInterface;
+
+/**
+ * Contract Model
+ *
+ * Handles contract specific database operations
+ */
+class Contract extends BaseModel
+{
+    protected $table = 'contracts';
+    protected $resourceName = 'contract';
+
+    /**
+     * @var array The attributes that are mass assignable
+     */
+    protected $fillable = [
+        'booking_id',
+        'user_id',
+        'content',
+        'status'
+    ];
+
+    /**
+     * @var array Data type casting definitions
+     */
+    protected $casts = [
+        'booking_id' => 'int',
+        'user_id' => 'int'
+    ];
+    
+    /**
+     * Constructor
+     * 
+     * @param DatabaseHelper $db Database helper instance
+     * @param LoggerInterface $logger Logger instance
+     */
+    public function __construct(DatabaseHelper $db, LoggerInterface $logger)
+    {
+        parent::__construct($db, null, $logger);
+    }
+    
+    /**
+     * Get contract by booking ID
+     * 
+     * @param int $bookingId Booking ID
+     * @return array|null Contract or null if not found
+     */
+    public function getByBookingId(int $bookingId): ?array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE booking_id = :booking_id LIMIT 1";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':booking_id' => $bookingId]);
+        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+    
+    /**
+     * Get contracts by user ID
+     * 
+     * @param int $userId User ID
+     * @return array Contracts
+     */
+    public function getByUserId(int $userId): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id ORDER BY created_at DESC";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
 }
 === App/Models/Admin.php ===
 <?php
@@ -1100,6 +1505,25 @@ class Admin extends BaseModel
     protected $resourceName = 'admin';
     protected $useTimestamps = true;
     protected $useSoftDeletes = true;
+
+    /**
+     * @var array The attributes that are mass assignable
+     */
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'role'
+    ];
+
+    /**
+     * @var array Data type casting definitions
+     */
+    protected $casts = [
+        'id' => 'int',
+        'email' => 'string',
+        'role' => 'string'
+    ];
     
     /**
      * Constructor
@@ -1136,13 +1560,12 @@ class Admin extends BaseModel
     }
     
     /**
-     * Create an admin.
-     * Override to handle password hashing.
+     * Override create to handle password hashing.
      *
      * @param array $data
      * @return int|string
      */
-    public function create(array $data): int|string
+    public function create(array $data): int
     {
         if (isset($data['password'])) {
             $data['password'] = self::hashPassword($data['password']);
@@ -1164,8 +1587,7 @@ class Admin extends BaseModel
     }
     
     /**
-     * Update an admin.
-     * Override to handle password hashing.
+     * Override update to handle password hashing.
      *
      * @param int|string $id
      * @param array $data
@@ -1275,47 +1697,53 @@ class Admin extends BaseModel
 
     /**
      * Find admin by token
+     * 
+     * @param string $token
+     * @return array|null
      */
     public function findByToken(string $token): ?array
     {
-        $adminData = DatabaseHelper::select(
-            "SELECT id, email, role FROM admins WHERE token = ? AND token_expiry > NOW()",
-            [$token],
-            true // Using secure database
-        );
-        
-        return !empty($adminData) ? $adminData[0] : null;
+        $query = "SELECT id, email, role FROM {$this->table} 
+                 WHERE token = :token AND token_expiry > NOW()";
+                 
+        $result = $this->dbHelper->select($query, [':token' => $token], true);
+        return !empty($result) ? $result[0] : null;
     }
 
     /**
      * Get paginated list of all users with their roles
+     * 
+     * @param int $page
+     * @param int $perPage
+     * @return array
      */
     public function getPaginatedUsers(int $page, int $perPage): array
     {
         $offset = ($page - 1) * $perPage;
         
-        $users = DatabaseHelper::select(
-            "SELECT u.*, r.name as role_name 
-             FROM users u 
-             LEFT JOIN roles r ON u.role_id = r.id 
-             ORDER BY u.created_at DESC 
-             LIMIT ? OFFSET ?",
-            [$perPage, $offset],
-            false // Using application database
-        );
-        
-        return $users;
+        $query = "SELECT u.*, r.name as role_name 
+                 FROM users u 
+                 LEFT JOIN roles r ON u.role_id = r.id 
+                 ORDER BY u.created_at DESC 
+                 LIMIT :limit OFFSET :offset";
+                 
+        return $this->dbHelper->select($query, [
+            ':limit' => $perPage,
+            ':offset' => $offset
+        ], false);
     }
 
     /**
      * Get total user count
+     * 
+     * @return int
      */
     public function getTotalUserCount(): int
     {
-        $result = DatabaseHelper::select(
+        $result = $this->dbHelper->select(
             "SELECT COUNT(*) as count FROM users",
             [],
-            false // Using application database
+            false
         );
         
         return (int)$result[0]['count'];
@@ -1323,88 +1751,86 @@ class Admin extends BaseModel
 
     /**
      * Get user by ID
+     * 
+     * @param int $userId
+     * @return array|null
      */
     public function getUserById(int $userId): ?array
     {
-        $user = DatabaseHelper::select(
-            "SELECT id, email, role FROM users WHERE id = ?",
-            [$userId],
-            false // Using application database
+        $result = $this->dbHelper->select(
+            "SELECT id, email, role FROM users WHERE id = :id",
+            [':id' => $userId],
+            false
         );
         
-        return !empty($user) ? $user[0] : null;
+        return !empty($result) ? $result[0] : null;
     }
 
     /**
      * Update user role
+     * 
+     * @param int $userId
+     * @param string $role
+     * @return bool
      */
     public function updateUserRole(int $userId, string $role): bool
     {
-        return DatabaseHelper::update(
+        return $this->dbHelper->update(
             "users",
             ["role" => $role],
             ["id" => $userId],
-            false // Using application database
+            false
         );
     }
 
     /**
      * Soft delete user
+     * 
+     * @param int $userId
+     * @return bool
      */
     public function softDeleteUser(int $userId): bool
     {
-        return DatabaseHelper::update(
+        return $this->dbHelper->update(
             "users",
             ["deleted_at" => date('Y-m-d H:i:s')],
             ["id" => $userId],
-            false // Using application database
+            false
         );
     }
 
     /**
      * Get dashboard statistics
+     * 
+     * @return array
      */
     public function getDashboardStatistics(): array
     {
         // Get total users count
-        $totalUsers = DatabaseHelper::select(
-            "SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL",
-            [],
-            false
-        )[0]['count'];
+        $userQuery = "SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL";
+        $totalUsers = $this->dbHelper->select($userQuery, [], false)[0]['count'];
         
         // Get total bookings count
-        $totalBookings = DatabaseHelper::select(
-            "SELECT COUNT(*) as count FROM bookings",
-            [],
-            false
-        )[0]['count'];
+        $bookingQuery = "SELECT COUNT(*) as count FROM bookings";
+        $totalBookings = $this->dbHelper->select($bookingQuery, [], false)[0]['count'];
         
         // Get total revenue
-        $totalRevenue = DatabaseHelper::select(
-            "SELECT SUM(amount) as total FROM payments WHERE status = 'completed'",
-            [],
-            false
-        )[0]['total'] ?? 0;
+        $revenueQuery = "SELECT SUM(amount) as total FROM payments WHERE status = 'completed'";
+        $revenueResult = $this->dbHelper->select($revenueQuery, [], false);
+        $totalRevenue = $revenueResult[0]['total'] ?? 0;
         
         // Get latest 5 users
-        $latestUsers = DatabaseHelper::select(
-            "SELECT u.*, r.name as role_name 
-             FROM users u 
-             LEFT JOIN roles r ON u.role_id = r.id 
-             WHERE u.deleted_at IS NULL 
-             ORDER BY u.created_at DESC 
-             LIMIT 5",
-            [],
-            false
-        );
+        $latestUserQuery = "SELECT u.*, r.name as role_name 
+            FROM users u 
+            LEFT JOIN roles r ON u.role_id = r.id 
+            WHERE u.deleted_at IS NULL 
+            ORDER BY u.created_at DESC 
+            LIMIT 5";
+        $latestUsers = $this->dbHelper->select($latestUserQuery, [], false);
         
         // Get latest 5 transactions
-        $latestTransactions = DatabaseHelper::select(
-            "SELECT * FROM transaction_logs ORDER BY created_at DESC LIMIT 5",
-            [],
-            false
-        );
+        $transactionQuery = "SELECT * FROM transaction_logs ORDER BY created_at DESC LIMIT 5";
+        $latestTransactions = $this->dbHelper->select($transactionQuery, [], false);
         
         return [
             'total_users' => $totalUsers,
@@ -1416,17 +1842,17 @@ class Admin extends BaseModel
     }
 
     /**
-     * Check if admin with email exists
+     * Find admin by email
+     * 
+     * @param string $email
+     * @return array|null
      */
     public function findByEmail(string $email): ?array
     {
-        $admin = DatabaseHelper::select(
-            "SELECT id FROM admins WHERE email = ?",
-            [$email],
-            true // Using secure database
-        );
+        $query = "SELECT id FROM {$this->table} WHERE email = :email";
         
-        return !empty($admin) ? $admin[0] : null;
+        $result = $this->dbHelper->select($query, [':email' => $email], true);
+        return !empty($result) ? $result[0] : null;
     }
 
     /**
@@ -1445,17 +1871,17 @@ class Admin extends BaseModel
     }
 
     /**
-     * Get admin by ID
+     * Find admin by ID
+     * 
+     * @param int $adminId
+     * @return array|null
      */
     public function findById(int $adminId): ?array
     {
-        $admin = DatabaseHelper::select(
-            "SELECT id, name, email, role, created_at FROM admins WHERE id = ?",
-            [$adminId],
-            true // Using secure database
-        );
+        $query = "SELECT id, name, email, role, created_at FROM {$this->table} WHERE id = :id";
         
-        return !empty($admin) ? $admin[0] : null;
+        $result = $this->dbHelper->select($query, [':id' => $adminId], true);
+        return !empty($result) ? $result[0] : null;
     }
 }
 === App/Models/Notification.php ===
@@ -1475,8 +1901,29 @@ class Notification extends BaseModel
 {
     protected $table = 'notifications';
     protected $resourceName = 'notification';
-    protected $useTimestamps = false;  // We'll use sent_at instead of created_at
+    protected $useTimestamps = true;  // We'll use sent_at instead of created_at
     protected $useSoftDeletes = false; // Notifications don't use soft deletes
+
+    /**
+     * @var array The attributes that are mass assignable
+     */
+    protected $fillable = [
+        'user_id',
+        'message',
+        'type',
+        'link',
+        'is_read',
+        'sent_at'
+    ];
+
+    /**
+     * @var array Data type casting definitions
+     */
+    protected $casts = [
+        'user_id' => 'int',
+        'is_read' => 'bool',
+        'sent_at' => 'datetime'
+    ];
 
     /**
      * Mark a notification as read.
@@ -1566,6 +2013,71 @@ class Notification extends BaseModel
         
         if ($result && $this->auditService) {
             $this->auditService->logEvent($this->resourceName, 'all_notifications_read', [
+                'user_id' => $userId
+            ]);
+        }
+        
+        return $result;
+    }
+
+    /**
+     * Mark all notifications as read for a user.
+     *
+     * @param int $userId
+     * @return bool
+     */
+    public function markAllAsRead(int $userId): bool
+    {
+        return $this->markAllAsReadForUser($userId);
+    }
+
+    /**
+     * Get unread notifications count for a user.
+     *
+     * @param int $userId
+     * @return int
+     */
+    public function getUnreadCount(int $userId): int
+    {
+        $query = "
+            SELECT COUNT(*) as count FROM {$this->table}
+            WHERE user_id = :user_id AND is_read = 0
+        ";
+        
+        $result = $this->dbHelper->selectOne($query, [':user_id' => $userId]);
+        return $result ? (int)$result['count'] : 0;
+    }
+
+    /**
+     * Find a notification by ID and ensure it belongs to the specified user.
+     *
+     * @param int $id
+     * @param int $userId
+     * @return array|null
+     */
+    public function findForUser(int $id, int $userId): ?array
+    {
+        $query = "
+            SELECT * FROM {$this->table}
+            WHERE id = :id AND user_id = :user_id
+        ";
+        
+        $result = $this->dbHelper->select($query, [':id' => $id, ':user_id' => $userId]);
+        return $result[0] ?? null;
+    }
+
+    /**
+     * Delete all notifications for a user.
+     *
+     * @param int $userId
+     * @return bool
+     */
+    public function deleteAllForUser(int $userId): bool
+    {
+        $result = $this->dbHelper->delete($this->table, ['user_id' => $userId]);
+        
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent($this->resourceName, 'all_notifications_deleted', [
                 'user_id' => $userId
             ]);
         }
@@ -1755,53 +2267,21 @@ class Document extends BaseModel
     protected $useSoftDeletes = false; // Document model doesn't use soft deletes
 
     /**
-     * Create a new document record.
-     *
-     * @param array $data Data including name, file_path, user_id, type
-     * @return int The ID of the newly created document.
+     * @var array The attributes that are mass assignable
      */
-    public function create(array $data): int
-    {
-        // Add created_at if using timestamps but not provided
-        if ($this->useTimestamps && !isset($data['created_at'])) {
-            $data['created_at'] = date('Y-m-d H:i:s');
-        }
-        
-        $id = parent::create($data);
-        
-        // Add custom audit logging if needed
-        if ($this->auditService) {
-            $this->auditService->logEvent($this->resourceName, 'document_created', [
-                'id' => $id,
-                'name' => $data['name'] ?? null,
-                'type' => $data['type'] ?? null,
-                'user_id' => $data['user_id'] ?? null
-            ]);
-        }
-        
-        return $id;
-    }
+    protected $fillable = [
+        'name',
+        'file_path',
+        'user_id',
+        'type'
+    ];
 
     /**
-     * Override find to add audit logging for views.
-     *
-     * @param int $id
-     * @return array|null
+     * @var array Data type casting definitions
      */
-    public function find(int $id): ?array
-    {
-        $document = parent::find($id);
-        
-        // Log view event if document was found
-        if ($document && $this->auditService) {
-            $this->auditService->logEvent($this->resourceName, 'document_viewed', [
-                'id' => $id,
-                'name' => $document['name'] ?? 'unknown'
-            ]);
-        }
-        
-        return $document;
-    }
+    protected $casts = [
+        'user_id' => 'int'
+    ];
 
     /**
      * Retrieve documents associated with a user.
@@ -1840,65 +2320,86 @@ class Document extends BaseModel
         $stmt->execute([':type' => $type]);
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
+}
+=== App/Models/BaseFinancialModel.php ===
+<?php
 
+namespace App\Models;
+
+use App\Helpers\DatabaseHelper;
+use App\Services\AuditService;
+use App\Services\EncryptionService;
+
+/**
+ * Base class for any model dealing with financial data
+ * to provide consistent handling of sensitive information
+ */
+abstract class BaseFinancialModel extends BaseModel
+{
+    /** @var DatabaseHelper */
+    protected $dbHelper;
+    
+    /** @var AuditService|null */
+    protected $auditService;
+    
     /**
-     * Delete a document by its ID.
+     * Fields that should be encrypted when stored in the database
      *
-     * @param int $id The ID of the document to delete.
-     * @return bool True on success, false otherwise.
+     * @var array
      */
-    public function delete(int $id): bool
+    protected $encryptedFields = ['amount', 'card_number', 'card_last4'];
+    
+    /**
+     * Encrypt sensitive data before insert/update
+     *
+     * @param array $data
+     * @return array
+     */
+    protected function encryptSensitiveData(array $data): array
     {
-        // First, get document details for audit log
-        $document = $this->find($id);
-        
-        if (!$document) {
-            return false;
+        foreach ($this->encryptedFields as $field) {
+            if (isset($data[$field])) {
+                $data[$field] = EncryptionService::encrypt($data[$field]);
+            }
         }
         
-        $result = parent::delete($id);
-        
-        // Add custom audit log if needed
-        if ($result && $this->auditService) {
-            $this->auditService->logEvent($this->resourceName, 'document_deleted', [
-                'id' => $id,
-                'name' => $document['name'] ?? 'unknown',
-                'type' => $document['type'] ?? null
-            ]);
-        }
-        
-        return $result;
+        return $data;
     }
     
     /**
-     * Update a document's details.
+     * Decrypt sensitive data after fetch
      *
-     * @param int $id The ID of the document to update.
-     * @param array $data The data to update.
-     * @return bool True on success, false otherwise.
+     * @param array $data
+     * @return array
      */
-    public function update(int $id, array $data): bool
+    protected function decryptSensitiveData(array $data): array
     {
-        // Filter data to only include allowed fields
-        $validData = array_filter($data, function($key) {
-            return in_array($key, ['name', 'file_path', 'type']);
-        }, ARRAY_FILTER_USE_KEY);
-        
-        if (empty($validData)) {
-            return false;
+        foreach ($this->encryptedFields as $field) {
+            if (isset($data[$field])) {
+                $data[$field] = EncryptionService::decrypt($data[$field]);
+            }
         }
         
-        $result = parent::update($id, $validData);
-        
-        // Add custom audit log if needed
-        if ($result && $this->auditService) {
-            $this->auditService->logEvent($this->resourceName, 'document_updated', [
-                'id' => $id,
-                'updated_fields' => array_keys($validData)
-            ]);
+        return $data;
+    }
+    
+    /**
+     * Record a security event in the audit log
+     *
+     * @param string $action
+     * @param array $data
+     * @param int|null $userId
+     */
+    protected function recordAuditEvent(string $action, array $data, ?int $userId = null): void
+    {
+        if ($this->auditService) {
+            $this->auditService->logEvent(
+                $this->resourceName,
+                $action,
+                $data,
+                $userId
+            );
         }
-        
-        return $result;
     }
 }
 === App/Models/Vehicle.php ===
@@ -1935,20 +2436,27 @@ class Vehicle extends BaseModel
     ];
 
     /**
-     * Create a new vehicle
-     * 
-     * @param array $data
-     * @return int
+     * The attributes that are mass assignable.
+     *
+     * @var array
      */
-    public function create(array $data): int
-    {
-        // Ensure status is properly managed
-        if (empty($data['status'])) {
-            $data['status'] = 'available';
-        }
+    protected $fillable = [
+        'registration_number',
+        'type',
+        'status',
+        'make',
+        'model',
+        'year',
+    ];
 
-        return parent::create($data);
-    }
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'year' => 'integer',
+    ];
 
     /**
      * Find available vehicles
@@ -2029,18 +2537,20 @@ class Vehicle extends BaseModel
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Traits\Auditable;
+use App\Helpers\DatabaseHelper;
+use App\Services\AuditService;
+use Psr\Log\LoggerInterface;
 
 /**
  * DocumentTemplate Model
  *
  * Manages templates for documents such as contracts, invoices, and Terms & Conditions.
  */
-class DocumentTemplate extends Model
+class DocumentTemplate extends BaseModel
 {
-    use SoftDeletes, Auditable;
+    protected $table = 'document_templates';
+    protected $resourceName = 'document_template';
+    protected $useSoftDeletes = true;
 
     /**
      * The attributes that are mass assignable.
@@ -2050,7 +2560,8 @@ class DocumentTemplate extends Model
     protected $fillable = [
         'name',
         'content',
-        'description'
+        'description',
+        'file_path'
     ];
 
     /**
@@ -2065,6 +2576,17 @@ class DocumentTemplate extends Model
     ];
 
     /**
+     * Constructor
+     *
+     * @param DatabaseHelper $dbHelper
+     * @param LoggerInterface|null $logger
+     */
+    public function __construct(DatabaseHelper $dbHelper, ?LoggerInterface $logger = null)
+    {
+        parent::__construct($dbHelper, null, $logger);
+    }
+
+    /**
      * Get the validation rules for the model.
      *
      * @return array
@@ -2074,8 +2596,19 @@ class DocumentTemplate extends Model
         return [
             'name' => 'required|string|max:255',
             'content' => 'required|string',
-            'description' => 'nullable|string'
+            'file_path' => 'required|string|max:255',
         ];
+    }
+
+    /**
+     * Find a template by its name
+     * 
+     * @param string $name The template name
+     * @return array|null The template or null if not found
+     */
+    public function findByName(string $name): ?array
+    {
+        return $this->findOneBy('name', $name);
     }
 }
 === App/Models/User.php ===
@@ -2109,12 +2642,11 @@ use App\Services\AuditService;
  */
 class User extends BaseModel
 {
-    private $pdo;
-    private LoggerInterface $logger;
+    protected $logger;
 
-    public function __construct(DatabaseHelper $dbHelper, LoggerInterface $logger)
+    public function __construct(DatabaseHelper $dbHelper = null, LoggerInterface $logger = null, AuditService $auditService = null)
     {
-        $this->pdo = $dbHelper->getPdo();
+        parent::__construct($dbHelper, $auditService);
         $this->logger = $logger;
     }
 
@@ -2133,6 +2665,9 @@ class User extends BaseModel
         'role',
         'phone',
         'address',
+        'status',
+        'created_at',
+        'updated_at'
     ];
 
     protected $hidden = [
@@ -2440,8 +2975,11 @@ class User extends BaseModel
 
     /**
      * Find a user by their ID
+     * 
+     * @param string|int $id
+     * @return array|null
      */
-    public function find(int $id): ?array
+    public function find(string|int $id): ?array
     {
         try {
             $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = ? AND active = 1");
@@ -2704,6 +3242,285 @@ class User extends BaseModel
             throw $e;
         }
     }
+
+    public function getRecentActivity(string|int $userId, int $limit = 5): array
+    {
+        $query = "SELECT activity_type, description, created_at 
+                  FROM user_activities 
+                  WHERE user_id = :user_id 
+                  ORDER BY created_at DESC 
+                  LIMIT $limit";
+        return $this->dbHelper->select($query, [':user_id' => $userId]);
+    }
+
+    public function logActivity(string|int $userId, string $activityType, string $description, ?string $ipAddress = null): bool
+    {
+        $data = [
+            'user_id'       => $userId,
+            'activity_type' => $activityType,
+            'description'   => $description,
+            'created_at'    => date('Y-m-d H:i:s'),
+            'ip_address'    => $ipAddress
+        ];
+        return (bool) $this->dbHelper->insert('user_activities', $data);
+    }
+
+    /**
+     * Get users within a date range with optional filters
+     *
+     * @param string $start
+     * @param string $end
+     * @param array $filters
+     * @return array
+     */
+    public function getByDateRange(string $start, string $end, array $filters = []): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE created_at BETWEEN :start AND :end";
+        
+        $params = [':start' => $start, ':end' => $end];
+        
+        if (!empty($filters['status'])) {
+            $query .= " AND status = :status";
+            $params[':status'] = $filters['status'];
+        }
+        
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+}
+=== App/Models/AuditLog.php ===
+<?php
+
+namespace App\Models;
+
+use App\Helpers\DatabaseHelper;
+use App\Helpers\LogQueryBuilder;
+use App\Helpers\SecurityHelper;
+use DateTime;
+
+/**
+ * AuditLog Model
+ *
+ * Represents the audit_logs table and provides methods for
+ * retrieving, searching, and exporting audit data.
+ */
+class AuditLog
+{
+    protected $table = 'audit_logs';
+    
+    /**
+     * Get logs with filtering and pagination
+     *
+     * @param array $filters Filter criteria
+     * @return array Logs and pagination information
+     */
+    public function getLogs(array $filters = []): array
+    {
+        // Use LogQueryBuilder for building the query
+        $query = LogQueryBuilder::buildSelectQuery($filters);
+        
+        // Execute count query for pagination
+        $totalItems = 0;
+        $totalPages = 0;
+        
+        if (!($filters['skip_pagination'] ?? false)) {
+            $countResult = DatabaseHelper::select(
+                $query['countSql'],
+                $query['params'],
+                true
+            );
+            $totalItems = $countResult[0]['total'] ?? 0;
+            $perPage = $query['perPage'];
+            $totalPages = ceil($totalItems / $perPage);
+        }
+        
+        // Execute the main query
+        $logs = DatabaseHelper::select(
+            $query['mainSql'],
+            $query['params'],
+            true
+        );
+        
+        // Process results
+        foreach ($logs as &$log) {
+            $this->processLogData($log);
+        }
+        
+        // Build response
+        $result = ['data' => $logs];
+        
+        // Add pagination if needed
+        if (!($filters['skip_pagination'] ?? false)) {
+            $result['pagination'] = [
+                'total' => $totalItems,
+                'per_page' => $query['perPage'],
+                'current_page' => $query['page'],
+                'last_page' => $totalPages,
+                'from' => (($query['page'] - 1) * $query['perPage']) + 1,
+                'to' => min(($query['page'] * $query['perPage']), $totalItems),
+            ];
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Get a single log by ID
+     *
+     * @param int $id Log ID
+     * @return array|null Log data or null if not found
+     */
+    public function getById(int $id): ?array
+    {
+        $sql = "SELECT * FROM {$this->table} WHERE id = ? LIMIT 1";
+        $logs = DatabaseHelper::select($sql, [$id], true);
+        
+        if (empty($logs)) {
+            return null;
+        }
+        
+        $log = $logs[0];
+        $this->processLogData($log);
+        
+        return $log;
+    }
+    
+    /**
+     * Delete logs based on criteria
+     *
+     * @param array $filters Filter criteria
+     * @param bool $forceBulkDelete Allow bulk deletion
+     * @return int Number of deleted records
+     */
+    public function deleteLogs(array $filters, bool $forceBulkDelete = false): int
+    {
+        // Use LogQueryBuilder to build the where clause
+        list($whereClause, $params) = LogQueryBuilder::buildWhereClause($filters);
+        
+        // Safety check
+        if (empty($whereClause) || $whereClause === "1=1" && count($params) === 0 && !$forceBulkDelete) {
+            throw new \Exception('Attempted to delete all logs without explicit confirmation');
+        }
+        
+        // Get IDs to delete for batch processing
+        $sql = "SELECT id FROM {$this->table} WHERE {$whereClause}";
+        
+        // Add limit for safety if not forced bulk delete
+        if (!$forceBulkDelete) {
+            $sql .= " LIMIT 10000";
+        }
+        
+        $logIds = DatabaseHelper::select($sql, $params, true);
+        $ids = array_column($logIds, 'id');
+        
+        if (empty($ids)) {
+            return 0;
+        }
+        
+        // Use batch processing to delete
+        $totalDeleted = 0;
+        $batches = array_chunk($ids, 1000);
+        
+        foreach ($batches as $batch) {
+            $placeholders = implode(',', array_fill(0, count($batch), '?'));
+            $deleteSql = "DELETE FROM {$this->table} WHERE id IN ({$placeholders})";
+            $rowsDeleted = DatabaseHelper::execute($deleteSql, $batch, true);
+            $totalDeleted += $rowsDeleted;
+        }
+        
+        return $totalDeleted;
+    }
+    
+    /**
+     * Export logs to CSV
+     *
+     * @param array $filters Filter criteria
+     * @return array Export file information
+     */
+    public function exportLogs(array $filters): array
+    {
+        // Create export file information
+        $exportId = date('Ymd_His') . '_' . substr(uniqid(), -8);
+        $filename = 'audit_logs_export_' . $exportId . '.csv';
+        $exportDir = rtrim(sys_get_temp_dir(), '/') . '/secure_exports';
+        
+        // Ensure directory exists
+        if (!is_dir($exportDir)) {
+            mkdir($exportDir, 0750, true);
+        }
+        
+        $filepath = $exportDir . '/' . $filename;
+        
+        // Get export query
+        $exportQuery = LogQueryBuilder::buildExportQuery($filters);
+        
+        // Execute export
+        $rowsExported = DatabaseHelper::executeExport($exportQuery['sql'], $exportQuery['params'], $filepath);
+        
+        // Set permissions
+        chmod($filepath, 0640);
+        
+        // Calculate expiry
+        $expiryTime = time() + (24 * 3600); // 24 hours
+        
+        return [
+            'file_path' => $filepath,
+            'file_name' => $filename,
+            'export_id' => $exportId,
+            'row_count' => $rowsExported,
+            'expiry_time' => $expiryTime,
+            'expiry_formatted' => date('Y-m-d H:i:s', $expiryTime)
+        ];
+    }
+    
+    /**
+     * Create a new log entry
+     *
+     * @param array $data Log data
+     * @return int|null ID of created log or null on failure
+     */
+    public function createLog(array $data): ?int
+    {
+        // Ensure required fields are present
+        $requiredFields = ['action', 'message', 'log_level'];
+        foreach ($requiredFields as $field) {
+            if (!isset($data[$field])) {
+                throw new \InvalidArgumentException("Missing required field: {$field}");
+            }
+        }
+        
+        // Format details as JSON if it's an array
+        if (isset($data['details']) && is_array($data['details'])) {
+            $data['details'] = json_encode($data['details'], JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        }
+        
+        // Add timestamp if not present
+        if (!isset($data['created_at'])) {
+            $data['created_at'] = date('Y-m-d H:i:s');
+        }
+        
+        return DatabaseHelper::insert($this->table, $data, true);
+    }
+    
+    /**
+     * Process log data for output
+     *
+     * @param array &$log Log data to process
+     */
+    private function processLogData(array &$log): void
+    {
+        // Parse JSON details
+        if (isset($log['details']) && is_string($log['details'])) {
+            $log['details'] = json_decode($log['details'], true) ?? [];
+        }
+        
+        // Format timestamp
+        if (!empty($log['created_at'])) {
+            $date = new DateTime($log['created_at']);
+            $log['formatted_date'] = $date->format('Y-m-d H:i:s');
+        }
+    }
 }
 === App/Models/BaseModel.php ===
 <?php
@@ -2712,6 +3529,7 @@ namespace App\Models;
 
 use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
+use Psr\Log\LoggerInterface;
 use PDO;
 
 /**
@@ -2757,145 +3575,443 @@ abstract class BaseModel
     protected $auditService;
     
     /**
+     * @var LoggerInterface|null Logger instance
+     */
+    protected $logger;
+    
+    /**
      * @var PDO PDO instance
      */
     protected $pdo;
 
     /**
+     * @var array The attributes that are mass assignable
+     */
+    protected $fillable = [];
+    
+    /**
+     * @var array Data type casting definitions
+     */
+    protected $casts = [];
+
+    /**
      * Constructor
      *
-     * @param DatabaseHelper|null $dbHelper
-     * @param AuditService|null $auditService
+     * @param DatabaseHelper $dbHelper Database helper instance
+     * @param AuditService|null $auditService Audit service instance for logging
+     * @param LoggerInterface|null $logger Logger for errors and debug info
      */
-    public function __construct(DatabaseHelper $dbHelper = null, AuditService $auditService = null)
+    public function __construct(DatabaseHelper $dbHelper, ?AuditService $auditService = null, ?LoggerInterface $logger = null)
     {
-        $this->dbHelper = $dbHelper ?? new DatabaseHelper();
+        $this->dbHelper = $dbHelper;
         $this->auditService = $auditService;
+        $this->logger = $logger;
         $this->pdo = $this->dbHelper->getPdo();
+        
+        if (!$this->table) {
+            throw new \RuntimeException("Table name must be defined in the model class");
+        }
     }
 
     /**
      * Find a record by ID
      *
-     * @param int $id
+     * @param int|string $id
      * @return array|null
      */
     public function find(int|string $id): ?array
     {
-        $query = "SELECT * FROM {$this->table} WHERE id = :id";
-        
-        if ($this->useSoftDeletes) {
-            $query .= " AND deleted_at IS NULL";
+        try {
+            $query = "SELECT * FROM {$this->table} WHERE id = :id";
+            
+            if ($this->useSoftDeletes) {
+                $query .= " AND deleted_at IS NULL";
+            }
+            
+            $stmt = $this->pdo->prepare($query);
+            $stmt->bindValue(':id', $id);
+            $stmt->execute();
+            
+            $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+            return $result ?: null;
+        } catch (\PDOException $e) {
+            if ($this->logger) {
+                $this->logger->error("Database error in find(): " . $e->getMessage(), ['id' => $id, 'table' => $this->table]);
+            }
+            throw $e;
         }
-        
-        $result = $this->dbHelper->select($query, [':id' => $id]);
-        return $result ? $result[0] : null;
+    }
+
+    /**
+     * Find records by a field value
+     *
+     * @param string $field Field name
+     * @param mixed $value Field value
+     * @param string $operator Comparison operator (=, >, <, etc.)
+     * @return array
+     */
+    public function findBy(string $field, $value, string $operator = '='): array
+    {
+        try {
+            $query = "SELECT * FROM {$this->table} WHERE {$field} {$operator} :value";
+            
+            if ($this->useSoftDeletes) {
+                $query .= " AND deleted_at IS NULL";
+            }
+            
+            $stmt = $this->pdo->prepare($query);
+            $stmt->bindValue(':value', $value);
+            $stmt->execute();
+            
+            $result = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            return $result ?: [];
+        } catch (\PDOException $e) {
+            if ($this->logger) {
+                $this->logger->error("Database error in findBy(): " . $e->getMessage(), [
+                    'field' => $field,
+                    'value' => $value,
+                    'table' => $this->table
+                ]);
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Find a single record by a field value
+     *
+     * @param string $field Field name
+     * @param mixed $value Field value
+     * @return array|null
+     */
+    public function findOneBy(string $field, $value): ?array
+    {
+        try {
+            $query = "SELECT * FROM {$this->table} WHERE {$field} = :value";
+            
+            if ($this->useSoftDeletes) {
+                $query .= " AND deleted_at IS NULL";
+            }
+            
+            $query .= " LIMIT 1";
+            
+            $stmt = $this->pdo->prepare($query);
+            $stmt->bindValue(':value', $value);
+            $stmt->execute();
+            
+            $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+            return $result ?: null;
+        } catch (\PDOException $e) {
+            if ($this->logger) {
+                $this->logger->error("Database error in findOneBy(): " . $e->getMessage(), [
+                    'field' => $field,
+                    'value' => $value,
+                    'table' => $this->table
+                ]);
+            }
+            throw $e;
+        }
     }
 
     /**
      * Get all records from the table
      *
+     * @param array $orderBy Optional ordering ['field' => 'ASC|DESC']
+     * @param int|null $limit Optional record limit
+     * @param int|null $offset Optional offset for pagination
      * @return array
      */
-    public function all(): array
+    public function all(array $orderBy = [], ?int $limit = null, ?int $offset = null): array
     {
-        $query = "SELECT * FROM {$this->table}";
-        
-        if ($this->useSoftDeletes) {
-            $query .= " WHERE deleted_at IS NULL";
+        try {
+            $query = "SELECT * FROM {$this->table}";
+            
+            if ($this->useSoftDeletes) {
+                $query .= " WHERE deleted_at IS NULL";
+            }
+            
+            // Add ordering
+            if (!empty($orderBy)) {
+                $query .= " ORDER BY ";
+                $orders = [];
+                foreach ($orderBy as $field => $direction) {
+                    $orders[] = "{$field} {$direction}";
+                }
+                $query .= implode(', ', $orders);
+            }
+            
+            // Add limit and offset
+            if ($limit !== null) {
+                $query .= " LIMIT {$limit}";
+                if ($offset !== null) {
+                    $query .= " OFFSET {$offset}";
+                }
+            }
+            
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute();
+            
+            $result = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            return $result ?: [];
+        } catch (\PDOException $e) {
+            if ($this->logger) {
+                $this->logger->error("Database error in all(): " . $e->getMessage(), ['table' => $this->table]);
+            }
+            throw $e;
         }
-        
-        return $this->dbHelper->select($query);
     }
 
     /**
      * Create a new record
      *
      * @param array $data
-     * @return int The ID of the created record
+     * @return int|string The ID of the created record
      */
-    public function create(array $data): int
+    public function create(array $data): int|string
     {
-        if ($this->useTimestamps && !isset($data['created_at'])) {
-            $data['created_at'] = date('Y-m-d H:i:s');
+        try {
+            // Filter data to only include fillable fields
+            if (!empty($this->fillable)) {
+                $data = array_intersect_key($data, array_flip($this->fillable));
+            }
+            
+            // Add timestamps
+            if ($this->useTimestamps) {
+                $now = date('Y-m-d H:i:s');
+                if (!isset($data['created_at'])) {
+                    $data['created_at'] = $now;
+                }
+                if (!isset($data['updated_at'])) {
+                    $data['updated_at'] = $now;
+                }
+            }
+            
+            // Generate UUID if needed
+            if ($this->useUuid && !isset($data['id'])) {
+                $data['id'] = \Ramsey\Uuid\Uuid::uuid4()->toString();
+            }
+            
+            // Create placeholders
+            $fields = array_keys($data);
+            $placeholders = array_map(function($field) {
+                return ":{$field}";
+            }, $fields);
+            
+            $query = "INSERT INTO {$this->table} (" . implode(', ', $fields) . ") 
+                     VALUES (" . implode(', ', $placeholders) . ")";
+            
+            $stmt = $this->pdo->prepare($query);
+            
+            // Bind values with appropriate types based on casts
+            foreach ($data as $field => $value) {
+                $type = PDO::PARAM_STR;
+                if (isset($this->casts[$field])) {
+                    if (in_array($this->casts[$field], ['int', 'integer', 'timestamp'])) {
+                        $type = PDO::PARAM_INT;
+                    } elseif (in_array($this->casts[$field], ['bool', 'boolean'])) {
+                        $type = PDO::PARAM_BOOL;
+                    }
+                }
+                $stmt->bindValue(":{$field}", $value, $type);
+            }
+            
+            $stmt->execute();
+            
+            // Get the ID of the inserted record
+            $id = $this->useUuid && isset($data['id']) ? $data['id'] : $this->pdo->lastInsertId();
+            
+            // Log audit event if service is available
+            if ($this->auditService && $this->resourceName) {
+                $this->auditService->logEvent(
+                    "{$this->resourceName}_created",
+                    "{$this->resourceName} record created",
+                    ['id' => $id, 'data' => $data],
+                    $data['user_id'] ?? null,
+                    $id,
+                    $this->resourceName
+                );
+            }
+            
+            return $id;
+        } catch (\PDOException $e) {
+            if ($this->logger) {
+                $this->logger->error("Database error in create(): " . $e->getMessage(), [
+                    'data' => $data,
+                    'table' => $this->table
+                ]);
+            }
+            throw $e;
         }
-        
-        if ($this->useTimestamps && !isset($data['updated_at'])) {
-            $data['updated_at'] = date('Y-m-d H:i:s');
-        }
-        
-        if ($this->useUuid && !isset($data['id'])) {
-            $data['id'] = \Ramsey\Uuid\Uuid::uuid4()->toString();
-        }
-        
-        $id = $this->dbHelper->insert($this->table, $data);
-        
-        // Log audit event if service is available
-        if ($this->auditService && $this->resourceName) {
-            $this->auditService->logEvent($this->resourceName, 'create', [
-                'id' => $id,
-                'data' => $data
-            ]);
-        }
-        
-        return $id;
     }
 
     /**
      * Update a record
      *
-     * @param int $id
+     * @param int|string $id
      * @param array $data
      * @return bool
      */
     public function update(int|string $id, array $data): bool
     {
-        if ($this->useTimestamps) {
-            $data['updated_at'] = date('Y-m-d H:i:s');
+        try {
+            // Filter data to only include fillable fields
+            if (!empty($this->fillable)) {
+                $data = array_intersect_key($data, array_flip($this->fillable));
+            }
+            
+            // Add updated_at timestamp
+            if ($this->useTimestamps && !isset($data['updated_at'])) {
+                $data['updated_at'] = date('Y-m-d H:i:s');
+            }
+            
+            // Build SET clause
+            $setClauses = [];
+            foreach ($data as $field => $value) {
+                $setClauses[] = "{$field} = :{$field}";
+            }
+            
+            $query = "UPDATE {$this->table} SET " . implode(', ', $setClauses) . " WHERE id = :id";
+            
+            if ($this->useSoftDeletes) {
+                $query .= " AND deleted_at IS NULL";
+            }
+            
+            $stmt = $this->pdo->prepare($query);
+            
+            // Bind values
+            $stmt->bindValue(':id', $id);
+            foreach ($data as $field => $value) {
+                $type = PDO::PARAM_STR;
+                if (isset($this->casts[$field])) {
+                    if (in_array($this->casts[$field], ['int', 'integer', 'timestamp'])) {
+                        $type = PDO::PARAM_INT;
+                    } elseif (in_array($this->casts[$field], ['bool', 'boolean'])) {
+                        $type = PDO::PARAM_BOOL;
+                    }
+                }
+                $stmt->bindValue(":{$field}", $value, $type);
+            }
+            
+            $stmt->execute();
+            
+            $affected = $stmt->rowCount();
+            
+            // Log audit event if service is available
+            if ($affected > 0 && $this->auditService && $this->resourceName) {
+                $this->auditService->logEvent(
+                    "{$this->resourceName}_updated",
+                    "{$this->resourceName} record updated",
+                    ['id' => $id, 'updated_fields' => array_keys($data)],
+                    $data['user_id'] ?? null, 
+                    $id,
+                    $this->resourceName
+                );
+            }
+            
+            return $affected > 0;
+        } catch (\PDOException $e) {
+            if ($this->logger) {
+                $this->logger->error("Database error in update(): " . $e->getMessage(), [
+                    'id' => $id,
+                    'data' => $data,
+                    'table' => $this->table
+                ]);
+            }
+            throw $e;
         }
-        
-        $conditions = ['id' => $id];
-        
-        if ($this->useSoftDeletes) {
-            $conditions['deleted_at IS NULL'] = null;
-        }
-        
-        $result = $this->dbHelper->update($this->table, $data, $conditions);
-        
-        // Log audit event if service is available
-        if ($result && $this->auditService && $this->resourceName) {
-            $this->auditService->logEvent($this->resourceName, 'update', [
-                'id' => $id,
-                'updated_fields' => array_keys($data)
-            ]);
-        }
-        
-        return $result;
     }
 
     /**
      * Delete a record (soft delete if enabled)
      *
-     * @param int $id
+     * @param int|string $id
      * @return bool
      */
     public function delete(int|string $id): bool
     {
-        if ($this->useSoftDeletes) {
-            $data = ['deleted_at' => date('Y-m-d H:i:s')];
-            $result = $this->dbHelper->update($this->table, $data, ['id' => $id]);
-        } else {
-            $result = $this->dbHelper->delete($this->table, ['id' => $id]);
+        try {
+            if ($this->useSoftDeletes) {
+                // Soft delete - update the deleted_at field
+                $query = "UPDATE {$this->table} SET deleted_at = :deleted_at WHERE id = :id AND deleted_at IS NULL";
+                $stmt = $this->pdo->prepare($query);
+                $stmt->bindValue(':deleted_at', date('Y-m-d H:i:s'));
+                $stmt->bindValue(':id', $id);
+            } else {
+                // Hard delete - remove the record completely
+                $query = "DELETE FROM {$this->table} WHERE id = :id";
+                $stmt = $this->pdo->prepare($query);
+                $stmt->bindValue(':id', $id);
+            }
+            
+            $stmt->execute();
+            
+            $affected = $stmt->rowCount();
+            
+            // Log audit event if service is available
+            if ($affected > 0 && $this->auditService && $this->resourceName) {
+                $eventType = $this->useSoftDeletes ? "{$this->resourceName}_soft_deleted" : "{$this->resourceName}_deleted";
+                $this->auditService->logEvent(
+                    $eventType,
+                    "{$this->resourceName} record deleted",
+                    ['id' => $id, 'soft_delete' => $this->useSoftDeletes],
+                    null,
+                    $id,
+                    $this->resourceName
+                );
+            }
+            
+            return $affected > 0;
+        } catch (\PDOException $e) {
+            if ($this->logger) {
+                $this->logger->error("Database error in delete(): " . $e->getMessage(), [
+                    'id' => $id, 
+                    'table' => $this->table
+                ]);
+            }
+            throw $e;
         }
-        
-        // Log audit event if service is available
-        if ($result && $this->auditService && $this->resourceName) {
-            $this->auditService->logEvent($this->resourceName, 'delete', [
-                'id' => $id
-            ]);
+    }
+
+    /**
+     * Get validation rules for the model
+     *
+     * @return array
+     */
+    public static function validationRules(): array
+    {
+        return [];
+    }
+
+    /**
+     * Execute a raw SQL query
+     * 
+     * @param string $query SQL query with placeholders
+     * @param array $params Parameters for the query
+     * @param bool $fetchAll Whether to fetch all results or just one
+     * @return array|null Query results
+     */
+    protected function rawQuery(string $query, array $params = [], bool $fetchAll = true): ?array
+    {
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+            
+            if ($fetchAll) {
+                $result = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                return $result ?: [];
+            } else {
+                $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+                return $result ?: null;
+            }
+        } catch (\PDOException $e) {
+            if ($this->logger) {
+                $this->logger->error("Database error in rawQuery(): " . $e->getMessage(), [
+                    'query' => $query,
+                    'params' => $params
+                ]);
+            }
+            throw $e;
         }
-        
-        return $result;
     }
 }
 === App/Models/Report.php ===
@@ -2989,6 +4105,25 @@ class AuditTrail extends BaseModel
     protected $resourceName = 'audit_trail';
     protected $useTimestamps = true;
     protected $useSoftDeletes = false;
+
+    /**
+     * @var array The attributes that are mass assignable
+     */
+    protected $fillable = [
+        'user_id',
+        'booking_id',
+        'action',
+        'message',
+        'details'
+    ];
+
+    /**
+     * @var array Data type casting definitions
+     */
+    protected $casts = [
+        'user_id' => 'int',
+        'booking_id' => 'int'
+    ];
 
     /**
      * Retrieve audit trail records based on filters.
@@ -3094,6 +4229,9 @@ class RefundLog extends BaseModel
         return $result[0] ?? null;
     }
 }=== App/Models/Signature.php ===
+<?php
+
+
 namespace App\Models;
 
 use App\Helpers\DatabaseHelper;
@@ -3106,6 +4244,14 @@ class Signature extends BaseModel
     protected $resourceName = 'signature';
     protected $useTimestamps = true;
     protected $useSoftDeletes = false;
+    private EncryptionService $encryptionService;
+
+    public function __construct(DatabaseHelper $db, EncryptionService $encryptionService = null)
+    {
+        parent::__construct($db);
+        // If encryption service is not injected, try to resolve it through container or create new instance
+        $this->encryptionService = $encryptionService ?? app(EncryptionService::class) ?? new EncryptionService();
+    }
 
     /**
      * Create a new signature.
@@ -3116,7 +4262,7 @@ class Signature extends BaseModel
     public function create(array $data): int
     {
         if (isset($data['signature'])) {
-            $data['signature'] = EncryptionService::encrypt($data['signature']);
+            $data['signature'] = $this->encryptionService->encrypt($data['signature']);
         }
 
         return parent::create($data);
@@ -3132,7 +4278,7 @@ class Signature extends BaseModel
     public function update(int $id, array $data): bool
     {
         if (isset($data['signature'])) {
-            $data['signature'] = EncryptionService::encrypt($data['signature']);
+            $data['signature'] = $this->encryptionService->encrypt($data['signature']);
         }
 
         return parent::update($id, $data);
@@ -3149,7 +4295,7 @@ class Signature extends BaseModel
         $signature = $this->find($signatureId);
 
         if ($signature && isset($signature['signature'])) {
-            return EncryptionService::decrypt($signature['signature']);
+            return $this->encryptionService->decrypt($signature['signature']);
         }
 
         return null;
@@ -3173,6 +4319,54 @@ class Signature extends BaseModel
         $stmt = $this->pdo->prepare($query);
         $stmt->execute([':user_id' => $signature['user_id']]);
         return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Store signature file path.
+     *
+     * @param int $userId
+     * @param string $filePath
+     * @param bool $encrypted
+     * @return int
+     */
+    public function storeSignaturePath(int $userId, string $filePath, bool $encrypted = true): int
+    {
+        return $this->create([
+            'user_id' => $userId,
+            'file_path' => $filePath,
+            'encrypted' => $encrypted,
+            'created_at' => date('Y-m-d H:i:s')
+        ]);
+    }
+
+    /**
+     * Get signatures by user ID.
+     *
+     * @param int $userId
+     * @return array
+     */
+    public function getSignaturesByUserId(int $userId): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get signature path by user ID.
+     *
+     * @param int $userId
+     * @return string|null
+     */
+    public function getSignaturePathByUserId(int $userId): ?string
+    {
+        $query = "SELECT file_path FROM {$this->table} WHERE user_id = :user_id ORDER BY created_at DESC LIMIT 1";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([':user_id' => $userId]);
+        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+        
+        return $result ? $result['file_path'] : null;
     }
 }
 === App/Models/PasswordReset.php ===

@@ -14,6 +14,24 @@ class Contract extends BaseModel
 {
     protected $table = 'contracts';
     protected $resourceName = 'contract';
+
+    /**
+     * @var array The attributes that are mass assignable
+     */
+    protected $fillable = [
+        'booking_id',
+        'user_id',
+        'content',
+        'status'
+    ];
+
+    /**
+     * @var array Data type casting definitions
+     */
+    protected $casts = [
+        'booking_id' => 'int',
+        'user_id' => 'int'
+    ];
     
     /**
      * Constructor
@@ -23,7 +41,7 @@ class Contract extends BaseModel
      */
     public function __construct(DatabaseHelper $db, LoggerInterface $logger)
     {
-        parent::__construct($db, $logger);
+        parent::__construct($db, null, $logger);
     }
     
     /**
@@ -53,22 +71,5 @@ class Contract extends BaseModel
         $stmt = $this->pdo->prepare($query);
         $stmt->execute([':user_id' => $userId]);
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
-    }
-    
-    /**
-     * Create a new contract
-     * 
-     * @param array $data Contract data
-     * @return int The ID of the newly created contract
-     */
-    public function create(array $data): int
-    {
-        // Add timestamp if not provided
-        if (!isset($data['created_at'])) {
-            $data['created_at'] = date('Y-m-d H:i:s');
-        }
-        
-        // Insert record using parent method
-        return parent::create($data);
     }
 }

@@ -19,6 +19,25 @@ class AuditTrail extends BaseModel
     protected $useSoftDeletes = false;
 
     /**
+     * @var array The attributes that are mass assignable
+     */
+    protected $fillable = [
+        'user_id',
+        'booking_id',
+        'action',
+        'message',
+        'details'
+    ];
+
+    /**
+     * @var array Data type casting definitions
+     */
+    protected $casts = [
+        'user_id' => 'int',
+        'booking_id' => 'int'
+    ];
+
+    /**
      * Retrieve audit trail records based on filters.
      *
      * @param array $filters An associative array of filters:
