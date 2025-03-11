@@ -301,7 +301,7 @@ return function (Container $container, array $config) {
         return new BookingService(
             $c->get('logger.booking'),
             $c->get(ExceptionHandler::class),
-            $c->get(DatabaseHelper::class)
+            $c->get(Booking::class),
         );
     });
 
