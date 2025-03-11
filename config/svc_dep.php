@@ -158,7 +158,10 @@ return function (Container $container, array $config) {
 
     $container->set(PaymentGatewayService::class, function($c) {
         return new PaymentGatewayService(
-            $c->get('logger.payment') ?? $c->get(LoggerInterface::class)
+            $c->get('logger.payment') ?? $c->get(LoggerInterface::class),
+            $c->get(TransactionLog::class),
+            $c->get(Payment::class),
+            $c->get(AuditService::class)
         );
     });
 
