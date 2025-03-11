@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
+use Psr\Log\LoggerInterface;
 
 /**
  * Admin Model - Manages system administrators.
