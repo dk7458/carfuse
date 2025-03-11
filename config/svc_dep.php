@@ -238,8 +238,9 @@ return function (Container $container, array $config) {
         return new NotificationService(
             $c->get('logger.notification') ?? $c->get('logger.api') ?? $c->get(LoggerInterface::class),
             $c->get(ExceptionHandler::class),
+            $c->get(Notification::class),
             $config['database'] ?? [],
-            $c->get(Notification::class)
+
         );
     });
 
