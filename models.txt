@@ -471,10 +471,10 @@ class TransactionLog extends BaseFinancialModel
     protected $useTimestamps = true; // Transaction logs use timestamps
     protected $useSoftDeletes = false; // Transaction logs don't use soft deletes
 
-    private DatabaseHelper $dbHelper;
-    private ?AuditService $auditService;
+    protected $dbHelper;
+    protected $auditService;
 
-    public function __construct(DatabaseHelper $dbHelper, ?AuditService $auditService = null)
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService)
     {
         $this->dbHelper = $dbHelper;
         $this->auditService = $auditService;
@@ -881,6 +881,7 @@ namespace App\Models;
 
 use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
+use Psr\Log\LoggerInterface;
 
 /**
  * Payment Model
@@ -936,11 +937,13 @@ class Payment extends BaseModel
         'original_payment_id' => 'nullable|integer|exists:payments,id',
     ];
 
-    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService = null)
-    {
-        $this->dbHelper = $dbHelper;
-        $this->auditService = $auditService;
-    }
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService, LoggerInterface $logger)
+{
+    global $loggers;
+    $logger = $logger ?? $loggers['payment'];
+
+    parent::__construct($dbHelper, $auditService, $logger);
+}
 
     /**
      * Find a payment by ID.
@@ -948,7 +951,7 @@ class Payment extends BaseModel
      * @param int $id
      * @return array|null
      */
-    public function find(int $id): ?array
+    public function findPayment(int $id): ?array
     {
         $query = "SELECT * FROM {$this->table} WHERE id = :id AND deleted_at IS NULL LIMIT 1";
         $result = $this->dbHelper->select($query, [':id' => $id]);
@@ -961,19 +964,19 @@ class Payment extends BaseModel
      *
      * @return array
      */
-    public function all(): array
+
+    public function all(array $orderBy = ['created_at' => 'DESC'], ?int $limit = null, ?int $offset = null): array
     {
-        $query = "SELECT * FROM {$this->table} WHERE deleted_at IS NULL ORDER BY created_at DESC";
-        return $this->dbHelper->select($query);
+        return parent::all($orderBy, $limit, $offset);
     }
 
     /**
-     * Create a new payment or refund.
+     * Create a new payment or refund record
      *
      * @param array $data
      * @return int|null ID of the created payment/refund, or null on failure
      */
-    public function create(array $data): ?int
+    public function createPaymentRecord(array $data): ?int
     {
         // Set default type to 'payment' if not specified
         $data['type'] = $data['type'] ?? 'payment';
@@ -989,16 +992,16 @@ class Payment extends BaseModel
             }
         }
         
-        // For refunds, the amount should be negative (to represent money going out)
+        // For refunds, the amount should be negative
         if ($data['type'] === 'refund' && $data['amount'] > 0) {
             $data['amount'] = -1 * abs($data['amount']);
         }
 
         $data['created_at'] = $data['updated_at'] = date('Y-m-d H:i:s');
-        $paymentId = $this->dbHelper->insert($this->table, $data);
+        $paymentId = parent::create($data);
         
         if (!$paymentId) {
-            return null; // Return null if insertion fails
+            return null;
         }
 
         if ($this->auditService) {
@@ -1013,7 +1016,6 @@ class Payment extends BaseModel
                 'type' => $data['type']
             ];
             
-            // Add refund-specific data if applicable
             if ($data['type'] === 'refund') {
                 $auditData['refund_reason'] = $data['refund_reason'] ?? null;
                 $auditData['original_payment_id'] = $data['original_payment_id'] ?? null;
@@ -1022,7 +1024,7 @@ class Payment extends BaseModel
             $this->auditService->logEvent($this->resourceName, $eventType, $auditData);
         }
         
-        return (int) $paymentId; // Ensure ID is always an integer
+        return (int) $paymentId;
     }
 
     /**
@@ -1119,18 +1121,17 @@ class Payment extends BaseModel
     }
 
     /**
-     * Update a payment.
+     * Update a payment record with audit logging
      *
      * @param int $id
      * @param array $data
      * @return bool
      */
-    public function update(int $id, array $data): bool
+    public function updatePaymentRecord(int $id, array $data): bool
     {
         $data['updated_at'] = date('Y-m-d H:i:s');
-        $result = $this->dbHelper->update($this->table, $data, ['id' => $id, 'deleted_at IS NULL']);
+        $result = parent::update($id, $data);
         
-        // Log audit if service is available and update was successful
         if ($result && $this->auditService) {
             $this->auditService->logEvent($this->resourceName, 'Updated payment', [
                 'payment_id' => $id,
@@ -1142,22 +1143,21 @@ class Payment extends BaseModel
     }
 
     /**
-     * Soft delete a payment.
+     * Soft delete a payment with audit logging
      *
      * @param int $id
      * @return bool
      */
-    public function delete(int $id): bool
+    public function softDeletePayment(int $id): bool
     {
-        $result = $this->dbHelper->update($this->table, ['deleted_at' => date('Y-m-d H:i:s')], ['id' => $id]);
-    
+        $result = parent::delete($id);
+
         if ($result && $this->auditService) {
             $this->auditService->logEvent($this->resourceName, 'Deleted payment', ['payment_id' => $id]);
         }
         
         return $result;
     }
-    
 
     /**
      * Get payments by user ID.
@@ -1420,6 +1420,7 @@ namespace App\Models;
 
 use App\Helpers\DatabaseHelper;
 use Psr\Log\LoggerInterface;
+use App\Services\AuditService;
 
 /**
  * Contract Model
@@ -1454,10 +1455,11 @@ class Contract extends BaseModel
      * 
      * @param DatabaseHelper $db Database helper instance
      * @param LoggerInterface $logger Logger instance
+     * @param AuditService $auditService Audit service instance
      */
-    public function __construct(DatabaseHelper $db, LoggerInterface $logger)
+    public function __construct(DatabaseHelper $db, AuditService $auditService, LoggerInterface $logger)
     {
-        parent::__construct($db, null, $logger);
+        parent::__construct($db, $auditService, $logger);
     }
     
     /**
@@ -1559,59 +1561,6 @@ class Admin extends BaseModel
     public static function verifyPassword(string $plainPassword, string $hashedPassword): bool
     {
         return password_verify($plainPassword, $hashedPassword);
-    }
-    
-    /**
-     * Override create to handle password hashing.
-     *
-     * @param array $data
-     * @return int|string
-     */
-    public function create(array $data): int
-    {
-        if (isset($data['password'])) {
-            $data['password'] = self::hashPassword($data['password']);
-        }
-        
-        $id = parent::create($data);
-        
-        // Add custom audit logging if needed
-        if ($this->auditService) {
-            $this->auditService->logEvent('admin', 'admin_created', [
-                'id' => $id,
-                'name' => $data['name'] ?? null,
-                'email' => $data['email'] ?? null,
-                'role' => $data['role'] ?? null
-            ]);
-        }
-        
-        return $id;
-    }
-    
-    /**
-     * Override update to handle password hashing.
-     *
-     * @param int|string $id
-     * @param array $data
-     * @return bool
-     */
-    public function update(int|string $id, array $data): bool
-    {
-        if (isset($data['password'])) {
-            $data['password'] = self::hashPassword($data['password']);
-        }
-        
-        $result = parent::update($id, $data);
-        
-        // Add custom audit logging if needed
-        if ($result && $this->auditService) {
-            $this->auditService->logEvent('admin', 'admin_updated', [
-                'id' => $id,
-                'updated_fields' => array_keys($data)
-            ]);
-        }
-        
-        return $result;
     }
     
     /**
@@ -1884,6 +1833,57 @@ class Admin extends BaseModel
         
         $result = $this->dbHelper->select($query, [':id' => $adminId], true);
         return !empty($result) ? $result[0] : null;
+    }
+
+    /**
+     * Create an admin user with password hashing
+     *
+     * @param array $data
+     * @return int|string
+     */
+    public function createAdminWithHashedPassword(array $data): int|string
+    {
+        if (isset($data['password'])) {
+            $data['password'] = self::hashPassword($data['password']);
+        }
+        
+        $id = parent::create($data);
+        
+        if ($this->auditService) {
+            $this->auditService->logEvent('admin', 'admin_created', [
+                'id' => $id,
+                'name' => $data['name'] ?? null,
+                'email' => $data['email'] ?? null,
+                'role' => $data['role'] ?? null
+            ]);
+        }
+        
+        return $id;
+    }
+
+    /**
+     * Update an admin with password handling
+     *
+     * @param int|string $id
+     * @param array $data
+     * @return bool
+     */
+    public function updateAdminWithPasswordHandling(int|string $id, array $data): bool
+    {
+        if (isset($data['password'])) {
+            $data['password'] = self::hashPassword($data['password']);
+        }
+        
+        $result = parent::update($id, $data);
+        
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent('admin', 'admin_updated', [
+                'id' => $id,
+                'updated_fields' => array_keys($data)
+            ]);
+        }
+        
+        return $result;
     }
 }
 === App/Models/Notification.php ===
@@ -2163,9 +2163,9 @@ class PaymentMethod extends BaseModel
     }
 
     /**
-     * Add a new payment method.
+     * Create a payment method with validation
      */
-    public function create(array $data): int
+    public function createPaymentMethodWithValidation(array $data): int
     {
         $validPaymentTypes = ['credit_card', 'paypal', 'bank_transfer'];
         if (!in_array($data['payment_type'], $validPaymentTypes)) {
@@ -2174,11 +2174,11 @@ class PaymentMethod extends BaseModel
 
         return parent::create($data);
     }
-    
+
     /**
-     * Update a payment method.
+     * Update a payment method with custom fields
      */
-    public function update(int $id, array $data): bool
+    public function customUpdatePaymentMethod(int $id, array $data): bool
     {
         $setClauses = [];
         $params = [':id' => $id];
@@ -2204,11 +2204,11 @@ class PaymentMethod extends BaseModel
         ");
         return $stmt->execute($params);
     }
-    
+
     /**
-     * Delete a payment method.
+     * Remove a payment method
      */
-    public function delete(int $id): bool
+    public function removePaymentMethod(int $id): bool
     {
         $stmt = $this->pdo->prepare("DELETE FROM payment_methods WHERE id = :id");
         return $stmt->execute([':id' => $id]);
@@ -2581,11 +2581,16 @@ class DocumentTemplate extends BaseModel
      * Constructor
      *
      * @param DatabaseHelper $dbHelper
-     * @param LoggerInterface|null $logger
+     * @param LoggerInterface $logger
+     * @param AuditService $auditService
      */
-    public function __construct(DatabaseHelper $dbHelper, ?LoggerInterface $logger = null)
+    public function __construct(
+        DatabaseHelper $dbHelper, 
+        LoggerInterface $logger,
+        AuditService $auditService
+    )
     {
-        parent::__construct($dbHelper, null, $logger);
+        parent::__construct($dbHelper, $auditService, $logger);
     }
 
     /**
@@ -2689,6 +2694,46 @@ class User extends BaseModel
         'phone' => 'nullable|string|max:20',
         'address' => 'nullable|string|max:255',
     ];
+
+    /**
+     * Create a new user with role assignment and password hashing
+     * 
+     * @param array $data
+     * @return int|string
+     */
+    public function createWithDefaultRole(array $data): int|string
+    {
+        // Hash password if provided
+        if (isset($data['password'])) {
+            $data['password_hash'] = self::hashPassword($data['password']);
+            unset($data['password']);
+        }
+        
+        // Set default role if not provided
+        if (!isset($data['role'])) {
+            $data['role'] = 'user';
+        }
+        
+        // Call parent create method to handle database insertion
+        return parent::create($data);
+    }
+
+    /**
+     * Update user data with password handling
+     * 
+     * @param string|int $id
+     * @param array $data
+     * @return bool
+     */
+    public function updateWithPasswordHandling(string|int $id, array $data): bool
+    {
+        if (isset($data['password'])) {
+            $data['password_hash'] = self::hashPassword($data['password']);
+            unset($data['password']);
+        }
+
+        return parent::update($id, $data);
+    }
 
     /**
      * Override create method to hash password and assign default role.
@@ -3588,7 +3633,10 @@ abstract class BaseModel
      * @param AuditService|null $auditService Audit service instance for logging
      * @param LoggerInterface|null $logger Logger for errors and debug info
      */
-    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService, LoggerInterface $logger)
+    public function __construct(
+        DatabaseHelper $dbHelper, 
+        AuditService $auditService, 
+        LoggerInterface $logger)
     {
         $this->dbHelper = $dbHelper;
         $this->auditService = $auditService;
@@ -4391,12 +4439,12 @@ class PasswordReset extends BaseModel
     }
 
     /**
-     * Create a new password reset.
+     * Create a new password reset with token generation
      *
      * @param array $data
      * @return int
      */
-    public function create(array $data): int
+    public function createPasswordResetWithToken(array $data): int
     {
         // Generate a token if not provided
         if (!isset($data['token'])) {

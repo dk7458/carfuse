@@ -3,19 +3,27 @@
 namespace App\Models;
 
 use App\Helpers\DatabaseHelper;
+use App\Services\AuditService;
 use Psr\Log\LoggerInterface;
 use Exception;
 
-class RefreshToken
+class RefreshToken extends BaseModel
 {
-    private DatabaseHelper $dbHelper;
-    private LoggerInterface $logger;
-    private bool $useSecureDb = true;
+    protected $table = 'refresh_tokens';
+    protected $resourceName = 'refresh_token';
+    protected $useTimestamps = true;
+    protected $useSoftDeletes = false;
 
+    /**
+     * RefreshToken constructor
+     * 
+     * @param DatabaseHelper $dbHelper
+     * @param LoggerInterface $logger
+     */
     public function __construct(DatabaseHelper $dbHelper, LoggerInterface $logger)
     {
-        $this->dbHelper = $dbHelper;
-        $this->logger = $logger;
+        // Call parent constructor with null AuditService as third parameter
+        parent::__construct($dbHelper, null, $logger);
     }
 
     /**
@@ -26,23 +34,25 @@ class RefreshToken
      * @param int $expiresIn Expiry time in seconds
      * @return bool Success status
      */
-    public function store(int $userId, string $refreshToken, int $expiresIn = 604800): bool
+    public function storeToken(int $userId, string $refreshToken, int $expiresIn = 604800): bool
     {
         try {
             // Hash token for secure storage
             $hashedToken = hash('sha256', $refreshToken);
             
-            // Store the token in the refresh_tokens table
-            $this->dbHelper->insert('refresh_tokens', [
+            // Create token data
+            $data = [
                 'user_id' => $userId,
                 'token' => $hashedToken,
                 'expires_at' => date('Y-m-d H:i:s', time() + $expiresIn),
-                'created_at' => date('Y-m-d H:i:s'),
                 'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null
-            ], $this->useSecureDb);
+            ];
+            
+            // Use BaseModel's create method
+            $result = $this->create($data);
             
             $this->logger->info("Refresh token stored", ['user_id' => $userId]);
-            return true;
+            return (bool)$result;
         } catch (Exception $e) {
             $this->logger->error("Failed to store refresh token: " . $e->getMessage());
             return false;
@@ -59,17 +69,17 @@ class RefreshToken
     {
         try {
             // Check cache first for performance
-            if (apcu_exists("revoked_refresh_token_$token")) {
+            if (function_exists('apcu_exists') && apcu_exists("revoked_refresh_token_$token")) {
                 return true;
             }
             
-            // If not in cache, check secure database
+            // If not in cache, check database
             $hashedToken = hash('sha256', $token);
-            $query = "SELECT 1 FROM refresh_tokens WHERE token = :token AND revoked = 1 LIMIT 1";
-            $revoked = $this->dbHelper->select($query, [':token' => $hashedToken], $this->useSecureDb);
+            $query = "SELECT 1 FROM {$this->table} WHERE token = :token AND revoked = 1 LIMIT 1";
+            $revoked = $this->dbHelper->select($query, [':token' => $hashedToken]);
                 
             // If revoked in database, store in cache for next time
-            if ($revoked) {
+            if (!empty($revoked) && function_exists('apcu_store')) {
                 apcu_store("revoked_refresh_token_$token", true, 604800);
             }
             
@@ -91,8 +101,8 @@ class RefreshToken
     {
         try {
             $hashedToken = hash('sha256', $token);
-            $query = "SELECT * FROM refresh_tokens WHERE token = :token LIMIT 1";
-            $result = $this->dbHelper->select($query, [':token' => $hashedToken], $this->useSecureDb);
+            $query = "SELECT * FROM {$this->table} WHERE token = :token LIMIT 1";
+            $result = $this->dbHelper->select($query, [':token' => $hashedToken]);
             
             return $result[0] ?? null;
         } catch (Exception $e) {
@@ -107,24 +117,26 @@ class RefreshToken
      * @param string $token The unhashed token
      * @return bool Success status
      */
-    public function revoke(string $token): bool
+    public function revokeToken(string $token): bool
     {
         try {
-            // Store in cache for quick lookups
-            apcu_store("revoked_refresh_token_$token", true, 604800);
+            // Store in cache for quick lookups if APCu is available
+            if (function_exists('apcu_store')) {
+                apcu_store("revoked_refresh_token_$token", true, 604800);
+            }
             
-            // Store in secure database for persistence
+            // Store in database for persistence
             $hashedToken = hash('sha256', $token);
             
-            // Update the token status in secure database
+            // Update the token status using BaseModel's update method
             $result = $this->dbHelper->update(
-                'refresh_tokens', 
+                $this->table, 
                 [
                     'revoked' => 1,
-                    'revoked_at' => date('Y-m-d H:i:s')
+                    'revoked_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s')
                 ], 
-                ['token' => $hashedToken], 
-                $this->useSecureDb
+                ['token' => $hashedToken]
             );
                 
             return $result;
@@ -142,12 +154,9 @@ class RefreshToken
     public function purgeExpired(): int
     {
         try {
-            $count = $this->dbHelper->delete(
-                'refresh_tokens', 
-                ['expires_at < ' => date('Y-m-d H:i:s')], 
-                false,
-                $this->useSecureDb
-            );
+            $query = "DELETE FROM {$this->table} WHERE expires_at < :now";
+            $params = [':now' => date('Y-m-d H:i:s')];
+            $count = $this->dbHelper->execute($query, $params);
                 
             $this->logger->info("Purged {$count} expired tokens");
             return $count;
@@ -166,14 +175,13 @@ class RefreshToken
     public function getActiveForUser(int $userId): array
     {
         try {
-            $query = "SELECT * FROM refresh_tokens WHERE user_id = :user_id AND revoked = 0 AND expires_at > :now";
+            $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id AND revoked = 0 AND expires_at > :now";
             $tokens = $this->dbHelper->select(
                 $query, 
                 [
                     ':user_id' => $userId,
                     ':now' => date('Y-m-d H:i:s')
-                ], 
-                $this->useSecureDb
+                ]
             );
                 
             return $tokens ?? [];

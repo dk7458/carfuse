@@ -5,221 +5,313 @@ namespace App\Models;
 use App\Helpers\DatabaseHelper;
 use App\Services\AuditService;
 use App\Services\EncryptionService;
+use Psr\Log\LoggerInterface;
 
 /**
- * TransactionLog Model
- *
- * Represents a financial transaction and handles interactions with the `transaction_logs` table.
+ * Transaction Log Model
+ * 
+ * Represents financial transaction log entries in the system with enhanced security
+ * for sensitive financial data.
  */
-class TransactionLog extends BaseFinancialModel
+class TransactionLog extends BaseModel
 {
     protected $table = 'transaction_logs';
-    protected $resourceName = 'transaction_log';
-    protected $useTimestamps = true; // Transaction logs use timestamps
-    protected $useSoftDeletes = false; // Transaction logs don't use soft deletes
-
-    protected $dbHelper;
-    protected $auditService;
-
-    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService)
-    {
-        $this->dbHelper = $dbHelper;
-        $this->auditService = $auditService;
-    }
-
+    protected $resourceName = 'transaction';
+    protected $useTimestamps = true;
+    protected $useSoftDeletes = true;
+    protected $useUuid = true;
+    
     /**
-     * Get the database helper instance.
+     * Fields that should be encrypted when stored in the database
      *
-     * @return DatabaseHelper
+     * @var array
      */
-    public function getDbHelper(): DatabaseHelper
+    protected $encryptedFields = ['amount', 'card_number', 'card_last4'];
+
+    /**
+     * Constructor
+     * 
+     * @param DatabaseHelper $dbHelper
+     * @param AuditService $auditService
+     * @param LoggerInterface $logger
+     */
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService, LoggerInterface $logger)
     {
-        return $this->dbHelper;
+        parent::__construct($dbHelper, $auditService, $logger);
     }
 
     /**
-     * Get the table name.
+     * Encrypt sensitive data before insert/update
+     *
+     * @param array $data
+     * @return array
+     */
+    protected function encryptSensitiveData(array $data): array
+    {
+        if (!class_exists(EncryptionService::class)) {
+            $this->logger->warning('EncryptionService not available, storing sensitive data unencrypted');
+            return $data;
+        }
+
+        foreach ($this->encryptedFields as $field) {
+            if (isset($data[$field])) {
+                $data[$field] = EncryptionService::encrypt($data[$field]);
+            }
+        }
+        
+        return $data;
+    }
+    
+    /**
+     * Decrypt sensitive data after fetch
+     *
+     * @param array $data
+     * @return array
+     */
+    protected function decryptSensitiveData(array $data): array
+    {
+        if (!class_exists(EncryptionService::class)) {
+            return $data;
+        }
+
+        foreach ($this->encryptedFields as $field) {
+            if (isset($data[$field])) {
+                $data[$field] = EncryptionService::decrypt($data[$field]);
+            }
+        }
+        
+        return $data;
+    }
+
+    /**
+     * Override BaseModel's find method to decrypt sensitive fields
+     *
+     * @param string|int $id
+     * @return array|null
+     */
+    public function find(string|int $id): ?array
+    {
+        $result = parent::find($id);
+        
+        if ($result) {
+            $result = $this->decryptSensitiveData($result);
+        }
+        
+        return $result;
+    }
+
+    /**
+     * Override BaseModel's all method to decrypt sensitive fields
+     *
+     * @param array $orderBy
+     * @param int|null $limit
+     * @param int|null $offset
+     * @return array
+     */
+    public function all(array $orderBy = ['created_at' => 'DESC'], ?int $limit = null, ?int $offset = null): array
+    {
+        $results = parent::all($orderBy, $limit, $offset);
+        
+        foreach ($results as &$row) {
+            $row = $this->decryptSensitiveData($row);
+        }
+        
+        return $results;
+    }
+
+    /**
+     * Override BaseModel's create method to encrypt sensitive fields
+     *
+     * @param array $data
+     * @return int|string
+     */
+    public function create(array $data): int|string
+    {
+        // Encrypt sensitive data before storing
+        $data = $this->encryptSensitiveData($data);
+        
+        // Call parent create method
+        $id = parent::create($data);
+        
+        // Add additional audit logging
+        if ($this->auditService) {
+            $this->auditService->logEvent(
+                $this->resourceName,
+                'transaction_created',
+                [
+                    'transaction_id' => $id,
+                    'user_id' => $data['user_id'] ?? null,
+                    'transaction_type' => $data['transaction_type'] ?? null,
+                    'reference' => $data['reference'] ?? null
+                ]
+            );
+        }
+        
+        return $id;
+    }
+
+    /**
+     * Log a new financial transaction
+     *
+     * @param array $transactionData
+     * @return int|string
+     */
+    public function logTransaction(array $transactionData): int|string
+    {
+        // Validate required fields
+        $requiredFields = ['user_id', 'amount', 'transaction_type'];
+        foreach ($requiredFields as $field) {
+            if (!isset($transactionData[$field])) {
+                $this->logger->error("Missing required field for transaction log: {$field}");
+                throw new \InvalidArgumentException("Missing required field: {$field}");
+            }
+        }
+        
+        // Set default status if not provided
+        if (!isset($transactionData['status'])) {
+            $transactionData['status'] = 'pending';
+        }
+        
+        // Generate reference number if not provided
+        if (!isset($transactionData['reference'])) {
+            $transactionData['reference'] = $this->generateReferenceNumber();
+        }
+        
+        // Store the transaction
+        return $this->create($transactionData);
+    }
+    
+    /**
+     * Update transaction status
+     *
+     * @param string|int $transactionId
+     * @param string $status
+     * @param array $additionalData
+     * @return bool
+     */
+    public function updateStatus(string|int $transactionId, string $status, array $additionalData = []): bool
+    {
+        $data = ['status' => $status] + $additionalData;
+        
+        $result = parent::update($transactionId, $data);
+        
+        if ($result && $this->auditService) {
+            $this->auditService->logEvent(
+                $this->resourceName,
+                'transaction_status_updated',
+                [
+                    'transaction_id' => $transactionId,
+                    'new_status' => $status,
+                    'previous_status' => $additionalData['previous_status'] ?? 'unknown'
+                ]
+            );
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Get transactions for a specific user
+     *
+     * @param int|string $userId
+     * @return array
+     */
+    public function getForUser(int|string $userId): array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $query .= " ORDER BY created_at DESC";
+        
+        $results = $this->dbHelper->select($query, [':user_id' => $userId]);
+        
+        // Decrypt any sensitive fields
+        foreach ($results as &$row) {
+            $row = $this->decryptSensitiveData($row);
+        }
+        
+        return $results;
+    }
+    
+    /**
+     * Get transactions by reference number
+     *
+     * @param string $reference
+     * @return array|null
+     */
+    public function getByReference(string $reference): ?array
+    {
+        $query = "SELECT * FROM {$this->table} WHERE reference = :reference";
+        
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
+        }
+        
+        $results = $this->dbHelper->select($query, [':reference' => $reference]);
+        
+        if (empty($results)) {
+            return null;
+        }
+        
+        // Decrypt any sensitive fields
+        $results[0] = $this->decryptSensitiveData($results[0]);
+        
+        return $results[0];
+    }
+    
+    /**
+     * Generate a unique transaction reference number
      *
      * @return string
      */
-    public function getTable(): string
+    protected function generateReferenceNumber(): string
     {
-        return $this->table;
-    }
-
-    /**
-     * Log a transaction - this is the method that other services will call.
-     *
-     * @param array $transactionData
-     * @return int The ID of the logged transaction
-     */
-    public function logTransaction(array $transactionData): int
-    {
-        // Apply any specific transaction logging logic here
-        if (!isset($transactionData['created_at'])) {
-            $transactionData['created_at'] = date('Y-m-d H:i:s');
-        }
-
-        // If a description is not provided, generate a generic one
-        if (!isset($transactionData['description'])) {
-            $type = $transactionData['type'] ?? 'transaction';
-            $transactionData['description'] = ucfirst($type) . ' processed';
-        }
-
-        // Log this transaction for security audit
-        if ($this->auditService && isset($transactionData['type'])) {
-            $this->recordAuditEvent(
-                $transactionData['type'] . '_logged',
-                [
-                    'payment_id' => $transactionData['payment_id'] ?? null,
-                    'booking_id' => $transactionData['booking_id'] ?? null,
-                    'amount' => $transactionData['amount'] ?? null,
-                    'status' => $transactionData['status'] ?? null
-                ],
-                $transactionData['user_id'] ?? null
-            );
-        }
-
-        // Encrypt any sensitive data and create the transaction log
-        $encryptedData = $this->encryptSensitiveData($transactionData);
-        return $this->create($encryptedData);
-    }
-
-    /**
-     * Create a new transaction log.
-     *
-     * @param array $data
-     * @return int The ID of the created transaction log
-     * @throws \Exception If creation fails
-     */
-    public function create(array $data): int
-    {
-        // Required fields check
-        if (!isset($data['payment_id']) || !isset($data['amount'])) {
-            throw new \Exception('Transaction log requires payment_id and amount');
-        }
+        $prefix = 'TXN';
+        $timestamp = date('YmdHis');
+        $random = substr(str_shuffle('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), 0, 6);
         
-        // Add timestamps
-        if (!isset($data['created_at'])) {
-            $data['created_at'] = date('Y-m-d H:i:s');
-        }
-        $data['updated_at'] = date('Y-m-d H:i:s');
-
-        // Insert the record
-        $logId = $this->dbHelper->insert($this->table, $data);
-        
-        if (!$logId) {
-            throw new \Exception('Failed to create transaction log');
-        }
-        
-        return (int)$logId;
+        return $prefix . $timestamp . $random;
     }
-
+    
     /**
-     * Get transactions by user ID.
+     * Get transactions within a date range
      *
-     * @param int $userId
+     * @param string $startDate Format: Y-m-d
+     * @param string $endDate Format: Y-m-d
+     * @param string|null $type
      * @return array
      */
-    public function getByUserId(int $userId): array
+    public function getByDateRange(string $startDate, string $endDate, ?string $type = null): array
     {
-        $query = "SELECT * FROM {$this->table} WHERE user_id = :user_id ORDER BY created_at DESC";
-        $transactions = $this->dbHelper->select($query, [':user_id' => $userId]);
-
-        // Decrypt transaction details
-        foreach ($transactions as &$transaction) {
-            $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
-        }
-
-        return $transactions;
-    }
-
-    /**
-     * Get transaction by ID.
-     *
-     * @param int $id
-     * @return array|null
-     */
-    public function getById(int $id): ?array
-    {
-        $query = "SELECT * FROM {$this->table} WHERE id = :id";
-        $result = $this->dbHelper->select($query, [':id' => $id]);
+        $query = "SELECT * FROM {$this->table} 
+                  WHERE created_at BETWEEN :start_date AND :end_date";
         
-        if (!empty($result)) {
-            // Decrypt sensitive data before returning
-            return $this->decryptSensitiveData($result[0]);
-        }
-        
-        return null;
-    }
-
-    /**
-     * Update transaction status.
-     *
-     * @param int $id
-     * @param string $status
-     * @return bool
-     */
-    public function updateStatus(int $id, string $status): bool
-    {
-        $data = [
-            'status' => $status,
-            'updated_at' => date('Y-m-d H:i:s')
+        $params = [
+            ':start_date' => $startDate . ' 00:00:00',
+            ':end_date' => $endDate . ' 23:59:59'
         ];
         
-        $result = $this->dbHelper->update($this->table, $data, ['id' => $id]);
+        if ($type !== null) {
+            $query .= " AND transaction_type = :type";
+            $params[':type'] = $type;
+        }
         
-        // Log the event
-        if ($result && $this->auditService) {
-            $this->auditService->logEvent($this->resourceName, 'status_update', [
-                'id' => $id,
-                'status' => $status
-            ]);
+        if ($this->useSoftDeletes) {
+            $query .= " AND deleted_at IS NULL";
         }
-
-        return (bool)$result;
-    }
-
-    /**
-     * Get recent transactions.
-     *
-     * @param int $limit
-     * @return array
-     */
-    public function getRecent(int $limit = 10): array
-    {
-        $query = "SELECT * FROM {$this->table} ORDER BY created_at DESC LIMIT :limit";
-        $transactions = $this->dbHelper->select($query, [':limit' => $limit]);
-
-        // Decrypt transaction details
-        foreach ($transactions as &$transaction) {
-            $transaction['amount'] = EncryptionService::decrypt($transaction['amount']);
+        
+        $query .= " ORDER BY created_at DESC";
+        
+        $results = $this->dbHelper->select($query, $params);
+        
+        // Decrypt any sensitive fields
+        foreach ($results as &$row) {
+            $row = $this->decryptSensitiveData($row);
         }
-
-        return $transactions;
-    }
-
-    /**
-     * Get transactions by payment ID.
-     *
-     * @param int $paymentId
-     * @return array
-     */
-    public function getByPaymentId(int $paymentId): array
-    {
-        $query = "SELECT * FROM {$this->table} WHERE payment_id = :payment_id ORDER BY created_at DESC";
-        return $this->dbHelper->select($query, [':payment_id' => $paymentId]);
-    }
-
-    /**
-     * Get transactions by booking ID.
-     *
-     * @param int $bookingId
-     * @return array
-     */
-    public function getByBookingId(int $bookingId): array
-    {
-        $query = "SELECT * FROM {$this->table} WHERE booking_id = :booking_id ORDER BY created_at DESC";
-        return $this->dbHelper->select($query, [':booking_id' => $bookingId]);
+        
+        return $results;
     }
 }
