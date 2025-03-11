@@ -60,11 +60,10 @@ class BookingController extends Controller
     /**
      * Create standardized PSR-7 JSON response
      */
-    protected function jsonResponse(array $data, $status = 200): ResponseInterface
+    public function jsonResponse(ResponseInterface $response, $data, $status = 200): ResponseInterface
     {
-        $response = $this->responseFactory->createResponse($status);
         $response->getBody()->write(json_encode($data));
-        return $response->withHeader('Content-Type', 'application/json');
+        return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
     }
 
     /**
