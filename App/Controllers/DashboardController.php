@@ -26,7 +26,7 @@ class DashboardController extends Controller
     public function __construct(
         LoggerInterface $logger,
         BookingService $bookingService,
-        MetricsService$statisticsService,
+        MetricsService $statisticsService,
         NotificationService $notificationService,
         UserService $userService,
         AuditService $auditService,
