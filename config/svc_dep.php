@@ -83,6 +83,7 @@ return function (Container $container, array $config) {
     $container->set(Payment::class, function($c) {
         return new Payment(
             $c->get(DatabaseHelper::class),
+            $c->get(AuditService::class),
             $c->get('logger.payment')
         );
     });

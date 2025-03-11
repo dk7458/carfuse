@@ -59,11 +59,10 @@ class Payment extends BaseModel
         'original_payment_id' => 'nullable|integer|exists:payments,id',
     ];
 
-    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService = null)
-    {
-        $this->dbHelper = $dbHelper;
-        $this->auditService = $auditService;
-    }
+    public function __construct(DatabaseHelper $dbHelper, AuditService $auditService, LoggerInterface $logger)
+{
+    parent::__construct($dbHelper, $auditService, $logger);
+}
 
     /**
      * Find a payment by ID.

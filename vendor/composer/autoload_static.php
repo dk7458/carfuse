@@ -481,6 +481,7 @@ class ComposerStaticInit845530136cdef95a6876c03fea3eafa6
         'App\\Models\\RefreshToken' => __DIR__ . '/../..' . '/App/Models/RefreshToken.php',
         'App\\Models\\RefundLog' => __DIR__ . '/../..' . '/App/Models/RefundLog.php',
         'App\\Models\\Report' => __DIR__ . '/../..' . '/App/Models/Report.php',
+        'App\\Models\\Signature' => __DIR__ . '/../..' . '/App/Models/Signature.php',
         'App\\Models\\TransactionLog' => __DIR__ . '/../..' . '/App/Models/TransactionLog.php',
         'App\\Models\\User' => __DIR__ . '/../..' . '/App/Models/User.php',
         'App\\Models\\Vehicle' => __DIR__ . '/../..' . '/App/Models/Vehicle.php',

@@ -50,6 +50,7 @@ return array(
     'App\\Models\\RefreshToken' => $baseDir . '/App/Models/RefreshToken.php',
     'App\\Models\\RefundLog' => $baseDir . '/App/Models/RefundLog.php',
     'App\\Models\\Report' => $baseDir . '/App/Models/Report.php',
+    'App\\Models\\Signature' => $baseDir . '/App/Models/Signature.php',
     'App\\Models\\TransactionLog' => $baseDir . '/App/Models/TransactionLog.php',
     'App\\Models\\User' => $baseDir . '/App/Models/User.php',
     'App\\Models\\Vehicle' => $baseDir . '/App/Models/Vehicle.php',
