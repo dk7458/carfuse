@@ -306,8 +306,11 @@ return function (Container $container, array $config) {
     $container->set(SignatureService::class, function($c) use ($config) {
         return new SignatureService(
             $c->get('logger.security'),
-            $c->get(DatabaseHelper::class),
-            $config['signature'] ?? []
+            $c->get(Signature::class),
+            $config['signature'] ?? [],
+            $c->get(FileStorage::class),
+            $c->get(EncryptionService::class),
+            $c->get(ExceptionHandler::class)
         );
     });
 
