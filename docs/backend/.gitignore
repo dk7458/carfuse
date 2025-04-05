@@ -1,0 +1,18 @@
+# Build artifacts
+build/
+dist/
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+
+# Editor-specific files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS-specific files
+.DS_Store
+Thumbs.db

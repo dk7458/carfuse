@@ -1,0 +1,60 @@
+/* Typography styles */
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-medium text-text-primary;
+  }
+  
+  h1 {
+    @apply text-4xl lg:text-5xl;
+  }
+  
+  h2 {
+    @apply text-3xl lg:text-4xl;
+  }
+  
+  h3 {
+    @apply text-2xl lg:text-3xl;
+  }
+  
+  h4 {
+    @apply text-xl lg:text-2xl;
+  }
+  
+  h5 {
+    @apply text-lg lg:text-xl;
+  }
+  
+  h6 {
+    @apply text-base lg:text-lg;
+  }
+  
+  p {
+    @apply mb-4 text-text-primary;
+  }
+  
+  a {
+    @apply text-text-link hover:text-text-link-hover transition-colors;
+  }
+  
+  /* Polish typography adjustments */
+  /* Support for special Polish characters */
+  @font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/inter-var.woff2') format('woff2');
+    unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  }
+  
+  /* Polish language specifics */
+  html[lang="pl"] {
+    hyphens: auto;
+    font-feature-settings: "locl";
+  }
+  
+  /* Polish currency formatting */
+  .pln::after {
+    content: " zł";
+  }
+}

@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CarFuse Forms Examples</title>
+  <meta name="csrf-token" content="example-token-12345">
+  
+  <!-- Tailwind CSS (CDN for demo purposes) -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  
+  <!-- Form component styles -->
+  <link href="/css/components/forms.css" rel="stylesheet">
+  <link href="/css/components/file-upload.css" rel="stylesheet">
+  
+  <style>
+    /* Example page styles */
+    .example-section {
+      margin-bottom: 2rem;
+      padding: 1.5rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 0.5rem;
+    }
+    
+    .code-block {
+      background-color: #f8fafc;
+      padding: 1rem;
+      border-radius: 0.25rem;
+      font-family: monospace;
+      white-space: pre-wrap;
+      font-size: 0.875rem;
+      margin: 1rem 0;
+      border: 1px solid #e5e7eb;
+      overflow-x: auto;
+    }
+    
+    h1 {
+      font-size: 2.25rem;
+      margin-bottom: 1rem;
+    }
+    
+    h2 {
+      font-size: 1.5rem;
+      margin: 1rem 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    h3 {
+      font-size: 1.25rem;
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div class="container max-w-4xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold">CarFuse Forms Examples</h1>
+    <p class="text-gray-600 mb-8">This page demonstrates the various form components and their usage.</p>
+    
+    <div class="example-section">
+      <h2>Basic Form with Validation</h2>
+      <p class="text-gray-600 mb-4">A simple form with validation rules.</p>
+      
+      <form id="basic-form" data-cf-form>
+        <div class="form-group">
+          <label for="name" class="form-label required">Name</label>
+          <input type="text" id="name" name="name" class="form-input" 
+                 data-validate="required|min:2|max:50" placeholder="Enter your name">
+        </div>
+        
+        <div class="form-group">
+          <label for="email" class="form-label required">Email Address</label>
+          <input type="email" id="email" name="email" class="form-input" 
+                 data-validate="required|email" placeholder="Enter your email">
+          <div class="form-help">We'll never share your email with anyone else.</div>
+        </div>
+        
+        <div class="form-group">
+          <label for="phone" class="form-label">Phone Number</label>
+          <input type="tel" id="phone" name="phone" class="form-input" 
+                 data-validate="phone" placeholder="+48 123 456 789">
+        </div>
+        
+        <div class="form-group">
+          <label for="message" class="form-label">Message</label>
+          <textarea id="message" name="message" class="form-input" rows="4" 
+                    data-validate="required|min:10" placeholder="Enter your message"
+                    data-cf-textarea data-cf-auto-resize="true"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <div class="flex items-center">
+            <input type="checkbox" id="terms" name="terms" class="form-checkbox"
+                   data-validate="required" data-cf-checkbox data-cf-custom="true">
+            <label for="terms" class="ml-2 text-sm">I agree to the terms and conditions</label>
+          </div>
+        </div>
+        
+        <div class="mt-6">
+          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Submit
+          </button>
+        </div>
+      </form>
+      
+      <div class="mt-4">
+        <h3>Code Example:</h3>
+        <div class="code-block">&lt;form data-cf-form&gt;
+  &lt;div class="form-group"&gt;
+    &lt;label for="name" class="form-label required"&gt;Name&lt;/label&gt;
+    &lt;input type="text" id="name" name="name" class="form-input" 
+           data-validate="required|min:2|max:50"&gt;
+  &lt;/div&gt;
+  
+  &lt;div class="form-group"&gt;
+    &lt;label for="email" class="form-label required"&gt;Email Address&lt;/label&gt;
+    &lt;input type="email" id="email" name="email" class="form-input" 
+           data-validate="required|email"&gt;
+    &lt;div class="form-help"&gt;We'll never share your email with anyone else.&lt;/div&gt;
+  &lt;/div&gt;
+  
+  &lt;!-- More form fields --&gt;
+  
+  &lt;button type="submit" class="btn btn-primary"&gt;Submit&lt;/button&gt;
+&lt;/form&gt;</div>
+      </div>
+    </div>
+    
+    <div class="example-section">
+      <h2>Enhanced Form Components</h2>
+      <p class="text-gray-600 mb-4">Form with enhanced components like searchable select, character counter, and floating labels.</p>
+      
+      <form id="enhanced-form" data-cf-form>
+        <div class="form-group" data-cf-form-group data-cf-floating-label="true">
+          <label for="username" class="form-label">Username</label>
+          <input type="text" id="username" name="username" class="form-input" 
+                 data-cf-text-input data-cf-clearable="true">
+        </div>
+        
+        <div class="form-group">
+          <label for="bio" class="form-label">Bio</label>
+          <textarea id="bio" name="bio" class="form-input" maxlength="200" 
+                    data-cf-textarea data-cf-show-counter="true" data-cf-auto-resize="true"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label for="country" class="form-label">Country</label>
+          <select id="country" name="country" data-cf-select data-cf-searchable="true">
+            <option value="">Select a country</option>
+            <option value="pl">Poland</option>
+            <option value="de">Germany</option>
+            <option value="fr">France</option>
+            <option value="es">Spain</option>
+            <option value="it">Italy</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Notification Preferences</label>
+          <div class="space-y-2">
+            <div>
+              <input type="checkbox" id="notify_email" name="notify_email" 
+                     data-cf-checkbox data-cf-custom="true" data-label="Email Notifications">
+            </div>
+            <div>
+              <input type="checkbox" id="notify_sms" name="notify_sms" 
+                     data-cf-checkbox data-cf-custom="true" data-label="SMS Notifications">
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Preferred Contact Method</label>
+          <div class="space-y-2">
+            <div>
+              <input type="radio" id="contact_email" name="contact_method" value="email" 
+                     data-cf-radio data-cf-custom="true" data-label="Email">
+            </div>
+            <div>
+              <input type="radio" id="contact_phone" name="contact_method" value="phone" 
+                     data-cf-radio data-cf-custom="true" data-label="Phone">
+            </div>
+          </div>
+        </div>
+        
+        <div class="mt-6">
+          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Save Preferences
+          </button>
+        </div>
+      </form>
+      
+      <div class="mt-4">
+        <h3>Code Example:</h3>
+        <div class="code-block">&lt;div class="form-group" data-cf-form-group data-cf-floating-label="true"&gt;
+  &lt;label for="username" class="form-label"&gt;Username&lt;/label&gt;
+  &lt;input type="text" id="username" name="username" class="form-input" 
+         data-cf-text-input data-cf-clearable="true"&gt;
+&lt;/div&gt;
+
+&lt;div class="form-group"&gt;
+  &lt;label for="bio" class="form-label"&gt;Bio&lt;/label&gt;
+  &lt;textarea id="bio" name="bio" class="form-input" maxlength="200" 
+            data-cf-textarea data-cf-show-counter="true" data-cf-auto-resize="true"&gt;&lt;/textarea&gt;
+&lt;/div&gt;
+
+&lt;div class="form-group"&gt;
+  &lt;label for="country" class="form-label"&gt;Country&lt;/label&gt;
+  &lt;select id="country" name="country" data-cf-select data-cf-searchable="true"&gt;
+    &lt;option value=""&gt;Select a country&lt;/option&gt;
+    &lt;option value="pl"&gt;Poland&lt;/option&gt;
+    &lt;!-- More options --&gt;
+  &lt;/select&gt;
+&lt;/div&gt;</div>
+      </div>
+    </div>
+    
+    <div class="example-section">
+      <h2>File Upload Example</h2>
+      <p class="text-gray-600 mb-4">Demonstration of file upload functionality with drag & drop support.</p>
+      
+      <form id="upload-form" data-cf-form>
+        <div class="form-group">
+          <label for="profile_image" class="form-label">Profile Image</label>
+          <input type="file" id="profile_image" name="profile_image" 
+                 data-cf-upload 
+                 data-cf-allowed-types="image/jpeg,image/png"
+                 data-cf-max-size="2">
+          <div class="form-help">Upload a profile picture (JPEG or PNG, max 2MB)</div>
+        </div>
+        
+        <div class="form-group">
+          <label for="documents" class="form-label">Documents</label>
+          <input type="file" id="documents" name="documents" 
+                 data-cf-upload
+                 data-cf-multiple="true" 
+                 data-cf-allowed-types="application/pdf,.doc,.docx">
+          <div class="form-help">Upload multiple documents (PDF, Word, max 5MB each)</div>
+        </div>
+        
+        <div class="mt-6">
+          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Upload Files
+          </button>
+        </div>
+      </form>
+      
+      <div class="mt-4">
+        <h3>Code Example:</h3>
+        <div class="code-block">&lt;div class="form-group"&gt;
+  &lt;label for="profile_image" class="form-label"&gt;Profile Image&lt;/label&gt;
+  &lt;input type="file" id="profile_image" name="profile_image" 
+         data-cf-upload 
+         data-cf-allowed-types="image/jpeg,image/png"
+         data-cf-max-size="2"&gt;
+  &lt;div class="form-help"&gt;Upload a profile picture (JPEG or PNG, max 2MB)&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;div class="form-group"&gt;
+  &lt;label for="documents" class="form-label"&gt;Documents&lt;/label&gt;
+  &lt;input type="file" id="documents" name="documents" 
+         data-cf-upload
+         data-cf-multiple="true" 
+         data-cf-allowed-types="application/pdf,.doc,.docx"&gt;
+&lt;/div&gt;</div>
+      </div>
+    </div>
+    
+    <div class="example-section">
+      <h2>Dynamic Form Fields</h2>
+      <p class="text-gray-600 mb-4">Example of dynamically adding/removing form fields.</p>
+      
+      <form id="dynamic-form" data-cf-form>
+        <div class="form-group">
+          <label for="project_name" class="form-label required">Project Name</label>
+          <input type="text" id="project_name" name="project_name" class="form-input" 
+                 data-validate="required">
+        </div>
+        
+        <h3 class="text-lg font-medium text-gray-700 mt-4 mb-2">Team Members</h3>
+        <div id="team-members-container">
+          <!-- Dynamic items will be inserted here -->
+        </div>
+        
+        <template id="team-member-template">
+          <div class="p-4 mb-2 border border-gray-200 rounded bg-gray-50">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="form-group">
+                <label for="members_0_name" class="form-label">Name</label>
+                <input type="text" id="members_0_name" name="members[0][name]" class="form-input" data-validate="required">
+              </div>
+              <div class="form-group">
+                <label for="members_0_role" class="form-label">Role</label>
+                <input type="text" id="members_0_role" name="members[0][role]" class="form-input">
+              </div>
+              <div class="form-group">
+                <label for="members_0_email" class="form-label">Email</label>
+                <input type="email" id="members_0_email" name="members[0][email]" class="form-input" data-validate="email">
+              </div>
+            </div>
+          </div>
+        </template>
+        
+        <div class="mt-6">
+          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Save Project
+          </button>
+        </div>
+      </form>
+      
+      <div class="mt-4">
+        <h3>JavaScript Code Example:</h3>
+        <div class="code-block">// Initialize dynamic inputs
+const container = document.getElementById('team-members-container');
+const template = document.getElementById('team-member-template');
+
+CarFuse.forms.utils.addDynamicInputs(container, template, 2, {
+  maxItems: 5,
+  addButtonText: 'Add Team Member',
+  itemClass: 'team-member-item'
+});</div>
+      </div>
+    </div>
+    
+    <div class="example-section">
+      <h2>Programmatic Form Creation</h2>
+      <p class="text-gray-600 mb-4">Creating a form programmatically from a JSON schema.</p>
+      
+      <div id="schema-form-container">
+        <!-- Form will be inserted here -->
+      </div>
+      
+      <div class="mt-4">
+        <h3>JavaScript Code Example:</h3>
+        <div class="code-block">// Form schema
+const formSchema = {
+  fields: [
+    {
+      type: 'text',
+      name: 'title',
+      label: 'Title',
+      required: true,
+      placeholder: 'Enter a title',
+      validation: 'required|min:3'
+    },
+    {
+      type: 'select',
+      name: 'category',
+      label: 'Category',
+      options: [
+        { value: '', label: 'Select a category' },
+        { value: 'business', label: 'Business' },
+        { value: 'technology', label: 'Technology' },
+        { value: 'health', label: 'Health' }
+      ],
+      validation: 'required'
+    },
+    {
+      type: 'textarea',
+      name: 'content',
+      label: 'Content',
+      rows: 5,
+      required: true,
+      validation: 'required|min:10'
+    },
+    {
+      type: 'checkbox',
+      name: 'publish',
+      checkboxLabel: 'Publish immediately',
+      value: '1'
+    }
+  ],
+  options: {
+    validation: {
+      validateOnBlur: true
+    }
+  }
+};
+
+// Create form
+const form = CarFuse.forms.utils.createForm(formSchema, {
+  formId: 'schema-form',
+  submitButtonText: 'Create Post'
+});
+
+// Add to container
+document.getElementById('schema-form-container').appendChild(form);</div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Scripts -->
+  <script src="/js/forms/validation/index.js"></script>
+  <script src="/js/forms/submission/index.js"></script>
+  <script src="/js/forms/components/index.js"></script>
+  <script src="/js/forms/uploads/index.js"></script>
+  <script src="/js/forms/utils/index.js"></script>
+  <script src="/js/forms/index.js"></script>
+  
+  <script>
+    // Initialize dynamic inputs when forms system is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      // Wait for CarFuse forms to initialize
+      setTimeout(() => {
+        // Initialize dynamic inputs
+        if (CarFuse.forms.utils) {
+          const container = document.getElementById('team-members-container');
+          const template = document.getElementById('team-member-template');
+          
+          CarFuse.forms.utils.addDynamicInputs(container, template, 2, {
+            maxItems: 5,
+            addButtonText: 'Add Team Member',
+            itemClass: 'team-member-item'
+          });
+        }
+        
+        // Create schema-based form
+        const formSchema = {
+          fields: [
+            {
+              type: 'text',
+              name: 'title',
+              label: 'Title',
+              required: true,
+              placeholder: 'Enter a title',
+              validation: 'required|min:3'
+            },
+            {
+              type: 'select',
+              name: 'category',
+              label: 'Category',
+              options: [
+                { value: '', label: 'Select a category' },
+                { value: 'business', label: 'Business' },
+                { value: 'technology', label: 'Technology' },
+                { value: 'health', label: 'Health' }
+              ],
+              validation: 'required'
+            },
+            {
+              type: 'textarea',
+              name: 'content',
+              label: 'Content',
+              rows: 5,
+              required: true,
+              validation: 'required|min:10'
+            },
+            {
+              type: 'checkbox',
+              name: 'publish',
+              checkboxLabel: 'Publish immediately',
+              value: '1'
+            }
+          ]
+        };
+
+        // Create form
+        const form = CarFuse.forms.utils.createForm(formSchema, {
+          formId: 'schema-form',
+          submitButtonText: 'Create Post'
+        });
+
+        // Add to container
+        document.getElementById('schema-form-container').appendChild(form);
+      }, 500);
+    });
+  </script>
+</body>
+</html>

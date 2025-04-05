@@ -431,4 +431,64 @@ class BookingController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get booking list for HTMX requests
+     */
+    public function getBookingListHtmx(): void
+    {
+        try {
+            // Get user from session
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                echo '<div class="text-red-500 p-4">Nie jesteś zalogowany. Proszę zalogować się ponownie.</div>';
+                return;
+            }
+            
+            // Get pagination and filter parameters
+            $page = isset($_GET['page']) ? (int)$_GET['page'] : 0;
+            $perPage = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 5;
+            $status = $_GET['status'] ?? 'all';
+            
+            // Get bookings using service
+            $bookings = $this->bookingService->getUserBookings($userId, $page + 1, $perPage, $status !== 'all' ? $status : null);
+            
+            // Log access to audit trail
+            $this->auditService->logEvent(
+                'user_bookings_htmx_fetched',
+                "User fetched their bookings via HTMX",
+                [
+                    'user_id' => $userId,
+                    'page' => $page,
+                    'per_page' => $perPage,
+                    'status' => $status
+                ],
+                $userId,
+                null,
+                'booking'
+            );
+            
+            // Check if we have results
+            if (empty($bookings['data']) && $page === 0) {
+                echo '<script>document.getElementById("no-bookings-message").classList.remove("hidden");</script>';
+                return;
+            }
+            
+            // Render each booking
+            foreach ($bookings['data'] as $booking) {
+                include BASE_PATH . '/public/views/partials/booking-list-item.php';
+            }
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to load user bookings for HTMX", [
+                'error' => $e->getMessage(),
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
+            
+            echo '<div class="text-red-500 p-4">
+                <p class="font-medium">Nie udało się załadować rezerwacji</p>
+                <p class="text-sm">Spróbuj odświeżyć stronę lub skontaktuj się z obsługą klienta</p>
+            </div>';
+        }
+    }
 }

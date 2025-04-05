@@ -1,0 +1,394 @@
+/**
+ * CarFuse Theme CSS
+ * Consolidated and standardized color system with dark mode support
+ */
+
+:root {
+  /* Base color palette (hidden implementation colors) */
+  --blue-50: #EFF6FF;
+  --blue-100: #DBEAFE;
+  --blue-200: #BFDBFE;
+  --blue-300: #93C5FD;
+  --blue-400: #60A5FA;
+  --blue-500: #3B82F6;
+  --blue-600: #2563EB;
+  --blue-700: #1D4ED8;
+  --blue-800: #1E40AF;
+  --blue-900: #1E3A8A;
+
+  --green-50: #ECFDF5;
+  --green-100: #D1FAE5;
+  --green-500: #10B981;
+  --green-700: #047857;
+  
+  --amber-50: #FFFBEB;
+  --amber-100: #FEF3C7;
+  --amber-500: #F59E0B;
+  --amber-700: #B45309;
+  
+  --red-50: #FEF2F2;
+  --red-100: #FEE2E2;
+  --red-500: #EF4444;
+  --red-700: #B91C1C;
+  
+  --gray-50: #F9FAFB;
+  --gray-100: #F3F4F6;
+  --gray-200: #E5E7EB;
+  --gray-300: #D1D5DB;
+  --gray-400: #9CA3AF;
+  --gray-500: #6B7280;
+  --gray-600: #4B5563;
+  --gray-700: #374151;
+  --gray-800: #1F2937;
+  --gray-900: #111827;
+
+  /* Primary colors */
+  --color-primary-lightest: var(--blue-50);
+  --color-primary-lighter: var(--blue-100);
+  --color-primary-light: var(--blue-300);
+  --color-primary: var(--blue-500);
+  --color-primary-dark: var(--blue-600);
+  --color-primary-darker: var(--blue-700);
+  --color-primary-darkest: var(--blue-900);
+
+  /* Secondary colors */
+  --color-secondary-lightest: #F5F7FA;
+  --color-secondary-lighter: #E4E7EB;
+  --color-secondary-light: #CBD2D9;
+  --color-secondary: #9AA5B1;
+  --color-secondary-dark: #7B8794;
+  --color-secondary-darker: #616E7C;
+  --color-secondary-darkest: #323F4B;
+
+  /* Accent colors */
+  --color-accent-lightest: #F8E9FF;
+  --color-accent-lighter: #F0D1FF;
+  --color-accent-light: #E3B0FF;
+  --color-accent: #C270FF;
+  --color-accent-dark: #A855F7;
+  --color-accent-darker: #8B33DB;
+  --color-accent-darkest: #6B21A8;
+
+  /* Surface colors */
+  --color-surface-white: #FFFFFF;
+  --color-surface-lightest: var(--gray-50);
+  --color-surface-lighter: var(--gray-100);
+  --color-surface-light: var(--gray-200);
+  --color-surface: var(--gray-300);
+  --color-surface-dark: var(--gray-500);
+  --color-surface-darker: var(--gray-700);
+  --color-surface-darkest: var(--gray-800);
+  --color-surface-black: var(--gray-900);
+
+  /* Text colors */
+  --color-text-primary: var(--gray-900);
+  --color-text-secondary: var(--gray-700);
+  --color-text-tertiary: var(--gray-500);
+  --color-text-disabled: var(--gray-400);
+  --color-text-inverse: #FFFFFF;
+
+  /* Status colors */
+  --color-info-lighter: var(--blue-100);
+  --color-info-light: var(--blue-300);
+  --color-info: var(--blue-500);
+  --color-info-dark: var(--blue-700);
+
+  --color-success-lighter: var(--green-50);
+  --color-success-light: var(--green-100);
+  --color-success: var(--green-500);
+  --color-success-dark: var(--green-700);
+
+  --color-warning-lighter: var(--amber-50);
+  --color-warning-light: var(--amber-100);
+  --color-warning: var(--amber-500);
+  --color-warning-dark: var(--amber-700);
+
+  --color-error-lighter: var(--red-50);
+  --color-error-light: var(--red-100);
+  --color-error: var(--red-500);
+  --color-error-dark: var(--red-700);
+
+  /* UI state colors */
+  --color-state-hover: rgba(0, 0, 0, 0.05);
+  --color-state-active: rgba(0, 0, 0, 0.1);
+  --color-state-selected: var(--color-primary-lightest);
+  --color-state-disabled: var(--gray-200);
+  --color-state-focus: rgba(59, 130, 246, 0.5);
+
+  /* Border colors */
+  --color-border-light: var(--gray-200);
+  --color-border: var(--gray-300);
+  --color-border-dark: var(--gray-400);
+
+  /* Shadow colors */
+  --color-shadow-light: rgba(0, 0, 0, 0.05);
+  --color-shadow: rgba(0, 0, 0, 0.1);
+  --color-shadow-dark: rgba(0, 0, 0, 0.2);
+
+  /* Theme configuration */
+  --theme-transition-duration: 300ms;
+  --theme-transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Backwards compatibility - mapped to semantic colors */
+  --color-bg-primary: var(--color-surface-white);
+  --color-bg-secondary: var(--color-surface-lightest);
+  --color-bg-tertiary: var(--color-surface-lighter);
+  
+  /* Theme specific UI components */
+  --toggle-bg: var(--color-surface-light);
+  --toggle-border: var(--color-border);
+  --toggle-handle-bg: var(--color-surface-white);
+  --toggle-icon-color: var(--color-text-tertiary);
+  --toggle-active-bg: var(--color-primary);
+}
+
+/* Dark theme variables */
+.dark {
+  /* Primary colors - adjusted for dark mode */
+  --color-primary-lightest: #1E3A8A;
+  --color-primary-lighter: #1E40AF;
+  --color-primary-light: #1D4ED8;
+  --color-primary: #3B82F6;
+  --color-primary-dark: #60A5FA;
+  --color-primary-darker: #93C5FD;
+  --color-primary-darkest: #DBEAFE;
+
+  /* Surface colors - inverted for dark mode */
+  --color-surface-white: #111827; /* surface-black in light mode */
+  --color-surface-lightest: #1F2937; /* surface-darkest in light mode */
+  --color-surface-lighter: #374151; /* surface-darker in light mode */
+  --color-surface-light: #4B5563; /* surface-dark in light mode */
+  --color-surface: #6B7280; 
+  --color-surface-dark: #9CA3AF;
+  --color-surface-darker: #D1D5DB;
+  --color-surface-darkest: #F3F4F6;
+  --color-surface-black: #FFFFFF; /* surface-white in light mode */
+
+  /* Text colors - inverted for dark mode */
+  --color-text-primary: #F9FAFB;
+  --color-text-secondary: #F3F4F6;
+  --color-text-tertiary: #D1D5DB;
+  --color-text-disabled: #6B7280;
+  --color-text-inverse: #111827;
+
+  /* Status colors - adjusted for dark mode */
+  --color-info-lighter: #1E40AF;
+  --color-info-light: #2563EB;
+  --color-info: #3B82F6;
+  --color-info-dark: #93C5FD;
+
+  --color-success-lighter: #064E3B;
+  --color-success-light: #047857;
+  --color-success: #10B981;
+  --color-success-dark: #A7F3D0;
+
+  --color-warning-lighter: #92400E;
+  --color-warning-light: #B45309;
+  --color-warning: #F59E0B;
+  --color-warning-dark: #FDE68A;
+
+  --color-error-lighter: #7F1D1D;
+  --color-error-light: #B91C1C;
+  --color-error: #EF4444;
+  --color-error-dark: #FECACA;
+
+  /* UI state colors - adjusted for dark mode */
+  --color-state-hover: rgba(255, 255, 255, 0.05);
+  --color-state-active: rgba(255, 255, 255, 0.1);
+  --color-state-selected: var(--color-primary-darkest);
+  --color-state-disabled: var(--gray-700);
+  --color-state-focus: rgba(59, 130, 246, 0.5);
+
+  /* Border colors - adjusted for dark mode */
+  --color-border-light: var(--gray-700);
+  --color-border: var(--gray-600);
+  --color-border-dark: var(--gray-500);
+
+  /* Shadow colors - adjusted for dark mode */
+  --color-shadow-light: rgba(0, 0, 0, 0.3);
+  --color-shadow: rgba(0, 0, 0, 0.5);
+  --color-shadow-dark: rgba(0, 0, 0, 0.7);
+  
+  /* Backwards compatibility - mapped to semantic colors */
+  --color-bg-primary: var(--color-surface-white);
+  --color-bg-secondary: var(--color-surface-lightest);
+  --color-bg-tertiary: var(--color-surface-lighter);
+  
+  /* Theme specific UI components */
+  --toggle-bg: var(--color-surface-darker);
+  --toggle-border: var(--color-border);
+  --toggle-handle-bg: var(--color-surface-black);
+  --toggle-icon-color: var(--color-text-primary);
+  --toggle-active-bg: var(--color-primary);
+}
+
+/* High contrast theme variables */
+.high-contrast {
+  --color-surface-white: #000000;
+  --color-surface-lightest: #0d0d0d;
+  --color-surface-lighter: #1a1a1a;
+  --color-surface-light: #262626;
+  --color-surface: #404040;
+  --color-surface-dark: #737373;
+  --color-surface-darker: #a3a3a3;
+  --color-surface-darkest: #d4d4d4;
+  --color-surface-black: #ffffff;
+  
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #f5f5f5;
+  --color-text-tertiary: #d4d4d4;
+  --color-text-disabled: #a3a3a3;
+  --color-text-inverse: #000000;
+  
+  --color-border: #ffffff;
+  
+  --color-primary: #3B82F6;
+  --color-primary-dark: #60A5FA;
+  
+  --color-success: #10B981;
+  --color-error: #EF4444;
+  --color-warning: #F59E0B;
+  --color-info: #3B82F6;
+}
+
+/* Theme transition class for smooth switching - optimized properties */
+.transition-theme {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow, opacity;
+  transition-timing-function: var(--theme-transition-timing);
+  transition-duration: var(--theme-transition-duration);
+}
+
+/* For users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .transition-theme {
+    transition: none;
+  }
+  
+  .reduce-motion .transition-theme {
+    transition: none;
+  }
+}
+
+/* Prevent layout shifts during theme change */
+body {
+  min-height: 100vh;
+}
+
+/* Accessibility - screen reader only class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Theme toggle styling */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0.5rem;
+  border-radius: 50%;
+  cursor: pointer;
+  background-color: transparent;
+  color: var(--color-text-primary);
+  transition: background-color 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-toggle:hover {
+  background-color: var(--color-surface-lighter);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--color-state-focus);
+  outline-offset: 2px;
+}
+
+.theme-toggle-active {
+  animation: theme-toggle-pulse 0.3s ease;
+}
+
+/* Animation for toggle click */
+@keyframes theme-toggle-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+/* Switch style toggle */
+.theme-toggle-switch {
+  width: 3.5rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background-color: var(--toggle-bg);
+  border: 1px solid var(--toggle-border);
+  position: relative;
+  transition: background-color 0.2s ease;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.theme-toggle-switch::after {
+  content: '';
+  position: absolute;
+  left: 0.2rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background-color: var(--toggle-handle-bg);
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px var(--color-shadow);
+}
+
+.dark .theme-toggle-switch::after {
+  transform: translateX(1.75rem);
+}
+
+.theme-toggle-switch:hover {
+  opacity: 0.9;
+}
+
+/* Icons within toggle */
+.theme-toggle-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--toggle-icon-color);
+}
+
+/* Ensure hidden state works properly */
+.hidden {
+  display: none !important;
+}
+
+/* Fixed position toggle for consistent placement */
+.theme-toggle-fixed {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 50;
+  background-color: var(--color-surface-lighter);
+  box-shadow: 0 4px 6px var(--color-shadow);
+  border-radius: 50%;
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-toggle-fixed:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 8px var(--color-shadow);
+}

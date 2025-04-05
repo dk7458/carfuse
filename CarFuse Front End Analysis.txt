@@ -1,0 +1,127 @@
+CarFuse Front-End Analysis Report
+After analyzing the front-end structure in relation to the controllers and file organization, I've identified several issues that need attention. Here's a comprehensive breakdown by file category:
+
+JavaScript Files Issues
+alpine.js
+
+Missing main initialization that should import the component files from /js/alpine-components/
+No clear entry point that registers Alpine with window.Alpine
+No initialization code connecting with the component modules (core.js, ui.js, form.js, etc.)
+htmx.js
+
+Contains some helpers for bookings and payments but lacks initialization code
+Missing CSRF token handling mentioned in controllers
+Missing Polish language error messages
+Incomplete connection with notification handling methods
+tailwind.config.js
+
+Exists but may not be properly configured for Polish language support
+No evidence of purging rules for PHP files
+Missing theme extensions for CarFuse-specific components
+main.js
+
+Missing initialization code for all other JavaScript components
+No global event handlers setup
+Missing Polish locale configuration for date/currency formatting
+User View Issues
+/public/views/user/dashboard.php
+
+References getUserStatistics() but implementation in DashboardController expects different parameters
+Uses $_SESSION['user_name'] which isn't consistently set in AuthController
+Missing HTMX integration for real-time updates
+Incomplete notification handling compared to NotificationController's capabilities
+/public/views/user/bookings.php
+
+Missing reference to BookingController's getBookingListHtmx() method
+No clear implementation of booking cancellation flow that matches controller's cancelBooking() method
+Incomplete integration with booking-list-item.php partial
+Missing HTMX pagination that should call getUserBookings()
+/public/views/user/payments.php and payments-history.php
+
+Duplicate functionality between two files - should be consolidated
+PaymentController methods not fully represented in the views
+Missing integration with payment-details.php and payment-method-details.php
+No HTMX calls to lazy-load payment details
+/public/views/user/profile.php
+
+Missing form validation with Alpine.js that should match UserController validation rules
+No clear HTMX submission to UserController's updateUserProfile() method
+Missing connection to profile picture upload functionality
+Admin View Issues
+/public/views/admin/dashboard.php
+
+Missing HTMX integration for dashboard data refreshing
+Incomplete links to admin dashboard API endpoints
+No proper admin session validation aligned with AdminDashboardController requirements
+/public/views/admin/users.php
+
+Missing template reference to user-row.php partial
+Incomplete HTMX integration for user management functions
+Missing Alpine.js modals for user actions that align with AdminController methods
+/public/views/admin/reports.php
+
+Missing form implementation for report generation that matches ReportController's generateReport() method
+Incomplete date range picker integration
+Missing export format options mentioned in ReportController
+/public/views/admin/settings.php
+
+No clear connection to any controller method
+Missing form controls for system settings
+Incomplete tab implementation with Alpine.js
+Partials Issues
+/public/views/partials/notifications-list.php
+
+Missing role-based conditional logic that should adapt to admin vs user context
+Incomplete integration with NotificationController methods
+No HTMX calls for marking notifications as read
+Modal Component Issues
+
+modal.php exists but doesn't appear to be fully implemented
+Missing Alpine.js integration for show/hide functionality
+Missing standardized modal types for different actions
+User-Related Partials
+
+Inconsistent naming between partials (user-bookings.php vs booking-list-item.php)
+Missing reuse of common components
+Authentication & Security Issues
+Session Handling
+
+Inconsistent session checks across views
+Some files use direct $_SESSION access while others should use TokenService
+Missing proper redirection for unauthenticated users
+CSRF Protection
+
+Missing CSRF token implementation in forms
+No consistent HTMX header for CSRF as mentioned in controllers
+Role-Based Access
+
+Inconsistent admin role verification
+Some views missing proper role checks that match controller expectations
+Internationalization Issues
+Polish Language Support
+Inconsistent use of Polish text across views
+Missing Polish date and currency formatting in some views
+Hardcoded English strings in some files
+Recommendations
+Standardize Authentication
+
+Implement consistent session or token validation in all views
+Create a helper function for authentication checks
+Complete JavaScript Files
+
+Properly implement the main.js initialization
+Complete Alpine.js integration with proper component structure
+Implement HTMX utilities for all controller endpoints
+Fix View-Controller Alignment
+
+Ensure all controller methods have corresponding UI elements
+Implement HTMX calls that match controller endpoints
+Polish Language Consistency
+
+Replace all hardcoded English text with Polish equivalents
+Implement consistent date and currency formatting for Polish locale
+Reorganize Duplicated Functionality
+
+Consolidate payments.php and payments-history.php
+Standardize partial naming and usage
+By addressing these issues, the CarFuse front-end will be more consistent, maintainable, and properly integrated with its back-end controllers.

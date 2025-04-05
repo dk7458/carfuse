@@ -1,0 +1,75 @@
+/* Responsive utilities */
+@layer utilities {
+  /* Mobile/Desktop specific display */
+  .mobile-only {
+    @apply block md:hidden;
+  }
+  
+  .desktop-only {
+    @apply hidden md:block;
+  }
+  
+  /* Custom responsive grid for dashboard panels */
+  .dashboard-grid {
+    @apply grid gap-6;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+  
+  /* Dashboard-specific scrollbar */
+  .dashboard-scrollbar {
+    scrollbar-width: thin;
+    
+    &::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      @apply bg-gray-100 dark:bg-gray-800;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      @apply bg-gray-400 dark:bg-gray-600 rounded;
+    }
+  }
+  
+  /* Responsive breakpoint visualizer (development only) */
+  .breakpoint-debug {
+    @apply fixed bottom-0 right-0 p-2 m-2 bg-white border border-gray-300 rounded shadow-md z-50;
+  }
+  
+  .breakpoint-debug::after {
+    @apply font-mono text-xs bg-blue-500 text-white px-2 py-1 rounded;
+    content: 'xs';
+  }
+  
+  @screen sm {
+    .breakpoint-debug::after {
+      content: 'sm';
+    }
+  }
+  
+  @screen md {
+    .breakpoint-debug::after {
+      content: 'md';
+    }
+  }
+  
+  @screen lg {
+    .breakpoint-debug::after {
+      content: 'lg';
+    }
+  }
+  
+  @screen xl {
+    .breakpoint-debug::after {
+      content: 'xl';
+    }
+  }
+  
+  @screen 2xl {
+    .breakpoint-debug::after {
+      content: '2xl';
+    }
+  }
+}

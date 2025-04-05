@@ -1,0 +1,42 @@
+/*
+ * Theme Template
+ * 
+ * Use this file as a template for creating custom themes.
+ * Only override the variables that need to be different from the base theme.
+ */
+
+.theme-custom {
+  /* Primary colors - customize */
+  --color-primary-lightest: #[VALUE];
+  --color-primary-lighter: #[VALUE];
+  --color-primary-light: #[VALUE];
+  --color-primary: #[VALUE];
+  --color-primary-dark: #[VALUE];
+  --color-primary-darker: #[VALUE];
+  --color-primary-darkest: #[VALUE];
+
+  /* Secondary colors - if different from default */
+  --color-secondary-lightest: #[VALUE];
+  --color-secondary-lighter: #[VALUE];
+  --color-secondary-light: #[VALUE];
+  --color-secondary: #[VALUE];
+  --color-secondary-dark: #[VALUE];
+  --color-secondary-darker: #[VALUE];
+  --color-secondary-darkest: #[VALUE];
+
+  /* Accent colors - if different from default */
+  --color-accent-lightest: #[VALUE];
+  --color-accent-lighter: #[VALUE];
+  --color-accent-light: #[VALUE];
+  --color-accent: #[VALUE];
+  --color-accent-dark: #[VALUE];
+  --color-accent-darker: #[VALUE];
+  --color-accent-darkest: #[VALUE];
+
+  /* Only override other colors if specifically needed for the theme */
+}
+
+/* Dark variant of custom theme (optional) */
+.dark.theme-custom {
+  /* Override dark mode colors as needed */
+}

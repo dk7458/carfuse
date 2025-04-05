@@ -1,13 +1,17 @@
 {
   "name": "carfuse",
   "version": "1.0.0",
-  "description": "",
+  "description": "CarFuse car rental system",
   "main": "ajax.js",
   "directories": {
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:htmx": "node build/build-htmx.js",
+    "build": "npm run build:htmx",
+    "build:css": "postcss public/css/tailwind.css -o public/css/app.css",
+    "watch:css": "postcss public/css/tailwind.css -o public/css/app.css --watch"
   },
   "repository": {
     "type": "git",
@@ -32,7 +36,9 @@
     "gulp-imagemin": "^9.1.0",
     "gulp-rev": "^11.0.0",
     "gulp-sourcemaps": "^2.6.5",
-    "gulp-uglify": "^3.0.2"
+    "gulp-uglify": "^3.0.2",
+    "concat": "^1.0.3",
+    "terser": "^5.17.1"
   },
   "dependencies": {
     "uuid": "^11.0.5"

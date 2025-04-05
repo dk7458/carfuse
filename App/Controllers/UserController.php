@@ -116,7 +116,7 @@ class UserController extends Controller
     /**
      * Update user profile.
      */
-    public function updateProfile(Request $request, Response $response)
+    public function updateUserProfile(Request $request, Response $response)
     {
         try {
             $user = $this->tokenService->validateRequest($request);
@@ -264,6 +264,221 @@ class UserController extends Controller
                 'user_id' => $request->getAttribute('user_id') ?? 'unknown'
             ]);
             return ApiHelper::sendJsonResponse('error', 'Failed to load dashboard', [], 500);
+        }
+    }
+
+    /**
+     * Display the user profile page.
+     */
+    public function showProfilePage(Request $request, Response $response)
+    {
+        try {
+            // Check if user is authenticated via session
+            if (!isset($_SESSION['user_id'])) {
+                return $response->withHeader('Location', '/auth/login')->withStatus(302);
+            }
+            
+            $userId = $_SESSION['user_id'];
+            $this->logger->info("User accessing profile page", ['user_id' => $userId]);
+
+            // Fetch user profile data
+            $profile = $this->userModel->findOrFail($userId);
+            
+            // Prepare data for the view
+            $profileData = [
+                'id' => $profile->id,
+                'name' => $profile->name,
+                'email' => $profile->email,
+                'bio' => $profile->bio ?? '',
+                'phone' => $profile->phone ?? '',
+                'location' => $profile->location ?? '',
+                'avatar_url' => $profile->avatar_url ?? '/images/default-avatar.png',
+                'joined_date' => (new \DateTime($profile->created_at))->format('d.m.Y'),
+                'preferences' => $this->userModel->getUserPreferences($userId)
+            ];
+            
+            // Log audit trail
+            $this->auditService->logEvent('profile_page_viewed', 'User viewed their profile page', 
+                ['user_id' => $userId], $userId, null, 'user');
+
+            // Include the profile view
+            include BASE_PATH . '/public/views/profile.php';
+            return $response;
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            return $response->withHeader('Location', '/error')->withStatus(302);
+        }
+    }
+
+    /**
+     * Handle user profile update.
+     */
+    public function updateProfile(Request $request, Response $response)
+    {
+        try {
+            // Check if user is authenticated
+            if (!isset($_SESSION['user_id'])) {
+                return ApiHelper::sendJsonResponse('error', 'Nie jesteś zalogowany', [], 401);
+            }
+            
+            $userId = $_SESSION['user_id'];
+            $this->logger->info("Processing profile update", ['user_id' => $userId]);
+            
+            // Get form data (handle both JSON and form submissions)
+            $contentType = $request->getHeaderLine('Content-Type');
+            if (strstr($contentType, 'application/json')) {
+                $data = json_decode($request->getBody()->getContents(), true);
+            } else {
+                $data = $request->getParsedBody();
+            }
+            
+            // Validate the input
+            $rules = [
+                'name'     => 'required|string|max:100',
+                'bio'      => 'string|max:500',
+                'phone'    => 'string|max:20',
+                'location' => 'string|max:100'
+            ];
+            
+            $validateResult = $this->validator->validate($data, $rules);
+            if ($validateResult !== true) {
+                return ApiHelper::sendJsonResponse('error', 'Niepoprawne dane formularza', ['errors' => $validateResult], 400);
+            }
+            
+            // Handle file upload if present
+            $avatarUrl = null;
+            if (isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK) {
+                $avatarUrl = $this->handleAvatarUpload($_FILES['avatar'], $userId);
+                if (!$avatarUrl) {
+                    return ApiHelper::sendJsonResponse('error', 'Nie udało się przesłać zdjęcia profilowego', [], 500);
+                }
+                $data['avatar_url'] = $avatarUrl;
+            }
+            
+            // Handle avatar removal
+            if (isset($data['remove_avatar']) && $data['remove_avatar'] === '1') {
+                $data['avatar_url'] = null;
+            }
+            
+            // Extract preferences
+            $preferences = $data['preferences'] ?? [];
+            unset($data['preferences']);
+            
+            // Update profile in database
+            $updated = $this->userModel->updateProfile($userId, $data);
+            
+            // Update preferences
+            if (!empty($preferences)) {
+                $this->userModel->updatePreferences($userId, $preferences);
+            }
+            
+            // Log the update
+            $this->auditService->logEvent('profile_updated', 'User updated their profile', 
+                ['user_id' => $userId, 'fields_updated' => array_keys($data)], $userId, null, 'user');
+            
+            // Return success response
+            return ApiHelper::sendJsonResponse('success', 'Profil został zaktualizowany pomyślnie', [
+                'user' => $this->userModel->find($userId)
+            ], 200);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            return ApiHelper::sendJsonResponse('error', 'Wystąpił błąd podczas aktualizacji profilu', [], 500);
+        }
+    }
+    
+    /**
+     * Handle profile picture upload.
+     */
+    private function handleAvatarUpload($file, $userId)
+    {
+        try {
+            $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+            $maxSize = 2 * 1024 * 1024; // 2MB
+            
+            // Validate file
+            if (!in_array($file['type'], $allowedTypes)) {
+                throw new \Exception("Nieprawidłowy typ pliku. Dozwolone: JPG, PNG, GIF");
+            }
+            
+            if ($file['size'] > $maxSize) {
+                throw new \Exception("Plik jest za duży. Maksymalny rozmiar to 2MB");
+            }
+            
+            // Create unique filename
+            $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+            $filename = 'avatar_' . $userId . '_' . time() . '.' . $extension;
+            $uploadDir = BASE_PATH . '/public/uploads/avatars/';
+            
+            // Create directory if it doesn't exist
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            
+            $uploadPath = $uploadDir . $filename;
+            
+            // Move the uploaded file
+            if (!move_uploaded_file($file['tmp_name'], $uploadPath)) {
+                throw new \Exception("Nie udało się zapisać pliku");
+            }
+            
+            return '/uploads/avatars/' . $filename;
+        } catch (\Exception $e) {
+            $this->logger->error("Avatar upload error", [
+                'error' => $e->getMessage(),
+                'user_id' => $userId
+            ]);
+            return null;
+        }
+    }
+    
+    /**
+     * Change user password.
+     */
+    public function changePassword(Request $request, Response $response)
+    {
+        try {
+            // Verify authentication
+            if (!isset($_SESSION['user_id'])) {
+                return ApiHelper::sendJsonResponse('error', 'Nie jesteś zalogowany', [], 401);
+            }
+            
+            $userId = $_SESSION['user_id'];
+            $this->logger->info("Processing password change", ['user_id' => $userId]);
+            
+            // Get form data
+            $data = $request->getParsedBody();
+            
+            // Validate input
+            if (!isset($data['current_password']) || !isset($data['new_password']) || !isset($data['confirm_password'])) {
+                return ApiHelper::sendJsonResponse('error', 'Wszystkie pola są wymagane', [], 400);
+            }
+            
+            if ($data['new_password'] !== $data['confirm_password']) {
+                return ApiHelper::sendJsonResponse('error', 'Hasła nie są zgodne', [], 400);
+            }
+            
+            if (strlen($data['new_password']) < 6) {
+                return ApiHelper::sendJsonResponse('error', 'Nowe hasło musi mieć co najmniej 6 znaków', [], 400);
+            }
+            
+            // Verify current password
+            $user = $this->userModel->find($userId);
+            if (!$user || !$this->authService->verifyPassword($data['current_password'], $user->password)) {
+                return ApiHelper::sendJsonResponse('error', 'Nieprawidłowe aktualne hasło', [], 400);
+            }
+            
+            // Update the password
+            $this->userModel->updatePassword($userId, $data['new_password']);
+            
+            // Log password change
+            $this->auditService->logEvent('password_changed', 'User changed their password', 
+                ['user_id' => $userId], $userId, null, 'security');
+                
+            // Return success response
+            return ApiHelper::sendJsonResponse('success', 'Hasło zostało zmienione pomyślnie', [], 200);
+        } catch (\Exception $e) {
+            $this->exceptionHandler->handleException($e);
+            return ApiHelper::sendJsonResponse('error', 'Wystąpił błąd podczas zmiany hasła', [], 500);
         }
     }
 }

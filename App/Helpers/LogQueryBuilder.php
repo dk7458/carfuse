@@ -50,6 +50,21 @@ class LogQueryBuilder
         'Y/m/d',
         'Y/m/d H:i:s'
     ];
+
+    /**
+     * @var SecurityHelper
+     */
+    private SecurityHelper $securityHelper;
+
+    /**
+     * Constructor with dependency injection
+     * 
+     * @param SecurityHelper $securityHelper Security helper for input sanitization
+     */
+    public function __construct(SecurityHelper $securityHelper)
+    {
+        $this->securityHelper = $securityHelper;
+    }
     
     /**
      * Build WHERE clause and parameters for audit log queries
@@ -57,7 +72,7 @@ class LogQueryBuilder
      * @param array $filters Query filters
      * @return array [whereClause, params]
      */
-    public static function buildWhereClause(array $filters): array
+    public function buildWhereClause(array $filters): array
     {
         $whereClause = "1=1";
         $params = [];
@@ -109,7 +124,7 @@ class LogQueryBuilder
         
         // Date range filters with better validation
         if (!empty($filters['start_date'])) {
-            $startDate = self::validateAndFormatDate($filters['start_date']);
+            $startDate = $this->validateAndFormatDate($filters['start_date']);
             if ($startDate) {
                 $whereClause .= " AND created_at >= ?";
                 $params[] = $startDate;
@@ -117,7 +132,7 @@ class LogQueryBuilder
         }
         
         if (!empty($filters['end_date'])) {
-            $endDate = self::validateAndFormatDate($filters['end_date'], true);
+            $endDate = $this->validateAndFormatDate($filters['end_date'], true);
             if ($endDate) {
                 $whereClause .= " AND created_at <= ?";
                 $params[] = $endDate;
@@ -126,7 +141,7 @@ class LogQueryBuilder
         
         // Relative date filter (e.g., last 7 days, last month)
         if (!empty($filters['relative_date'])) {
-            $dateRange = self::calculateRelativeDateRange($filters['relative_date']);
+            $dateRange = $this->calculateRelativeDateRange($filters['relative_date']);
             if ($dateRange) {
                 $whereClause .= " AND created_at >= ? AND created_at <= ?";
                 $params[] = $dateRange['start'];
@@ -137,7 +152,7 @@ class LogQueryBuilder
         // Message/details text search
         if (!empty($filters['search'])) {
             $whereClause .= " AND (message LIKE ? OR details LIKE ?)";
-            $searchTerm = '%' . SecurityHelper::sanitizeString($filters['search']) . '%';
+            $searchTerm = '%' . $this->securityHelper->sanitizeInput($filters['search']) . '%';
             $params[] = $searchTerm;
             $params[] = $searchTerm;
         }
@@ -171,10 +186,10 @@ class LogQueryBuilder
      * @param array $filters Various filters to apply
      * @return array Query parts including SQL and parameters
      */
-    public static function buildSelectQuery(array $filters): array
+    public function buildSelectQuery(array $filters): array
     {
         // Build WHERE clause and parameters
-        list($whereClause, $params) = self::buildWhereClause($filters);
+        list($whereClause, $params) = $this->buildWhereClause($filters);
         
         // Calculate pagination values
         $page = isset($filters['page']) ? max(1, (int)$filters['page']) : self::DEFAULT_PAGE;
@@ -191,7 +206,7 @@ class LogQueryBuilder
         $sortOrder = isset($filters['sort_order']) && strtoupper($filters['sort_order']) === 'ASC' ? 'ASC' : 'DESC';
         
         // Define fields to select
-        $fieldList = self::getFieldList($filters);
+        $fieldList = $this->getFieldList($filters);
         
         // Build main query
         $mainSql = "SELECT {$fieldList} FROM " . self::TABLE_NAME . " WHERE {$whereClause} ORDER BY {$sortField} {$sortOrder}";
@@ -222,10 +237,10 @@ class LogQueryBuilder
      * @param string|null $filepath Optional file path for direct export
      * @return array Export query information
      */
-    public static function buildExportQuery(array $filters, ?string $filepath = null): array
+    public function buildExportQuery(array $filters, ?string $filepath = null): array
     {
         // Get WHERE clause and parameters
-        list($whereClause, $params) = self::buildWhereClause($filters);
+        list($whereClause, $params) = $this->buildWhereClause($filters);
         
         // Define CSV format options
         $csvOptions = "
@@ -307,10 +322,10 @@ class LogQueryBuilder
      * @param bool $forceBulkDelete Whether to allow bulk deletion without ID restrictions
      * @return array Delete query information
      */
-    public static function buildDeleteQuery(array $filters, bool $forceBulkDelete = false): array
+    public function buildDeleteQuery(array $filters, bool $forceBulkDelete = false): array
     {
         // Get WHERE clause and parameters
-        list($whereClause, $params) = self::buildWhereClause($filters);
+        list($whereClause, $params) = $this->buildWhereClause($filters);
         
         // Safeguard: If no specific WHERE conditions and not forcing bulk delete, throw exception
         if (($whereClause === "1=1" || empty(array_filter($params))) && !$forceBulkDelete) {
@@ -339,7 +354,7 @@ class LogQueryBuilder
      * @param array $ids Array of log IDs to delete
      * @return string SQL for deletion
      */
-    public static function buildBatchDeleteQuery(array $ids): string
+    public function buildBatchDeleteQuery(array $ids): string
     {
         if (empty($ids)) {
             throw new InvalidArgumentException('No IDs provided for deletion');
@@ -355,7 +370,7 @@ class LogQueryBuilder
      * @param int $logId Log ID
      * @return array Query and parameters
      */
-    public static function buildGetByIdQuery(int $logId): array
+    public function buildGetByIdQuery(int $logId): array
     {
         $sql = "SELECT * FROM " . self::TABLE_NAME . " WHERE id = ? LIMIT 1";
         return [
@@ -371,7 +386,7 @@ class LogQueryBuilder
      * @param bool $isEndDate Whether this is an end date (add time if needed)
      * @return string|null Formatted date string or null if invalid
      */
-    private static function validateAndFormatDate(string $dateStr, bool $isEndDate = false): ?string
+    private function validateAndFormatDate(string $dateStr, bool $isEndDate = false): ?string
     {
         try {
             // Try to create DateTime object from the string
@@ -406,7 +421,7 @@ class LogQueryBuilder
      * @param string $relativeDate Relative date string ("last_7_days", "last_month", etc.)
      * @return array|null Date range with 'start' and 'end' dates or null if invalid
      */
-    private static function calculateRelativeDateRange(string $relativeDate): ?array
+    private function calculateRelativeDateRange(string $relativeDate): ?array
     {
         $now = new DateTime();
         $end = $now->format('Y-m-d H:i:s');
@@ -491,7 +506,7 @@ class LogQueryBuilder
      * @param array $filters Filter options
      * @return string SQL field list
      */
-    private static function getFieldList(array $filters): string
+    private function getFieldList(array $filters): string
     {
         // If custom fields are specified, use them
         if (!empty($filters['fields']) && is_array($filters['fields'])) {

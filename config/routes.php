@@ -146,6 +146,12 @@ return function (Container $container) {
             $r->addRoute(['GET'], '/{userId:\d+}', [$signatureController, 'getSignature']);
         });
 
+        // Settings routes
+        $router->addGroup('/admin/api/settings', function (RouteCollector $r) {
+            $r->addRoute(['GET'], '', 'App\Controllers\SettingsController:getSettings');
+            $r->addRoute(['POST'], '/save', 'App\Controllers\SettingsController:saveSettings');
+        });
+
         // Catch-All for Unmatched Requests
         $router->addRoute(['GET', 'POST'], '/{any:.+}', function () {
             http_response_code(404);

@@ -449,4 +449,438 @@ class PaymentController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get user transactions for HTMX requests
+     */
+    public function getUserTransactionsHtmx(): void
+    {
+        try {
+            // Get user from session
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                echo '<div class="text-red-500 p-4">Nie jesteś zalogowany. Proszę zalogować się ponownie.</div>';
+                return;
+            }
+            
+            // Get pagination and filter parameters
+            $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+            $type = $_GET['type'] ?? 'all';
+            $sortBy = $_GET['sort_by'] ?? 'date';
+            $sortDir = $_GET['sort_dir'] ?? 'desc';
+            
+            // Map frontend sort fields to backend fields
+            $sortMapping = [
+                'date' => 'created_at',
+                'amount' => 'amount',
+                'status' => 'status'
+            ];
+            
+            $backendSortField = $sortMapping[$sortBy] ?? 'created_at';
+            
+            // Get transactions through the service
+            $transactions = $this->paymentService->getTransactionHistory(
+                $userId, 
+                $page, 
+                $limit, 
+                $type !== 'all' ? $type : null,
+                $backendSortField,
+                $sortDir
+            );
+            
+            // Check if we have results
+            if (empty($transactions['data'])) {
+                echo '<script>document.getElementById("no-transactions").classList.remove("hidden");</script>';
+                return;
+            }
+            
+            // Render each transaction
+            foreach ($transactions['data'] as $transaction) {
+                include BASE_PATH . '/public/views/partials/payment-item.php';
+            }
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to load user transactions for HTMX", [
+                'error' => $e->getMessage(),
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
+            
+            echo '<div class="text-red-500 p-4">
+                <p class="font-medium">Nie udało się załadować historii transakcji</p>
+                <p class="text-sm">Spróbuj odświeżyć stronę lub skontaktuj się z obsługą klienta</p>
+            </div>';
+        }
+    }
+
+    /**
+     * Get user payments with filters for HTMX requests (Polish interface)
+     */
+    public function getUserPayments(): void
+    {
+        try {
+            // Get user from session
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                echo '<div class="text-red-500 p-4">Nie jesteś zalogowany. Proszę zalogować się ponownie.</div>';
+                return;
+            }
+            
+            // Get pagination and filter parameters
+            $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+            $type = $_GET['type'] ?? 'all';
+            $query = $_GET['query'] ?? null;
+            $sortBy = $_GET['sort_by'] ?? 'date';
+            $sortDir = $_GET['sort_dir'] ?? 'desc';
+            
+            // Map frontend sort fields to backend fields
+            $sortMapping = [
+                'date' => 'created_at',
+                'amount' => 'amount',
+                'status' => 'status'
+            ];
+            
+            $backendSortField = $sortMapping[$sortBy] ?? 'created_at';
+            
+            // Get transactions through the service
+            $transactions = $this->paymentService->getTransactionHistory(
+                $userId, 
+                $page, 
+                $limit, 
+                $type !== 'all' ? $type : null,
+                $backendSortField,
+                $sortDir,
+                $query
+            );
+            
+            // Check if we have results
+            if (empty($transactions['data'])) {
+                echo '<script>document.getElementById("no-transactions").classList.remove("hidden");</script>';
+                return;
+            }
+            
+            // Render each transaction
+            foreach ($transactions['data'] as $transaction) {
+                include BASE_PATH . '/public/views/partials/payment-item.php';
+            }
+            
+            // If pagination information is available and there are more pages
+            if (isset($transactions['meta']) && $transactions['meta']['has_more_pages']) {
+                echo '<script>document.getElementById("load-more-btn").setAttribute("hx-get", "/payments/history?page=' . ($page + 1) . '");</script>';
+            } else {
+                echo '<script>document.getElementById("load-more-btn").classList.add("hidden");</script>';
+            }
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to load user payments for HTMX", [
+                'error' => $e->getMessage(),
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
+            
+            echo '<div class="text-red-500 p-4">
+                <p class="font-medium">Nie udało się załadować historii płatności</p>
+                <p class="text-sm">Spróbuj odświeżyć stronę lub skontaktuj się z obsługą klienta</p>
+            </div>';
+        }
+    }
+
+    /**
+     * Search transactions by query string
+     */
+    public function searchPayments(): void
+    {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                echo '<div class="text-red-500 p-4">Nie jesteś zalogowany. Proszę zalogować się ponownie.</div>';
+                return;
+            }
+            
+            $query = $_GET['q'] ?? '';
+            $filter = $_GET['payment-filter'] ?? 'all';
+            
+            $type = ($filter !== 'all') ? $filter : null;
+            
+            $transactions = $this->paymentService->searchTransactions($userId, $query, $type);
+            
+            if (empty($transactions)) {
+                echo '<tr><td colspan="6" class="text-center py-4 text-gray-500">Nie znaleziono pasujących transakcji</td></tr>';
+                return;
+            }
+            
+            foreach ($transactions as $transaction) {
+                include BASE_PATH . '/public/views/partials/payment-item.php';
+            }
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to search payments", [
+                'error' => $e->getMessage(),
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
+            
+            echo '<tr><td colspan="6" class="text-center py-4 text-red-500">Wystąpił błąd podczas wyszukiwania</td></tr>';
+        }
+    }
+
+    /**
+     * Filter transactions by type
+     */
+    public function filterPayments(): void
+    {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                echo '<div class="text-red-500 p-4">Nie jesteś zalogowany. Proszę zalogować się ponownie.</div>';
+                return;
+            }
+            
+            $filter = $_GET['payment-filter'] ?? 'all';
+            $type = ($filter !== 'all') ? $filter : null;
+            
+            $transactions = $this->paymentService->getTransactionHistory($userId, 1, 10, $type);
+            
+            if (empty($transactions['data'])) {
+                echo '<tr><td colspan="6" class="text-center py-4 text-gray-500">Nie znaleziono transakcji danego typu</td></tr>';
+                return;
+            }
+            
+            foreach ($transactions['data'] as $transaction) {
+                include BASE_PATH . '/public/views/partials/payment-item.php';
+            }
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to filter payments", [
+                'error' => $e->getMessage(),
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
+            
+            echo '<tr><td colspan="6" class="text-center py-4 text-red-500">Wystąpił błąd podczas filtrowania</td></tr>';
+        }
+    }
+
+    /**
+     * Sort transactions by specified criteria
+     */
+    public function sortPayments(): void
+    {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                echo '<div class="text-red-500 p-4">Nie jesteś zalogowany. Proszę zalogować się ponownie.</div>';
+                return;
+            }
+            
+            $sortValue = $_GET['payment-sort'] ?? 'date_desc';
+            list($field, $direction) = explode('_', $sortValue);
+            
+            $sortMapping = [
+                'date' => 'created_at',
+                'amount' => 'amount'
+            ];
+            
+            $backendField = $sortMapping[$field] ?? 'created_at';
+            
+            $transactions = $this->paymentService->getTransactionHistory(
+                $userId, 
+                1, 
+                10, 
+                null, 
+                $backendField, 
+                $direction
+            );
+            
+            if (empty($transactions['data'])) {
+                echo '<tr><td colspan="6" class="text-center py-4 text-gray-500">Brak transakcji do wyświetlenia</td></tr>';
+                return;
+            }
+            
+            foreach ($transactions['data'] as $transaction) {
+                include BASE_PATH . '/public/views/partials/payment-item.php';
+            }
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to sort payments", [
+                'error' => $e->getMessage(),
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
+            
+            echo '<tr><td colspan="6" class="text-center py-4 text-red-500">Wystąpił błąd podczas sortowania</td></tr>';
+        }
+    }
+    
+    /**
+     * Get payment methods for a user (HTMX format)
+     */
+    public function getPaymentMethods(): void
+    {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                echo '<div class="text-red-500 p-4">Nie jesteś zalogowany. Proszę zalogować się ponownie.</div>';
+                return;
+            }
+            
+            // Get payment methods from service
+            $methods = $this->paymentService->getUserPaymentMethods($userId);
+            
+            if (empty($methods)) {
+                echo '<div class="col-span-full text-center py-4 text-gray-500">
+                    Nie masz jeszcze żadnych zapisanych metod płatności.
+                </div>';
+                return;
+            }
+            
+            // Render each payment method
+            foreach ($methods as $method) {
+                include BASE_PATH . '/public/views/partials/payment-method-card.php';
+            }
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to load payment methods", [
+                'error' => $e->getMessage(),
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
+            
+            echo '<div class="col-span-full text-red-500 p-4">
+                <p class="font-medium">Nie udało się załadować metod płatności</p>
+                <p class="text-sm">Spróbuj odświeżyć stronę lub skontaktuj się z obsługą klienta</p>
+            </div>';
+        }
+    }
+    
+    /**
+     * Get payment method details (HTMX format)
+     */
+    public function getPaymentMethodDetails(int $id): void
+    {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                echo '<div class="text-red-500 p-4">Nie jesteś zalogowany. Proszę zalogować się ponownie.</div>';
+                return;
+            }
+            
+            // Get payment method details
+            $method = $this->paymentService->getPaymentMethodDetails($id, $userId);
+            
+            if (!$method) {
+                echo '<div class="text-red-500 p-4">Nie znaleziono metody płatności lub nie masz do niej dostępu.</div>';
+                return;
+            }
+            
+            // Include the payment method details template
+            include BASE_PATH . '/public/views/partials/payment-method-details.php';
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to load payment method details", [
+                'error' => $e->getMessage(),
+                'method_id' => $id,
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
+            
+            echo '<div class="text-red-500 p-4">
+                <p class="font-medium">Nie udało się załadować szczegółów metody płatności</p>
+                <p class="text-sm">Spróbuj odświeżyć stronę lub skontaktuj się z obsługą klienta</p>
+            </div>';
+        }
+    }
+    
+    /**
+     * Get payment details for a specific transaction (HTMX format)
+     */
+    public function getPaymentDetails(int $id): void
+    {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                echo '<div class="text-red-500 p-4">Nie jesteś zalogowany. Proszę zalogować się ponownie.</div>';
+                return;
+            }
+            
+            // Get transaction details from service (checks user permission internally)
+            $details = $this->paymentService->getTransactionDetails($id, $userId, false);
+            
+            if (!$details) {
+                echo '<div class="text-red-500 p-4">Nie znaleziono szczegółów transakcji lub nie masz do nich dostępu.</div>';
+                return;
+            }
+            
+            // Include the payment details template
+            include BASE_PATH . '/public/views/partials/payment-details.php';
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to load payment details", [
+                'error' => $e->getMessage(),
+                'payment_id' => $id,
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
+            
+            echo '<div class="text-red-500 p-4">
+                <p class="font-medium">Nie udało się załadować szczegółów płatności</p>
+                <p class="text-sm">Spróbuj odświeżyć stronę lub skontaktuj się z obsługą klienta</p>
+            </div>';
+        }
+    }
+    
+    /**
+     * Download payment invoice
+     */
+    public function downloadInvoice(int $id): void
+    {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                header('Location: /login?redirect=' . urlencode($_SERVER['REQUEST_URI']));
+                exit;
+            }
+            
+            // Check if user has access to this invoice
+            $hasAccess = $this->paymentService->verifyTransactionAccess($id, $userId);
+            if (!$hasAccess) {
+                header('HTTP/1.1 403 Forbidden');
+                echo 'Brak dostępu do tego dokumentu';
+                exit;
+            }
+            
+            // Generate and send invoice PDF
+            $invoice = $this->paymentService->generateInvoice($id);
+            
+            if (!$invoice) {
+                header('HTTP/1.1 404 Not Found');
+                echo 'Nie można wygenerować faktury dla tej transakcji';
+                exit;
+            }
+            
+            // Log the invoice download
+            $this->auditService->logEvent(
+                'invoice_downloaded',
+                "User downloaded invoice",
+                ['payment_id' => $id, 'user_id' => $userId],
+                $userId,
+                $id,
+                'payment'
+            );
+            
+            // Set headers for PDF download
+            header('Content-Type: application/pdf');
+            header('Content-Disposition: attachment; filename="faktura-' . $invoice['invoice_number'] . '.pdf"');
+            header('Content-Length: ' . strlen($invoice['pdf_content']));
+            
+            // Output PDF content
+            echo $invoice['pdf_content'];
+            exit;
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to download invoice", [
+                'error' => $e->getMessage(),
+                'payment_id' => $id,
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
+            
+            header('HTTP/1.1 500 Internal Server Error');
+            echo 'Wystąpił błąd podczas pobierania faktury. Proszę spróbować później.';
+            exit;
+        }
+    }
 }

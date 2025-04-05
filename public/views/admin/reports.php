@@ -1,164 +1,252 @@
 <?php
-require_once __DIR__ . '/../../../helpers/SecurityHelper.php';
-if (!isset($_SESSION['admin_id'])) {
-    header('Location: login.php');
+// Ensure admin access
+if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
+    header('Location: /auth/login');
     exit();
 }
+$pageTitle = "CarFuse - Raporty Systemowe";
+$metaDescription = "Panel generowania raportów systemowych CarFuse - twórz i zarządzaj raportami.";
 ?>
-
-/*
-|--------------------------------------------------------------------------
-| Raporty Administratora
-|--------------------------------------------------------------------------
-| Ten plik umożliwia generowanie raportów dotyczących rezerwacji, płatności,
-| użytkowników, aktywności w systemie oraz audytów.
-|
-| Ścieżka: App/Views/admin/reports.php
-|
-| Zależy od:
-| - JavaScript: /js/admin.js (obsługa generowania raportów, AJAX)
-| - CSS: /css/admin.css (stylizacja formularzy i tabeli)
-| - PHP: csrf_field() (zabezpieczenie formularzy)
-| - MySQL (dane pobierane z bazy)
-|
-| Technologie:
-| - PHP 8+ (backend)
-| - MySQL (baza danych)
-| - JavaScript (AJAX, dynamiczne generowanie raportów)
-| - Chart.js (wizualizacja raportów)
-| - HTML, CSS (interfejs)
-*/
-
-<h1 class="text-center">Raporty Systemowe</h1>
-
-<div class="admin-container">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3>Generowanie raportów</h3>
-        <button class="btn btn-secondary" id="clearFilters">Reset</button>
+<div class="container mx-auto px-4 py-8">
+    <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Raporty Systemowe 📊</h1>
+        <p class="text-gray-600">
+            Generuj, przeglądaj i pobieraj raporty dotyczące działania systemu.
+        </p>
     </div>
 
-    <!-- Formularz generowania raportów -->
-    <form id="adminReportForm" class="mt-4">
-        <?= csrf_field() ?>
+    <!-- Alpine.js data for form validation -->
+    <div x-data="reportForm()" class="bg-white rounded-lg shadow-md p-6">
+        <form hx-post="/admin/reports/generate"
+              hx-indicator="#loadingIndicator"
+              hx-target="#reportResult"
+              @submit="validateForm($event)"
+              class="space-y-4">
 
-        <div class="mb-3">
-            <label for="reportType" class="form-label">Typ raportu</label>
-            <select class="form-select" id="reportType" name="reportType" required>
-                <option value="" disabled selected>Wybierz typ raportu</option>
-                <option value="bookings">Rezerwacje</option>
-                <option value="payments">Płatności</option>
-                <option value="users">Użytkownicy</option>
-                <option value="activity">Aktywność użytkowników</option>
-                <option value="audit">Logi audytowe</option>
-            </select>
-        </div>
-
-        <div class="row">
-            <div class="col-md-6 mb-3">
-                <label for="startDate" class="form-label">Data początkowa</label>
-                <input type="date" class="form-control" id="startDate" name="startDate" required>
+            <!-- Typ raportu -->
+            <div>
+                <label for="report_type" class="block text-sm font-medium text-gray-700 mb-1">Typ raportu</label>
+                <select id="report_type" name="report_type" x-model="reportType"
+                        class="form-select w-full" @change="showRelevantFilters()">
+                    <option value="">Wybierz typ raportu</option>
+                    <option value="bookings">Raport rezerwacji</option>
+                    <option value="users">Raport użytkowników</option>
+                    <option value="revenue">Raport przychodów</option>
+                </select>
+                <p class="text-red-500 text-sm" x-show="errors.reportType">
+                    <span x-text="errors.reportType"></span>
+                </p>
             </div>
 
-            <div class="col-md-6 mb-3">
-                <label for="endDate" class="form-label">Data końcowa</label>
-                <input type="date" class="form-control" id="endDate" name="endDate" required>
+            <!-- Zakres dat -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="start-date" class="block text-sm font-medium text-gray-700 mb-1">Data początkowa</label>
+                    <input type="date" id="start-date" name="date_range[start]" x-model="startDate"
+                           class="form-input w-full" max="2099-12-31" />
+                    <p class="text-red-500 text-sm" x-show="errors.startDate">
+                        <span x-text="errors.startDate"></span>
+                    </p>
+                </div>
+                <div>
+                    <label for="end-date" class="block text-sm font-medium text-gray-700 mb-1">Data końcowa</label>
+                    <input type="date" id="end-date" name="date_range[end]" x-model="endDate"
+                           class="form-input w-full" max="2099-12-31" />
+                    <p class="text-red-500 text-sm" x-show="errors.endDate">
+                        <span x-text="errors.endDate"></span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Filtry -->
+            <div x-show="reportType !== ''">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Filtry</label>
+                
+                <!-- Filtry dla rezerwacji -->
+                <div x-show="reportType === 'bookings'" class="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border rounded-lg bg-gray-50">
+                    <div>
+                        <label for="status_filter" class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <select id="status_filter" name="filters[status]" class="form-select w-full">
+                            <option value="">Wszystkie statusy</option>
+                            <option value="completed">Zakończone</option>
+                            <option value="pending">Oczekujące</option>
+                            <option value="cancelled">Anulowane</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="car_type_filter" class="block text-sm font-medium text-gray-700 mb-1">Typ samochodu</label>
+                        <select id="car_type_filter" name="filters[car_type]" class="form-select w-full">
+                            <option value="">Wszystkie typy</option>
+                            <option value="economy">Ekonomiczny</option>
+                            <option value="standard">Standardowy</option>
+                            <option value="premium">Premium</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Filtry dla użytkowników -->
+                <div x-show="reportType === 'users'" class="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border rounded-lg bg-gray-50">
+                    <div>
+                        <label for="user_status_filter" class="block text-sm font-medium text-gray-700 mb-1">Status użytkownika</label>
+                        <select id="user_status_filter" name="filters[user_status]" class="form-select w-full">
+                            <option value="">Wszyscy użytkownicy</option>
+                            <option value="active">Aktywni</option>
+                            <option value="inactive">Nieaktywni</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="role_filter" class="block text-sm font-medium text-gray-700 mb-1">Rola</label>
+                        <select id="role_filter" name="filters[role]" class="form-select w-full">
+                            <option value="">Wszystkie role</option>
+                            <option value="admin">Administrator</option>
+                            <option value="user">Użytkownik</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Filtry dla przychodów -->
+                <div x-show="reportType === 'revenue'" class="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border rounded-lg bg-gray-50">
+                    <div>
+                        <label for="revenue_source" class="block text-sm font-medium text-gray-700 mb-1">Źródło przychodu</label>
+                        <select id="revenue_source" name="filters[source]" class="form-select w-full">
+                            <option value="">Wszystkie źródła</option>
+                            <option value="bookings">Rezerwacje</option>
+                            <option value="extras">Dodatki</option>
+                            <option value="penalties">Kary</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="min_amount" class="block text-sm font-medium text-gray-700 mb-1">Minimalna kwota</label>
+                        <input type="number" id="min_amount" name="filters[min_amount]" class="form-input w-full" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Format eksportu -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Format eksportu</label>
+                <div class="flex space-x-4">
+                    <label class="cursor-pointer flex flex-col items-center">
+                        <input type="radio" name="format" value="pdf" x-model="format" class="hidden" />
+                        <i class="fas fa-file-pdf text-2xl mb-1"
+                           :class="format === 'pdf' ? 'text-red-500' : 'text-gray-400'"></i>
+                        <span :class="format === 'pdf' ? 'font-bold' : ''">PDF</span>
+                    </label>
+                    <label class="cursor-pointer flex flex-col items-center">
+                        <input type="radio" name="format" value="csv" x-model="format" class="hidden" />
+                        <i class="fas fa-file-csv text-2xl mb-1"
+                           :class="format === 'csv' ? 'text-green-500' : 'text-gray-400'"></i>
+                        <span :class="format === 'csv' ? 'font-bold' : ''">CSV</span>
+                    </label>
+                    <label class="cursor-pointer flex flex-col items-center">
+                        <input type="radio" name="format" value="excel" x-model="format" class="hidden" />
+                        <i class="fas fa-file-excel text-2xl mb-1"
+                           :class="format === 'excel' ? 'text-blue-500' : 'text-gray-400'"></i>
+                        <span :class="format === 'excel' ? 'font-bold' : ''">Excel</span>
+                    </label>
+                </div>
+                <p class="text-red-500 text-sm" x-show="errors.format">
+                    <span x-text="errors.format"></span>
+                </p>
+            </div>
+
+            <!-- Submit -->
+            <div class="flex items-center space-x-2">
+                <div id="loadingIndicator" class="htmx-indicator">
+                    <i class="fas fa-spinner fa-spin"></i> Generowanie...
+                </div>
+                <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                    Generuj Raport
+                </button>
+            </div>
+        </form>
+
+        <!-- Wynik raportu -->
+        <div id="reportResult" class="mt-4"></div>
+    </div>
+
+    <!-- Sekcja poprzednich raportów -->
+    <div class="bg-white rounded-lg shadow-md p-6 mt-6">
+        <h2 class="text-lg font-bold mb-3">Poprzednie Raporty</h2>
+        <div id="recent-reports" hx-get="/admin/reports/recent" hx-trigger="load">
+            <!-- Wyświetlanie poprzednich raportów po załadowaniu -->
+            <div class="animate-pulse">
+                <div class="h-6 bg-gray-200 mb-2 rounded"></div>
+                <div class="h-6 bg-gray-200 mb-2 rounded"></div>
             </div>
         </div>
-
-        <div class="mb-3">
-            <label for="format" class="form-label">Format raportu</label>
-            <select class="form-select" id="format" name="format" required>
-                <option value="csv">CSV</option>
-                <option value="pdf">PDF</option>
-                <option value="json">JSON</option>
-            </select>
-        </div>
-
-        <button type="submit" class="btn btn-primary w-100">Generuj raport</button>
-    </form>
-
-    <div id="responseMessage" class="alert mt-3" style="display:none;"></div>
-
-    <div class="mt-4">
-        <h4>Podgląd raportu</h4>
-        <canvas id="reportChart"></canvas>
     </div>
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-    const reportForm = document.getElementById("adminReportForm");
-    const responseMessage = document.getElementById("responseMessage");
-    const clearFilters = document.getElementById("clearFilters");
-
-    reportForm.addEventListener("submit", function(e) {
-        e.preventDefault();
-        generateReport(new FormData(reportForm));
-    });
-
-    clearFilters.addEventListener("click", function() {
-        reportForm.reset();
-        responseMessage.style.display = "none";
-    });
-
-    function generateReport(formData) {
-        let url = "/api/admin/reports.php";
-
-        fetch(url, {
-            method: "POST",
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            responseMessage.style.display = "block";
-            if (data.success) {
-                responseMessage.className = "alert alert-success";
-                responseMessage.textContent = "Raport wygenerowany pomyślnie! Pobierz go tutaj: " + data.download_link;
-                renderChart(data.chartData);
-            } else {
-                responseMessage.className = "alert alert-danger";
-                responseMessage.textContent = "Błąd: " + data.error;
+function reportForm() {
+    return {
+        reportType: '',
+        startDate: '',
+        endDate: '',
+        format: '',
+        errors: {},
+        
+        showRelevantFilters() {
+            // Additional logic can be added here if needed
+        },
+        
+        validateForm(e) {
+            this.errors = {};
+            
+            // Validate required fields
+            if (!this.reportType) {
+                this.errors.reportType = 'Wybierz typ raportu.';
             }
-        })
-        .catch(error => {
-            responseMessage.style.display = "block";
-            responseMessage.className = "alert alert-danger";
-            responseMessage.textContent = "Błąd połączenia z serwerem.";
-            console.error("Błąd generowania raportu:", error);
-        });
-    }
-
-    function renderChart(chartData) {
-        const ctx = document.getElementById("reportChart").getContext("2d");
-        new Chart(ctx, {
-            type: "bar",
-            data: {
-                labels: chartData.labels,
-                datasets: [{
-                    label: "Liczba zgłoszeń",
-                    data: chartData.values,
-                    backgroundColor: "rgba(54, 162, 235, 0.6)"
-                }]
+            if (!this.startDate) {
+                this.errors.startDate = 'Wybierz datę początkową.';
             }
-        });
+            if (!this.endDate) {
+                this.errors.endDate = 'Wybierz datę końcową.';
+            }
+            if (!this.format) {
+                this.errors.format = 'Wybierz format eksportu.';
+            }
+            
+            // Validate date range
+            if (this.startDate && this.endDate) {
+                const start = new Date(this.startDate);
+                const end = new Date(this.endDate);
+                
+                if (start > end) {
+                    this.errors.endDate = 'Data końcowa musi być późniejsza niż data początkowa.';
+                }
+            }
+            
+            // Prevent form submission if there are errors
+            if (Object.keys(this.errors).length) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // Display loading state
+            document.getElementById('loadingIndicator').classList.remove('hidden');
+        }
+    };
+}
+
+// Event handler for successful report generation
+document.addEventListener('htmx:afterSwap', function(event) {
+    if (event.detail.target.id === 'reportResult') {
+        const response = event.detail.xhr.response;
+        try {
+            // Check if response is JSON
+            const jsonResponse = JSON.parse(response);
+            if (jsonResponse.status === 'error') {
+                document.getElementById('reportResult').innerHTML = 
+                    `<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mt-4">
+                        <p>${jsonResponse.message}</p>
+                    </div>`;
+            }
+        } catch (e) {
+            // If not JSON, it's likely the file download response
+            console.log('Report generated successfully');
+        }
     }
 });
 </script>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<?php
-// Date range validation
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['start_date'], $_POST['end_date'])) {
-    $start_date = $_POST['start_date'];
-    $end_date = $_POST['end_date'];
-
-    if (strtotime($start_date) > strtotime($end_date)) {
-        echo 'Invalid date range';
-        exit();
-    }
-
-    // Export reports logic (PDF, CSV)
-    // ...existing code...
-}
-?>

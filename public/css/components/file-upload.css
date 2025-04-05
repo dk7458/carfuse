@@ -1,0 +1,132 @@
+/* File Upload Component Styles */
+@layer components {
+  /* Drop Zone */
+  .cf-drop-zone {
+    @apply bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 transition-all duration-200 ease-in-out;
+  }
+  
+  .cf-drop-zone:hover {
+    @apply border-primary-500 bg-primary-50;
+  }
+  
+  /* Dark mode adjustments */
+  .dark .cf-drop-zone {
+    @apply bg-gray-800 border-gray-600;
+  }
+  
+  .dark .cf-drop-zone:hover {
+    @apply border-primary-400 bg-gray-700;
+  }
+  
+  /* Browse button */
+  .cf-browse-button {
+    @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500;
+  }
+  
+  .dark .cf-browse-button {
+    @apply bg-primary-600 hover:bg-primary-700 focus:ring-offset-gray-800;
+  }
+  
+  /* File list */
+  .cf-file-list {
+    @apply mt-4 rounded-md overflow-hidden border border-gray-200;
+  }
+  
+  .dark .cf-file-list {
+    @apply border-gray-700;
+  }
+  
+  /* File item */
+  .cf-file-item {
+    @apply border-b border-gray-200 p-3 flex justify-between items-center bg-white last:border-b-0;
+    @apply transition-colors duration-150 ease-in-out;
+  }
+  
+  .cf-file-item:hover {
+    @apply bg-gray-50;
+  }
+  
+  .dark .cf-file-item {
+    @apply bg-gray-800 border-gray-700;
+  }
+  
+  .dark .cf-file-item:hover {
+    @apply bg-gray-700;
+  }
+  
+  /* File preview */
+  .cf-file-preview {
+    @apply w-10 h-10 rounded-md bg-gray-100 mr-3 flex-shrink-0 flex items-center justify-center overflow-hidden;
+  }
+  
+  .dark .cf-file-preview {
+    @apply bg-gray-700;
+  }
+  
+  /* File name */
+  .cf-file-name {
+    @apply text-sm font-medium text-gray-900;
+  }
+  
+  .dark .cf-file-name {
+    @apply text-gray-200;
+  }
+  
+  /* File size */
+  .cf-file-size {
+    @apply text-xs text-gray-500;
+  }
+  
+  .dark .cf-file-size {
+    @apply text-gray-400;
+  }
+  
+  /* File progress */
+  .cf-file-progress {
+    @apply text-xs text-primary-600 mt-1;
+  }
+  
+  .dark .cf-file-progress {
+    @apply text-primary-400;
+  }
+  
+  /* Progress bar */
+  .cf-progress-bar {
+    @apply w-full bg-gray-200 rounded-full h-2.5 overflow-hidden;
+  }
+  
+  .cf-progress-bar-fill {
+    @apply bg-primary-600 h-2.5 rounded-full transition-all duration-300;
+  }
+  
+  .dark .cf-progress-bar {
+    @apply bg-gray-700;
+  }
+  
+  /* Upload button */
+  .cf-upload-button {
+    @apply mt-4 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500;
+  }
+  
+  .dark .cf-upload-button {
+    @apply focus:ring-offset-gray-800;
+  }
+  
+  /* Error message */
+  .cf-upload-error {
+    @apply bg-red-100 border-l-4 border-red-500 text-red-700 p-3 mb-3 rounded-r-md;
+  }
+  
+  .dark .cf-upload-error {
+    @apply bg-red-900/30 text-red-300;
+  }
+  
+  /* Success states */
+  .cf-file-item.uploaded {
+    @apply bg-green-50;
+  }
+  
+  .dark .cf-file-item.uploaded {
+    @apply bg-green-900/20;
+  }
+}

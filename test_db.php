@@ -4,7 +4,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Dotenv\Dotenv;
 
 // ✅ Force Absolute Path
-$dotenvPath = '/home/u122931475/domains/carfuse.pl/public_html';
+$dotenvPath = '/home/dorian/carfuse';
 $dotenv = Dotenv::createImmutable($dotenvPath);
 $dotenv->load();
 

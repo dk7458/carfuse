@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import base styles */
+@import './base/variables.css';
+@import './base/typography.css';
+@import './base/reset.css';
+
+/* Import theme styles */
+@import './themes/light.css';
+@import './themes/dark.css';
+
+/* Import component styles */
+@import './components/buttons.css';
+@import './components/forms.css';
+@import './components/cards.css';
+@import './components/modals.css';
+@import './components/navigation.css';
+@import './components/tables.css';
+@import './components/alerts.css';
+@import './components/status.css';
+
+/* Import utility styles */
+@import './utilities/animations.css';
+@import './utilities/responsive.css';
+@import './utilities/print.css';

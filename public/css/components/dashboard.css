@@ -1,0 +1,202 @@
+/* ====== DASHBOARD UI ELEMENTS ====== */
+@layer components {
+  /* === Dashboard Layout === */
+  .dashboard-grid {
+    @apply grid gap-6;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+  
+  @screen sm {
+    .dashboard-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  
+  @screen lg {
+    .dashboard-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  
+  .dashboard-section {
+    @apply mb-8;
+  }
+  
+  .dashboard-section-title {
+    @apply text-xl font-semibold mb-4 text-gray-900 dark:text-white;
+  }
+  
+  /* === Stat Cards === */
+  .dashboard-card {
+    @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-100 dark:border-gray-700;
+  }
+  
+  .stat-card {
+    @apply dashboard-card flex flex-col gap-2;
+  }
+  
+  .stat-card-title {
+    @apply text-sm text-gray-600 dark:text-gray-400;
+  }
+  
+  .stat-card-value {
+    @apply text-3xl font-semibold text-gray-900 dark:text-white leading-tight;
+  }
+  
+  .stat-card-description {
+    @apply text-sm text-gray-500 dark:text-gray-400;
+  }
+  
+  .stat-card-footer {
+    @apply mt-2 pt-2 border-t border-gray-100 dark:border-gray-700 text-sm flex items-center justify-between;
+  }
+  
+  .stat-card-trend {
+    @apply flex items-center;
+  }
+  
+  .stat-card-trend-up {
+    @apply text-success-500 dark:text-success-400;
+  }
+  
+  .stat-card-trend-down {
+    @apply text-danger-500 dark:text-danger-400;
+  }
+  
+  .stat-card-trend-neutral {
+    @apply text-gray-500 dark:text-gray-400;
+  }
+  
+  /* === Data Tables === */
+  .data-table-container {
+    @apply rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700;
+  }
+  
+  .data-table {
+    @apply w-full;
+  }
+  
+  .data-table-header {
+    @apply bg-gray-50 dark:bg-gray-800;
+  }
+  
+  .data-table-th {
+    @apply p-4 text-sm font-medium text-gray-700 dark:text-gray-300 text-left;
+  }
+  
+  .data-table-cell {
+    @apply p-4 text-sm border-t border-gray-200 dark:border-gray-700;
+  }
+  
+  .data-table-row {
+    @apply hover:bg-gray-50 dark:hover:bg-gray-800/50;
+  }
+  
+  .data-table-row-selected {
+    @apply bg-blue-50 dark:bg-blue-900 dark:bg-opacity-20;
+  }
+  
+  .data-table-footer {
+    @apply bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between;
+  }
+  
+  .data-table-pagination {
+    @apply flex items-center gap-2;
+  }
+  
+  /* === Chart Containers === */
+  .chart-container {
+    @apply p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700;
+  }
+  
+  .chart-header {
+    @apply flex justify-between items-center mb-4;
+  }
+  
+  .chart-title {
+    @apply text-base font-medium text-gray-900 dark:text-white;
+  }
+  
+  .chart-legend {
+    @apply flex flex-wrap gap-4 mt-2;
+  }
+  
+  .chart-legend-item {
+    @apply flex items-center text-sm text-gray-600 dark:text-gray-400;
+  }
+  
+  .chart-legend-color {
+    @apply w-3 h-3 rounded-full mr-1;
+  }
+  
+  /* === Responsive Touch Targets === */
+  @screen sm {
+    .touch-target {
+      @apply min-h-[2.5rem] min-w-[2.5rem];
+    }
+  }
+  
+  @screen xs {
+    .touch-target {
+      @apply min-h-[3rem] min-w-[3rem];
+    }
+  }
+  
+  /* === Dashboard Activity Feed === */
+  .activity-feed {
+    @apply space-y-4;
+  }
+  
+  .activity-item {
+    @apply flex gap-3 py-3;
+  }
+  
+  .activity-icon {
+    @apply h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0;
+  }
+  
+  .activity-content {
+    @apply flex-1;
+  }
+  
+  .activity-title {
+    @apply text-sm font-medium text-gray-900 dark:text-white;
+  }
+  
+  .activity-time {
+    @apply text-xs text-gray-500 dark:text-gray-400;
+  }
+  
+  /* === Dashboard Summary Cards === */
+  .summary-card {
+    @apply dashboard-card;
+  }
+  
+  .summary-card-header {
+    @apply flex justify-between items-center mb-4;
+  }
+  
+  .summary-card-title {
+    @apply text-base font-medium text-gray-900 dark:text-white;
+  }
+  
+  .summary-card-body {
+    @apply space-y-4;
+  }
+  
+  .summary-list {
+    @apply divide-y divide-gray-100 dark:divide-gray-700;
+  }
+  
+  .summary-list-item {
+    @apply flex justify-between items-center py-2;
+  }
+  
+  .summary-list-label {
+    @apply text-sm text-gray-600 dark:text-gray-400;
+  }
+  
+  .summary-list-value {
+    @apply text-sm font-medium text-gray-900 dark:text-white;
+  }
+}

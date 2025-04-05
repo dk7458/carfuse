@@ -1,0 +1,288 @@
+/* ====== STATUS INDICATORS ====== */
+@layer components {
+  /* === Base Styles === */
+  
+  /* Common base for all indicators */
+  .status-base {
+    @apply inline-flex items-center justify-center font-medium;
+  }
+  
+  /* === BADGES === */
+  .badge {
+    @apply status-base px-2.5 py-0.5 rounded-full text-xs;
+  }
+  
+  /* Badge sizes */
+  .badge-sm {
+    @apply px-2 py-0.5 text-xs;
+  }
+  
+  .badge-md {
+    @apply px-2.5 py-0.5 text-xs;
+  }
+  
+  .badge-lg {
+    @apply px-3 py-1 text-sm;
+  }
+  
+  /* --- Standard Status Types --- */
+  
+  /* Success status */
+  .badge-success {
+    @apply bg-success-100 text-success-800 border border-success-200 
+           dark:bg-success-900 dark:bg-opacity-30 dark:text-success-300 dark:border-success-800;
+  }
+  
+  /* Warning status */
+  .badge-warning {
+    @apply bg-warning-100 text-warning-800 border border-warning-200
+           dark:bg-warning-900 dark:bg-opacity-30 dark:text-warning-300 dark:border-warning-800;
+  }
+  
+  /* Error status */
+  .badge-error {
+    @apply bg-danger-100 text-danger-800 border border-danger-200
+           dark:bg-danger-900 dark:bg-opacity-30 dark:text-danger-300 dark:border-danger-800;
+  }
+  
+  /* Info status */
+  .badge-info {
+    @apply bg-info-100 text-info-800 border border-info-200
+           dark:bg-info-900 dark:bg-opacity-30 dark:text-info-300 dark:border-info-800;
+  }
+  
+  /* Neutral status */
+  .badge-neutral {
+    @apply bg-gray-100 text-gray-800 border border-gray-200
+           dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700;
+  }
+  
+  /* --- Process States --- */
+  .badge-pending {
+    @apply bg-status-pending-bg text-status-pending-text border border-status-pending-border
+           dark:bg-status-pending-bg dark:bg-opacity-20 dark:text-status-pending-text dark:border-status-pending-border dark:border-opacity-50;
+  }
+  
+  .badge-in-progress {
+    @apply bg-status-inprogress-bg text-status-inprogress-text border border-status-inprogress-border
+           dark:bg-status-inprogress-bg dark:bg-opacity-20 dark:text-status-inprogress-text dark:border-status-inprogress-border dark:border-opacity-50;
+  }
+  
+  .badge-completed {
+    @apply bg-status-completed-bg text-status-completed-text border border-status-completed-border
+           dark:bg-status-completed-bg dark:bg-opacity-20 dark:text-status-completed-text dark:border-status-completed-border dark:border-opacity-50;
+  }
+  
+  .badge-cancelled {
+    @apply bg-status-cancelled-bg text-status-cancelled-text border border-status-cancelled-border
+           dark:bg-status-cancelled-bg dark:bg-opacity-20 dark:text-status-cancelled-text dark:border-status-cancelled-border dark:border-opacity-50;
+  }
+  
+  /* --- Availability States --- */
+  .badge-active {
+    @apply bg-status-active-bg text-status-active-text border border-status-active-border
+           dark:bg-status-active-bg dark:bg-opacity-20 dark:text-status-active-text dark:border-status-active-border dark:border-opacity-50;
+  }
+  
+  .badge-inactive {
+    @apply bg-status-inactive-bg text-status-inactive-text border border-status-inactive-border
+           dark:bg-status-inactive-bg dark:bg-opacity-20 dark:text-status-inactive-text dark:border-status-inactive-border dark:border-opacity-50;
+  }
+
+  /* === PILLS === */
+  .pill {
+    @apply status-base px-3 py-1 rounded-full text-sm;
+  }
+  
+  /* Pill sizes */
+  .pill-sm {
+    @apply px-2.5 py-0.5 text-xs;
+  }
+  
+  .pill-md {
+    @apply px-3 py-1 text-sm;
+  }
+  
+  .pill-lg {
+    @apply px-4 py-1.5 text-base;
+  }
+  
+  /* Apply the same color schemes as badges */
+  .pill-success {
+    @apply bg-success-100 text-success-800 border border-success-200 
+           dark:bg-success-900 dark:bg-opacity-30 dark:text-success-300 dark:border-success-800;
+  }
+  
+  .pill-warning {
+    @apply bg-warning-100 text-warning-800 border border-warning-200
+           dark:bg-warning-900 dark:bg-opacity-30 dark:text-warning-300 dark:border-warning-800;
+  }
+  
+  .pill-error {
+    @apply bg-danger-100 text-danger-800 border border-danger-200
+           dark:bg-danger-900 dark:bg-opacity-30 dark:text-danger-300 dark:border-danger-800;
+  }
+  
+  .pill-info {
+    @apply bg-info-100 text-info-800 border border-info-200
+           dark:bg-info-900 dark:bg-opacity-30 dark:text-info-300 dark:border-info-800;
+  }
+  
+  .pill-neutral {
+    @apply bg-gray-100 text-gray-800 border border-gray-200
+           dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700;
+  }
+  
+  /* Process States for Pills */
+  .pill-pending {
+    @apply bg-status-pending-bg text-status-pending-text border border-status-pending-border
+           dark:bg-status-pending-bg dark:bg-opacity-20 dark:text-status-pending-text dark:border-status-pending-border dark:border-opacity-50;
+  }
+  
+  .pill-in-progress {
+    @apply bg-status-inprogress-bg text-status-inprogress-text border border-status-inprogress-border
+           dark:bg-status-inprogress-bg dark:bg-opacity-20 dark:text-status-inprogress-text dark:border-status-inprogress-border dark:border-opacity-50;
+  }
+  
+  .pill-completed {
+    @apply bg-status-completed-bg text-status-completed-text border border-status-completed-border
+           dark:bg-status-completed-bg dark:bg-opacity-20 dark:text-status-completed-text dark:border-status-completed-border dark:border-opacity-50;
+  }
+  
+  .pill-cancelled {
+    @apply bg-status-cancelled-bg text-status-cancelled-text border border-status-cancelled-border
+           dark:bg-status-cancelled-bg dark:bg-opacity-20 dark:text-status-cancelled-text dark:border-status-cancelled-border dark:border-opacity-50;
+  }
+  
+  /* === STATUS DOTS === */
+  .status-dot {
+    @apply inline-block h-2.5 w-2.5 rounded-full;
+  }
+  
+  .status-dot-sm {
+    @apply h-2 w-2;
+  }
+  
+  .status-dot-md {
+    @apply h-2.5 w-2.5;
+  }
+  
+  .status-dot-lg {
+    @apply h-3 w-3;
+  }
+  
+  /* Status colors for dots */
+  .status-dot-success {
+    @apply bg-success-500 dark:bg-success-400;
+  }
+  
+  .status-dot-warning {
+    @apply bg-warning-500 dark:bg-warning-400;
+  }
+  
+  .status-dot-error {
+    @apply bg-danger-500 dark:bg-danger-400;
+  }
+  
+  .status-dot-info {
+    @apply bg-info-500 dark:bg-info-400;
+  }
+  
+  .status-dot-neutral {
+    @apply bg-gray-500 dark:bg-gray-400;
+  }
+  
+  /* Process States for Dots */
+  .status-dot-pending {
+    @apply bg-yellow-400 dark:bg-yellow-300;
+  }
+  
+  .status-dot-in-progress {
+    @apply bg-blue-500 dark:bg-blue-400;
+  }
+  
+  .status-dot-completed {
+    @apply bg-green-500 dark:bg-green-400;
+  }
+  
+  .status-dot-cancelled {
+    @apply bg-red-500 dark:bg-red-400;
+  }
+  
+  /* === STATUS TEXT === */
+  .status-text {
+    @apply font-medium;
+  }
+  
+  .status-text-sm {
+    @apply text-xs;
+  }
+  
+  .status-text-md {
+    @apply text-sm;
+  }
+  
+  .status-text-lg {
+    @apply text-base;
+  }
+  
+  /* Status colors for text */
+  .status-text-success {
+    @apply text-success-600 dark:text-success-400;
+  }
+  
+  .status-text-warning {
+    @apply text-warning-600 dark:text-warning-400;
+  }
+  
+  .status-text-error {
+    @apply text-danger-600 dark:text-danger-400;
+  }
+  
+  .status-text-info {
+    @apply text-info-600 dark:text-info-400;
+  }
+  
+  .status-text-neutral {
+    @apply text-gray-600 dark:text-gray-400;
+  }
+  
+  /* === ICON INTEGRATION === */
+  .status-with-icon {
+    @apply inline-flex items-center space-x-1;
+  }
+  
+  .status-icon {
+    @apply -ml-0.5 mr-1 flex-shrink-0;
+  }
+  
+  .status-icon-sm {
+    @apply h-3 w-3;
+  }
+  
+  .status-icon-md {
+    @apply h-4 w-4;
+  }
+  
+  .status-icon-lg {
+    @apply h-5 w-5;
+  }
+  
+  /* === LEGACY COMPATIBILITY === */
+  /* Keep for backward compatibility */
+  .status-active {
+    @apply bg-status-active-bg text-status-active-text border border-status-active-border;
+  }
+  
+  .status-completed {
+    @apply bg-status-completed-bg text-status-completed-text border border-status-completed-border;
+  }
+  
+  .status-pending {
+    @apply bg-status-pending-bg text-status-pending-text border border-status-pending-border;
+  }
+  
+  .status-canceled {
+    @apply bg-status-cancelled-bg text-status-cancelled-text border border-status-cancelled-border;
+  }
+}

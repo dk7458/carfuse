@@ -8,9 +8,10 @@ use App\Helpers\ApiHelper;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
+use Psr\Http\Server\MiddlewareInterface;
 use Psr\Log\LoggerInterface;
 
-class TokenValidationMiddleware
+class TokenValidationMiddleware implements MiddlewareInterface
 {
     private AuthService $authService;
     private LoggerInterface $logger;
@@ -26,7 +27,7 @@ class TokenValidationMiddleware
         $this->tokenService = $tokenService;
     }
 
-    public function __invoke(Request $request, RequestHandler $handler): Response
+    public function process(Request $request, RequestHandler $handler): Response
     {
         // Use TokenService to extract and validate the token
         $user = $this->tokenService->validateRequest($request);

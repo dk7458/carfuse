@@ -1,228 +1,66 @@
 <?php
-require_once __DIR__ . '/../../../App/Helpers/SecurityHelper.php';
-if (!isset($_SESSION['user_id'])) {
-    header("Location: /login");
-    exit();
-}
-$page = 'profile';
+/**
+ * User profile management view
+ * 
+ * This view allows users to update their profile information
+ */
 
+// Standard authentication check - use this instead of direct $_SESSION access
+$required_role = null; // Any authenticated user can view their profile
+$return_url = true;
+$show_messages = true;
+include_once BASE_PATH . '/public/views/components/auth-check.php';
+
+$pageTitle = "Mój profil | CarFuse";
+require_once BASE_PATH . '/public/views/layout/base.php';
 ?>
 
-/*
-|--------------------------------------------------------------------------
-| Edycja Profilu Użytkownika
-|--------------------------------------------------------------------------
-| Ten plik pozwala użytkownikowi aktualizować swoje dane, zmieniać hasło
-| oraz zarządzać swoim zdjęciem profilowym.
-|
-| Ścieżka: App/Views/user/profile.php
-|
-| Zależy od:
-| - JavaScript: /js/dashboard.js (obsługa AJAX, walidacja formularzy)
-| - CSS: /css/dashboard.css (stylizacja interfejsu użytkownika)
-| - PHP: csrf_field() (zabezpieczenie formularzy)
-| - MySQL (dane użytkownika)
-|
-| Technologie:
-| - PHP 8+ (backend)
-| - MySQL (baza danych)
-| - JavaScript (AJAX do dynamicznego zapisu)
-| - HTML, CSS (interfejs)
-*/
+<?php startSection('content'); ?>
 
-<h1 class="text-center">Mój Profil</h1>
-
-<div class="user-profile-container">
-    <div class="row">
-        <!-- Edycja Danych Użytkownika -->
-        <div class="col-md-6 mb-4">
-            <div class="card shadow">
-                <div class="card-body">
-                    <h4>Edycja Danych</h4>
-                    <form id="profileForm">
-                        <?= csrf_field() ?>
-                        <div class="mb-3">
-                            <label for="name" class="form-label">Imię i nazwisko</label>
-                            <input type="text" class="form-control" id="name" name="name" value="<?= esc($user['name']) ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="email" class="form-label">Adres e-mail</label>
-                            <input type="email" class="form-control" id="email" name="email" value="<?= esc($user['email']) ?>" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">Zapisz zmiany</button>
-                    </form>
-                    <div id="profileResponseMessage" class="alert mt-3" style="display:none;"></div>
-                </div>
-            </div>
+<div class="container mx-auto px-4 py-8"
+     x-data="Object.assign(formValidation(), authState())"
+     x-init="$nextTick(() => { 
+        // Fetch user data when page loads
+        if(isAuthenticated) {
+            fetchUserData();
+        }
+     })">
+     
+    <!-- Success/error messages -->
+    <div x-data="{ showSuccess: false, showError: false, message: '' }">
+        <div 
+            x-show="showSuccess" 
+            x-transition
+            class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded" 
+            role="alert">
+            <p x-text="message">Profil został zaktualizowany pomyślnie!</p>
         </div>
-
-        <!-- Zmiana Hasła -->
-        <div class="col-md-6 mb-4">
-            <div class="card shadow">
-                <div class="card-body">
-                    <h4>Zmiana Hasła</h4>
-                    <form id="passwordForm">
-                        <?= csrf_field() ?>
-                        <div class="mb-3">
-                            <label for="current_password" class="form-label">Obecne hasło</label>
-                            <input type="password" class="form-control" id="current_password" name="current_password" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="new_password" class="form-label">Nowe hasło</label>
-                            <input type="password" class="form-control" id="new_password" name="new_password" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="confirm_password" class="form-label">Potwierdź nowe hasło</label>
-                            <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
-                        </div>
-                        <button type="submit" class="btn btn-danger w-100">Zmień hasło</button>
-                    </form>
-                    <div id="passwordResponseMessage" class="alert mt-3" style="display:none;"></div>
-                </div>
-            </div>
+        
+        <div 
+            x-show="showError" 
+            x-transition
+            class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded" 
+            role="alert">
+            <p x-text="message">Wystąpił błąd podczas aktualizacji profilu.</p>
         </div>
     </div>
-
-    <!-- Zarządzanie Awatarem -->
-    <div class="row mt-4">
-        <div class="col-md-6 offset-md-3">
-            <div class="card shadow text-center">
-                <div class="card-body">
-                    <h4>Zdjęcie Profilowe</h4>
-                    <img id="profileAvatar" src="<?= esc($user['avatar_url'] ?? '/images/default-avatar.png') ?>" class="profile-avatar img-thumbnail mb-3" width="150">
-                    <form id="avatarForm" enctype="multipart/form-data">
-                        <?= csrf_field() ?>
-                        <input type="file" class="form-control mb-2" id="avatar" name="avatar" accept="image/*" onchange="previewAvatar(event)">
-                        <button type="submit" class="btn btn-success">Prześlij nowe zdjęcie</button>
-                        <button type="button" class="btn btn-danger" onclick="deleteAvatar()">Usuń zdjęcie</button>
-                    </form>
-                    <div id="avatarResponseMessage" class="alert mt-3" style="display:none;"></div>
-                </div>
-            </div>
-        </div>
+    
+    <!-- Main profile form -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+            
+        <form 
+            id="profileForm"
+            @submit.prevent="handleSubmit($el, 
+                function(data) { 
+                    // Success handler
+                    document.querySelector('[x-data=\"{ showSuccess: false, showError: false, message: \'\' }\"]').__x.$data.showSuccess = true;
+                    document.querySelector('[x-data=\"{ showSuccess: false, showError: false, message: \'\' }\"]').__x.$data.message = 'Profil został zaktualizowany pomyślnie!';
+                }, 4000);
+                })"
+        >
+            <!-- Form fields will be dynamically added here -->
+        </form>
     </div>
 </div>
 
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-    const profileForm = document.getElementById("profileForm");
-    const passwordForm = document.getElementById("passwordForm");
-    const avatarForm = document.getElementById("avatarForm");
-    const profileResponseMessage = document.getElementById("profileResponseMessage");
-    const passwordResponseMessage = document.getElementById("passwordResponseMessage");
-    const avatarResponseMessage = document.getElementById("avatarResponseMessage");
-
-    profileForm.addEventListener("submit", function(e) {
-        e.preventDefault();
-        updateProfile(new FormData(profileForm));
-    });
-
-    passwordForm.addEventListener("submit", function(e) {
-        e.preventDefault();
-        updatePassword(new FormData(passwordForm));
-    });
-
-    avatarForm.addEventListener("submit", function(e) {
-        e.preventDefault();
-        updateAvatar(new FormData(avatarForm));
-    });
-
-    function updateProfile(formData) {
-        fetch("/api/user/update_profile.php", {
-            method: "POST",
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            profileResponseMessage.style.display = "block";
-            if (data.success) {
-                profileResponseMessage.className = "alert alert-success";
-                profileResponseMessage.textContent = "Dane zaktualizowane!";
-            } else {
-                profileResponseMessage.className = "alert alert-danger";
-                profileResponseMessage.textContent = "Błąd: " + data.error;
-            }
-        })
-        .catch(error => {
-            profileResponseMessage.style.display = "block";
-            profileResponseMessage.className = "alert alert-danger";
-            profileResponseMessage.textContent = "Błąd połączenia z serwerem.";
-            console.error("Błąd aktualizacji profilu:", error);
-        });
-    }
-
-    function updatePassword(formData) {
-        fetch("/api/user/update_password.php", {
-            method: "POST",
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            passwordResponseMessage.style.display = "block";
-            if (data.success) {
-                passwordResponseMessage.className = "alert alert-success";
-                passwordResponseMessage.textContent = "Hasło zmienione!";
-            } else {
-                passwordResponseMessage.className = "alert alert-danger";
-                passwordResponseMessage.textContent = "Błąd: " + data.error;
-            }
-        })
-        .catch(error => {
-            passwordResponseMessage.style.display = "block";
-            passwordResponseMessage.className = "alert alert-danger";
-            passwordResponseMessage.textContent = "Błąd połączenia z serwerem.";
-            console.error("Błąd zmiany hasła:", error);
-        });
-    }
-
-    function updateAvatar(formData) {
-        fetch("/api/user/update_avatar.php", {
-            method: "POST",
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            avatarResponseMessage.style.display = "block";
-            if (data.success) {
-                avatarResponseMessage.className = "alert alert-success";
-                avatarResponseMessage.textContent = "Zdjęcie profilowe zaktualizowane!";
-                location.reload();
-            } else {
-                avatarResponseMessage.className = "alert alert-danger";
-                avatarResponseMessage.textContent = "Błąd: " + data.error;
-            }
-        })
-        .catch(error => {
-            avatarResponseMessage.style.display = "block";
-            avatarResponseMessage.className = "alert alert-danger";
-            avatarResponseMessage.textContent = "Błąd połączenia z serwerem.";
-            console.error("Błąd aktualizacji awatara:", error);
-        });
-    }
-
-    function deleteAvatar() {
-        if (!confirm("Czy na pewno chcesz usunąć zdjęcie profilowe?")) return;
-
-        fetch("/api/user/delete_avatar.php", { method: "POST" })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert("Zdjęcie profilowe usunięte!");
-                location.reload();
-            } else {
-                alert("Błąd: " + data.error);
-            }
-        })
-        .catch(error => console.error("Błąd usuwania awatara:", error));
-    }
-
-    function previewAvatar(event) {
-        const reader = new FileReader();
-        reader.onload = function() {
-            const output = document.getElementById('profileAvatar');
-            output.src = reader.result;
-        };
-        reader.readAsDataURL(event.target.files[0]);
-    }
-});
-</script>
+<?php endSection(); ?>

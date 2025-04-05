@@ -1,0 +1,23 @@
+/* ...existing code... */
+
+/* Prevent FOUC during theme switching */
+.theme-transition-suppress * {
+  transition: none !important;
+}
+
+/* Use hardware acceleration for animations */
+.hardware-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* ...existing code... */
+
+/* Apply to off-screen heavy content */
+.perf-container {
+  content-visibility: auto;
+  contain-intrinsic-size: 1000px;
+}
+
+/* ...existing code... */

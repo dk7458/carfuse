@@ -1,0 +1,81 @@
+/**
+ * CarFuse - Dark Theme Landing Page Styles
+ * High-conversion landing page styling with premium, trustworthy aesthetics
+ */
+
+body {
+    background-color: #121212;
+    color: #E0E0E0;
+}
+
+.section {
+    padding: 4rem 0;
+}
+
+.car-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.car-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.testimonial-card {
+    background-color: #1E1E1E;
+}
+
+.gradient-overlay {
+    background: linear-gradient(to right, rgba(18, 18, 18, 1), rgba(18, 18, 18, 0.8), rgba(18, 18, 18, 0));
+}
+
+.scroll-snap-x {
+    scroll-snap-type: x mandatory;
+}
+
+.scroll-snap-x > div {
+    scroll-snap-align: start;
+}
+
+.hero-image {
+    background-image: url('/images/hero-car-dark.jpg');
+    background-size: cover;
+    background-position: center;
+    position: relative;
+}
+
+.hero-image::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to bottom, rgba(18,18,18,0.4), rgba(18,18,18,0.9));
+    z-index: 1;
+}
+
+.hero-content {
+    position: relative;
+    z-index: 2;
+}
+
+/* Animate CTA button */
+.cta-btn {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.cta-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(13, 110, 253, 0.4);
+}
+
+/* Hide scrollbars but allow scrolling */
+.hide-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
+.hide-scrollbar {
+    -ms-overflow-style: none; /* IE, Edge */
+    scrollbar-width: none; /* Firefox */
+}

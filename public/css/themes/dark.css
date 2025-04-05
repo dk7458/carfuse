@@ -1,0 +1,75 @@
+/* DARK THEME VALUES */
+.dark {
+  /* Semantic UI Colors - Dark Theme */
+  --color-surface-background: var(--color-gray-950);
+  --color-surface-foreground: var(--color-gray-900);
+  --color-surface-card: var(--color-gray-800);
+  --color-surface-popup: var(--color-gray-800);
+  --color-surface-highlight: var(--color-gray-700);
+  --color-surface-muted: var(--color-gray-800);
+  
+  /* Text Colors - Dark Theme */
+  --color-text-primary: var(--color-gray-50);
+  --color-text-secondary: var(--color-gray-300);
+  --color-text-tertiary: var(--color-gray-400);
+  --color-text-disabled: var(--color-gray-500);
+  --color-text-inverted: var(--color-gray-900);
+  --color-text-link: var(--color-primary-400);
+  --color-text-link-hover: var(--color-primary-300);
+  
+  /* Border Colors - Dark Theme */
+  --color-border-default: var(--color-gray-700);
+  --color-border-strong: var(--color-gray-600);
+  --color-border-focus: var(--color-primary-400);
+  --color-border-muted: var(--color-gray-800);
+  
+  /* State Colors - Dark Theme */
+  --color-state-focus-ring: rgba(59, 130, 246, 0.5);
+  --color-state-hover: rgba(255, 255, 255, 0.05);
+  --color-state-pressed: rgba(255, 255, 255, 0.1);
+  --color-state-selected: rgba(59, 130, 246, 0.2);
+  
+  /* Status Indicator Colors - Dark Theme */
+  --color-status-pending-text: var(--color-warning-300);
+  --color-status-pending-bg: rgba(245, 158, 11, 0.2);
+  --color-status-pending-border: var(--color-warning-700);
+  
+  --color-status-inprogress-text: var(--color-info-300);
+  --color-status-inprogress-bg: rgba(59, 130, 246, 0.2);
+  --color-status-inprogress-border: var(--color-info-700);
+  
+  --color-status-completed-text: var(--color-success-300);
+  --color-status-completed-bg: rgba(34, 197, 94, 0.2);
+  --color-status-completed-border: var(--color-success-700);
+  
+  --color-status-cancelled-text: var(--color-danger-300);
+  --color-status-cancelled-bg: rgba(239, 68, 68, 0.2);
+  --color-status-cancelled-border: var(--color-danger-700);
+  
+  --color-status-active-text: var(--color-info-300);
+  --color-status-active-bg: rgba(59, 130, 246, 0.2);
+  --color-status-active-border: var(--color-info-700);
+  
+  --color-status-inactive-text: var(--color-gray-300);
+  --color-status-inactive-bg: rgba(75, 85, 99, 0.2);
+  --color-status-inactive-border: var(--color-gray-700);
+  
+  /* Form Control Colors - Dark Theme */
+  --color-input-background: var(--color-gray-800);
+  --color-input-border: var(--color-gray-700);
+  --color-input-text: var(--color-gray-100);
+  --color-input-placeholder: var(--color-gray-500);
+  --color-input-focus-border: var(--color-primary-400);
+  --color-input-focus-ring: rgba(59, 130, 246, 0.3);
+  --color-input-disabled-background: var(--color-gray-900);
+  --color-input-disabled-text: var(--color-gray-600);
+  --color-input-error-border: var(--color-danger-400);
+  --color-input-error-text: var(--color-danger-300);
+  --color-input-error-ring: rgba(239, 68, 68, 0.3);
+  
+  /* Shadows - Dark Theme */
+  --shadow-card: 0 2px 4px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-dropdown: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}

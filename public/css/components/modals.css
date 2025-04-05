@@ -1,0 +1,34 @@
+/* ====== MODAL SYSTEM ====== */
+@layer components {
+  .modal-overlay {
+    @apply fixed inset-0 z-modal bg-gray-900 bg-opacity-50 transition-opacity;
+  }
+  
+  .modal-container {
+    @apply fixed inset-0 z-modal overflow-y-auto;
+  }
+  
+  .modal-content {
+    @apply flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0;
+  }
+  
+  .modal {
+    @apply relative transform overflow-hidden rounded-lg bg-surface-card shadow-modal border border-border-muted text-left transition-all sm:my-8 sm:w-full sm:max-w-lg;
+  }
+  
+  .modal-header {
+    @apply px-6 py-4 border-b border-border-muted;
+  }
+  
+  .modal-body {
+    @apply p-6;
+  }
+  
+  .modal-footer {
+    @apply bg-surface-muted px-6 py-4 flex flex-row-reverse gap-x-2 border-t border-border-muted;
+  }
+  
+  .modal-close-button {
+    @apply absolute right-4 top-4 text-text-tertiary hover:text-text-secondary;
+  }
+}

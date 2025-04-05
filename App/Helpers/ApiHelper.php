@@ -2,25 +2,49 @@
 
 namespace App\Helpers;
 
+use Psr\Log\LoggerInterface;
+
 /**
  * API Helper Functions
  */
 class ApiHelper
 {
     /**
+     * @var LoggerInterface
+     */
+    private LoggerInterface $logger;
+    
+    /**
+     * @var string
+     */
+    private string $logFile;
+    
+    /**
+     * Constructor with dependency injection
+     * 
+     * @param LoggerInterface $logger Logger instance
+     * @param string|null $logFile Path to API log file (optional)
+     */
+    public function __construct(LoggerInterface $logger, ?string $logFile = null)
+    {
+        $this->logger = $logger;
+        $this->logFile = $logFile ?? __DIR__ . '/../../logs/api.log';
+    }
+    
+    /**
      * ✅ Log API Events for Debugging
      */
-    public static function logApiEvent($message)
+    public function logApiEvent($message)
     {
         $timestamp = date('Y-m-d H:i:s');
-        $logFile = __DIR__ . '/../../logs/api.log';
-        file_put_contents($logFile, "{$timestamp} - {$message}\n", FILE_APPEND);
+        $this->logger->info("[API] {$message}");
+        file_put_contents($this->logFile, "{$timestamp} - {$message}\n", FILE_APPEND);
     }
 
     /**
      * ✅ Standardized JSON Response Function
      */
-    public static function sendJsonResponse($status, $message, $data = [], $httpCode = 200)
+    public function sendJsonResponse($status, $message, $data = [], $httpCode = 200)
     {
         http_response_code($httpCode);
         header('Content-Type: application/json');
@@ -31,7 +55,7 @@ class ApiHelper
     /**
      * ✅ Extract JWT from Authorization Header or Cookie
      */
-    public static function getJWT()
+    public function getJWT()
     {
         $headers = getallheaders();
         if (isset($headers['Authorization']) && preg_match('/Bearer\s(\S+)/', $headers['Authorization'], $matches)) {

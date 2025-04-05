@@ -2,57 +2,67 @@
 
 namespace App\Middleware;
 
-// Removed: use Illuminate\Http\Request;
-// Removed: use Illuminate\Support\Facades\Log;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Server\MiddlewareInterface;
+use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
 use Psr\Log\LoggerInterface;
 use App\Services\EncryptionService;
 
-class EncryptionMiddleware
+class EncryptionMiddleware implements MiddlewareInterface
 {
     private LoggerInterface $logger;
+    private EncryptionService $encryptionService;
     
-    public function __construct(LoggerInterface $logger)
+    public function __construct(LoggerInterface $logger, EncryptionService $encryptionService)
     {
         $this->logger = $logger;
+        $this->encryptionService = $encryptionService;
     }
     
-    // Modified handle() to use native PHP request handling without Closure
-    public function handle(array $request)
+    public function process(Request $request, RequestHandler $handler): Response
     {
-        $uri = $_SERVER['REQUEST_URI'] ?? '/';
-        if ($this->isSensitiveEndpoint($uri)) {
-            $this->encryptRequestData($request);
-        }
-
-        // Process request (replace with your actual request processing)
-        // ...existing code or processRequest($request)...
-        $response = []; // Placeholder for processed response
+        $uri = $request->getUri()->getPath();
         
+        // Process request data if it's a sensitive endpoint
         if ($this->isSensitiveEndpoint($uri)) {
-            $response = $this->encryptResponseData(json_encode($response));
+            $parsedBody = $request->getParsedBody();
+            if (is_array($parsedBody)) {
+                $encryptedData = $this->encryptRequestData($parsedBody);
+                $request = $request->withParsedBody($encryptedData);
+            }
         }
         
-        echo json_encode($response);
-        exit;
+        // Pass request to next middleware/handler
+        $response = $handler->handle($request);
+        
+        // Process response data if needed
+        if ($this->isSensitiveEndpoint($uri)) {
+            $responseBody = (string) $response->getBody();
+            if (!empty($responseBody)) {
+                $encryptedResponse = $this->encryptResponseData($responseBody);
+                $response = $this->createJsonResponse($response, $encryptedResponse);
+            }
+        }
+        
+        return $response;
     }
     
-    // Modified to encrypt response data and return a string
     private function encryptResponseData(string $data): string
     {
-        return EncryptionService::encrypt($data);
+        return $this->encryptionService->encrypt($data);
     }
 
-    // Handle encryption on native request arrays (e.g., $_POST or $_GET)
-    private function encryptRequestData(array &$request)
+    private function encryptRequestData(array $request): array
     {
         foreach ($request as $key => $value) {
             if ($this->isSensitiveField($key)) {
-                $request[$key] = EncryptionService::encrypt($value);
+                $request[$key] = $this->encryptionService->encrypt($value);
             }
         }
+        return $request;
     }
 
-    // Load sensitive fields dynamically from configuration file
     private function isSensitiveField(string $field): bool
     {
         $configPath = __DIR__ . '/../../config/sensitive_fields.json';
@@ -61,7 +71,6 @@ class EncryptionMiddleware
         return in_array($field, $sensitiveFields);
     }
 
-    // Load sensitive endpoints dynamically from configuration file
     private function isSensitiveEndpoint(string $endpoint): bool
     {
         $configPath = __DIR__ . '/../../config/sensitive_endpoints.json';
@@ -70,8 +79,16 @@ class EncryptionMiddleware
         return in_array($endpoint, $sensitiveEndpoints);
     }
     
-    // Log events using injected LoggerInterface
-    private function logEvent(string $message)
+    private function createJsonResponse(Response $response, string $data): Response
+    {
+        $response = $response->withHeader('Content-Type', 'application/json');
+        $body = $response->getBody();
+        $body->rewind();
+        $body->write($data);
+        return $response;
+    }
+    
+    private function logEvent(string $message): void
     {
         $this->logger->info("[EncryptionMiddleware] $message");
     }

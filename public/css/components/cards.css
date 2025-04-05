@@ -1,0 +1,82 @@
+/* ====== CARD SYSTEM ====== */
+@layer components {
+  /* Base Card */
+  .card {
+    @apply bg-white rounded-lg shadow transition-shadow duration-300;
+  }
+  
+  /* Card Variants */
+  .card-flat {
+    @apply shadow-sm;
+  }
+  
+  .card-raised {
+    @apply shadow-md hover:shadow-lg;
+  }
+  
+  .card-bordered {
+    @apply border border-gray-200 shadow-sm;
+  }
+  
+  /* Card Sections */
+  .card-header {
+    @apply px-6 py-4 border-b border-gray-200;
+  }
+  
+  .card-body {
+    @apply p-6;
+  }
+  
+  .card-footer {
+    @apply px-6 py-4 border-t border-gray-200;
+  }
+  
+  /* Card Content Types */
+  .card-media-top img {
+    @apply w-full h-auto rounded-t-lg;
+  }
+  
+  .card-media-bottom img {
+    @apply w-full h-auto rounded-b-lg;
+  }
+  
+  /* Card Sizing */
+  .card-sm .card-header, .card-sm .card-footer {
+    @apply px-4 py-2;
+  }
+  
+  .card-sm .card-body {
+    @apply p-4;
+  }
+  
+  .card-lg .card-header, .card-lg .card-footer {
+    @apply px-8 py-6;
+  }
+  
+  .card-lg .card-body {
+    @apply p-8;
+  }
+  
+  /* Dark Mode */
+  .dark .card {
+    @apply bg-gray-800 text-white transition-colors duration-300;
+  }
+  
+  .dark .card-bordered {
+    @apply border-gray-700;
+  }
+  
+  .dark .card-header,
+  .dark .card-footer {
+    @apply border-gray-700;
+  }
+  
+  /* Legacy card class for backward compatibility */
+  .stats-card {
+    @apply bg-white rounded-lg shadow-md p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg;
+    
+    .dark & {
+      @apply bg-surface-card shadow-dark-card hover:shadow-dark-card-hover;
+    }
+  }
+}

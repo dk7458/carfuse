@@ -1,0 +1,146 @@
+/* Ogólne nadpisania stylów dla aplikacji Wynajem Samochodów */
+
+/* Przyciski */
+.btn {
+  padding: 0.5rem 1rem;
+  background-color: #4f46e5;
+  color: white;
+  border-radius: 0.25rem;
+  transition-duration: 200ms;
+}
+.btn:hover {
+  background-color: #4338ca;
+}
+.btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #818cf8, 0 0 0 4px #f3f4f6;
+}
+
+.btn-secondary {
+  padding: 0.5rem 1rem;
+  background-color: #e5e7eb;
+  color: #1f2937;
+  border-radius: 0.25rem;
+  transition-duration: 200ms;
+}
+.btn-secondary:hover {
+  background-color: #d1d5db;
+}
+
+.btn-danger {
+  padding: 0.5rem 1rem;
+  background-color: #dc2626;
+  color: white;
+  border-radius: 0.25rem;
+  transition-duration: 200ms;
+}
+.btn-danger:hover {
+  background-color: #b91c1c;
+}
+
+/* Formularze */
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+.form-control:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px #6366f1;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+/* Powiadomienia */
+.alert {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 0.25rem;
+}
+
+.alert-success {
+  background-color: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.alert-danger {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.alert-info {
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.alert-warning {
+  background-color: #fef9c3;
+  color: #854d0e;
+  border: 1px solid #fef08a;
+}
+
+/* Karty samochodów */
+.car-card {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  transition: box-shadow 300ms;
+}
+.car-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.car-image {
+  width: 100%;
+  height: 12rem;
+  object-fit: cover;
+}
+
+.car-details {
+  padding: 1rem;
+}
+
+/* Specjalne style dla elementów animowanych z Alpine.js */
+[x-cloak] {
+  display: none !important;
+}
+
+/* Style dla komunikatów ładowania podczas używania HTMX */
+.htmx-indicator {
+  opacity: 0;
+  transition: opacity 500ms;
+}
+.htmx-request .htmx-indicator, 
+.htmx-request.htmx-indicator {
+  opacity: 1;
+}
+
+/* Komunikaty systemowe */
+.komunikat-niedostepny {
+  font-style: italic;
+  color: #6b7280;
+  text-align: center;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+/* Responsywne dostosowania dla urządzeń mobilnych */
+@media (max-width: 768px) {
+  .ukryj-mobile {
+    display: none;
+  }
+}

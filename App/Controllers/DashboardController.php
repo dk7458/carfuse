@@ -54,14 +54,6 @@ class DashboardController extends Controller
         try {
             // Assume session_start() is already called.
             $user = (object)['id' => $_SESSION['user_id'] ?? null]; // Replace with native session retrieval
-            // ...existing code for eager loading if needed...
-            $statistics = Cache::remember('user_dashboard_' . $user->id, 60, function () use ($user) {
-                return [
-                    'total_bookings'     => Booking::where('user_id', $user->id)->count(),
-                    'completed_bookings' => Booking::where('user_id', $user->id)->where('status', 'completed')->count(),
-                    'total_payments'     => Payment::where('user_id', $user->id)->sum('amount'),
-                ];
-            });
             
             // Log dashboard access
             $this->auditService->logEvent(
@@ -73,20 +65,56 @@ class DashboardController extends Controller
                 'user'
             );
             
-            view('dashboard/user_dashboard', ['user' => $user, 'statistics' => $statistics]);
+            // Render the main dashboard view - the components will load via HTMX
+            include BASE_PATH . '/public/views/dashboard.php';
         } catch (\Exception $e) {
             $this->exceptionHandler->handleException($e);
         }
     }
 
     /**
-     * Fetch user bookings.
+     * Get user statistics (for HTMX).
+     */
+    public function getUserStatistics(): void
+    {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            
+            $statistics = Cache::remember('user_dashboard_' . $userId, 60, function () use ($userId) {
+                return [
+                    'total_bookings'     => Booking::where('user_id', $userId)->count(),
+                    'completed_bookings' => Booking::where('user_id', $userId)->where('status', 'completed')->count(),
+                    'total_payments'     => Payment::where('user_id', $userId)->sum('amount'),
+                ];
+            });
+            
+            // Include the statistics partial
+            include BASE_PATH . '/public/views/partials/user-statistics.php';
+        } catch (\Exception $e) {
+            echo '<div class="text-red-500 p-4">Nie udało się załadować statystyk.</div>';
+            $this->logger->error("Failed to load user statistics", [
+                'error' => $e->getMessage(),
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
+        }
+    }
+
+    /**
+     * Fetch user bookings (for HTMX).
      */
     public function getUserBookings(): void
     {
         try {
             $userId = $_SESSION['user_id'] ?? null;
-            $bookings = Booking::where('user_id', $userId)->get();
+            $page = isset($_GET['page']) ? (int)$_GET['page'] : 0;
+            $limit = 5;
+            $offset = $page * $limit;
+            
+            $bookings = Booking::where('user_id', $userId)
+                ->orderBy('created_at', 'desc')
+                ->limit($limit)
+                ->offset($offset)
+                ->get();
             
             // Log bookings fetch
             $this->auditService->logEvent(
@@ -98,64 +126,78 @@ class DashboardController extends Controller
                 'booking'
             );
             
-            http_response_code(200);
-            echo json_encode([
-                'status'  => 'success',
-                'message' => 'Bookings fetched',
-                'data'    => ['bookings' => $bookings]
-            ]);
+            // Include the bookings partial
+            include BASE_PATH . '/public/views/partials/user-bookings.php';
         } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
+            echo '<div class="text-red-500 p-4">Nie udało się załadować rezerwacji.</div>';
+            $this->logger->error("Failed to load user bookings", [
+                'error' => $e->getMessage(),
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
         }
     }
 
     /**
-     * Fetch dashboard statistics.
+     * Fetch user profile (for HTMX).
      */
-    public function fetchStatistics(): void
+    public function getUserProfile(): void
     {
         try {
             $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                echo '<div class="text-red-500 p-4">Nie jesteś zalogowany. Proszę zalogować się ponownie.</div>';
+                return;
+            }
             
-            $stats = Cache::remember('dashboard_statistics', 60, function () {
-                return [
-                    'total_bookings'     => Booking::count(),
-                    'completed_bookings' => Booking::where('status', 'completed')->count(),
-                    'total_revenue'      => Payment::sum('amount')
-                ];
-            });
+            $profile = User::findOrFail($userId);
             
-            // Log statistics fetch
+            // Prepare additional profile data if needed
+            $profileData = [
+                'id' => $profile->id,
+                'name' => $profile->name,
+                'email' => $profile->email,
+                'avatar_url' => $profile->avatar_url ?? '/images/default-avatar.png',
+                'bio' => $profile->bio ?? '',
+                'location' => $profile->location ?? '',
+                'joined_date' => (new \DateTime($profile->created_at))->format('d.m.Y'),
+            ];
+            
+            // Log profile fetch
             $this->auditService->logEvent(
-                'statistics_fetched',
-                "User fetched dashboard statistics",
+                'profile_fetched',
+                "User fetched their profile",
                 ['user_id' => $userId],
                 $userId,
                 null,
                 'user'
             );
             
-            http_response_code(200);
-            echo json_encode([
-                'status'  => 'success',
-                'message' => 'Statistics fetched',
-                'data'    => $stats
-            ]);
+            // Include the updated profile partial
+            include BASE_PATH . '/public/views/partials/user-profile.php';
         } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
+            echo '<div class="text-red-500 p-4">Nie udało się załadować profilu.</div>';
+            $this->logger->error("Failed to load user profile", [
+                'error' => $e->getMessage(),
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
+            ]);
         }
     }
 
     /**
-     * Fetch user notifications.
+     * Fetch user notifications (for HTMX).
      */
-    public function fetchNotifications(): void
+    public function getUserNotifications(): void
     {
         try {
             $userId = $_SESSION['user_id'] ?? null;
+            $page = isset($_GET['page']) ? (int)$_GET['page'] : 0;
+            $limit = 5;
+            $offset = $page * $limit;
             
             $notifications = Notification::where('user_id', $userId)
-                ->latest()
+                ->orderBy('created_at', 'desc')
+                ->limit($limit)
+                ->offset($offset)
                 ->get();
                 
             // Log notifications fetch
@@ -168,44 +210,14 @@ class DashboardController extends Controller
                 'notification'
             );
             
-            http_response_code(200);
-            echo json_encode([
-                'status'  => 'success',
-                'message' => 'Notifications fetched',
-                'data'    => ['notifications' => $notifications]
-            ]);
+            // Include the notifications partial
+            include BASE_PATH . '/public/views/partials/user-notifications.php';
         } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
-        }
-    }
-
-    /**
-     * Fetch user profile.
-     */
-    public function fetchUserProfile(): void
-    {
-        try {
-            $userId = $_SESSION['user_id'] ?? null;
-            $profile = User::findOrFail($userId);
-            
-            // Log profile fetch
-            $this->auditService->logEvent(
-                'profile_fetched',
-                "User fetched their profile",
-                ['user_id' => $userId],
-                $userId,
-                null,
-                'user'
-            );
-            
-            http_response_code(200);
-            echo json_encode([
-                'status'  => 'success',
-                'message' => 'User profile fetched',
-                'data'    => ['profile' => $profile]
+            echo '<div class="text-red-500 p-4">Nie udało się załadować powiadomień.</div>';
+            $this->logger->error("Failed to load user notifications", [
+                'error' => $e->getMessage(),
+                'user_id' => $_SESSION['user_id'] ?? 'unknown'
             ]);
-        } catch (\Exception $e) {
-            $this->exceptionHandler->handleException($e);
         }
     }
 }

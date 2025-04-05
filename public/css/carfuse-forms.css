@@ -1,0 +1,157 @@
+/**
+ * CarFuse Forms - Main CSS File
+ * Imports all form component styles
+ */
+
+/**
+ * Base form elements styles
+ */
+@import 'components/forms.css';
+
+/**
+ * File upload component styles
+ */
+@import 'components/file-upload.css';
+
+/**
+ * Custom form components
+ */
+.cf-form {
+  @apply max-w-2xl mx-auto;
+}
+
+.cf-form-title {
+  @apply text-xl font-medium text-gray-900 mb-5;
+}
+
+.dark .cf-form-title {
+  @apply text-gray-100;
+}
+
+.cf-form-subtitle {
+  @apply text-sm text-gray-600 mb-6;
+}
+
+.dark .cf-form-subtitle {
+  @apply text-gray-400;
+}
+
+/* Form section dividers */
+.cf-form-section {
+  @apply border-t border-gray-200 pt-6 mt-6;
+}
+
+.dark .cf-form-section {
+  @apply border-gray-700;
+}
+
+.cf-form-section-title {
+  @apply text-lg font-medium text-gray-900 mb-3;
+}
+
+.dark .cf-form-section-title {
+  @apply text-gray-100;
+}
+
+/* Form grid layout helpers */
+.cf-form-row {
+  @apply flex flex-wrap -mx-2;
+}
+
+.cf-form-col {
+  @apply px-2;
+}
+
+.cf-form-col-6 {
+  @apply w-1/2;
+}
+
+.cf-form-col-4 {
+  @apply w-1/3;
+}
+
+.cf-form-col-8 {
+  @apply w-2/3;
+}
+
+.cf-form-col-3 {
+  @apply w-1/4;
+}
+
+/* For small screens, stack columns */
+@media (max-width: 640px) {
+  .cf-form-col-6,
+  .cf-form-col-4,
+  .cf-form-col-8,
+  .cf-form-col-3 {
+    @apply w-full mb-4;
+  }
+}
+
+/* Inline form variant */
+.cf-form-inline {
+  @apply flex flex-wrap items-end;
+}
+
+.cf-form-inline .form-group {
+  @apply mr-3 mb-0;
+}
+
+.cf-form-inline .form-label {
+  @apply mb-1;
+}
+
+/* Form feedback states */
+.cf-form-success {
+  @apply bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md mb-4;
+}
+
+.dark .cf-form-success {
+  @apply bg-green-900/20 border-green-700/30 text-green-400;
+}
+
+.cf-form-error {
+  @apply bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4;
+}
+
+.dark .cf-form-error {
+  @apply bg-red-900/20 border-red-700/30 text-red-400;
+}
+
+/* Input and button sizes */
+.input-sm {
+  @apply py-1 px-2 text-sm;
+}
+
+.input-lg {
+  @apply py-3 px-4 text-base;
+}
+
+.btn-sm {
+  @apply py-1 px-3 text-sm;
+}
+
+.btn-lg {
+  @apply py-3 px-6 text-base;
+}
+
+/* Template-specific styles */
+.cf-login-form {
+  @apply max-w-md mx-auto;
+}
+
+.cf-registration-form {
+  @apply max-w-lg mx-auto;
+}
+
+.cf-search-form.simple {
+  @apply flex items-center;
+}
+
+.cf-search-form.simple .form-group {
+  @apply flex-grow mb-0;
+}
+
+.cf-search-form.simple .cf-form-buttons {
+  @apply ml-2;
+}

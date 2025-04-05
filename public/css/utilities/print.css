@@ -1,0 +1,49 @@
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+  
+  body {
+    @apply bg-white text-black;
+  }
+  
+  .card, .stats-card {
+    @apply shadow-none border border-gray-300;
+  }
+  
+  /* Ensure no page breaks inside important elements */
+  h1, h2, h3, 
+  .card, 
+  .table tr {
+    break-inside: avoid;
+  }
+  
+  /* Remove background colors and use border for contrast */
+  .badge, .pill, .status-active, .status-pending, 
+  .status-completed, .status-canceled {
+    @apply bg-white border;
+    color: black !important;
+  }
+  
+  /* Expand all URLs for reference */
+  a[href]:after {
+    content: " (" attr(href) ")";
+    @apply text-gray-500 text-xs;
+  }
+  
+  /* Don't show URL for internal or javascript links */
+  a[href^="#"]:after,
+  a[href^="javascript:"]:after {
+    content: "";
+  }
+  
+  /* Show full table even if it was scrollable in screen view */
+  .table-container {
+    overflow: visible !important;
+  }
+}

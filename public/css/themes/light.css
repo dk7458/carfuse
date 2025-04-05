@@ -1,0 +1,75 @@
+/* LIGHT THEME VALUES */
+:root {
+  /* Semantic UI Colors - Light Theme */
+  --color-surface-background: var(--color-gray-50);
+  --color-surface-foreground: white;
+  --color-surface-card: white;
+  --color-surface-popup: white;
+  --color-surface-highlight: var(--color-gray-100);
+  --color-surface-muted: var(--color-gray-100);
+  
+  /* Text Colors - Light Theme */
+  --color-text-primary: var(--color-gray-900);
+  --color-text-secondary: var(--color-gray-700);
+  --color-text-tertiary: var(--color-gray-500);
+  --color-text-disabled: var(--color-gray-400);
+  --color-text-inverted: white;
+  --color-text-link: var(--color-primary-600);
+  --color-text-link-hover: var(--color-primary-800);
+  
+  /* Border Colors - Light Theme */
+  --color-border-default: var(--color-gray-200);
+  --color-border-strong: var(--color-gray-300);
+  --color-border-focus: var(--color-primary-500);
+  --color-border-muted: var(--color-gray-100);
+  
+  /* State Colors - Light Theme */
+  --color-state-focus-ring: rgba(59, 130, 246, 0.5);
+  --color-state-hover: rgba(0, 0, 0, 0.05);
+  --color-state-pressed: rgba(0, 0, 0, 0.1);
+  --color-state-selected: var(--color-primary-50);
+  
+  /* Status Indicator Colors - Light Theme */
+  --color-status-pending-text: var(--color-warning-800);
+  --color-status-pending-bg: var(--color-warning-100);
+  --color-status-pending-border: var(--color-warning-200);
+  
+  --color-status-inprogress-text: var(--color-info-800);
+  --color-status-inprogress-bg: var(--color-info-100);
+  --color-status-inprogress-border: var(--color-info-200);
+  
+  --color-status-completed-text: var(--color-success-800);
+  --color-status-completed-bg: var(--color-success-100);
+  --color-status-completed-border: var(--color-success-200);
+  
+  --color-status-cancelled-text: var(--color-danger-800);
+  --color-status-cancelled-bg: var(--color-danger-100);
+  --color-status-cancelled-border: var(--color-danger-200);
+  
+  --color-status-active-text: var(--color-info-800);
+  --color-status-active-bg: var(--color-info-100);
+  --color-status-active-border: var(--color-info-200);
+  
+  --color-status-inactive-text: var(--color-gray-800);
+  --color-status-inactive-bg: var(--color-gray-100);
+  --color-status-inactive-border: var(--color-gray-200);
+  
+  /* Form Control Colors - Light Theme */
+  --color-input-background: white;
+  --color-input-border: var(--color-gray-300);
+  --color-input-text: var(--color-gray-800);
+  --color-input-placeholder: var(--color-gray-400);
+  --color-input-focus-border: var(--color-primary-500);
+  --color-input-focus-ring: rgba(59, 130, 246, 0.2);
+  --color-input-disabled-background: var(--color-gray-100);
+  --color-input-disabled-text: var(--color-gray-500);
+  --color-input-error-border: var(--color-danger-500);
+  --color-input-error-text: var(--color-danger-700);
+  --color-input-error-ring: rgba(220, 38, 38, 0.2);
+  
+  /* Shadows - Light Theme */
+  --shadow-card: var(--shadow-md);
+  --shadow-card-hover: var(--shadow-lg);
+  --shadow-dropdown: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}

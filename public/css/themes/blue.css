@@ -1,0 +1,46 @@
+/*
+ * Blue Theme 
+ *
+ * A blue-focused theme variant
+ */
+
+.theme-blue {
+  /* Primary colors - blue focus */
+  --color-primary-lightest: #EFF6FF;
+  --color-primary-lighter: #DBEAFE;
+  --color-primary-light: #93C5FD;
+  --color-primary: #3B82F6;
+  --color-primary-dark: #2563EB;
+  --color-primary-darker: #1D4ED8;
+  --color-primary-darkest: #1E3A8A;
+
+  /* Accent colors - purple to complement blue */
+  --color-accent-lightest: #F5F3FF;
+  --color-accent-lighter: #EDE9FE;
+  --color-accent-light: #C4B5FD;
+  --color-accent: #8B5CF6;
+  --color-accent-dark: #7C3AED;
+  --color-accent-darker: #6D28D9;
+  --color-accent-darkest: #5B21B6;
+}
+
+/* Dark variant of blue theme */
+.dark.theme-blue {
+  /* Primary colors - adjusted for dark mode */
+  --color-primary-lightest: #1E3A8A;
+  --color-primary-lighter: #1E40AF;
+  --color-primary-light: #1D4ED8;
+  --color-primary: #3B82F6;
+  --color-primary-dark: #60A5FA;
+  --color-primary-darker: #93C5FD;
+  --color-primary-darkest: #DBEAFE;
+
+  /* Accent colors - adjusted for dark mode */
+  --color-accent-lightest: #5B21B6;
+  --color-accent-lighter: #6D28D9;
+  --color-accent-light: #7C3AED;
+  --color-accent: #8B5CF6;
+  --color-accent-dark: #A78BFA;
+  --color-accent-darker: #C4B5FD;
+  --color-accent-darkest: #EDE9FE;
+}

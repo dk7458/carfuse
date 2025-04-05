@@ -19,30 +19,48 @@ class SecurityHelper
         'sid_bits_per_character'  => 6
     ];
 
-    // Standardized Logging Function
-    public static function securityLog(LoggerInterface $logger, $message, $level = 'info', $category = 'Security')
+    private LoggerInterface $logger;
+    private string $logFile;
+    
+    /**
+     * Constructor with dependency injection
+     *
+     * @param LoggerInterface $logger Logger instance
+     * @param string $logFile Path to security log file
+     */
+    public function __construct(LoggerInterface $logger, string $logFile = null)
     {
-        if ($logger && method_exists($logger, 'log')) {
-            $logger->log($level, "[$category] $message");
+        $this->logger = $logger;
+        $this->logFile = $logFile ?? __DIR__ . '/../../logs/security.log';
+        
+        // Initialize secure session
+        $this->startSecureSession();
+    }
+
+    // Standardized Logging Function
+    public function securityLog($message, $level = 'info', $category = 'Security')
+    {
+        if (method_exists($this->logger, 'log')) {
+            $this->logger->log($level, "[$category] $message");
         } else {
             error_log("[$category][$level] $message");
         }
     }
 
     // Log authentication events
-    public static function logAuthEvent($message, $level = 'info')
+    public function logAuthEvent($message, $level = 'info')
     {
-        self::securityLog(null, $message, $level, 'Auth');
+        $this->securityLog($message, $level, 'Auth');
     }
 
     // Helper to log authentication failures
-    public static function logAuthFailure($message)
+    public function logAuthFailure($message)
     {
-        self::securityLog(null, $message, 'error', 'Auth');
+        $this->securityLog($message, 'error', 'Auth');
     }
 
     // Secure Session Handling using native PHP sessions
-    public static function startSecureSession()
+    public function startSecureSession()
     {
         if (session_status() === PHP_SESSION_NONE) {
             ini_set('session.use_only_cookies', 1);
@@ -55,31 +73,30 @@ class SecurityHelper
     }
 
     // Refresh session to extend its duration
-    public static function refreshSession()
+    public function refreshSession()
     {
-        $logFile = __DIR__ . '/../../logs/security.log';
         $timestamp = date('Y-m-d H:i:s');
 
         try {
             if (session_status() === PHP_SESSION_ACTIVE) {
                 $_SESSION['last_activity'] = time();
                 session_regenerate_id(true);
-                error_log("[$timestamp][info] Session refreshed\n", 3, $logFile);
+                error_log("[$timestamp][info] Session refreshed\n", 3, $this->logFile);
             }
-        } catch (Exception $e) {
-            error_log("[$timestamp][error] Session refresh failed: " . $e->getMessage() . "\n", 3, $logFile);
+        } catch (\Exception $e) {
+            error_log("[$timestamp][error] Session refresh failed: " . $e->getMessage() . "\n", 3, $this->logFile);
         }
     }
 
     // Replace Laravel session calls with native PHP for session expiry enforcement
-    public static function enforceSessionExpiry(LoggerInterface $logger)
+    public function enforceSessionExpiry()
     {
         if (!isset($_SESSION['last_activity'])) {
             $_SESSION['last_activity'] = time();
             return;
         }
         if (time() - $_SESSION['last_activity'] > 1800) { // 30 min timeout
-            self::securityLog($logger, 'Session expired due to inactivity', 'info');
+            $this->securityLog('Session expired due to inactivity', 'info');
             $_SESSION = [];
             if (ini_get('session.use_cookies')) {
                 setcookie(session_name(), '', time() - 42000, '/');
@@ -89,7 +106,7 @@ class SecurityHelper
     }
 
     // Fingerprint-Based Session Integrity Check
-    public static function validateSessionIntegrity(LoggerInterface $logger)
+    public function validateSessionIntegrity()
     {
         $currentIp = hash('sha256', $_SERVER['REMOTE_ADDR']);
         $currentAgent = hash('sha256', $_SERVER['HTTP_USER_AGENT']);
@@ -100,7 +117,7 @@ class SecurityHelper
             return true;
         }
         if ($_SESSION['client_ip'] !== $currentIp || $_SESSION['user_agent'] !== $currentAgent) {
-            self::securityLog($logger, 'Session integrity check failed: Mismatch detected', 'warning');
+            $this->securityLog('Session integrity check failed: Mismatch detected', 'warning');
             $_SESSION = [];
             if (ini_get('session.use_cookies')) {
                 setcookie(session_name(), '', time() - 42000, '/');
@@ -112,7 +129,7 @@ class SecurityHelper
     }
 
     // Sanitize user input to prevent XSS
-    public static function sanitizeInput($data)
+    public function sanitizeInput($data)
     {
         if (!isset($data) || $data === null) {
             $data = ''; // Default to empty string to prevent undefined variable errors
@@ -122,49 +139,49 @@ class SecurityHelper
     }
 
     // Generate secure random string (for password resets, API keys, etc.)
-    public static function generateSecureToken($length = 64)
+    public function generateSecureToken($length = 64)
     {
         return bin2hex(random_bytes($length / 2));
     }
 
     // Secure Session Destruction using native PHP
-    public static function destroySession(LoggerInterface $logger)
+    public function destroySession()
     {
-        self::securityLog($logger, 'Destroying session', 'info');
+        $this->securityLog('Destroying session', 'info');
         $_SESSION = [];
         if (ini_get('session.use_cookies')) {
             setcookie(session_name(), '', time() - 42000, '/');
         }
         session_destroy();
-        self::securityLog($logger, 'Session destroyed successfully', 'info');
+        $this->securityLog('Session destroyed successfully', 'info');
     }
 
     // Check if a user is logged in
-    public static function isUserLoggedIn()
+    public function isUserLoggedIn()
     {
         return isset($_SESSION['user_id']);
     }
 
     // Get the logged-in user's role
-    public static function getUserRole()
+    public function getUserRole()
     {
         return isset($_SESSION['user_id']) ? ($_SESSION['user_role'] ?? 'guest') : 'guest';
     }
 
     // Get session data safely
-    public static function getSessionData($key)
+    public function getSessionData($key)
     {
         return $_SESSION[$key] ?? null;
     }
 
     // Set session data safely
-    public static function setSessionData($key, $value)
+    public function setSessionData($key, $value)
     {
         $_SESSION[$key] = $value;
     }
 
     // Validate JWT token
-    public static function validateJWT($token)
+    public function validateJWT($token)
     {
         // Replace Laravel's authentication with a native JWT approach or session check.
         // For example, decode using firebase/php-jwt, here we simply check session.
@@ -172,13 +189,13 @@ class SecurityHelper
     }
 
     // Enforce authentication for protected pages
-    public static function requireUserAuth()
+    public function requireUserAuth()
     {
-        return self::requireAuth();
+        return $this->requireAuth();
     }
 
     // Custom Authentication Enforcement
-    public static function requireAuth($allowGuest = false)
+    public function requireAuth($allowGuest = false)
     {
         if (isset($_SESSION['user_id'])) {
             return $_SESSION['user_id'];
@@ -193,7 +210,7 @@ class SecurityHelper
     }
 
     // CSRF Token Generation
-    public static function generateCsrfToken()
+    public function generateCsrfToken()
     {
         if (!isset($_SESSION['csrf_token'])) {
             $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -202,13 +219,13 @@ class SecurityHelper
     }
 
     // Validate CSRF token in POST requests
-    public static function validateCsrfToken($token)
+    public function validateCsrfToken($token)
     {
         return isset($_SESSION['csrf_token']) && $_SESSION['csrf_token'] === $token;
     }
 
     // Return structured JSON response
-    public static function jsonResponse($data, $statusCode = 200)
+    public function jsonResponse($data, $statusCode = 200)
     {
         header('Content-Type: application/json');
         http_response_code($statusCode);
@@ -216,9 +233,3 @@ class SecurityHelper
         exit;
     }
 }
-
-// Initialize secure session when the file is included
-if (!SecurityHelper::startSecureSession()) {
-    SecurityHelper::securityLog(null, 'Critical: Failed to initialize secure session', 'critical');
-}
-?>
